@@ -4,6 +4,28 @@ Guidance for Claude Code when working in this repository. For a project overview
 `README.md`; for domain vocabulary see `CONTEXT.md`; for past architectural decisions
 see `docs/adr/`.
 
+## Development
+
+- **Install (framework)**: `uv sync --extra lab` — installs the `lab` extra + the
+  `dev` group (pytest). Corpus-prep only needs `uv sync`.
+- **Run tests**: `.venv/Scripts/python.exe -m pytest` (pytest reads `src/` via
+  `pythonpath` in `pyproject.toml`). The heavy bge-m3 smoke test is skipped unless
+  `RAG_LAB_SMOKE=1` is set.
+- **CLI** (needs `PYTHONPATH=src`): `python -m rag_lab.cli build --input-dir
+  academic_resolutions/2569 --out data/index/dev --limit 50` then `... retrieve
+  --index data/index/dev --query "..."`.
+
+## Conventions
+
+- The core package `src/rag_lab/` must not import Streamlit (ADR-0001): keep it
+  importable and unit-testable; UI/CLI are thin layers on top.
+- Add a strategy by creating a file + registering it (`src/rag_lab/registry.py`);
+  never edit the runner (Open/Closed).
+- `Chunk.resolution_id` is load-bearing — relevance is judged at the Resolution level
+  (ADR-0002).
+- The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;
+  corpus-prep tooling in `tools/corpus_prep/` needs Poppler + Ollama.
+
 ## Agent skills
 
 ### Issue tracker

@@ -33,3 +33,19 @@ lab = [
     "loguru>=0.7",
     "tqdm>=4.66",
 ]
+
+# Test/dev tooling (installed by `uv sync` by default alongside the project).
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+# This repo is a workspace of scripts + an importable src/ package, not a
+# distributable wheel — don't try to build/install the root as a package.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
