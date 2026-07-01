@@ -16,6 +16,7 @@ from rag_lab.factory import build_embedder, build_retriever
 from rag_lab.io.artifact_store import ArtifactStore
 from rag_lab.pipeline import retrieve
 from rag_lab.results import save_retrieval_result
+from rag_lab.retrievers.filters import MetadataFilter
 from rag_lab.schema import RetrievalResult
 
 
@@ -67,6 +68,7 @@ def query_indices(
     retriever_spec: StrategySpec,
     k: int,
     results_dir: str | Path | None = None,
+    filter_criteria: dict | None = None,
 ) -> list[ComboRetrieval]:
     store = ArtifactStore()
     retriever = build_retriever(retriever_spec)
@@ -78,6 +80,8 @@ def query_indices(
             StrategySpec.model_validate(manifest["combo"]["embedder"])
         )
         index = store.load(index_dir)
+        if filter_criteria:
+            index = MetadataFilter(filter_criteria).apply(index)
 
         combination_id = f"{manifest['combo_id']}__{retriever.name}"
         result: RetrievalResult = retrieve(

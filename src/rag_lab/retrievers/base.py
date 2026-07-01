@@ -2,17 +2,15 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-import numpy as np
-
-from rag_lab.schema import Index, RankedChunk
+from rag_lab.schema import Index, Query, RankedChunk
 
 
 class BaseRetriever(ABC):
-    """Ranks Chunks from a prepared Index for a prepared query representation.
+    """Ranks Chunks from a prepared Index for a prepared Query.
 
-    Retrievers receive an already-computed query vector, never a raw string —
-    query embedding happens once in orchestration so retrievers never re-embed
-    (ADR-0001) and dense/BM25/hybrid can share this signature.
+    Retrievers receive a prepared Query (vector and/or tokens), never a raw
+    string — query preparation happens once in orchestration so retrievers never
+    re-embed (ADR-0001) and dense/BM25/hybrid share this signature.
     """
 
     @property
@@ -21,7 +19,5 @@ class BaseRetriever(ABC):
         ...
 
     @abstractmethod
-    def retrieve(
-        self, query_vector: np.ndarray, index: Index, k: int
-    ) -> list[RankedChunk]:
+    def retrieve(self, query: Query, index: Index, k: int) -> list[RankedChunk]:
         ...

@@ -37,14 +37,21 @@ by_id = {info.combo_id: info for info in infos}
 selected = st.sidebar.multiselect(
     "Combinations to compare", list(by_id), default=list(by_id)[:2]
 )
-retriever = st.sidebar.selectbox("Retriever", ["dense"], index=0)
+retriever = st.sidebar.selectbox("Retriever", ["dense", "bm25", "hybrid"], index=0)
 k = st.sidebar.slider("top-k", min_value=1, max_value=20, value=5)
+year_filter = st.sidebar.text_input("Filter by year (พ.ศ., optional)", "")
 query = st.text_input("Query (คำค้น)")
 
 if st.button("Search", type="primary") and query and selected:
     dirs = [by_id[c].dir for c in selected]
+    criteria = {"year": year_filter.strip()} if year_filter.strip() else None
     combos = query_indices(
-        query, dirs, StrategySpec(type=retriever), k, results_dir="data/results/mode_b"
+        query,
+        dirs,
+        StrategySpec(type=retriever),
+        k,
+        results_dir="data/results/mode_b",
+        filter_criteria=criteria,
     )
     for col, cr in zip(st.columns(len(combos)), combos):
         with col:

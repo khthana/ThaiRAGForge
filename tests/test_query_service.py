@@ -83,6 +83,43 @@ def test_discover_indices_skips_dirs_without_manifest(tmp_path):
     assert all(Path(i.dir).name != "junk" for i in infos)
 
 
+def test_query_indices_with_bm25_and_hybrid(tmp_path):
+    out = _build_two_indices(tmp_path)
+    dirs = [i.dir for i in discover_indices(out)]
+
+    for retriever in ("bm25", "hybrid"):
+        combos = query_indices("ค่าธรรมเนียม", dirs, StrategySpec(type=retriever), k=3)
+        assert len(combos) == 2
+        for cr in combos:
+            assert "ค่าธรรมเนียม" in cr.result.results[0].resolution_id, retriever
+
+
+def test_query_indices_metadata_filter_narrows_by_year(tmp_path):
+    for year, name in [("2569", "a"), ("2568", "b")]:
+        d = tmp_path / "corpus" / year / "ครั้งที่ 1"
+        d.mkdir(parents=True)
+        (d / f"{name}.md").write_text("## Page 1\nค่าธรรมเนียม การศึกษา", encoding="utf-8")
+    out = tmp_path / "out"
+    config = ExperimentConfig(
+        experiment_name="e",
+        corpus={"input_dir": (tmp_path / "corpus").as_posix()},
+        output_dir=out.as_posix(),
+        loaders=[StrategySpec(type="plain")],
+        chunkers=[StrategySpec(type="fixed_size", params={"chunk_size": 200})],
+        embedders=[StrategySpec(type="hashing")],
+    )
+    run_experiment(config)
+    dirs = [i.dir for i in discover_indices(out)]
+
+    combos = query_indices(
+        "ค่าธรรมเนียม", dirs, StrategySpec(type="dense"), k=10,
+        filter_criteria={"year": "2569"},
+    )
+    for cr in combos:
+        assert cr.result.results  # something survived the filter
+        assert all(r.resolution_id.startswith("2569/") for r in cr.result.results)
+
+
 def test_query_uses_each_index_own_embedder(tmp_path):
     corpus = tmp_path / "corpus" / "2569" / "ครั้งที่ 1"
     corpus.mkdir(parents=True)

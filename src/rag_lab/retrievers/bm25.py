@@ -1,37 +1,35 @@
 from __future__ import annotations
 
 import numpy as np
+from rank_bm25 import BM25Okapi
 
 from rag_lab.registries import retriever_registry
 from rag_lab.retrievers.base import BaseRetriever
 from rag_lab.schema import Index, Query, RankedChunk
 
 
-@retriever_registry.register("dense")
-class DenseRetriever(BaseRetriever):
-    """Ranks chunks by cosine similarity between the query vector and each
-    chunk embedding."""
+@retriever_registry.register("bm25")
+class BM25Retriever(BaseRetriever):
+    """Lexical BM25 over the index's per-chunk tokens. Corpus-relative: when run
+    over a filtered sub-index it scores against that subset (Index.select carries
+    the aligned lexical tokens along)."""
 
     @property
     def name(self) -> str:
-        return "dense"
+        return "bm25"
 
     def retrieve(self, query: Query, index: Index, k: int) -> list[RankedChunk]:
-        if query.vector is None:
-            raise ValueError("DenseRetriever requires query.vector")
-        embeddings = index.embeddings
-        if len(index.chunks) == 0:
+        if index.lexical is None:
+            raise ValueError(
+                "BM25Retriever needs a lexical index; rebuild the index for BM25"
+            )
+        if query.tokens is None:
+            raise ValueError("BM25Retriever requires query.tokens")
+        if not index.chunks:
             return []
 
-        q = np.asarray(query.vector, dtype=np.float64)
-        q_norm = np.linalg.norm(q)
-        row_norms = np.linalg.norm(embeddings, axis=1)
-        denom = row_norms * q_norm
-        dots = embeddings @ q
-        scores = np.divide(
-            dots, denom, out=np.zeros_like(dots, dtype=np.float64), where=denom > 0
-        )
-
+        bm25 = BM25Okapi(index.lexical)
+        scores = bm25.get_scores(query.tokens)
         order = np.argsort(-scores)[:k]
         return [
             RankedChunk(

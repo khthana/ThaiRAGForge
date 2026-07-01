@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 
 from rag_lab.retrievers import DenseRetriever
-from rag_lab.schema import Chunk, Index
+from rag_lab.schema import Chunk, Index, Query
 
 
 def _chunk(i: int) -> Chunk:
@@ -21,9 +21,13 @@ def _index(embeddings: np.ndarray) -> Index:
     )
 
 
+def _q(vector: np.ndarray) -> Query:
+    return Query(text="q", vector=vector)
+
+
 def test_ranks_by_cosine_and_limits_to_k():
     index = _index(np.array([[1.0, 0.0], [0.9, 0.1], [0.0, 1.0]]))
-    ranked = DenseRetriever().retrieve(np.array([1.0, 0.0]), index, k=2)
+    ranked = DenseRetriever().retrieve(_q(np.array([1.0, 0.0])), index, k=2)
 
     assert [r.chunk_id for r in ranked] == ["c0", "c1"]
     assert [r.rank for r in ranked] == [1, 2]
@@ -33,12 +37,12 @@ def test_ranks_by_cosine_and_limits_to_k():
 
 def test_k_larger_than_corpus_returns_all():
     index = _index(np.array([[1.0, 0.0], [0.0, 1.0]]))
-    ranked = DenseRetriever().retrieve(np.array([1.0, 1.0]), index, k=10)
+    ranked = DenseRetriever().retrieve(_q(np.array([1.0, 1.0])), index, k=10)
     assert len(ranked) == 2
 
 
 def test_zero_embedding_scores_zero_not_nan():
     index = _index(np.array([[0.0, 0.0], [1.0, 0.0]]))
-    ranked = DenseRetriever().retrieve(np.array([1.0, 0.0]), index, k=2)
+    ranked = DenseRetriever().retrieve(_q(np.array([1.0, 0.0])), index, k=2)
     by_id = {r.chunk_id: r.score for r in ranked}
     assert by_id["c0"] == 0.0

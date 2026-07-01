@@ -19,6 +19,7 @@ from rag_lab.schema import Chunk, Index
 _CHUNKS = "chunks.parquet"
 _EMBEDDINGS = "embeddings.npy"
 _META = "meta.json"
+_LEXICAL = "lexical.json"
 
 
 class ArtifactStore:
@@ -43,6 +44,10 @@ class ArtifactStore:
         (d / _META).write_text(
             json.dumps(index.meta, ensure_ascii=False), encoding="utf-8"
         )
+        if index.lexical is not None:
+            (d / _LEXICAL).write_text(
+                json.dumps(index.lexical, ensure_ascii=False), encoding="utf-8"
+            )
 
     def load(self, directory: str | Path) -> Index:
         d = Path(directory)
@@ -60,4 +65,10 @@ class ArtifactStore:
         ]
         embeddings = np.load(d / _EMBEDDINGS)
         meta = json.loads((d / _META).read_text(encoding="utf-8"))
-        return Index(chunks=chunks, embeddings=embeddings, meta=meta)
+        lexical_path = d / _LEXICAL
+        lexical = (
+            json.loads(lexical_path.read_text(encoding="utf-8"))
+            if lexical_path.exists()
+            else None
+        )
+        return Index(chunks=chunks, embeddings=embeddings, meta=meta, lexical=lexical)

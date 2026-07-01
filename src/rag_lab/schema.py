@@ -59,10 +59,33 @@ class RetrievalResult(BaseModel):
 
 
 @dataclass
+class Query:
+    """A prepared query representation handed to a Retriever. Different retrievers
+    use different parts: dense uses `vector`, lexical (BM25) uses `tokens`."""
+
+    text: str
+    vector: np.ndarray | None = None
+    tokens: list[str] | None = None
+
+
+@dataclass
 class Index:
     """An in-memory Index artifact: chunks aligned row-for-row to an embeddings
-    matrix, plus the metadata identifying how it was built."""
+    matrix (and, when present, to per-chunk lexical tokens), plus the metadata
+    identifying how it was built."""
 
     chunks: list[Chunk]
     embeddings: np.ndarray  # shape (len(chunks), dim)
     meta: dict[str, Any] = field(default_factory=dict)
+    lexical: list[list[str]] | None = None  # per-chunk tokens, row-aligned to chunks
+
+    def select(self, row_indices: list[int]) -> "Index":
+        """Return a sub-Index of the given rows, slicing chunks, embeddings and
+        lexical tokens by the *same* indices so all arrays stay aligned."""
+        rows = list(row_indices)
+        return Index(
+            chunks=[self.chunks[i] for i in rows],
+            embeddings=self.embeddings[rows] if len(self.embeddings) else self.embeddings,
+            meta=self.meta,
+            lexical=None if self.lexical is None else [self.lexical[i] for i in rows],
+        )

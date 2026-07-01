@@ -9,11 +9,13 @@ import hashlib
 import json
 from pathlib import Path
 
+from pythainlp.tokenize import word_tokenize
+
 from rag_lab.chunkers.base import BaseChunker
 from rag_lab.embedders.base import BaseEmbedder
 from rag_lab.io.artifact_store import ArtifactStore
 from rag_lab.retrievers.base import BaseRetriever
-from rag_lab.schema import Index, Resolution, RetrievalResult
+from rag_lab.schema import Index, Query, Resolution, RetrievalResult
 
 
 def _cache_key(
@@ -48,10 +50,20 @@ def build_index(
 
     chunks = []
     for resolution in resolutions:
-        chunks.extend(chunker.chunk(resolution))
+        # propagate resolution-level metadata onto each chunk so the MetadataFilter
+        # can narrow by year/session/faculty at query time (#6 only fills res.metadata)
+        res_meta = {
+            "year": resolution.year,
+            "session": resolution.session,
+            **resolution.metadata,
+        }
+        for chunk in chunker.chunk(resolution):
+            chunk.metadata = {**res_meta, **chunk.metadata}
+            chunks.append(chunk)
     embeddings = embedder.embed([c.text for c in chunks])
+    lexical = [word_tokenize(c.text) for c in chunks]  # BM25 tokens, row-aligned
     meta = {"chunker": chunker.params(), "embedder": embedder.model_id}
-    index = Index(chunks=chunks, embeddings=embeddings, meta=meta)
+    index = Index(chunks=chunks, embeddings=embeddings, meta=meta, lexical=lexical)
 
     if cache_path is not None:
         store.save(index, cache_path)
@@ -66,8 +78,12 @@ def retrieve(
     k: int,
     combination_id: str | None = None,
 ) -> RetrievalResult:
-    query_vector = embedder.embed([query])[0]
-    ranked = retriever.retrieve(query_vector, index, k)
+    prepared = Query(
+        text=query,
+        vector=embedder.embed([query])[0],
+        tokens=word_tokenize(query),
+    )
+    ranked = retriever.retrieve(prepared, index, k)
     if combination_id is None:
         combination_id = (
             f"{index.meta.get('chunker')}|{index.meta.get('embedder')}|{retriever.name}"
