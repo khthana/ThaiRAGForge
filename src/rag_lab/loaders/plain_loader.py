@@ -4,9 +4,11 @@ import re
 from pathlib import Path
 
 from rag_lab.loaders.base import BaseLoader
+from rag_lab.registries import loader_registry
 from rag_lab.schema import Resolution
 
 
+@loader_registry.register("plain")
 class PlainLoader(BaseLoader):
     """Reads an OCR'd Markdown resolution verbatim and derives basic metadata
     from its corpus path (<year>/ครั้งที่ N/<title>.md). Page markers are left

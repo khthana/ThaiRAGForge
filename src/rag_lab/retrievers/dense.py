@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import numpy as np
 
+from rag_lab.registries import retriever_registry
 from rag_lab.retrievers.base import BaseRetriever
 from rag_lab.schema import Index, RankedChunk
 
 
+@retriever_registry.register("dense")
 class DenseRetriever(BaseRetriever):
     """Ranks chunks by cosine similarity between the query vector and each
     chunk embedding."""

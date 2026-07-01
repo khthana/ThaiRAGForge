@@ -3,8 +3,10 @@ from __future__ import annotations
 import numpy as np
 
 from rag_lab.embedders.base import BaseEmbedder
+from rag_lab.registries import embedder_registry
 
 
+@embedder_registry.register("local")
 class LocalSTEmbedder(BaseEmbedder):
     """Local sentence-transformers embedder (default BAAI/bge-m3), GPU if available.
 

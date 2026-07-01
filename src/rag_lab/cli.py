@@ -19,13 +19,26 @@ except (AttributeError, ValueError):  # pragma: no cover
     pass
 
 from rag_lab.chunkers import FixedSizeChunker
+from rag_lab.config import ExperimentConfig
 from rag_lab.embedders.local_st_embedder import LocalSTEmbedder
 from rag_lab.io.artifact_store import ArtifactStore
 from rag_lab.loaders import PlainLoader
 from rag_lab.pipeline import build_index, retrieve
 from rag_lab.retrievers import DenseRetriever
+from rag_lab.runner import run_experiment
 
 app = typer.Typer(add_completion=False, help="RAG Lab walking-skeleton CLI")
+
+
+@app.command()
+def run(config: str = typer.Option(..., "--config")) -> None:
+    """Run a batch experiment from a YAML config: build + cache + manifest per combo."""
+    cfg = ExperimentConfig.from_yaml(config)
+    results = run_experiment(cfg)
+    for r in results:
+        typer.echo(f"[{r.status}] {r.combo_id} chunks={r.n_chunks} {r.error or ''}")
+    ok = sum(1 for r in results if r.status == "ok")
+    typer.echo(f"Done: {ok}/{len(results)} combos built -> {cfg.output_dir}")
 
 
 @app.command()

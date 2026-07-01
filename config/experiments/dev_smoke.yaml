@@ -1,0 +1,29 @@
+# Example experiment on a dev subset. Uses the `hashing` baseline embedder so it
+# runs fast without a GPU model. Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/dev_smoke.yaml
+experiment_name: dev_smoke
+
+corpus:
+  input_dir: academic_resolutions/2569
+  subset: dev
+  limit: 20
+
+output_dir: data/index/dev_smoke
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: fixed_size
+    params: { chunk_size: 512, chunk_overlap: 50 }
+  - type: fixed_size
+    params: { chunk_size: 256, chunk_overlap: 30 }
+
+embedders:
+  - type: hashing
+
+retrievers:
+  - type: dense
+
+run_mode: cartesian
+seed: 42

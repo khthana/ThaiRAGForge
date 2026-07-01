@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from rag_lab.chunkers.base import BaseChunker
+from rag_lab.registries import chunker_registry
 from rag_lab.schema import Chunk, Resolution
 
 _PAGE_MARKER = re.compile(r"^\s*##\s*Page\s+(\d+)\s*$")
@@ -33,6 +34,7 @@ def _segment_by_page(text: str) -> list[tuple[int, str]]:
     return segments
 
 
+@chunker_registry.register("fixed_size")
 class FixedSizeChunker(BaseChunker):
     """Fixed-size sliding window over the text (character units). `## Page`
     markers are hard boundaries: a window never spans two pages."""
