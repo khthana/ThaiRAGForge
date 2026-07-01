@@ -25,7 +25,22 @@ def _cache_key(
     so an unchanged (docset × chunker × embedder) reloads instead of re-embedding."""
     payload = json.dumps(
         {
-            "docs": [[r.resolution_id, r.raw_text] for r in resolutions],
+            # include the loader-produced fields/metadata, not just raw_text, so
+            # two loaders that emit different Resolutions get different cache
+            # entries (e.g. MetadataLoader vs NERLoader share raw_text but differ
+            # in metadata) while identical outputs still share a cache entry.
+            "docs": [
+                [
+                    r.resolution_id,
+                    r.raw_text,
+                    r.year,
+                    r.session,
+                    r.title,
+                    r.source_url,
+                    r.metadata,
+                ]
+                for r in resolutions
+            ],
             "chunker": chunker.params(),
             "embedder": embedder.model_id,
         },
