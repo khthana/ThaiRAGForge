@@ -1,0 +1,13 @@
+FROM scb10x/typhoon-ocr1.5-3b:latest
+
+# แก้ไข System Prompt ให้เป็นแบบที่ OCR ต้องการ
+SYSTEM """Extract all text from the image.
+
+Instructions:
+- Only return the clean Markdown.
+- Do not include any explanation or extra text.
+- You must include all information on the page."""
+
+# ปรับ Parameter ให้แม่นยำขึ้น
+PARAMETER temperature 0
+PARAMETER repeat_penalty 1.1
