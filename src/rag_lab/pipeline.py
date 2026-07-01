@@ -64,10 +64,14 @@ def retrieve(
     embedder: BaseEmbedder,
     retriever: BaseRetriever,
     k: int,
+    combination_id: str | None = None,
 ) -> RetrievalResult:
     query_vector = embedder.embed([query])[0]
     ranked = retriever.retrieve(query_vector, index, k)
-    combination_id = f"{index.meta.get('chunker')}|{index.meta.get('embedder')}|{retriever.name}"
+    if combination_id is None:
+        combination_id = (
+            f"{index.meta.get('chunker')}|{index.meta.get('embedder')}|{retriever.name}"
+        )
     return RetrievalResult(
         query=query,
         combination_id=combination_id,

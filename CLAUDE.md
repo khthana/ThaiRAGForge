@@ -11,9 +11,11 @@ see `docs/adr/`.
 - **Run tests**: `.venv/Scripts/python.exe -m pytest` (pytest reads `src/` via
   `pythonpath` in `pyproject.toml`). The heavy bge-m3 smoke test is skipped unless
   `RAG_LAB_SMOKE=1` is set.
-- **CLI** (needs `PYTHONPATH=src`): `python -m rag_lab.cli build --input-dir
-  academic_resolutions/2569 --out data/index/dev --limit 50` then `... retrieve
-  --index data/index/dev --query "..."`.
+- **CLI** (needs `PYTHONPATH=src`): `python -m rag_lab.cli run --config
+  config/experiments/dev_smoke.yaml` (batch build), or the low-level `build` /
+  `retrieve` commands.
+- **UI (Mode B)**: `streamlit run app/streamlit_app.py` — Query & Compare over built
+  indices. Thin shell over `rag_lab.query_service` (the tested core).
 
 ## Conventions
 
