@@ -27,6 +27,7 @@ lab = [
     "sentence-transformers>=3.0",
     "rank-bm25>=0.2.2",
     "pythainlp>=5.0",
+    "python-crfsuite>=0.9.11",  # pythainlp crfcut Thai sentence tokenizer
     "langchain-text-splitters>=0.2",
     "typer>=0.12",
     "streamlit>=1.36",
