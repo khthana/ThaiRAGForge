@@ -95,7 +95,7 @@ def retrieve(
 ) -> RetrievalResult:
     prepared = Query(
         text=query,
-        vector=embedder.embed([query])[0],
+        vector=embedder.embed_query(query),
         tokens=word_tokenize(query),
     )
     ranked = retriever.retrieve(prepared, index, k)

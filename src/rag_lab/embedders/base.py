@@ -20,3 +20,11 @@ class BaseEmbedder(ABC):
     @abstractmethod
     def embed(self, texts: list[str]) -> np.ndarray:
         """Return a (len(texts), dim) float matrix, one row per input text."""
+
+    def embed_query(self, text: str) -> np.ndarray:
+        """Embed a single query string. Default: a single-item passage batch.
+
+        Override when the model encodes queries differently from passages
+        (e.g. e5's `query: `/`passage: ` prefixes).
+        """
+        return self.embed([text])[0]

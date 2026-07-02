@@ -19,6 +19,13 @@ def test_builds_registered_embedder_by_name():
     assert embedder.model_id.startswith("hashing")
 
 
+def test_builds_e5_embedder_selectable_via_config():
+    from rag_lab.embedders import E5Embedder
+
+    embedder = build_embedder(StrategySpec(type="e5"))
+    assert isinstance(embedder, E5Embedder)
+
+
 def test_unknown_type_raises():
     with pytest.raises(KeyError):
         build_chunker(StrategySpec(type="no-such-chunker"))

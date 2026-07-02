@@ -38,3 +38,6 @@ class BagOfWordsEmbedder:
                 digest = hashlib.md5(token.encode("utf-8")).hexdigest()
                 vecs[i, int(digest, 16) % self.dim] += 1.0
         return vecs
+
+    def embed_query(self, text: str) -> np.ndarray:
+        return self.embed([text])[0]

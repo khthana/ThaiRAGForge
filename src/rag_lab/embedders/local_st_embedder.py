@@ -15,10 +15,12 @@ class LocalSTEmbedder(BaseEmbedder):
     are L2-normalized so cosine reduces to a dot product.
     """
 
-    def __init__(self, model_name: str = "BAAI/bge-m3", device: str | None = None) -> None:
+    def __init__(
+        self, model_name: str = "BAAI/bge-m3", device: str | None = None, model=None
+    ) -> None:
         self._model_name = model_name
         self._device = device
-        self._model = None
+        self._model = model
 
     @property
     def model_id(self) -> str:

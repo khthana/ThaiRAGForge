@@ -91,3 +91,35 @@ run_mode: cartesian
     assert (out / ok.combo_id / "manifest.json").exists()
     err = next(r for r in results if r.status == "error")
     assert err.error  # failure message captured, batch did not crash
+
+
+def test_keyless_api_embedder_combo_is_isolated_as_error(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    corpus = _write_corpus(tmp_path)
+    out = tmp_path / "out"
+    text = f"""
+experiment_name: api-iso
+corpus:
+  input_dir: {corpus.as_posix()}
+output_dir: {out.as_posix()}
+loaders:
+  - type: plain
+chunkers:
+  - type: fixed_size
+    params: {{chunk_size: 100, chunk_overlap: 0}}
+embedders:
+  - type: hashing
+  - type: api
+    params: {{provider: openai, model: text-embedding-3-large}}
+run_mode: cartesian
+"""
+    path = tmp_path / "api-iso.yaml"
+    path.write_text(text, encoding="utf-8")
+
+    results = run_experiment(ExperimentConfig.from_yaml(path))
+
+    assert sorted(r.status for r in results) == ["error", "ok"]
+    ok = next(r for r in results if r.status == "ok")
+    assert (out / ok.combo_id / "manifest.json").exists()
+    err = next(r for r in results if r.status == "error")
+    assert "OPENAI_API_KEY" in err.error  # clear, not a bare crash
