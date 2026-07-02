@@ -1,7 +1,9 @@
 """Cycle 2 — ExperimentConfig.from_yaml parses YAML and applies defaults."""
 from __future__ import annotations
 
-from rag_lab.config import ExperimentConfig
+import yaml
+
+from rag_lab.config import ExperimentConfig, StrategySpec
 
 
 def test_from_yaml_parses_and_applies_defaults(tmp_path):
@@ -30,3 +32,54 @@ embedders:
     assert cfg.seed == 42
     assert cfg.corpus.subset == "dev"
     assert [r.type for r in cfg.retrievers] == ["dense"]
+
+
+def test_to_yaml_round_trips_through_from_yaml(tmp_path):
+    cfg = ExperimentConfig(
+        experiment_name="ทดสอบ",
+        corpus={"input_dir": "academic_resolutions/2569", "subset": "full"},
+        output_dir="data/index/ทดสอบ",
+        loaders=[StrategySpec(type="plain")],
+        chunkers=[StrategySpec(type="fixed_size", params={"chunk_size": 256})],
+        embedders=[StrategySpec(type="hashing")],
+    )
+    path = tmp_path / "roundtrip.yaml"
+
+    cfg.to_yaml(path)
+    loaded = ExperimentConfig.from_yaml(path)
+
+    assert loaded == cfg
+
+
+def test_to_yaml_string_round_trips_and_includes_chunker_params():
+    cfg = ExperimentConfig(
+        experiment_name="e",
+        corpus={"input_dir": "x"},
+        output_dir="out",
+        loaders=[StrategySpec(type="plain")],
+        chunkers=[StrategySpec(type="fixed_size", params={"chunk_size": 256})],
+        embedders=[StrategySpec(type="hashing")],
+    )
+
+    text = cfg.to_yaml_string()
+
+    assert "chunk_size: 256" in text
+    assert ExperimentConfig.model_validate(yaml.safe_load(text)) == cfg
+
+
+def test_to_yaml_writes_thai_text_literally_not_as_unicode_escapes(tmp_path):
+    cfg = ExperimentConfig(
+        experiment_name="ทดสอบ",
+        corpus={"input_dir": "academic_resolutions/2569"},
+        output_dir="data/index/ทดสอบ",
+        loaders=[StrategySpec(type="plain")],
+        chunkers=[StrategySpec(type="fixed_size")],
+        embedders=[StrategySpec(type="hashing")],
+    )
+    path = tmp_path / "thai.yaml"
+
+    cfg.to_yaml(path)
+
+    text = path.read_text(encoding="utf-8")
+    assert "ทดสอบ" in text
+    assert "\\u" not in text

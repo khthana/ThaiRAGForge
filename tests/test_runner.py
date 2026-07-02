@@ -123,3 +123,44 @@ run_mode: cartesian
     assert (out / ok.combo_id / "manifest.json").exists()
     err = next(r for r in results if r.status == "error")
     assert "OPENAI_API_KEY" in err.error  # clear, not a bare crash
+
+
+def test_on_combo_done_is_called_once_per_combo_as_it_completes(tmp_path):
+    corpus = _write_corpus(tmp_path)
+    out = tmp_path / "out"
+    config = ExperimentConfig.from_yaml(_write_config(tmp_path, corpus, out))
+
+    seen = []
+    results = run_experiment(config, on_combo_done=seen.append)
+
+    assert len(seen) == 2  # 1 loader x 2 chunkers x 1 embedder
+    assert seen == results  # same ComboResults, in completion order
+
+
+def test_ok_combo_reports_load_chunk_embed_timings(tmp_path):
+    corpus = _write_corpus(tmp_path)
+    out = tmp_path / "out"
+    config = ExperimentConfig.from_yaml(_write_config(tmp_path, corpus, out))
+
+    results = run_experiment(config)
+
+    for r in results:
+        assert set(r.timings) == {"load_seconds", "chunk_seconds", "embed_seconds"}
+        assert all(v >= 0 for v in r.timings.values())
+
+
+def test_ok_combo_reports_chunk_size_stats_matching_the_built_index(tmp_path):
+    corpus = _write_corpus(tmp_path)
+    out = tmp_path / "out"
+    config = ExperimentConfig.from_yaml(_write_config(tmp_path, corpus, out))
+
+    results = run_experiment(config)
+
+    for r in results:
+        index = ArtifactStore().load(out / r.combo_id)
+        lengths = [len(c.text) for c in index.chunks]
+        assert r.chunk_size_stats == {
+            "min": min(lengths),
+            "max": max(lengths),
+            "mean": sum(lengths) / len(lengths),
+        }

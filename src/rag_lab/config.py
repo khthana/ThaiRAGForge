@@ -40,3 +40,14 @@ class ExperimentConfig(BaseModel):
     def from_yaml(cls, path: str | Path) -> "ExperimentConfig":
         data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
         return cls.model_validate(data)
+
+    def to_yaml_string(self) -> str:
+        """Render as YAML text `from_yaml` can parse back unmodified.
+        allow_unicode so a Thai experiment_name/input_dir stays human-editable
+        instead of escaping to \\uXXXX."""
+        return yaml.safe_dump(self.model_dump(), allow_unicode=True, sort_keys=False)
+
+    def to_yaml(self, path: str | Path) -> None:
+        """Write this config as YAML the CLI can run unmodified (`from_yaml` is
+        the inverse)."""
+        Path(path).write_text(self.to_yaml_string(), encoding="utf-8")

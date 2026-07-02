@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from pathlib import Path
 
 from pythainlp.tokenize import word_tokenize
@@ -63,6 +64,7 @@ def build_index(
         if (cache_path / "meta.json").exists():
             return store.load(cache_path)
 
+    t0 = time.perf_counter()
     chunks = []
     for resolution in resolutions:
         # propagate resolution-level metadata onto each chunk so the MetadataFilter
@@ -75,9 +77,17 @@ def build_index(
         for chunk in chunker.chunk(resolution):
             chunk.metadata = {**res_meta, **chunk.metadata}
             chunks.append(chunk)
+    t1 = time.perf_counter()
     embeddings = embedder.embed([c.text for c in chunks])
+    t2 = time.perf_counter()
     lexical = [word_tokenize(c.text) for c in chunks]  # BM25 tokens, row-aligned
-    meta = {"chunker": chunker.params(), "embedder": embedder.model_id}
+    meta = {
+        "chunker": chunker.params(),
+        "embedder": embedder.model_id,
+        # per-phase build timing (#10 Mode A metrics); absent on a cache hit above
+        # since nothing was recomputed there.
+        "timings": {"chunk_seconds": t1 - t0, "embed_seconds": t2 - t1},
+    }
     index = Index(chunks=chunks, embeddings=embeddings, meta=meta, lexical=lexical)
 
     if cache_path is not None:
