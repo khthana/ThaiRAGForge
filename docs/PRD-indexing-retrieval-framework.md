@@ -6,6 +6,10 @@
 `docs/adr/0001` และ `0002` (เหตุผลการตัดสินใจ), `docs/grill-session-2026-07-01.md`
 (บันทึกการสัมภาษณ์)
 
+**สถานะ (2026-07-02):** Implemented — issues #1–#11 ปิดหมดแล้ว ดู `README.md` §Status
+สำหรับข้อจำกัดที่ตั้งใจเหลือไว้ (APIEmbedder เป็น stub, HybridEmbedder ไม่ได้สร้าง,
+SemanticChunker threshold ยังไม่ tune). เอกสารนี้คงไว้ตามแผนเดิม ไม่แก้ไขตามของจริงที่สร้าง.
+
 ---
 
 ## Problem Statement
