@@ -7,8 +7,12 @@ A shared glossary for this project. Terms only — no implementation details.
 - **Corpus** — The full body of source material under test: KMITL academic-council
   resolutions spanning Buddhist-era years 2564–2569.
 - **Resolution (มติ)** — The atomic source document: one academic-council agenda
-  item / decision. Currently stored as an OCR-produced Markdown file. *(Unit to be
-  confirmed — a file may contain one or several มติ.)*
+  item / decision, stored as an OCR-produced Markdown file. A มติ that bundles
+  several curricula into one agenda item (e.g. one "ปรับปรุงหลักสูตร" filing
+  covering 3 curricula) is split so **one Resolution = one curriculum** in that
+  case — each curriculum has its own citable title (see ADR-0004). Other
+  bundled categories (อาจารย์พิเศษ, ผลการปฏิบัติงาน/มาตรฐาน 50) are left
+  unsplit by design.
 - **Session (ครั้งที่ N)** — A numbered council meeting within a given year that
   groups the resolutions decided in it. Special sessions (วาระพิเศษ) carry an `s`
   suffix (ครั้งที่ Ns) and are distinct meetings from the same-numbered regular

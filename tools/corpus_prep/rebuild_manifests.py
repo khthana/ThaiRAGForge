@@ -48,6 +48,7 @@ DRIVE = re.compile(r"/d/([A-Za-z0-9_-]{20,})|[?&]id=([A-Za-z0-9_-]{20,})|/folder
 NEW_ITEM = re.compile(r"^\s*(\d+\s*\.)?\s*เรื่อง")
 HEADER = re.compile(r"^\s*(\d{1,2})\s*/\s*(25\d{2})\s*(s?)")
 DOC_HEADER = re.compile(r"^\s*#\s*Document:.*$", re.MULTILINE)
+SPLIT_PIECE = re.compile(r"__\d+$")  # curriculum-split siblings legitimately share one URL
 
 
 def link_key(url: str | None) -> str | None:
@@ -236,7 +237,7 @@ print(f"matched file<->docx: {sum(1 for f in files if f['docx'])}")
 dup_flagged = []   # {dir, url, files: [folder entries], stems, why}
 by_dir_key = defaultdict(list)
 for f in files:
-    if f["key"]:
+    if f["key"] and not SPLIT_PIECE.search(f["stem"]):
         by_dir_key[(f["year"], f["sdir"], f["key"])].append(f)
 for (year, sdir, key), group in sorted(by_dir_key.items()):
     if len(group) < 2:

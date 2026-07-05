@@ -26,13 +26,25 @@ specific year/session before running.
 4. **`check_ocr_coverage.py`** — Diagnostic. Lists PDFs in a session folder and whether
    a matching `.md` already exists. Useful to see what still needs OCR.
 
-5. **`rebuild_manifests.py`** — Reconciliation (ADR-0003). Scans the corpus tree and
+5. **`split_curriculum_bundles.py`** — Curriculum splitting (ADR-0004). Some
+   resolutions bundle several curricula into one มติ (e.g. one "ปรับปรุงหลักสูตร"
+   file covering 3 curricula); this splits each into one physical `.md` file per
+   curriculum, patches `meeting_manifest.json`, and archives the original as
+   `*.md.dup`. Detection + boundary validation is content-based with a hard
+   length/count guard — anything it can't split cleanly goes to
+   `academic_resolutions/curriculum_split_review.md` for manual handling rather
+   than being guessed at. Dry-run by default; pass `--apply` to write. Run
+   **before** `rebuild_manifests.py` so the new files get picked up as ordinary
+   corpus entries.
+
+6. **`rebuild_manifests.py`** — Reconciliation (ADR-0003). Scans the corpus tree and
    writes per-meeting `meeting_manifest.json` (full titles + URLs — the metadata
    source of truth) and `academic_resolutions/master_list.csv`. If the original agenda
    capture `1.docx` is still at the repo root it is reconciled in (join on Google Drive
    file IDs); once retired, the tool runs corpus-only and keeps titles from the existing
    manifests. Dry-run by default; pass `--apply` to write. Re-run after adding/renaming
-   corpus files; see `docs/corpus-reconciliation-log.md` for the reconciliation history.
+   corpus files (including after a curriculum split); see
+   `docs/corpus-reconciliation-log.md` for the reconciliation history.
 
 ## Supporting files
 
