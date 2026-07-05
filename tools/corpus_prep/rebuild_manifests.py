@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
 """Rebuild per-meeting manifests + the reconciled master list (ADR-0003).
 
-Reconciles the hand-captured agenda (`1.docx` at the repo root) against the
-corpus tree `academic_resolutions/<ปี>/ครั้งที่ N[s]/`, joining both sides on
-link identity (Google Drive file id / open?id / folder id / full URL), then
-writes:
+Scans the corpus tree `academic_resolutions/<ปี>/ครั้งที่ N[s]/` and, if the
+hand-captured agenda `1.docx` is still present at the repo root, reconciles the
+two by link identity (Google Drive file id / open?id / folder id / full URL) —
+joining first on the id, then on a year+meeting+title fallback for stale docx
+URLs. `1.docx` is now optional: once it has been retired (master_list.csv
+supersedes it) the tool runs corpus-only. It writes:
 
 - `academic_resolutions/<ปี>/ครั้งที่ N[s]/meeting_manifest.json`
     the metadata source of truth: {file, title, url, title_source} per .md —
     titles are recovered from the docx because filenames are truncated ~100 chars
 - `academic_resolutions/master_list.csv`
-    one row per resolution across both sources, with a reconciliation status
-- `academic_resolutions/missing_report.md`
-    actionable list: files to re-download/OCR, suspect duplicate links, docx gaps
+    one row per resolution, with a reconciliation status (+ dup-link health count)
 
-Re-run this after fixing missing downloads or editing 1.docx:
+Re-run this after adding/renaming corpus files (or editing 1.docx, if kept):
 
     python tools/corpus_prep/rebuild_manifests.py            # dry-run (counts only)
     python tools/corpus_prep/rebuild_manifests.py --apply    # write everything
@@ -74,36 +74,13 @@ def body_hash(p: Path) -> str:
     return hashlib.md5(text.encode("utf-8")).hexdigest()
 
 
-_TITLE_STOP = re.compile(
-    r"^\s*($|\.{5,}|อ้างถึง|ตามหนังสือ|ตามบันทึก|ด้วย\s|ที่ประชุม|มติที่ประชุม)")
-
-
-def content_title(md_path: Path) -> tuple[str, str]:
-    """Read the OCR'd first page and extract (การประชุม, เรื่อง...) as stated in
-    the document itself — the ground truth when filenames/links disagree."""
-    text = DOC_HEADER.sub("", md_path.read_text(encoding="utf-8-sig"), count=1)
-    parts = re.split(r"^## Page \d+\s*$", text, flags=re.MULTILINE)
-    page = parts[1] if len(parts) > 1 else text
-    meet = ""
-    mm = re.search(r"(วาระพิเศษ\s*)?ครั้งที่\s*[๐-๙0-9]+\s*/\s*[๐-๙0-9]{4}", page)
-    if mm:
-        meet = re.sub(r"\s+", " ", mm.group(0)).strip()
-    title_lines: list[str] = []
-    for line in [l.strip() for l in page.splitlines()][:25]:
-        if not title_lines:
-            idx = line.find("เรื่อง")
-            if idx >= 0:
-                title_lines.append(line[idx:])
-            continue
-        if _TITLE_STOP.match(line):
-            break
-        title_lines.append(line)
-    title = re.sub(r"\s+", " ", " ".join(title_lines)).strip()
-    return meet, title[:260]
-
-
 # ---------- 1. parse 1.docx: paragraphs -> agenda items ----------
 def parse_docx() -> list[dict]:
+    if not DOCX.exists():
+        # 1.docx has been retired (master_list.csv supersedes it). Run corpus-only:
+        # every .md is kept, titles/urls come from _LINK.txt + filenames.
+        print("note: 1.docx not found — running corpus-only (no docx reconciliation)")
+        return []
     z = zipfile.ZipFile(DOCX)
     dom = ET.fromstring(z.read("word/document.xml"))
     rels = ET.fromstring(z.read("word/_rels/document.xml.rels"))
@@ -150,12 +127,25 @@ def parse_docx() -> list[dict]:
 
 
 # ---------- 2. scan the corpus tree ----------
+def _prev_titles(mdir: Path) -> dict[str, str]:
+    """Existing manifest titles keyed by .md filename, so a corpus-only re-run
+    (after 1.docx is retired) keeps the full titles once recovered from the docx
+    instead of falling back to the ~100-char-truncated filename."""
+    try:
+        entries = json.loads((mdir / "meeting_manifest.json").read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return {}
+    return {e["file"]: e["title"] for e in entries
+            if isinstance(e, dict) and e.get("file") and e.get("title")}
+
+
 def scan_corpus() -> list[dict]:
     files: list[dict] = []
     for year_dir in sorted(d for d in ROOT.iterdir() if d.is_dir()):
         for mdir in sorted(d for d in year_dir.iterdir() if d.is_dir()):
             sm = re.fullmatch(r"ครั้งที่ (\d+s?)", mdir.name)
             meet = (year_dir.name, sm.group(1)) if sm else (year_dir.name, mdir.name)
+            prev = _prev_titles(mdir)
             stems_md = {f.name[:-3] for f in mdir.glob("*.md")}
             seen = set()
             for lf in sorted(mdir.glob("*_LINK.txt")):
@@ -164,12 +154,14 @@ def scan_corpus() -> list[dict]:
                 md = mdir / f"{stem}.md"
                 files.append({"year": year_dir.name, "sdir": mdir.name, "meet": meet,
                               "stem": stem, "md": md if md.exists() else None,
-                              "url": url, "key": link_key(url), "docx": None})
+                              "url": url, "key": link_key(url), "docx": None,
+                              "prev_title": prev.get(f"{stem}.md")})
                 seen.add(stem)
             for stem in stems_md - seen:
                 files.append({"year": year_dir.name, "sdir": mdir.name, "meet": meet,
                               "stem": stem, "md": mdir / f"{stem}.md",
-                              "url": None, "key": None, "docx": None})
+                              "url": None, "key": None, "docx": None,
+                              "prev_title": prev.get(f"{stem}.md")})
     return files
 
 
@@ -273,11 +265,17 @@ for (year, sdir), group in sorted(dirs.items()):
         if not f["md"]:
             continue  # link-only rows go to the missing report, not the manifest
         it = f["docx"]
+        if it:
+            title, source = it["title"], "docx"
+        elif f["prev_title"]:
+            title, source = f["prev_title"], "manifest"
+        else:
+            title, source = clean_title(f["stem"]), "filename"
         entries.append({
             "file": f["md"].name,
-            "title": it["title"] if it else clean_title(f["stem"]),
+            "title": title,
             "url": f["url"],
-            "title_source": "docx" if it else "filename",
+            "title_source": source,
             "order": it["order"] if it else 10_000,
         })
     entries.sort(key=lambda e: (e["order"], e["file"]))
@@ -327,7 +325,7 @@ for f in files:
         note = "ไฟล์มีจริง จับเข้าคลังแล้ว (ไม่มีรายการใน 1.docx)"
         if is_flagged(f):
             note += "; ลิงก์ซ้ำกับเรื่องอื่น — ตรวจมือ"
-        rows.append([y, m, "", clean_title(f["stem"]), f["url"] or "",
+        rows.append([y, m, "", f["prev_title"] or clean_title(f["stem"]), f["url"] or "",
                      f"{f['year']}/{f['sdir']}/{f['md'].name if f['md'] else ''}",
                      status, note])
 
@@ -352,104 +350,3 @@ for r in rows:
     summary[r[6]] += 1
 for k, v in sorted(summary.items(), key=lambda x: -x[1]):
     print(f"  {v:5d}  {k}")
-
-# ---------- 7. missing report ----------
-def _lcs(a: str, b: str) -> int:
-    """Longest-common-subsequence length (for matching a filename to the
-    เรื่อง stated inside the document)."""
-    prev = [0] * (len(b) + 1)
-    for ch in a:
-        cur = [0]
-        for j, bj in enumerate(b, 1):
-            cur.append(prev[j - 1] + 1 if ch == bj else max(prev[j], cur[j - 1]))
-        prev = cur
-    return prev[-1]
-
-
-def meeting_label(y, m):
-    m = str(m)
-    return (f"{y} วาระพิเศษ ครั้งที่ {m[:-1]}" if m.endswith("s")
-            else f"{y} ครั้งที่ {m}")
-
-
-rep = ["# รายงานไฟล์ที่ขาด / ต้องตรวจสอบ (สร้างอัตโนมัติ)", "",
-       "สร้างจากการกระทบยอด `1.docx` กับ `academic_resolutions/` "
-       "(จับคู่ด้วย Google Drive file ID) — สร้างใหม่ได้ด้วย "
-       "`python tools/corpus_prep/rebuild_manifests.py --apply`", ""]
-
-# --- 1) nothing on disk at all ---
-sec1 = [r for r in rows if r[6] == "ไม่มีไฟล์เลย"]
-rep.append(f"## 1) ไม่มีไฟล์เลย — ต้องดาวน์โหลด + OCR ใหม่ ({len(sec1)} รายการ)")
-rep.append("")
-for r in sec1:
-    rep.append(f"- **{meeting_label(r[0], r[1])}** — {r[3]}")
-    rep.append(f"  - URL: {r[4]}")
-
-# (หมวด 1.1 "ไม่รู้ URL" และ หมวด 2 "มีลิงก์แต่ไม่มี .md" ตัดออกตามที่ผู้ใช้แจ้ง —
-#  เป็นรายการที่ไม่มี PDF ให้ดาวน์โหลด จึงยกเลิกการติดตาม)
-
-# --- 3) duplicate links, with the actual content of each file ---
-rep += ["", f"## 3) ลิงก์ซ้ำกัน/อาจผิดเรื่อง — ต้องตรวจด้วยมือ ({len(dup_flagged)} กลุ่ม)", "",
-        "แต่ละกลุ่มคือไฟล์หลายไฟล์ในโฟลเดอร์เดียวกันที่ `_LINK.txt` ชี้ URL เดียวกัน",
-        "บรรทัด \"เนื้อหาใน md\" คือเรื่องที่เขียนอยู่ในเอกสารจริง (อ่านจากหน้าแรกของ OCR)",
-        "",
-        "- **เนื้อหาเหมือนกันทุกไฟล์** = PDF เดียวกันถูกใช้กับหลายเรื่อง →",
-        "  เรื่องที่ชื่อไฟล์ *ไม่ตรง* กับเนื้อหา คือเรื่องที่ยังไม่มีเอกสารจริง:",
-        "  หา PDF ของเรื่องนั้นมาวางใน `academic_resolutions/missing/`",
-        "  (ตั้งชื่อขึ้นต้น `ครั้ง-ปี ` เช่น `11-2564 `) แล้วเรียก Claude ให้ OCR + จัดเข้าที่",
-        "- **เนื้อหาต่างกัน** = ไฟล์เป็นคนละเอกสารกันแต่ลิงก์ชี้ที่เดียวกัน →",
-        "  ตรวจว่า URL ควรเป็นของไฟล์ไหน แล้วแก้ `_LINK.txt` ของอีกไฟล์ให้ชี้ลิงก์ที่ถูก",
-        "  (ถ้าไฟล์หนึ่งเป็นแค่สำเนา/เวอร์ชันซ้ำ ให้เปลี่ยนนามสกุลเป็น `.dup`)"]
-for n, d in enumerate(dup_flagged, 1):
-    why = "เนื้อหาเหมือนกันทุกไฟล์" if d["why"] == "identical" else "เนื้อหาต่างกัน"
-    rep += ["", f"### กลุ่ม {n} — `{d['dir']}` · {why}",
-            f"URL ที่ใช้ร่วมกัน: {d['url']}", ""]
-    titles = []
-    for i, f in enumerate(d["files"], 1):
-        rep.append(f"{i}. ไฟล์: `{f['stem']}.md`")
-        if f["md"]:
-            meet, title = content_title(f["md"])
-            titles.append((f, title))
-            rep.append(f"   - เนื้อหาใน md: ({meet}) {title}")
-        else:
-            rep.append("   - ยังไม่มีไฟล์ .md")
-    if d["why"] == "identical" and titles:
-        # which filename matches the shared content best?
-        scored = sorted(d["files"],
-                        key=lambda f: _lcs(norm_for_match(f["stem"]),
-                                           norm_for_match(titles[0][1])),
-                        reverse=True)
-        rep.append(f"   → เนื้อหานี้น่าจะเป็นของ: {scored[0]['stem']}")
-        for f in scored[1:]:
-            rep.append(f"   → เรื่องที่ยังขาดเอกสารจริง (ต้องหา PDF มาเพิ่ม): {f['stem']}")
-    elif titles and len({norm_for_match(t) for _, t in titles}) == 1:
-        rep.append("   → หน้าแรกของทุกไฟล์ระบุเรื่องเดียวกัน — น่าจะเป็นสำเนา OCR ซ้ำ"
-                   "ของเอกสารเดียวกัน: เก็บไฟล์ที่ชื่อตรงเนื้อหาไว้ "
-                   "อีกไฟล์เปลี่ยนนามสกุลเป็น `.dup` ได้เลย")
-
-# --- 4) files that 1.docx does not know about ---
-genuine, artifacts = [], []
-for f in files:
-    if f["docx"] is None and f["md"]:
-        (artifacts if is_flagged(f) else genuine).append(f)
-rep += ["", f"## 4) รายการที่ตกหล่นจาก 1.docx (มีไฟล์อยู่จริง แต่ docx ไม่มี) — "
-        f"{len(genuine)} รายการ", "",
-        "ชื่อเรื่องด้านล่างอ่านจากเนื้อเอกสารจริง (หน้าแรกของ OCR) ใช้ค้นหา/เติมใน docx ได้เลย", ""]
-for f in genuine:
-    meet, title = content_title(f["md"])
-    y, m = f["meet"]
-    rep.append(f"- **{meeting_label(y, m)}** ({meet or 'ไม่พบเลขครั้งในเอกสาร'})")
-    rep.append(f"  - ชื่อเรื่องเต็ม: {title or f['stem']}")
-    rep.append(f"  - ไฟล์: `{f['year']}/{f['sdir']}/{f['md'].name}`")
-    rep.append(f"  - URL: {f['url'] or '(ไม่มี _LINK.txt)'}")
-if artifacts:
-    rep += ["", f"### 4.1) ไฟล์พ่วงจากปัญหาลิงก์ซ้ำ ({len(artifacts)} ไฟล์) — "
-            "ไม่ต้องเติมใน docx, จัดการที่หมวด 3 แทน", ""]
-    for f in artifacts:
-        rep.append(f"- `{f['year']}/{f['sdir']}/{f['stem']}.md`")
-rep += ["", "หมายเหตุ: การประชุมวาระพิเศษของปี 2565 (ครั้งที่ 2s, 3s) "
-        "ไม่มีหัวข้อใน 1.docx ทั้งการประชุม"]
-
-if APPLY:
-    (ROOT / "missing_report.md").write_text("\n".join(rep), encoding="utf-8")
-print(f"report: {len(rep)} lines {'written' if APPLY else '(dry-run, nothing saved)'}")

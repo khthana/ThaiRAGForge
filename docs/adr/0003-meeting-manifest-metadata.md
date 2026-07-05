@@ -41,8 +41,9 @@ fine) and are never edited to carry metadata.
 - `resolution_id`s and Silver-query titles use full, correct titles; link-back URLs
   survive even where `_LINK.txt` was broken or duplicated.
 - The reconciled corpus inventory lives in `academic_resolutions/master_list.csv`
-  (one row per resolution: meeting, full title, URL, file, status); gaps and
-  suspect links are tracked in `academic_resolutions/missing_report.md`.
+  (one row per resolution: meeting, full title, URL, file, status), which now
+  supersedes `1.docx` as the master inventory (the agenda capture has been retired;
+  `rebuild_manifests.py` runs corpus-only and keeps titles from the manifests).
 - Fixing a title or URL means editing one manifest entry — no file renames, no
   re-download.
 - Manifests are read once per process (cached); a live Streamlit session must be

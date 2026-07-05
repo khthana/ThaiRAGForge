@@ -26,13 +26,13 @@ specific year/session before running.
 4. **`check_ocr_coverage.py`** — Diagnostic. Lists PDFs in a session folder and whether
    a matching `.md` already exists. Useful to see what still needs OCR.
 
-5. **`rebuild_manifests.py`** — Reconciliation (ADR-0003). Joins the agenda capture
-   (`1.docx` at the repo root) against the corpus tree on Google Drive file IDs, then
+5. **`rebuild_manifests.py`** — Reconciliation (ADR-0003). Scans the corpus tree and
    writes per-meeting `meeting_manifest.json` (full titles + URLs — the metadata
-   source of truth), `academic_resolutions/master_list.csv`, and
-   `academic_resolutions/missing_report.md`. Dry-run by default; pass `--apply` to
-   write. Re-run after adding missing files or editing `1.docx`; see
-   `docs/corpus-reconciliation-log.md` for the follow-up workflow.
+   source of truth) and `academic_resolutions/master_list.csv`. If the original agenda
+   capture `1.docx` is still at the repo root it is reconciled in (join on Google Drive
+   file IDs); once retired, the tool runs corpus-only and keeps titles from the existing
+   manifests. Dry-run by default; pass `--apply` to write. Re-run after adding/renaming
+   corpus files; see `docs/corpus-reconciliation-log.md` for the reconciliation history.
 
 ## Supporting files
 
