@@ -3,7 +3,7 @@ import os
 import time
 import ollama
 from pathlib import Path
-from pdf2image import convert_from_path
+from pdf2image import convert_from_path, pdfinfo_from_path
 from PIL import Image, ImageEnhance
 
 sys.stdout.reconfigure(encoding='utf-8')
@@ -11,6 +11,9 @@ sys.stdout.reconfigure(encoding='utf-8')
 # =================================================================
 # CONFIGURATION
 # =================================================================
+# Default target when run without arguments. To OCR other folders, pass them on
+# the command line instead (one or more; processed sequentially), e.g.:
+#   python tools/corpus_prep/ocr_pdf_to_md.py "academic_resolutions/missing" "academic_resolutions/md-not-found"
 TARGET_SUBFOLDER = "ครั้งที่ 5"
 BASE_DIR = r"C:\Users\Terry\Desktop\Code\RAG\academic_resolutions\2567"
 MODEL_NAME = "scb10x/typhoon-ocr1.5-3b:latest"
@@ -119,21 +122,24 @@ def ocr_image(image_path: str) -> str:
 
 
 def process_pdf(file_path: Path) -> str:
+    # แปลงทีละหน้า — ไฟล์ใหญ่ (100+ หน้า) ถ้าแปลงทั้งเล่มทีเดียวจะกินแรมหลาย GB
     markdown = ""
     try:
-        images = convert_from_path(
-            file_path,
-            poppler_path=POPPLER_PATH,
-            dpi=PDF_DPI
-        )
-        total = len(images)
-        for i, img in enumerate(images):
+        total = pdfinfo_from_path(file_path, poppler_path=POPPLER_PATH)["Pages"]
+        for i in range(1, total + 1):
+            images = convert_from_path(
+                file_path,
+                poppler_path=POPPLER_PATH,
+                dpi=PDF_DPI,
+                first_page=i,
+                last_page=i,
+            )
             temp_img = f"temp_page_{i}.png"
-            img.save(temp_img, "PNG")
+            images[0].save(temp_img, "PNG")
 
-            print(f"   - Page {i+1}/{total}...")
+            print(f"   - Page {i}/{total}...")
             page_text = ocr_image(temp_img)
-            markdown += f"## Page {i+1}\n\n{page_text}\n\n---\n\n"
+            markdown += f"## Page {i}\n\n{page_text}\n\n---\n\n"
 
             if os.path.exists(temp_img):
                 os.remove(temp_img)
@@ -151,8 +157,7 @@ def process_image(file_path: Path) -> str:
 # MAIN
 # =================================================================
 
-def main():
-    target_path = Path(BASE_DIR) / TARGET_SUBFOLDER
+def run_folder(target_path: Path):
     if not target_path.exists():
         print(f"[ERROR] Folder not found: {target_path}")
         return
@@ -198,6 +203,12 @@ def main():
         print(f"[DONE] {output_file.name}")
 
     print("\n[FINISH]")
+
+
+def main():
+    targets = [Path(a) for a in sys.argv[1:]] or [Path(BASE_DIR) / TARGET_SUBFOLDER]
+    for target_path in targets:
+        run_folder(target_path)
 
 
 if __name__ == "__main__":

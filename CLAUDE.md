@@ -30,6 +30,10 @@ see `docs/adr/`.
   (ADR-0002).
 - The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;
   corpus-prep tooling in `tools/corpus_prep/` needs Poppler + Ollama.
+- Corpus layout is `<ปี>/ครั้งที่ N/` (special sessions: `ครั้งที่ Ns`); per-meeting
+  `meeting_manifest.json` is the metadata source of truth for titles/URLs — never
+  encode metadata in filenames (ADR-0003). The reconciled inventory is
+  `academic_resolutions/master_list.csv`.
 
 ## Agent skills
 

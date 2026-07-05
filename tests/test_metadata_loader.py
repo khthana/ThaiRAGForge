@@ -44,3 +44,21 @@ def test_metadata_loader_without_link_has_no_source_url(tmp_path):
     doc = _write(tmp_path, "## Page 1\nเนื้อหา", with_link=False)
     res = build_loader(StrategySpec(type="metadata")).load(str(doc))
     assert res.source_url is None
+
+
+def test_metadata_loader_prefers_manifest_over_link_file(tmp_path):
+    import json
+
+    doc = _write(tmp_path, "## Page 1\nเนื้อหา")  # _LINK.txt has .../d/ABC/view
+    (doc.parent / "meeting_manifest.json").write_text(
+        json.dumps([{"file": doc.name, "title": "เรื่อง ค่าธรรมเนียม (ฉบับเต็ม)",
+                     "url": "https://drive.google.com/file/d/XYZ/view"}],
+                   ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    res = build_loader(StrategySpec(type="metadata")).load(str(doc))
+
+    assert res.title == "เรื่อง ค่าธรรมเนียม (ฉบับเต็ม)"
+    assert res.source_url == "https://drive.google.com/file/d/XYZ/view"
+    assert res.metadata["title"] == "เรื่อง ค่าธรรมเนียม (ฉบับเต็ม)"

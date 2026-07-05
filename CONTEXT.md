@@ -10,7 +10,12 @@ A shared glossary for this project. Terms only — no implementation details.
   item / decision. Currently stored as an OCR-produced Markdown file. *(Unit to be
   confirmed — a file may contain one or several มติ.)*
 - **Session (ครั้งที่ N)** — A numbered council meeting within a given year that
-  groups the resolutions decided in it.
+  groups the resolutions decided in it. Special sessions (วาระพิเศษ) carry an `s`
+  suffix (ครั้งที่ Ns) and are distinct meetings from the same-numbered regular
+  session.
+- **Meeting manifest** — A per-meeting `meeting_manifest.json` mapping each
+  Resolution file to its full เรื่อง/title and source URL; the metadata source of
+  truth (filenames are truncated pointers, not metadata — see ADR-0003).
 
 ## Pipeline Units
 
@@ -32,7 +37,7 @@ A shared glossary for this project. Terms only — no implementation details.
 - **Retrieval phase** — Query-time, cheap: a Retriever ranks Chunks from a chosen
   Index artifact for a Query.
 - **Dev subset** — A small default slice of the Corpus used for fast iteration; the
-  full 1,215-Resolution corpus is an explicit opt-in.
+  full ~2,320-Resolution corpus is an explicit opt-in.
 - **Experiment run** — A single execution of the framework that produces persisted,
   comparable artifacts for one or more Combinations.
 
