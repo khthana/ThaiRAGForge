@@ -26,6 +26,16 @@ specific year/session before running.
 4. **`check_ocr_coverage.py`** — Diagnostic. Lists PDFs in a session folder and whether
    a matching `.md` already exists. Useful to see what still needs OCR.
 
+4a. **`scan_ocr_repetition.py`** — Diagnostic, read-only. Scans every corpus `.md` for
+    an OCR hallucination-loop artifact (the model gets stuck and repeats the same short
+    token many times instead of transcribing real content, e.g. a garbled URL repeated
+    600+ times). Tags each hit "table" (inside a data cell — doesn't affect retrieval,
+    deprioritized) or "prose" (corrupts searchable/citable text — worth fixing) and
+    writes the deduplicated list of affected source documents to
+    `academic_resolutions/ocr_repetition_review.md`. Fixing requires a fresh `ocr_pdf_to_md.py`
+    pass on the *source PDF* (the corrupted text is gone, not just misformatted) —
+    this script only detects and reports.
+
 5. **`split_curriculum_bundles.py`** — Curriculum splitting (ADR-0004). Some
    resolutions bundle several curricula into one มติ (e.g. one "ปรับปรุงหลักสูตร"
    file covering 3 curricula); this splits each into one physical `.md` file per
