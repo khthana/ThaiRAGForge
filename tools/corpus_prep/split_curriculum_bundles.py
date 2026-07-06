@@ -76,7 +76,21 @@ ENUM = re.compile(
     r"(?:^|\n)[ \t]*(?:#{1,6}[ \t]*)?([๐-๙]{1,2})[.)][ \t]*\**[ \t]*"
     r"(?=หลักสูตร)(?!หลักสูตร[ \t]*(?:เป็น|เน้น|ควร|ต้อง|จะ|ให้|มี|อยู่|คือ))")
 MIN_PIECE_LEN = 60          # floor against a literally-empty piece
-MAX_PIECE_RATIO = 12        # floor against one dominant piece + near-empty rest
+# A curriculum bundle's declaration sentence often carries its own inline
+# name-list ("จำนวน ๔ หลักสูตร ดังนี้ ๑) ชื่อ๑ ๒) ชื่อ๒ ๓) ชื่อ๓ ๔) ชื่อ๔") --
+# structurally identical to the real per-curriculum list (same "๑) หลักสูตร.."
+# markers) but each item is just a bare name+year line. The real content for
+# each curriculum, when present, appears later and re-numbers "๑) ๒) ..."
+# from scratch. Instead of guessing from piece-size ratios, require every
+# piece in a candidate run to show a concrete sign of real content; a
+# name-only run fails this and the search retries further into the document.
+REAL_CONTENT = re.compile(
+    r"โดยผ่านการพิจารณาจาก"    # "considered by [committee]" framing line
+    r"|เหตุผลการปรับปรุง"       # "rationale for revision" subsection heading
+    r"|สาระในการปรับปรุง"       # "substance of the revision" subsection heading
+    r"|^##\s*Page\s*\d+\s*$"    # a page marker falls inside the piece
+    r"|<table",                 # a table is embedded in the piece
+    re.M)
 PAGE_MARKER = re.compile(r"^##\s*Page\s*\d+\s*$", re.M)
 DOC_HEADER = re.compile(r"^\s*#\s*Document:.*$", re.M)
 SPLIT_PIECE = re.compile(r"__\d+$")
@@ -93,6 +107,13 @@ EXCLUDE_TITLE = re.compile(
     r"|บันทึกข้อตกลง|ความร่วมมือทางวิชาการ"              # MOUs
     r"|รายงานความคืบหน้า"                                # progress reports (e.g. OBE)
     r"|ลงทะเบียนเรียนเกิน"                                # credit-overload requests
+    r"|ฝึกอบรมเพื่อสะสมหน่วยกิต"    # credit-bank training modules -- short
+                                    # workshops/CEU courses, not degree curricula;
+                                    # same "จำนวน N หลักสูตร ๑) ๒)..." structure
+                                    # but each item is inherently a few lines
+    r"|อบรมเชิงปฏิบัติการ"          # workshop/training projects (e.g. OBE)
+    r"|ประเมินการพัฒนาคุณภาพ"       # internal quality-assessment reports (DPBP etc.)
+    r"|ประธานแจ้งให้ที่ประชุมทราบ"  # chair's general announcements agenda item
 )
 REPORT_ITEM = re.compile(r"จำนวน\s*[0-9๐-๙]+\s*หลักสูตร")
 # A curriculum list is often split into degree-level sections (ปริญญาตรี,
@@ -113,77 +134,40 @@ def blank_tables(text: str) -> str:
     return TABLE.sub(lambda m: " " * len(m.group(0)), text)
 
 
-def find_boundaries(text: str) -> dict:
-    """Classify a file and, if splittable, return the enumerator offsets.
+def validate_candidate(text: str, n: int, offsets: list[int]) -> dict:
+    """Check one candidate run of N sequential enumerator offsets. Returns
+    {"action": "split", ...} if it holds up, else {"action": "mismatch", ...}
+    with a reason."""
+    bodies = [text[start:offsets[i + 1] if i + 1 < len(offsets) else len(text)]
+              for i, start in enumerate(offsets)]
+    piece_lens = [len(b) for b in bodies]
 
-    Returns a dict with at least {"action": ...}; "split" results also carry
-    {"declared": N, "offsets": [...]}.
-    """
-    m = DECL.search(text)
-    if not m:
-        return {"action": "no-declaration"}
-    n = thai_int(m.group(1))
-    if n < 2:
-        return {"action": "single"}
-
-    blanked = blank_tables(text)
-    window = blanked[m.end():]
-    offsets: list[int] = []
-    local_next = 1
-    gap_start = 0
-    for em in ENUM.finditer(window):
-        if len(offsets) == n:
-            break  # got everything we expect; don't let a later, unrelated
-                   # numbered list (e.g. a feedback/recommendation list that
-                   # also restarts at ๑) ๒) ๓)...) extend the match further
-        num = thai_int(em.group(1))
-        if num == local_next:
-            offsets.append(m.end() + em.start(1))
-            local_next += 1
-            gap_start = em.end()
-        elif num == 1 and offsets and LEVEL_HEADER.search(window[gap_start:em.start()]):
-            # a degree-level header intervened (e.g. "ระดับบัณฑิตศึกษา") --
-            # this "๑)" restarts local numbering for the new level, but it's
-            # still the next curriculum in the overall list
-            offsets.append(m.end() + em.start(1))
-            local_next = 2
-            gap_start = em.end()
-        # else: out-of-sequence match (stray parenthesis) -- ignore it
-    if len(offsets) != n:
-        return {"action": "mismatch", "declared": n, "found": len(offsets)}
-
-    piece_lens = []
-    for i, start in enumerate(offsets):
-        end = offsets[i + 1] if i + 1 < len(offsets) else len(text)
-        piece_lens.append(end - start)
-
+    for body in bodies:
         # Guard against a status/count REPORT (e.g. a CHECO or OBE-progress
         # summary) whose top-level "๑) ... จำนวน M หลักสูตร" items are
         # category subtotals, not curriculum names -- never a real bundle.
-        head = text[start:start + 80]
-        if REPORT_ITEM.search(head):
+        if REPORT_ITEM.search(body[:80]):
             return {"action": "mismatch", "declared": n, "found": len(offsets),
                     "reason": "looks like a count/subtotal report, not curriculum names"}
 
-    # Guard against latching onto a short recap/restatement list (e.g. a
-    # "มติที่ประชุม ... ๑) ... ๒) ..." summary near the end of the document)
-    # instead of the real per-curriculum body: reject a literally-empty piece
-    # outright, and reject a wildly unbalanced split (one dominant piece plus
-    # near-empty stubs) even if every piece clears the absolute floor --
-    # legitimately short bundles (e.g. a 2-curriculum tuition-fee notice)
-    # still come out roughly even in size.
     if min(piece_lens) < MIN_PIECE_LEN:
         return {"action": "mismatch", "declared": n, "found": len(offsets),
                 "reason": f"piece too short (min {min(piece_lens)} chars)"}
-    if max(piece_lens) > MAX_PIECE_RATIO * min(piece_lens):
+
+    # Guard against latching onto the declaration sentence's own inline
+    # name-list ("๑) ชื่อ๑ ๒) ชื่อ๒ ...") instead of the real per-curriculum
+    # body: a bare name+year line carries no sign of actual content (no
+    # committee framing, no subsection heading, no page marker, no table).
+    # Reject the whole run if any piece looks like a name-only stub -- the
+    # caller retries further into the document for the real content run.
+    not_real = [i + 1 for i, b in enumerate(bodies) if not REAL_CONTENT.search(b)]
+    if not_real:
         return {"action": "mismatch", "declared": n, "found": len(offsets),
-                "reason": f"pieces wildly unbalanced ({min(piece_lens)}-{max(piece_lens)} chars)"}
+                "reason": f"piece(s) {not_real} look like name-only list entries, not real content"}
 
     # Guard against two "different" curricula actually being the same text
     # repeated (e.g. a table-of-contents echo of the same entry, or an OCR
     # double-scan) -- a real bundle never lists the identical passage twice.
-    bodies = [text[start:offsets[i + 1] if i + 1 < len(offsets) else len(text)]
-              for i, start in enumerate(offsets)]
     if len({b.strip() for b in bodies}) != len(bodies):
         return {"action": "mismatch", "declared": n, "found": len(offsets),
                 "reason": "two pieces have identical content -- likely a repeated passage, not distinct curricula"}
@@ -200,6 +184,68 @@ def find_boundaries(text: str) -> dict:
                 "reason": "two pieces extracted the same title -- likely a recap echo, not a distinct curriculum"}
 
     return {"action": "split", "declared": n, "offsets": offsets}
+
+
+def find_boundaries(text: str) -> dict:
+    """Classify a file and, if splittable, return the enumerator offsets.
+
+    Returns a dict with at least {"action": ...}; "split" results also carry
+    {"declared": N, "offsets": [...]}.
+    """
+    m = DECL.search(text)
+    if not m:
+        return {"action": "no-declaration"}
+    n = thai_int(m.group(1))
+    if n < 2:
+        return {"action": "single"}
+
+    # N comes from the declaration sentence, but the declaration itself isn't
+    # always where the enumerator list opens -- a "มติที่ประชุม ... จำนวน N
+    # หลักสูตร ดังนี้" recap near the end of the file matches DECL just as
+    # well as the real intro (some intros phrase it as "ระดับปริญญาตรี N
+    # หลักสูตร" with no "จำนวน" at all, so DECL's *first* match can be that
+    # trailing recap). Search the whole document for boundaries rather than
+    # anchoring to this match's position -- the real-content/duplicate-title
+    # guards below are what actually keep a wrong list from being accepted.
+    blanked = blank_tables(text)
+    window = blanked
+    offsets: list[int] = []
+    local_next = 1
+    gap_start = 0
+    last_attempt: dict | None = None
+    for em in ENUM.finditer(window):
+        num = thai_int(em.group(1))
+        if num == local_next:
+            offsets.append(em.start(1))
+            local_next += 1
+            gap_start = em.end()
+        elif num == 1 and offsets and LEVEL_HEADER.search(window[gap_start:em.start()]):
+            # a degree-level header intervened (e.g. "ระดับบัณฑิตศึกษา") --
+            # this "๑)" restarts local numbering for the new level, but it's
+            # still the next curriculum in the overall list
+            offsets.append(em.start(1))
+            local_next = 2
+            gap_start = em.end()
+        elif num == 1 and offsets:
+            # a fresh "๑)" appeared mid-run with no level-header restart --
+            # the current partial run is stale (most likely the declaration's
+            # own inline name-list); abandon it and start a new candidate
+            # here. The real per-curriculum content, when it exists, opens
+            # its own "๑) ๒) ..." run later in the document.
+            offsets = [em.start(1)]
+            local_next = 2
+            gap_start = em.end()
+        # else: out-of-sequence match (stray parenthesis) -- ignore it
+
+        if len(offsets) == n:
+            last_attempt = validate_candidate(text, n, offsets)
+            if last_attempt["action"] == "split":
+                return last_attempt
+            offsets = []
+            local_next = 1
+            gap_start = em.end()
+
+    return last_attempt or {"action": "mismatch", "declared": n, "found": 0}
 
 
 def last_page_marker(text: str, pos: int) -> str | None:
