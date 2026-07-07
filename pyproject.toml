@@ -24,6 +24,7 @@ lab = [
     "pyyaml>=6.0",
     "numpy>=1.26",
     "pyarrow>=16.0",
+    "torch>=2.0",
     "sentence-transformers>=3.0",
     "rank-bm25>=0.2.2",
     "pythainlp>=5.0",
@@ -45,6 +46,16 @@ dev = [
 # distributable wheel — don't try to build/install the root as a package.
 [tool.uv]
 package = false
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu130", marker = "sys_platform == 'win32'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
