@@ -1,0 +1,35 @@
+# Resume of chunker_compare_full.yaml: the first run was killed after
+# completing fixed_size + recursive (6/12 combos, saved under the same
+# output_dir). Combo IDs are content-hashed (loader+chunker+embedder), not
+# position-dependent, so re-pointing at the same output_dir with only the
+# remaining chunkers just fills in the missing 6 combos without redoing or
+# colliding with the ones already on disk.
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/chunker_compare_full_resume.yaml
+experiment_name: chunker_compare_full
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/chunker_compare_full
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: sentence
+    params: { chunk_size: 512 }
+  - type: semantic
+    params: { breakpoint_threshold: 0.5 }
+
+embedders:
+  - type: local
+    params: { model_name: "BAAI/bge-m3" }
+  - type: e5
+    params: { model_name: "intfloat/multilingual-e5-large" }
+  - type: local
+    params: { model_name: "kornwtp/ConGen-BGE_M3-model-phayathaibert" }
+
+run_mode: cartesian
+seed: 42

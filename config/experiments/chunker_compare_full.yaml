@@ -1,0 +1,36 @@
+# Full-corpus chunker/embedder comparison, promoted from
+# config/experiments/chunker_compare_smoke.yaml once the smoke run passed
+# clean on all 12 combos.
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/chunker_compare_full.yaml
+experiment_name: chunker_compare_full
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/chunker_compare_full
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: fixed_size
+    params: { chunk_size: 512, chunk_overlap: 50 }
+  - type: recursive
+    params: { chunk_size: 512, chunk_overlap: 50 }
+  - type: sentence
+    params: { chunk_size: 512 }
+  - type: semantic
+    params: { breakpoint_threshold: 0.5 }
+
+embedders:
+  - type: local
+    params: { model_name: "BAAI/bge-m3" }
+  - type: e5
+    params: { model_name: "intfloat/multilingual-e5-large" }
+  - type: local
+    params: { model_name: "kornwtp/ConGen-BGE_M3-model-phayathaibert" }
+
+run_mode: cartesian
+seed: 42

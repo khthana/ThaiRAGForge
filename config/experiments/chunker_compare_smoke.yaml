@@ -1,0 +1,37 @@
+# Validation run before the full-corpus sweep: small dev subset, but exercises
+# every chunker and every embedder (including the newly-added Thai model) so a
+# broken model_name or missing dependency fails fast and cheap.
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/chunker_compare_smoke.yaml
+experiment_name: chunker_compare_smoke
+
+corpus:
+  input_dir: academic_resolutions
+  subset: dev
+  limit: 10
+
+output_dir: data/index/chunker_compare_smoke
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: fixed_size
+    params: { chunk_size: 512, chunk_overlap: 50 }
+  - type: recursive
+    params: { chunk_size: 512, chunk_overlap: 50 }
+  - type: sentence
+    params: { chunk_size: 512 }
+  - type: semantic
+    params: { breakpoint_threshold: 0.5 }
+
+embedders:
+  - type: local
+    params: { model_name: "BAAI/bge-m3" }
+  - type: e5
+    params: { model_name: "intfloat/multilingual-e5-large" }
+  - type: local
+    params: { model_name: "kornwtp/ConGen-BGE_M3-model-phayathaibert" }
+
+run_mode: cartesian
+seed: 42
