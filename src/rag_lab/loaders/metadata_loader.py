@@ -7,6 +7,7 @@ from rag_lab.loaders.common import (
     read_source_url,
     read_text,
     strip_document_header,
+    strip_mapping_tables,
 )
 from rag_lab.registries import loader_registry
 from rag_lab.schema import Resolution
@@ -19,7 +20,7 @@ class MetadataLoader(BaseLoader):
     propagate onto chunks for filtering."""
 
     def load(self, path: str) -> Resolution:
-        text = strip_document_header(read_text(path))
+        text = strip_mapping_tables(strip_document_header(read_text(path)))
         year, session, title = parse_path(path)
         source_url = read_source_url(path)
         metadata = {

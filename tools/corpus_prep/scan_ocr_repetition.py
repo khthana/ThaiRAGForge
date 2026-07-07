@@ -24,9 +24,14 @@ design, not artifacts:
 - "Curriculum Mapping" tables (แผนที่แสดงการกระจายความรับผิดชอบ...): a PLO
   (program learning outcome) x-subject grid that is *supposed to* repeat "0"
   or "1" across dozens of columns per row. Detected by heading text and
-  skipped for a fixed window after it, regardless of whether the table is
-  `<table>`-wrapped (some are malformed/never close their tag, which is what
-  let one slip through the `<table>` blank in an earlier pass).
+  skipped through the end of the `<table>` span(s) that immediately follow it
+  -- chaining consecutive tables within CURRICULUM_MAP_CHAIN_GAP chars of each
+  other, so a grid split across a page break by "---"/"## Page N" markers
+  still counts as one continuous table. Only falls back to a flat
+  CURRICULUM_MAP_WINDOW-char skip when no table follows at all (a malformed/
+  never-closing tag). A flat window for every heading was tried first and
+  wrongly swallowed an unrelated OCR-loop table that happened to start within
+  8000 chars of a Curriculum Mapping heading elsewhere on the same page.
 
 Even with both exclusions this is a heuristic, not a precise classifier --
 other repetitive-by-design tables (citation lists, etc.) can still surface
@@ -82,7 +87,10 @@ TABLE = re.compile(r"<table.*?</table>", re.S | re.I)
 CURRICULUM_MAP_HEADING = re.compile(
     r"Curriculum\s*Mapping|แผนที่แสดงการกระจายความรับผิดชอบ", re.I
 )
-CURRICULUM_MAP_WINDOW = 8000  # chars after the heading treated as table body
+CURRICULUM_MAP_WINDOW = 8000  # fallback when no table follows (malformed/unclosed tag)
+CURRICULUM_MAP_CHAIN_GAP = 500  # max gap between chained tables (covers a PLO grid
+# split across a page break by "---"/"## Page N" markers) before treating the next
+# <table> as unrelated content, not a continuation of the mapping grid
 CONTEXT_WINDOW = 300
 TABLE_MARKUP = re.compile(r"<t[dr]|<table", re.I)
 
@@ -102,12 +110,16 @@ TR = re.compile(r"<tr>.*?</tr>", re.S | re.I)
 ROW_DIGITS = re.compile(r"[0-9๐-๙]+")
 DISTINCT_ROW_RATIO_MAX = 0.5  # loops repeat near-identical rows; real rosters vary row to row
 
-# Two more loop shapes found by hand while fixing table-name-loop hits:
+# Three more loop shapes found by hand while fixing table-name-loop hits:
 # (1) a numbered-list enumerator flooding upward ("๒. ๓. ๔. ... ๓๔๒.") with no
 #     real content between the numbers, drowning out whatever cell it replaced;
 # (2) a short phrase cycling verbatim many times ("๑๔ ๖-๘ มนาคม ๒๕๖๒" x90) --
 #     four *different* tokens repeating as a unit, invisible to find_runs()
 #     which only catches one *identical* token repeating.
+# (3) a whole garbled sentence repeated line-by-line, found by a user reading
+#     a course-description block ("Basic knowledge of food components, ...
+#     protein, hina" x78) -- a 26-token unit, past CYCLE_MAX_PERIOD (8) and
+#     therefore invisible to find_cyclic_floods() too. See find_line_repeats().
 NUMERIC_TOKEN = re.compile(r"^([0-9๐-๙]+)\.$")
 THAI_DIGITS = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
 NUMERIC_FLOOD_MIN = 8  # consecutive N., N+1., N+2., ... this long is not a real list
@@ -132,9 +144,27 @@ def blank_spans(text: str, spans: list[tuple[int, int]]) -> str:
 
 
 def curriculum_map_spans(text: str) -> list[tuple[int, int]]:
+    """Span(s) to treat as PLO-grid body for each Curriculum Mapping heading:
+    bounded by the actual table(s) that follow, not a blanket char count --
+    see the CURRICULUM_MAP_CHAIN_GAP docstring above for why."""
+    tables = list(TABLE.finditer(text))
     spans = []
     for m in CURRICULUM_MAP_HEADING.finditer(text):
-        spans.append((m.start(), min(len(text), m.start() + CURRICULUM_MAP_WINDOW)))
+        end = m.end()
+        cursor = m.end()
+        found_any = False
+        for t in tables:
+            if t.start() < cursor:
+                continue
+            if t.start() - cursor > CURRICULUM_MAP_CHAIN_GAP:
+                break
+            end = t.end()
+            cursor = t.end()
+            found_any = True
+        if found_any:
+            spans.append((m.start(), end))
+        else:
+            spans.append((m.start(), min(len(text), m.start() + CURRICULUM_MAP_WINDOW)))
     return spans
 
 
@@ -267,6 +297,47 @@ def find_cyclic_floods(text: str) -> list[tuple[str, int, int, str]]:
     return hits
 
 
+LINE_REPEAT_MIN = 4  # same non-trivial line, repeated this many times in a row, is a loop
+LINE_REPEAT_MIN_LEN = 20  # ignore short lines (table rules, blank markers, single words)
+
+
+def find_line_repeats(text: str) -> list[tuple[str, int, int, str]]:
+    """Find a whole line (a garbled sentence, not just a short token or a 2-8
+    token cycle) repeated verbatim many times in a row -- e.g. a hallucinated
+    course description that reads "Basic knowledge of food components,
+    ... protein, hina" and then repeats that exact sentence, one per line, 78
+    times instead of moving on to the next course. find_cyclic_floods() only
+    catches repeating units up to CYCLE_MAX_PERIOD (8) tokens; a 26-word
+    sentence like this is invisible to it. Line-based instead of token-based
+    because the OCR output puts one repetition per line here, which is a
+    cheaper and more reliable signal than re-deriving token-period cycles at
+    arbitrary length."""
+    cmap_spans = curriculum_map_spans(text)
+    hits: list[tuple[str, int, int, str]] = []
+    offset = 0
+    lines = text.split("\n")
+    i = 0
+    n = len(lines)
+    while i < n:
+        stripped = lines[i].strip()
+        if len(stripped) < LINE_REPEAT_MIN_LEN:
+            offset += len(lines[i]) + 1
+            i += 1
+            continue
+        j = i + 1
+        run_offset = offset
+        cursor = offset + len(lines[i]) + 1
+        while j < n and lines[j].strip() == stripped:
+            cursor += len(lines[j]) + 1
+            j += 1
+        run_len = j - i
+        if run_len >= LINE_REPEAT_MIN and not _in_any_span(run_offset, cmap_spans):
+            hits.append((stripped, run_len, run_offset, classify_context(text, run_offset)))
+        offset = cursor
+        i = j
+    return hits
+
+
 def find_runs(text: str) -> list[tuple[str, int, int, str]]:
     """Return (token, run_length, char_offset, context) for each offending run."""
     table_spans = [(m.start(), m.end()) for m in TABLE.finditer(text)]
@@ -289,6 +360,7 @@ def find_runs(text: str) -> list[tuple[str, int, int, str]]:
     hits.extend(find_table_name_loops(text))
     hits.extend(find_numeric_floods(text))
     hits.extend(find_cyclic_floods(text))
+    hits.extend(find_line_repeats(text))
     return hits
 
 
