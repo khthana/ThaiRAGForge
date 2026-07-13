@@ -2,9 +2,10 @@
 
 Parses `consensus_priority.md` (built from `full_review_<year>.md` by the
 scan in `llm_ocr_scan.py`), extracts a flagged page's full Markdown live from
-the real corpus file, detects split-document siblings, and persists reviewer
-verdicts to an append-only decision log. See
-tools/corpus_prep/consensus_review/SPEC.md and tickets.md (tickets 1-2).
+the real corpus file, detects split-document siblings, persists reviewer
+verdicts to an append-only decision log, and generates the re-OCR worklist
+from that log. See tools/corpus_prep/consensus_review/SPEC.md and
+tickets.md (tickets 1-3).
 """
 from __future__ import annotations
 
@@ -203,25 +204,23 @@ def resolve_decisions(decisions: list[Decision]) -> dict[str, Decision]:
 
 
 def generate_worklist(resolved: dict[str, Decision]) -> str:
-    """Markdown content for the re-OCR worklist: every file whose current
-    verdict is VERDICT_REOCR, sorted for a deterministic diff between
-    regenerations."""
+    """A plain list of full relative Resolution file paths whose current
+    verdict is VERDICT_REOCR, one per line, sorted for a deterministic diff
+    between regenerations. Empty string if none. No header/decoration --
+    this is meant to be directly consumable by the next (manual, scripted-or-
+    not) re-OCR-diff step, not just read by eye."""
     files = sorted(d.file for d in resolved.values() if d.verdict == VERDICT_REOCR)
-    lines = [
-        "# Re-OCR worklist",
-        "",
-        "Auto-generated from `review_decisions.jsonl` -- regenerated in full "
-        "each time, never appended.",
-        "",
-        f"{len(files)} file(s) marked \"{VERDICT_REOCR}\":",
-        "",
-    ]
-    lines.extend(files)
-    return "\n".join(lines) + "\n"
+    if not files:
+        return ""
+    return "\n".join(files) + "\n"
 
 
-def write_worklist(worklist_path: Path, resolved: dict[str, Decision]) -> None:
-    """Write the re-OCR worklist, replacing any prior contents in full."""
+def write_worklist(worklist_path: Path, resolved: dict[str, Decision]) -> int:
+    """Write the re-OCR worklist, replacing any prior contents in full.
+    Returns the number of files written, so callers don't have to re-derive
+    the same VERDICT_REOCR filter just to report a count."""
     worklist_path = Path(worklist_path)
     worklist_path.parent.mkdir(parents=True, exist_ok=True)
-    worklist_path.write_text(generate_worklist(resolved), encoding="utf-8")
+    content = generate_worklist(resolved)
+    worklist_path.write_text(content, encoding="utf-8")
+    return len(content.splitlines())

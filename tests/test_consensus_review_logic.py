@@ -216,6 +216,21 @@ def _resolved(*decisions: logic.Decision) -> dict[str, logic.Decision]:
     return logic.resolve_decisions(list(decisions))
 
 
+def test_generate_worklist_exact_content_for_a_small_fixture(tmp_path):
+    """The ticket's own wording ('assert exact worklist contents') calls for
+    a hand-written expected string, not a comparison against the function's
+    own output -- that would be tautological."""
+    resolved = _resolved(
+        logic.Decision(year="2567", file="2567\\ครั้งที่ 9\\ก.md", verdict=logic.VERDICT_REOCR),
+        logic.Decision(year="2567", file="2567\\ครั้งที่ 9\\ข.md", verdict=logic.VERDICT_FALSE_POSITIVE),
+        logic.Decision(year="2567", file="2567\\ครั้งที่ 9\\ค.md", verdict=logic.VERDICT_REOCR),
+    )
+
+    content = logic.generate_worklist(resolved)
+
+    assert content == "2567\\ครั้งที่ 9\\ก.md\n2567\\ครั้งที่ 9\\ค.md\n"
+
+
 def test_generate_worklist_lists_only_reocr_verdicts_sorted(tmp_path):
     resolved = _resolved(
         logic.Decision(year="2567", file="ข.md", verdict=logic.VERDICT_REOCR),
@@ -237,10 +252,7 @@ def test_generate_worklist_empty_when_no_reocr_decisions(tmp_path):
         logic.Decision(year="2567", file="ก.md", verdict=logic.VERDICT_FALSE_POSITIVE),
     )
 
-    content = logic.generate_worklist(resolved)
-
-    assert "0 file" in content
-    assert ".md" not in content
+    assert logic.generate_worklist(resolved) == ""
 
 
 def test_write_worklist_writes_generate_worklists_exact_content(tmp_path):
@@ -249,8 +261,9 @@ def test_write_worklist_writes_generate_worklists_exact_content(tmp_path):
     )
     worklist_path = tmp_path / "reocr_worklist.md"
 
-    logic.write_worklist(worklist_path, resolved)
+    count = logic.write_worklist(worklist_path, resolved)
 
+    assert count == 1
     assert worklist_path.read_text(encoding="utf-8") == logic.generate_worklist(resolved)
 
 

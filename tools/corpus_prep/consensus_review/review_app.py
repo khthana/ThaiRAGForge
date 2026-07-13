@@ -29,21 +29,23 @@ _DEFAULT_CONSENSUS_FILE = _DEFAULT_CORPUS_ROOT / "llm_ocr_scan" / "consensus_pri
 _DEFAULT_DECISIONS_FILE = _DEFAULT_CORPUS_ROOT / "llm_ocr_scan" / "review_decisions.jsonl"
 _DEFAULT_WORKLIST_FILE = _DEFAULT_CORPUS_ROOT / "llm_ocr_scan" / "reocr_worklist.md"
 
+def _path_input(label: str, default: Path, key: str) -> Path:
+    """A sidebar path override, defaulting to the real corpus location but
+    always overridable -- e.g. by tests, which seed `st.session_state[key]`
+    before the first run so they never touch the real path, even
+    transiently."""
+    return Path(st.sidebar.text_input(label, str(default), key=key))
+
+
 st.set_page_config(page_title="Consensus Review", layout="wide")
 st.title("Consensus Review -- ตรวจ flag ที่ทั้ง 2 โมเดลเห็นตรงกัน")
 
-corpus_root = Path(
-    st.sidebar.text_input("Corpus root", str(_DEFAULT_CORPUS_ROOT), key="corpus_root")
+corpus_root = _path_input("Corpus root", _DEFAULT_CORPUS_ROOT, "corpus_root")
+consensus_file = _path_input(
+    "consensus_priority.md path", _DEFAULT_CONSENSUS_FILE, "consensus_file"
 )
-consensus_file = Path(
-    st.sidebar.text_input(
-        "consensus_priority.md path", str(_DEFAULT_CONSENSUS_FILE), key="consensus_file"
-    )
-)
-decisions_file = Path(
-    st.sidebar.text_input(
-        "review_decisions.jsonl path", str(_DEFAULT_DECISIONS_FILE), key="decisions_file"
-    )
+decisions_file = _path_input(
+    "review_decisions.jsonl path", _DEFAULT_DECISIONS_FILE, "decisions_file"
 )
 
 if not consensus_file.exists():
@@ -62,14 +64,9 @@ show_all = st.sidebar.checkbox(
 )
 st.sidebar.caption(f"ตัดสินแล้ว {len(resolved)}/{len(entries)}")
 
-worklist_file = Path(
-    st.sidebar.text_input(
-        "reocr_worklist.md path", str(_DEFAULT_WORKLIST_FILE), key="worklist_file"
-    )
-)
+worklist_file = _path_input("reocr_worklist.md path", _DEFAULT_WORKLIST_FILE, "worklist_file")
 if st.sidebar.button("สร้าง/อัปเดต reocr_worklist.md", key="regenerate_worklist_button"):
-    logic.write_worklist(worklist_file, resolved)
-    reocr_count = sum(1 for d in resolved.values() if d.verdict == logic.VERDICT_REOCR)
+    reocr_count = logic.write_worklist(worklist_file, resolved)
     st.sidebar.success(f"เขียน {worklist_file} แล้ว ({reocr_count} ไฟล์)")
 
 visible_entries = entries if show_all else [e for e in entries if e.file not in resolved]
