@@ -56,12 +56,18 @@ st.caption(f"ไฟล์ {idx + 1}/{len(entries)} -- ปี {entries[idx].year}
 entry = entries[idx]
 st.subheader(entry.file)
 
-siblings = logic.split_siblings(entries, entry.year, entry.file)
-if siblings:
-    st.warning(
-        "ส่วนหนึ่งของเอกสารที่ถูกตัดเป็นหลายชิ้น -- ชิ้นอื่นในลิสต์ consensus นี้: "
-        + ", ".join(siblings)
-    )
+if logic.is_split_piece(entry.file):
+    siblings = logic.consensus_siblings(entries, entry)
+    if siblings:
+        st.warning(
+            "ส่วนหนึ่งของเอกสารที่ถูกตัดเป็นหลายชิ้น -- ชิ้นอื่นในลิสต์ consensus นี้: "
+            + ", ".join(siblings)
+        )
+    else:
+        st.warning(
+            "ส่วนหนึ่งของเอกสารที่ถูกตัดเป็นหลายชิ้น -- ชิ้นอื่นไม่อยู่ในลิสต์ consensus "
+            "นี้ (อาจไม่ถูก flag) แต่ควรเช็คไฟล์พี่น้องในคอร์ปัสด้วย"
+        )
 
 for page in entry.pages:
     st.markdown(f"#### {page.page}")

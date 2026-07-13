@@ -103,19 +103,29 @@ def test_load_page_markdown_returns_none_for_missing_file(tmp_path):
     assert logic.load_page_markdown(tmp_path, "2567\\ครั้งที่ 9\\ไม่มีไฟล์นี้.md", "Page 1") is None
 
 
-def test_split_siblings_finds_other_pieces_of_the_same_split_document(tmp_path):
+def test_is_split_piece_true_only_for_dunder_n_filenames(tmp_path):
     entries = logic.parse_consensus_priority(_write_fixture(tmp_path))
-    doc_a = entries[0]
-    doc_b = entries[1]
+    doc_a, doc_b = entries
+
+    assert logic.is_split_piece(doc_a.file) is False
+    assert logic.is_split_piece(doc_b.file) is True
+
+
+def test_consensus_siblings_empty_when_not_a_split_piece_or_no_sibling_flagged(tmp_path):
+    entries = logic.parse_consensus_priority(_write_fixture(tmp_path))
+    doc_a, doc_b = entries
 
     # doc_a is not a split piece at all.
-    assert logic.split_siblings(entries, doc_a.year, doc_a.file) == []
+    assert logic.consensus_siblings(entries, doc_a) == []
 
-    # doc_b (__1) has no sibling __N pieces in this small fixture.
-    assert logic.split_siblings(entries, doc_b.year, doc_b.file) == []
+    # doc_b (__1) is a split piece, but no sibling __N piece is also
+    # consensus-flagged in this small fixture -- still a split piece
+    # (is_split_piece is True), just with no consensus sibling to list.
+    assert logic.is_split_piece(doc_b.file) is True
+    assert logic.consensus_siblings(entries, doc_b) == []
 
 
-def test_split_siblings_finds_sibling_when_present(tmp_path):
+def test_consensus_siblings_finds_sibling_when_present(tmp_path):
     fixture = _CONSENSUS_FIXTURE + (
         "\n## [2567] 2567\\ครั้งที่ 9\\เอกสาร ข__2.md  (1 consensus page(s))\n"
         "### Page 1\n"
@@ -127,6 +137,6 @@ def test_split_siblings_finds_sibling_when_present(tmp_path):
     entries = logic.parse_consensus_priority(path)
 
     doc_b1 = next(e for e in entries if e.file.endswith("ข__1.md"))
-    siblings = logic.split_siblings(entries, doc_b1.year, doc_b1.file)
+    siblings = logic.consensus_siblings(entries, doc_b1)
 
     assert siblings == ["2567\\ครั้งที่ 9\\เอกสาร ข__2.md"]

@@ -104,19 +104,30 @@ def load_page_markdown(corpus_root: Path, relpath: str, page_label: str) -> str 
     return None
 
 
-def split_siblings(entries: list[FileEntry], year: str, relpath: str) -> list[str]:
+def is_split_piece(relpath: str) -> bool:
+    """True if `relpath`'s filename matches the split-document `__N` naming
+    convention (`llm_ocr_scan._source_key` / `SPLIT_PIECE`), regardless of
+    whether any sibling piece is present anywhere. This is the badge trigger:
+    the risk category is "this file is a split piece," not "another piece
+    happens to also be consensus-flagged.\""""
+    return _source_key(Path(relpath))[2]
+
+
+def consensus_siblings(entries: list[FileEntry], target: FileEntry) -> list[str]:
     """Other files in `entries` (the consensus-flagged set, not the whole
-    corpus) that are pieces of the same split document as `relpath`, using
+    corpus) that are pieces of the same split document as `target`, using
     `llm_ocr_scan._source_key` to recognise the `__N` naming convention.
-    Empty if `relpath` isn't a split piece, or has no sibling among
-    `entries`."""
-    parent, stem, is_split = _source_key(Path(relpath))
+    Empty if `target` isn't a split piece, or no sibling piece also happens
+    to be consensus-flagged -- use `is_split_piece` for the badge itself,
+    this is only the supplementary "which siblings are already on your list"
+    detail."""
+    parent, stem, is_split = _source_key(Path(target.file))
     if not is_split:
         return []
 
     siblings = []
     for e in entries:
-        if e.year != year or e.file == relpath:
+        if e.year != target.year or e.file == target.file:
             continue
         other_parent, other_stem, other_is_split = _source_key(Path(e.file))
         if other_is_split and other_parent == parent and other_stem == stem:
