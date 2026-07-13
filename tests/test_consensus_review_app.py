@@ -79,7 +79,7 @@ def _run_with_fixture(tmp_path, docs: dict[str, str], consensus_md: str) -> tupl
 
 def test_review_app_renders_the_first_file_and_page_content(tmp_path):
     docs = {
-        "เอกสาร ก.md": "## Page 1\n| a | b |\n|---|---|\n| 1 | 2 |\n\n## Page 3\nข้อความปกติ",
+        "เอกสาร ก.md": "## Page 1\n<table><tr><td>a</td><td>b</td></tr></table>\n\n## Page 3\nข้อความปกติ",
     }
     at, _, _ = _run_with_fixture(tmp_path, docs, _ONE_FILE_CONSENSUS_MD)
 
@@ -87,7 +87,22 @@ def test_review_app_renders_the_first_file_and_page_content(tmp_path):
     assert any("เอกสาร ก.md" in el.value for el in at.subheader)
     all_markdown = " ".join(el.value for el in at.markdown)
     assert "table looks garbled" in all_markdown
-    assert "| a | b |" in all_markdown
+    assert "<table>" in all_markdown
+
+
+def test_review_app_renders_html_tables_with_unsafe_allow_html(tmp_path):
+    """The real corpus renders tables as raw HTML <table> tags, not pipe
+    Markdown (verified: 183 files in 2567 alone use <table>, zero use pipe
+    tables) -- Streamlit's st.markdown escapes HTML by default, so this
+    needs unsafe_allow_html=True to actually render as a table rather than
+    literal text."""
+    docs = {
+        "เอกสาร ก.md": "## Page 1\n<table><tr><td>มติที่ประชุม</td><td>รับทราบ</td></tr></table>",
+    }
+    at, _, _ = _run_with_fixture(tmp_path, docs, _ONE_FILE_CONSENSUS_MD)
+
+    body_el = next(el for el in at.markdown if "<table>" in el.value)
+    assert body_el.allow_html is True
 
 
 def test_review_app_next_button_advances_to_next_file(tmp_path):
