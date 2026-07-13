@@ -200,3 +200,28 @@ def resolve_decisions(decisions: list[Decision]) -> dict[str, Decision]:
     for d in decisions:
         resolved[d.file] = d
     return resolved
+
+
+def generate_worklist(resolved: dict[str, Decision]) -> str:
+    """Markdown content for the re-OCR worklist: every file whose current
+    verdict is VERDICT_REOCR, sorted for a deterministic diff between
+    regenerations."""
+    files = sorted(d.file for d in resolved.values() if d.verdict == VERDICT_REOCR)
+    lines = [
+        "# Re-OCR worklist",
+        "",
+        "Auto-generated from `review_decisions.jsonl` -- regenerated in full "
+        "each time, never appended.",
+        "",
+        f"{len(files)} file(s) marked \"{VERDICT_REOCR}\":",
+        "",
+    ]
+    lines.extend(files)
+    return "\n".join(lines) + "\n"
+
+
+def write_worklist(worklist_path: Path, resolved: dict[str, Decision]) -> None:
+    """Write the re-OCR worklist, replacing any prior contents in full."""
+    worklist_path = Path(worklist_path)
+    worklist_path.parent.mkdir(parents=True, exist_ok=True)
+    worklist_path.write_text(generate_worklist(resolved), encoding="utf-8")

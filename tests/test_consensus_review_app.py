@@ -1,12 +1,12 @@
-"""Tickets 1-2 (tickets.md) -- Streamlit-driven smoke tests for review_app.py.
+"""Tickets 1-3 (tickets.md) -- Streamlit-driven smoke tests for review_app.py.
 
 Follows the AppTest pattern already established by
 tests/test_streamlit_build_run.py: drive the real widgets, not the logic
 module directly, against a small fixture corpus + fixture
-consensus_priority.md + fixture decision log (never the real corpus/files).
-Session state for `corpus_root` / `consensus_file` / `decisions_file` is
-seeded *before* the first `.run()` so the app never touches the real paths,
-even transiently.
+consensus_priority.md + fixture decision log/worklist (never the real
+corpus/files). Session state for `corpus_root` / `consensus_file` /
+`decisions_file` / `worklist_file` is seeded *before* the first `.run()` so
+the app never touches the real paths, even transiently.
 """
 from __future__ import annotations
 
@@ -59,27 +59,29 @@ def _write_fixture(tmp_path, docs: dict[str, str], consensus_md: str) -> tuple[P
     return corpus_root, consensus_file
 
 
-def _run_with_fixture(tmp_path, docs: dict[str, str], consensus_md: str) -> tuple[AppTest, Path]:
+def _run_with_fixture(tmp_path, docs: dict[str, str], consensus_md: str) -> tuple[AppTest, Path, Path]:
     corpus_root, consensus_file = _write_fixture(tmp_path, docs, consensus_md)
     decisions_file = tmp_path / "review_decisions.jsonl"
+    worklist_file = tmp_path / "reocr_worklist.md"
 
     at = AppTest.from_file(_PAGE)
     # Seed session state *before* the first run so the app reads the fixture
     # paths from the very first script execution -- it never touches the
-    # real corpus_root / consensus_priority.md / review_decisions.jsonl
-    # defaults, even transiently.
+    # real corpus_root / consensus_priority.md / review_decisions.jsonl /
+    # reocr_worklist.md defaults, even transiently.
     at.session_state["corpus_root"] = str(corpus_root)
     at.session_state["consensus_file"] = str(consensus_file)
     at.session_state["decisions_file"] = str(decisions_file)
+    at.session_state["worklist_file"] = str(worklist_file)
     at.run(timeout=30)
-    return at, decisions_file
+    return at, decisions_file, worklist_file
 
 
 def test_review_app_renders_the_first_file_and_page_content(tmp_path):
     docs = {
         "เอกสาร ก.md": "## Page 1\n| a | b |\n|---|---|\n| 1 | 2 |\n\n## Page 3\nข้อความปกติ",
     }
-    at, _ = _run_with_fixture(tmp_path, docs, _ONE_FILE_CONSENSUS_MD)
+    at, _, _ = _run_with_fixture(tmp_path, docs, _ONE_FILE_CONSENSUS_MD)
 
     assert not at.exception
     assert any("เอกสาร ก.md" in el.value for el in at.subheader)
@@ -93,7 +95,7 @@ def test_review_app_next_button_advances_to_next_file(tmp_path):
         "เอกสาร ก.md": "## Page 1\nข้อความ ก",
         "เอกสาร ข.md": "## Page 1\nข้อความ ข",
     }
-    at, _ = _run_with_fixture(tmp_path, docs, _TWO_FILE_CONSENSUS_MD)
+    at, _, _ = _run_with_fixture(tmp_path, docs, _TWO_FILE_CONSENSUS_MD)
 
     assert any("เอกสาร ก.md" in el.value for el in at.subheader)
 
@@ -115,7 +117,7 @@ def test_review_app_badges_split_piece_with_no_consensus_sibling(tmp_path):
         "- **[phi4:latest]** garbled\n"
         "- **[gemma4:e4b]** garbled\n"
     )
-    at, _ = _run_with_fixture(tmp_path, docs, consensus_md)
+    at, _, _ = _run_with_fixture(tmp_path, docs, consensus_md)
 
     assert not at.exception
     assert any("ตัดเป็นหลายชิ้น" in el.value for el in at.warning)
@@ -129,7 +131,7 @@ def test_review_app_verdict_button_writes_decision_and_updates_progress(tmp_path
         "เอกสาร ก.md": "## Page 1\nข้อความ ก",
         "เอกสาร ข.md": "## Page 1\nข้อความ ข",
     }
-    at, decisions_file = _run_with_fixture(tmp_path, docs, _TWO_FILE_CONSENSUS_MD)
+    at, decisions_file, _ = _run_with_fixture(tmp_path, docs, _TWO_FILE_CONSENSUS_MD)
 
     assert any("ตัดสินแล้ว 0/2" in el.value for el in at.sidebar.caption)
     assert any("เอกสาร ก.md" in el.value for el in at.subheader)
@@ -167,7 +169,7 @@ def test_review_app_show_all_toggle_keeps_the_same_file_in_view(tmp_path):
         "## [2567] 2567\\ครั้งที่ 9\\เอกสาร ค.md  (1 consensus page(s))\n"
         "### Page 1\n- **[phi4:latest]** garbled\n- **[gemma4:e4b]** garbled\n"
     )
-    at, _ = _run_with_fixture(tmp_path, docs, consensus_md)
+    at, _, _ = _run_with_fixture(tmp_path, docs, consensus_md)
 
     # Decide "ก" (index 0 of 3) -- undecided-only view is now [ข, ค], "ข" at
     # index 0 (auto-advanced there, same numeric slot "ก" vacated).
@@ -192,7 +194,7 @@ def test_review_app_revising_a_verdict_appends_rather_than_overwrites(tmp_path):
         "เอกสาร ก.md": "## Page 1\nข้อความ ก",
         "เอกสาร ข.md": "## Page 1\nข้อความ ข",
     }
-    at, decisions_file = _run_with_fixture(tmp_path, docs, _TWO_FILE_CONSENSUS_MD)
+    at, decisions_file, _ = _run_with_fixture(tmp_path, docs, _TWO_FILE_CONSENSUS_MD)
 
     at.button(key="verdict_unsure_2567\\ครั้งที่ 9\\เอกสาร ก.md").click().run(timeout=30)
 
@@ -210,3 +212,59 @@ def test_review_app_revising_a_verdict_appends_rather_than_overwrites(tmp_path):
     assert json.loads(lines[0])["verdict"] == "ไม่แน่ใจ"
     assert json.loads(lines[1])["verdict"] == "ควร re-OCR"
     assert any("ตัดสินไปแล้ว: ควร re-OCR" in el.value for el in at.info)
+
+
+# --- Ticket 3 (tickets.md): re-OCR worklist ------------------------------
+
+
+def test_review_app_regenerate_worklist_button_writes_expected_file(tmp_path):
+    docs = {
+        "เอกสาร ก.md": "## Page 1\nข้อความ ก",
+        "เอกสาร ข.md": "## Page 1\nข้อความ ข",
+    }
+    at, decisions_file, worklist_file = _run_with_fixture(tmp_path, docs, _TWO_FILE_CONSENSUS_MD)
+
+    at.button(key="verdict_reocr_2567\\ครั้งที่ 9\\เอกสาร ก.md").click().run(timeout=30)
+    at.button(key="verdict_fp_2567\\ครั้งที่ 9\\เอกสาร ข.md").click().run(timeout=30)
+
+    assert not worklist_file.exists()
+
+    at.sidebar.button(key="regenerate_worklist_button").click().run(timeout=30)
+
+    assert not at.exception
+    content = worklist_file.read_text(encoding="utf-8")
+    assert "2567\\ครั้งที่ 9\\เอกสาร ก.md" in content
+    assert "เอกสาร ข.md" not in content
+    assert any("เขียน" in el.value for el in at.sidebar.success)
+
+
+def test_review_app_regenerate_worklist_overwrites_after_a_revised_verdict(tmp_path):
+    docs = {
+        "เอกสาร ก.md": "## Page 1\nข้อความ ก",
+        "เอกสาร ข.md": "## Page 1\nข้อความ ข",
+    }
+    at, decisions_file, worklist_file = _run_with_fixture(tmp_path, docs, _TWO_FILE_CONSENSUS_MD)
+
+    at.button(key="verdict_reocr_2567\\ครั้งที่ 9\\เอกสาร ก.md").click().run(timeout=30)
+    at.button(key="verdict_reocr_2567\\ครั้งที่ 9\\เอกสาร ข.md").click().run(timeout=30)
+    at.sidebar.button(key="regenerate_worklist_button").click().run(timeout=30)
+    assert "เอกสาร ก.md" in worklist_file.read_text(encoding="utf-8")
+    assert "เอกสาร ข.md" in worklist_file.read_text(encoding="utf-8")
+
+    # Revisit "ก" and change the verdict away from re-OCR. Navigate with
+    # Prev until it's in view rather than assuming an exact position -- the
+    # point of this test is the worklist regeneration, not the navigation
+    # index math (covered separately).
+    at.sidebar.checkbox(key="show_all").set_value(True).run(timeout=30)
+    for _ in range(2):
+        if any("เอกสาร ก.md" in el.value for el in at.subheader):
+            break
+        at.button(key="prev_button").click().run(timeout=30)
+    assert any("เอกสาร ก.md" in el.value for el in at.subheader)
+    at.button(key="verdict_fp_2567\\ครั้งที่ 9\\เอกสาร ก.md").click().run(timeout=30)
+
+    at.sidebar.button(key="regenerate_worklist_button").click().run(timeout=30)
+
+    content = worklist_file.read_text(encoding="utf-8")
+    assert "เอกสาร ก.md" not in content
+    assert "เอกสาร ข.md" in content

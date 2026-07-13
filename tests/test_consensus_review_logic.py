@@ -207,3 +207,66 @@ def test_resolve_decisions_latest_record_per_file_wins(tmp_path):
     assert resolved["ก.md"].verdict == logic.VERDICT_REOCR
     assert resolved["ข.md"].verdict == logic.VERDICT_REOCR
     assert len(resolved) == 2
+
+
+# --- Ticket 3 (tickets.md): re-OCR worklist -------------------------------
+
+
+def _resolved(*decisions: logic.Decision) -> dict[str, logic.Decision]:
+    return logic.resolve_decisions(list(decisions))
+
+
+def test_generate_worklist_lists_only_reocr_verdicts_sorted(tmp_path):
+    resolved = _resolved(
+        logic.Decision(year="2567", file="ข.md", verdict=logic.VERDICT_REOCR),
+        logic.Decision(year="2567", file="ก.md", verdict=logic.VERDICT_FALSE_POSITIVE),
+        logic.Decision(year="2567", file="ค.md", verdict=logic.VERDICT_REOCR),
+        logic.Decision(year="2567", file="ง.md", verdict=logic.VERDICT_UNSURE),
+    )
+
+    content = logic.generate_worklist(resolved)
+
+    assert "ก.md" not in content
+    assert "ง.md" not in content
+    ix, cx = content.index("ข.md"), content.index("ค.md")
+    assert ix < cx  # sorted: ข before ค (codepoint / Thai alphabetical order)
+
+
+def test_generate_worklist_empty_when_no_reocr_decisions(tmp_path):
+    resolved = _resolved(
+        logic.Decision(year="2567", file="ก.md", verdict=logic.VERDICT_FALSE_POSITIVE),
+    )
+
+    content = logic.generate_worklist(resolved)
+
+    assert "0 file" in content
+    assert ".md" not in content
+
+
+def test_write_worklist_writes_generate_worklists_exact_content(tmp_path):
+    resolved = _resolved(
+        logic.Decision(year="2567", file="ก.md", verdict=logic.VERDICT_REOCR),
+    )
+    worklist_path = tmp_path / "reocr_worklist.md"
+
+    logic.write_worklist(worklist_path, resolved)
+
+    assert worklist_path.read_text(encoding="utf-8") == logic.generate_worklist(resolved)
+
+
+def test_write_worklist_regenerates_in_full_not_appends(tmp_path):
+    worklist_path = tmp_path / "reocr_worklist.md"
+
+    logic.write_worklist(worklist_path, _resolved(
+        logic.Decision(year="2567", file="ก.md", verdict=logic.VERDICT_REOCR),
+        logic.Decision(year="2567", file="ข.md", verdict=logic.VERDICT_REOCR),
+    ))
+    # Reviewer changed their mind about ก.md -- regenerating must fully
+    # replace the file's contents, not append a second copy.
+    logic.write_worklist(worklist_path, _resolved(
+        logic.Decision(year="2567", file="ข.md", verdict=logic.VERDICT_REOCR),
+    ))
+
+    content = worklist_path.read_text(encoding="utf-8")
+    assert "ก.md" not in content
+    assert content.count("ข.md") == 1

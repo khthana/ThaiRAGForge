@@ -4,8 +4,9 @@ same page), rendered as real Markdown so tables and prose are actually
 readable, instead of the raw OCR text or the short quoted span alone.
 
 Record a verdict per file ("ควร re-OCR" / "false positive" / "ไม่แน่ใจ") --
-persisted to an append-only decision log, resumable across restarts. Worklist
-generation (tickets.md ticket 3) is not implemented yet.
+persisted to an append-only decision log, resumable across restarts. A
+sidebar action regenerates `reocr_worklist.md`, the plain file list handed
+off to the (manual, separate) re-OCR-diff verification process.
 
 Run with:  streamlit run tools/corpus_prep/consensus_review/review_app.py
 """
@@ -26,6 +27,7 @@ REPO = Path(__file__).resolve().parents[3]
 _DEFAULT_CORPUS_ROOT = REPO / "academic_resolutions"
 _DEFAULT_CONSENSUS_FILE = _DEFAULT_CORPUS_ROOT / "llm_ocr_scan" / "consensus_priority.md"
 _DEFAULT_DECISIONS_FILE = _DEFAULT_CORPUS_ROOT / "llm_ocr_scan" / "review_decisions.jsonl"
+_DEFAULT_WORKLIST_FILE = _DEFAULT_CORPUS_ROOT / "llm_ocr_scan" / "reocr_worklist.md"
 
 st.set_page_config(page_title="Consensus Review", layout="wide")
 st.title("Consensus Review -- ตรวจ flag ที่ทั้ง 2 โมเดลเห็นตรงกัน")
@@ -59,6 +61,16 @@ show_all = st.sidebar.checkbox(
     "แสดงไฟล์ที่ตัดสินแล้วด้วย (แก้ไข verdict ได้)", value=False, key="show_all"
 )
 st.sidebar.caption(f"ตัดสินแล้ว {len(resolved)}/{len(entries)}")
+
+worklist_file = Path(
+    st.sidebar.text_input(
+        "reocr_worklist.md path", str(_DEFAULT_WORKLIST_FILE), key="worklist_file"
+    )
+)
+if st.sidebar.button("สร้าง/อัปเดต reocr_worklist.md", key="regenerate_worklist_button"):
+    logic.write_worklist(worklist_file, resolved)
+    reocr_count = sum(1 for d in resolved.values() if d.verdict == logic.VERDICT_REOCR)
+    st.sidebar.success(f"เขียน {worklist_file} แล้ว ({reocr_count} ไฟล์)")
 
 visible_entries = entries if show_all else [e for e in entries if e.file not in resolved]
 

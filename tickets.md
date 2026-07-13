@@ -82,11 +82,11 @@ verification) consumes.
 **Blocked by:** Record and persist per-file verdicts (needs decisions to exist
 before anything can be filtered into a worklist).
 
-- [ ] `logic.py` generates the worklist content from resolved decisions,
+- [x] `logic.py` generates the worklist content from resolved decisions,
       filtering to verdict == "ควร re-OCR"
-- [ ] `review_app.py` exposes a "regenerate worklist" action that writes
+- [x] `review_app.py` exposes a "regenerate worklist" action that writes
       `reocr_worklist.md`
-- [ ] `logic.py` worklist generation covered by direct pytest unit tests
+- [x] `logic.py` worklist generation covered by direct pytest unit tests
       (given a small fixture decision log, assert exact worklist contents)
-- [ ] `AppTest` smoke test confirms triggering the regenerate action produces
+- [x] `AppTest` smoke test confirms triggering the regenerate action produces
       the expected file contents for a fixture scenario
