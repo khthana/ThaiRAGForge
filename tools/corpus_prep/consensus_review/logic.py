@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import re
 import sys
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -166,15 +166,15 @@ def append_decision(
     decides which record for a file currently applies."""
     log_path = Path(log_path)
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    record = {
-        "year": year,
-        "file": file,
-        "verdict": verdict,
-        "note": note,
-        "timestamp": timestamp or datetime.now(timezone.utc).isoformat(),
-    }
+    decision = Decision(
+        year=year,
+        file=file,
+        verdict=verdict,
+        note=note,
+        timestamp=timestamp or datetime.now(timezone.utc).isoformat(),
+    )
     with log_path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        f.write(json.dumps(asdict(decision), ensure_ascii=False) + "\n")
 
 
 def load_decisions(log_path: Path) -> list[Decision]:

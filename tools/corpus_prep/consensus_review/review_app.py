@@ -68,10 +68,32 @@ if not visible_entries:
 
 if "review_idx" not in st.session_state:
     st.session_state.review_idx = 0
+if "review_show_all_prev" not in st.session_state:
+    st.session_state.review_show_all_prev = show_all
+
+# review_idx is a plain position in `visible_entries`, but that list's
+# membership changes shape across a show_all toggle (undecided-only subset
+# <-> full list) -- resync to the same *file* across that specific
+# transition, rather than reusing the old numeric position, which would
+# otherwise land on an unrelated file. Deciding a file, and Prev/Next, don't
+# go through this branch: the numeric position is exactly what makes the
+# just-decided file's slot show the next undecided file automatically, and
+# Prev/Next already set the position they want directly.
+if show_all != st.session_state.review_show_all_prev:
+    current_file = st.session_state.get("review_current_file")
+    try:
+        st.session_state.review_idx = next(
+            i for i, e in enumerate(visible_entries) if e.file == current_file
+        )
+    except StopIteration:
+        pass  # file no longer visible in the new view -- keep the old position
+    st.session_state.review_show_all_prev = show_all
+
 st.session_state.review_idx = max(0, min(st.session_state.review_idx, len(visible_entries) - 1))
 idx = st.session_state.review_idx
 
 entry = visible_entries[idx]
+st.session_state.review_current_file = entry.file
 
 st.caption(
     f"ไฟล์ {idx + 1}/{len(visible_entries)} ({'ทั้งหมด' if show_all else 'ยังไม่ตัดสิน'})"
@@ -114,21 +136,16 @@ for page in entry.pages:
 
 note = st.text_input("โน้ต (ถ้ามี)", value="", key=f"note_{entry.file}")
 
-col_reocr, col_fp, col_unsure = st.columns(3)
-with col_reocr:
-    if st.button(logic.VERDICT_REOCR, key=f"verdict_reocr_{entry.file}"):
-        logic.append_decision(decisions_file, entry.year, entry.file, logic.VERDICT_REOCR, note=note)
-        st.rerun()
-with col_fp:
-    if st.button(logic.VERDICT_FALSE_POSITIVE, key=f"verdict_fp_{entry.file}"):
-        logic.append_decision(
-            decisions_file, entry.year, entry.file, logic.VERDICT_FALSE_POSITIVE, note=note
-        )
-        st.rerun()
-with col_unsure:
-    if st.button(logic.VERDICT_UNSURE, key=f"verdict_unsure_{entry.file}"):
-        logic.append_decision(decisions_file, entry.year, entry.file, logic.VERDICT_UNSURE, note=note)
-        st.rerun()
+_VERDICT_KEY_SUFFIXES = {
+    logic.VERDICT_REOCR: "reocr",
+    logic.VERDICT_FALSE_POSITIVE: "fp",
+    logic.VERDICT_UNSURE: "unsure",
+}
+for col, verdict in zip(st.columns(3), logic.VERDICTS):
+    with col:
+        if st.button(verdict, key=f"verdict_{_VERDICT_KEY_SUFFIXES[verdict]}_{entry.file}"):
+            logic.append_decision(decisions_file, entry.year, entry.file, verdict, note=note)
+            st.rerun()
 
 col_prev, col_next = st.columns(2)
 with col_prev:

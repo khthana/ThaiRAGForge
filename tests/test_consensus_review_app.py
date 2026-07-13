@@ -149,7 +149,45 @@ def test_review_app_verdict_button_writes_decision_and_updates_progress(tmp_path
     assert any("เอกสาร ข.md" in el.value for el in at.subheader)
 
 
-def test_review_app_show_all_toggle_reveals_decided_files_and_allows_revision(tmp_path):
+def test_review_app_show_all_toggle_keeps_the_same_file_in_view(tmp_path):
+    """Toggling show_all must resync by file identity, not raw list
+    position -- otherwise, with 3+ files, the reviewer can land on a
+    completely unrelated file just because the two lists (undecided-only vs
+    all) put different files at the same numeric index."""
+    docs = {
+        "เอกสาร ก.md": "## Page 1\nข้อความ ก",
+        "เอกสาร ข.md": "## Page 1\nข้อความ ข",
+        "เอกสาร ค.md": "## Page 1\nข้อความ ค",
+    }
+    consensus_md = (
+        "## [2567] 2567\\ครั้งที่ 9\\เอกสาร ก.md  (1 consensus page(s))\n"
+        "### Page 1\n- **[phi4:latest]** garbled\n- **[gemma4:e4b]** garbled\n\n"
+        "## [2567] 2567\\ครั้งที่ 9\\เอกสาร ข.md  (1 consensus page(s))\n"
+        "### Page 1\n- **[phi4:latest]** garbled\n- **[gemma4:e4b]** garbled\n\n"
+        "## [2567] 2567\\ครั้งที่ 9\\เอกสาร ค.md  (1 consensus page(s))\n"
+        "### Page 1\n- **[phi4:latest]** garbled\n- **[gemma4:e4b]** garbled\n"
+    )
+    at, _ = _run_with_fixture(tmp_path, docs, consensus_md)
+
+    # Decide "ก" (index 0 of 3) -- undecided-only view is now [ข, ค], "ข" at
+    # index 0 (auto-advanced there, same numeric slot "ก" vacated).
+    at.button(key="verdict_unsure_2567\\ครั้งที่ 9\\เอกสาร ก.md").click().run(timeout=30)
+    assert any("เอกสาร ข.md" in el.value for el in at.subheader)
+
+    # Toggling to "all files" must keep showing "ข" (still index 0 of
+    # [ข, ค]) -- not silently jump to whatever full-list entry happens to
+    # sit at index 0 (which would be "ก").
+    at.sidebar.checkbox(key="show_all").set_value(True).run(timeout=30)
+    assert any("เอกสาร ข.md" in el.value for el in at.subheader)
+
+    # From here, Prev navigates (by position within the now-visible full
+    # list) to "ก" -- the actual way to revisit and revise its verdict.
+    at.button(key="prev_button").click().run(timeout=30)
+    assert any("เอกสาร ก.md" in el.value for el in at.subheader)
+    assert any("ตัดสินไปแล้ว: ไม่แน่ใจ" in el.value for el in at.info)
+
+
+def test_review_app_revising_a_verdict_appends_rather_than_overwrites(tmp_path):
     docs = {
         "เอกสาร ก.md": "## Page 1\nข้อความ ก",
         "เอกสาร ข.md": "## Page 1\nข้อความ ข",
@@ -157,17 +195,14 @@ def test_review_app_show_all_toggle_reveals_decided_files_and_allows_revision(tm
     at, decisions_file = _run_with_fixture(tmp_path, docs, _TWO_FILE_CONSENSUS_MD)
 
     at.button(key="verdict_unsure_2567\\ครั้งที่ 9\\เอกสาร ก.md").click().run(timeout=30)
-    assert any("เอกสาร ข.md" in el.value for el in at.subheader)
 
     at.sidebar.checkbox(key="show_all").set_value(True).run(timeout=30)
-
-    # "All files" view includes the decided one again, in original order.
+    at.button(key="prev_button").click().run(timeout=30)
     assert any("เอกสาร ก.md" in el.value for el in at.subheader)
     assert any("ตัดสินไปแล้ว: ไม่แน่ใจ" in el.value for el in at.info)
 
     # Changing the verdict appends a new record rather than rewriting the
-    # old one -- the log keeps both lines, and the resolved state is the
-    # latest.
+    # old one -- the log keeps both lines, and the resolved state is latest.
     at.button(key="verdict_reocr_2567\\ครั้งที่ 9\\เอกสาร ก.md").click().run(timeout=30)
 
     lines = decisions_file.read_text(encoding="utf-8").splitlines()
