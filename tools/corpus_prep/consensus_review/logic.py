@@ -2,14 +2,17 @@
 
 Parses `consensus_priority.md` (built from `full_review_<year>.md` by the
 scan in `llm_ocr_scan.py`), extracts a flagged page's full Markdown live from
-the real corpus file, and detects split-document siblings. See
-tools/corpus_prep/consensus_review/SPEC.md and tickets.md (ticket 1).
+the real corpus file, detects split-document siblings, and persists reviewer
+verdicts to an append-only decision log. See
+tools/corpus_prep/consensus_review/SPEC.md and tickets.md (tickets 1-2).
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 # tools/corpus_prep/ has no __init__.py -- add it to sys.path directly and
@@ -133,3 +136,67 @@ def consensus_siblings(entries: list[FileEntry], target: FileEntry) -> list[str]
         if other_is_split and other_parent == parent and other_stem == stem:
             siblings.append(e.file)
     return siblings
+
+
+VERDICT_REOCR = "ควร re-OCR"
+VERDICT_FALSE_POSITIVE = "false positive"
+VERDICT_UNSURE = "ไม่แน่ใจ"
+VERDICTS = (VERDICT_REOCR, VERDICT_FALSE_POSITIVE, VERDICT_UNSURE)
+
+
+@dataclass(frozen=True)
+class Decision:
+    year: str
+    file: str
+    verdict: str
+    note: str = ""
+    timestamp: str = ""
+
+
+def append_decision(
+    log_path: Path,
+    year: str,
+    file: str,
+    verdict: str,
+    note: str = "",
+    timestamp: str | None = None,
+) -> None:
+    """Append one verdict record to the append-only decision log. Never
+    rewrites or removes any earlier line -- `resolve_decisions` is what
+    decides which record for a file currently applies."""
+    log_path = Path(log_path)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "year": year,
+        "file": file,
+        "verdict": verdict,
+        "note": note,
+        "timestamp": timestamp or datetime.now(timezone.utc).isoformat(),
+    }
+    with log_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def load_decisions(log_path: Path) -> list[Decision]:
+    """Every record in the decision log, in append order. Empty list if the
+    log doesn't exist yet (nothing decided so far)."""
+    log_path = Path(log_path)
+    if not log_path.exists():
+        return []
+
+    decisions = []
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        decisions.append(Decision(**json.loads(line)))
+    return decisions
+
+
+def resolve_decisions(decisions: list[Decision]) -> dict[str, Decision]:
+    """Current per-file state: the latest record for each file (by append
+    order) wins over any earlier one for the same file, per the log's
+    append-only, no-in-place-rewrite design."""
+    resolved: dict[str, Decision] = {}
+    for d in decisions:
+        resolved[d.file] = d
+    return resolved

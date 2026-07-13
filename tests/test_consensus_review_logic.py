@@ -5,6 +5,7 @@ fixtures. See tools/corpus_prep/consensus_review/SPEC.md.
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -140,3 +141,69 @@ def test_consensus_siblings_finds_sibling_when_present(tmp_path):
     siblings = logic.consensus_siblings(entries, doc_b1)
 
     assert siblings == ["2567\\ครั้งที่ 9\\เอกสาร ข__2.md"]
+
+
+# --- Ticket 2 (tickets.md): decision log --------------------------------
+
+
+def test_append_decision_writes_one_json_line(tmp_path):
+    log_path = tmp_path / "review_decisions.jsonl"
+
+    logic.append_decision(
+        log_path, "2567", "2567\\ครั้งที่ 9\\เอกสาร ก.md", logic.VERDICT_REOCR,
+        note="หน้า 3 เท่านั้น", timestamp="2026-07-13T00:00:00+00:00",
+    )
+
+    lines = log_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    record = json.loads(lines[0])
+    assert record == {
+        "year": "2567",
+        "file": "2567\\ครั้งที่ 9\\เอกสาร ก.md",
+        "verdict": logic.VERDICT_REOCR,
+        "note": "หน้า 3 เท่านั้น",
+        "timestamp": "2026-07-13T00:00:00+00:00",
+    }
+
+
+def test_append_decision_appends_without_removing_previous_lines(tmp_path):
+    log_path = tmp_path / "review_decisions.jsonl"
+
+    logic.append_decision(log_path, "2567", "ก.md", logic.VERDICT_UNSURE, timestamp="t1")
+    logic.append_decision(log_path, "2567", "ก.md", logic.VERDICT_REOCR, timestamp="t2")
+
+    lines = log_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2
+
+
+def test_load_decisions_returns_empty_list_when_file_missing(tmp_path):
+    assert logic.load_decisions(tmp_path / "does_not_exist.jsonl") == []
+
+
+def test_load_decisions_parses_each_line_in_order(tmp_path):
+    log_path = tmp_path / "review_decisions.jsonl"
+    logic.append_decision(log_path, "2567", "ก.md", logic.VERDICT_UNSURE, timestamp="t1")
+    logic.append_decision(log_path, "2567", "ข.md", logic.VERDICT_FALSE_POSITIVE, timestamp="t2")
+
+    decisions = logic.load_decisions(log_path)
+
+    assert [d.file for d in decisions] == ["ก.md", "ข.md"]
+    assert [d.verdict for d in decisions] == [logic.VERDICT_UNSURE, logic.VERDICT_FALSE_POSITIVE]
+
+
+def test_resolve_decisions_latest_record_per_file_wins(tmp_path):
+    log_path = tmp_path / "review_decisions.jsonl"
+    logic.append_decision(log_path, "2567", "ก.md", logic.VERDICT_UNSURE, timestamp="t1")
+    logic.append_decision(log_path, "2567", "ข.md", logic.VERDICT_REOCR, timestamp="t2")
+    # Changed my mind about ก.md -- this later record should win, and the
+    # earlier "ไม่แน่ใจ" line above must still be present in the raw log
+    # (append-only, nothing rewritten in place).
+    logic.append_decision(log_path, "2567", "ก.md", logic.VERDICT_REOCR, timestamp="t3")
+
+    raw = logic.load_decisions(log_path)
+    assert len(raw) == 3  # nothing was removed
+
+    resolved = logic.resolve_decisions(raw)
+    assert resolved["ก.md"].verdict == logic.VERDICT_REOCR
+    assert resolved["ข.md"].verdict == logic.VERDICT_REOCR
+    assert len(resolved) == 2

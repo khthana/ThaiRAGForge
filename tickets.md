@@ -23,20 +23,20 @@ is independently useful on its own.
 
 **Blocked by:** None — can start immediately.
 
-- [ ] `logic.py` parses `consensus_priority.md` into structured entries (year,
+- [x] `logic.py` parses `consensus_priority.md` into structured entries (year,
       file, ordered consensus pages, per-model reason/span), preserving file
       order
-- [ ] `logic.py` extracts one full page's Markdown from the real corpus `.md`
+- [x] `logic.py` extracts one full page's Markdown from the real corpus `.md`
       file given (year, relative path, page id), reusing
       `llm_ocr_scan.split_pages`
-- [ ] `logic.py` detects split-document siblings for a given file, reusing
+- [x] `logic.py` detects split-document siblings for a given file, reusing
       `_source_key` / `SPLIT_PIECE`
-- [ ] `review_app.py` walks files in the preserved order, rendering each
+- [x] `review_app.py` walks files in the preserved order, rendering each
       flagged page's full Markdown (tables render as tables) with both models'
       reasons visible, and a badge when the file has split-document siblings
-- [ ] `logic.py` functions covered by direct pytest unit tests against small
+- [x] `logic.py` functions covered by direct pytest unit tests against small
       synthetic fixtures (no real corpus, no Streamlit)
-- [ ] One `AppTest` smoke test (pattern: `tests/test_streamlit_build_run.py`)
+- [x] One `AppTest` smoke test (pattern: `tests/test_streamlit_build_run.py`)
       confirms the app loads and renders the first fixture file's page content
 
 ## Record and persist per-file verdicts
@@ -54,18 +54,18 @@ be revisited and changed by simply recording a new one.
 **Blocked by:** Browse consensus-flagged pages, rendered readably (needs the
 per-file view to attach the verdict controls to).
 
-- [ ] `logic.py` appends a verdict record to `review_decisions.jsonl` given
+- [x] `logic.py` appends a verdict record to `review_decisions.jsonl` given
       (year, file, verdict, note)
-- [ ] `logic.py` resolves the log to current per-file state, where the latest
+- [x] `logic.py` resolves the log to current per-file state, where the latest
       record for a file wins over any earlier one
-- [ ] `review_app.py` shows the three verdict buttons + note field per file,
+- [x] `review_app.py` shows the three verdict buttons + note field per file,
       and writes through to the log on click
-- [ ] `review_app.py` defaults to an "undecided only" view with a progress
+- [x] `review_app.py` defaults to an "undecided only" view with a progress
       counter, and offers a toggle to an "all files" view
-- [ ] Changing a verdict on an already-decided file (via the "all files" view)
+- [x] Changing a verdict on an already-decided file (via the "all files" view)
       is reflected as the new current state without deleting the prior record
-- [ ] `logic.py` append/resolve functions covered by direct pytest unit tests
-- [ ] `AppTest` smoke test extended to cover: click a verdict, confirm it lands
+- [x] `logic.py` append/resolve functions covered by direct pytest unit tests
+- [x] `AppTest` smoke test extended to cover: click a verdict, confirm it lands
       in the log, confirm the progress counter moves
 
 ## Generate the re-OCR worklist
