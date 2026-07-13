@@ -108,6 +108,20 @@ def load_page_markdown(corpus_root: Path, relpath: str, page_label: str) -> str 
     return None
 
 
+def highlight_spans(body: str, spans: list[str]) -> str:
+    """Wrap each span that appears verbatim in `body` with <mark></mark> so
+    it renders highlighted (caller must render with unsafe_allow_html=True).
+    A model's quoted span sometimes doesn't match the corpus text exactly
+    (paraphrased or trimmed) -- those are silently skipped, not an error.
+    Processes longer spans first so a short span that's a substring of a
+    longer one doesn't get double-wrapped."""
+    highlighted = body
+    for span in sorted((s.strip() for s in spans), key=len, reverse=True):
+        if span and span in highlighted:
+            highlighted = highlighted.replace(span, f"<mark>{span}</mark>")
+    return highlighted
+
+
 def is_split_piece(relpath: str) -> bool:
     """True if `relpath`'s filename matches the split-document `__N` naming
     convention (`llm_ocr_scan._source_key` / `SPLIT_PIECE`), regardless of

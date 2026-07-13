@@ -105,6 +105,22 @@ def test_review_app_renders_html_tables_with_unsafe_allow_html(tmp_path):
     assert body_el.allow_html is True
 
 
+def test_review_app_highlights_the_flagged_span_within_the_full_page_content(tmp_path):
+    docs = {"เอกสาร ก.md": "## Page 1\nก่อนหน้า บางข้อความที่พัง หลังจากนั้น"}
+    consensus_md = (
+        "## [2567] 2567\\ครั้งที่ 9\\เอกสาร ก.md  (1 consensus page(s))\n"
+        "### Page 1\n"
+        "- **[phi4:latest]** garbled\n"
+        "  > บางข้อความที่พัง\n"
+        "- **[gemma4:e4b]** garbled\n"
+    )
+    at, _, _ = _run_with_fixture(tmp_path, docs, consensus_md)
+
+    body_el = next(el for el in at.markdown if "ก่อนหน้า" in el.value)
+    assert "<mark>บางข้อความที่พัง</mark>" in body_el.value
+    assert body_el.allow_html is True
+
+
 def test_review_app_next_button_advances_to_next_file(tmp_path):
     docs = {
         "เอกสาร ก.md": "## Page 1\nข้อความ ก",

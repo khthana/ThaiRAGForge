@@ -140,12 +140,14 @@ for page in entry.pages:
     if body is None:
         st.error("ไม่พบเนื้อหาหน้านี้ในคอร์ปัส (ไฟล์อาจถูกย้าย/แก้ไข)")
     else:
+        spans = [flag.span for flag in page.models.values() if flag.span]
         # The real corpus renders tables as raw HTML <table> tags, not pipe
-        # Markdown -- unsafe_allow_html is required for those to render as
-        # actual tables instead of literal escaped text. Safe here: this is
-        # a local single-user tool over the project's own OCR'd corpus, not
+        # Markdown -- unsafe_allow_html is required both for those to render
+        # as actual tables (instead of literal escaped text) and for the
+        # <mark> tags highlight_spans() inserts below.  Safe here: this is a
+        # local single-user tool over the project's own OCR'd corpus, not
         # arbitrary external input.
-        st.markdown(body, unsafe_allow_html=True)
+        st.markdown(logic.highlight_spans(body, spans), unsafe_allow_html=True)
     st.divider()
 
 note = st.text_input("โน้ต (ถ้ามี)", value="", key=f"note_{entry.file}")

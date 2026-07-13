@@ -283,3 +283,41 @@ def test_write_worklist_regenerates_in_full_not_appends(tmp_path):
     content = worklist_path.read_text(encoding="utf-8")
     assert "ก.md" not in content
     assert content.count("ข.md") == 1
+
+
+# --- In-text span highlighting --------------------------------------------
+
+
+def test_highlight_spans_wraps_an_exact_match():
+    body = "ก่อนหน้า บางข้อความที่พัง หลังจากนั้น"
+
+    highlighted = logic.highlight_spans(body, ["บางข้อความที่พัง"])
+
+    assert highlighted == "ก่อนหน้า <mark>บางข้อความที่พัง</mark> หลังจากนั้น"
+
+
+def test_highlight_spans_wraps_multiple_distinct_spans():
+    body = "หนึ่ง สอง สาม"
+
+    highlighted = logic.highlight_spans(body, ["หนึ่ง", "สาม"])
+
+    assert highlighted == "<mark>หนึ่ง</mark> สอง <mark>สาม</mark>"
+
+
+def test_highlight_spans_skips_a_span_not_found_verbatim():
+    """The model may have paraphrased or trimmed the span slightly -- when
+    it doesn't match verbatim, silently skip it rather than erroring or
+    corrupting the body."""
+    body = "เนื้อหาปกติ ไม่มีอะไรผิด"
+
+    highlighted = logic.highlight_spans(body, ["ข้อความที่ไม่มีอยู่จริง"])
+
+    assert highlighted == body
+
+
+def test_highlight_spans_handles_empty_and_blank_spans():
+    body = "เนื้อหาปกติ"
+
+    assert logic.highlight_spans(body, []) == body
+    assert logic.highlight_spans(body, [""]) == body
+    assert logic.highlight_spans(body, ["   "]) == body
