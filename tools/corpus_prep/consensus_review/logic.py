@@ -21,6 +21,7 @@ from pathlib import Path
 # for src/ (insert then plain import).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from llm_ocr_scan import _source_key, split_pages  # noqa: E402
+from reocr_adjudicate import load_full_page_text  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -238,3 +239,106 @@ def write_worklist(worklist_path: Path, resolved: dict[str, Decision]) -> int:
     content = generate_worklist(resolved)
     worklist_path.write_text(content, encoding="utf-8")
     return len(content.splitlines())
+
+
+# --- Old-vs-new re-OCR adjudication review (reocr_consensus_pages.py /
+# reocr_adjudicate.py, Phase 1+2) -----------------------------------------
+#
+# A different grain from the rest of this module: verdicts above are one per
+# *file*, but Phase 2 adjudicates one physical (source PDF, page number) at a
+# time -- a page can be shared by several split-document sibling files. The
+# decision log below is keyed the same way.
+
+
+def load_jsonl(path: Path) -> list[dict]:
+    """Every JSON record in an append-only JSONL log, in file order. Empty
+    list if the file doesn't exist yet."""
+    path = Path(path)
+    if not path.exists():
+        return []
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def needs_reocr_review(record: dict) -> bool:
+    """False only when both models independently verdict "new" -- the one
+    pairing strong enough to auto-apply without a human decision. Every
+    other pairing (disagreement, both prefer old, both say no real
+    difference, both still bad) needs a human to look."""
+    verdicts = record.get("verdicts", {})
+    return not (verdicts and all(v.get("verdict") == "new" for v in verdicts.values()))
+
+
+def staged_text_by_key(staging_records: list[dict]) -> dict[tuple[str, int], str]:
+    """(pdf, page) -> the Phase 1 fresh re-OCR text, from staged JSONL
+    records."""
+    return {(r["pdf"], r["page"]): r["new_text"] for r in staging_records}
+
+
+def load_old_text(corpus_root: Path, record: dict) -> str | None:
+    """The corpus's current text for an adjudication record's page, read from
+    `old_text_source` (the first sibling file Phase 2 resolved it from).
+    Reuses `reocr_adjudicate.load_full_page_text` so oversized pages that
+    `split_pages` sub-chunks ("Page N.1", "Page N.2", ...) are reassembled
+    the same way Phase 2 itself read them -- an exact "Page N" lookup would
+    silently return None for those."""
+    return load_full_page_text(Path(corpus_root), record["old_text_source"], record["page"])
+
+
+REOCR_VERDICT_APPLY_NEW = "ใช้ข้อความใหม่ (new)"
+REOCR_VERDICT_KEEP_OLD = "เก็บของเดิม (old)"
+REOCR_VERDICT_DEFER = "รอไว้ก่อน (ทั้งคู่ยังพัง/ไม่แน่ใจ)"
+REOCR_REVIEW_VERDICTS = (REOCR_VERDICT_APPLY_NEW, REOCR_VERDICT_KEEP_OLD, REOCR_VERDICT_DEFER)
+
+
+@dataclass(frozen=True)
+class ReocrReviewDecision:
+    pdf: str
+    page: int
+    verdict: str
+    note: str = ""
+    timestamp: str = ""
+
+
+def append_reocr_review_decision(
+    log_path: Path,
+    pdf: str,
+    page: int,
+    verdict: str,
+    note: str = "",
+    timestamp: str | None = None,
+) -> None:
+    """Append one verdict record for a (pdf, page) to the append-only
+    decision log -- never rewrites or removes an earlier line, same
+    convention as `append_decision`."""
+    log_path = Path(log_path)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    decision = ReocrReviewDecision(
+        pdf=pdf,
+        page=page,
+        verdict=verdict,
+        note=note,
+        timestamp=timestamp or datetime.now(timezone.utc).isoformat(),
+    )
+    with log_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(asdict(decision), ensure_ascii=False) + "\n")
+
+
+def load_reocr_review_decisions(log_path: Path) -> list[ReocrReviewDecision]:
+    """Every record in the re-OCR review decision log, in append order.
+    Empty list if the log doesn't exist yet."""
+    return [ReocrReviewDecision(**d) for d in load_jsonl(log_path)]
+
+
+def resolve_reocr_review_decisions(
+    decisions: list[ReocrReviewDecision],
+) -> dict[tuple[str, int], ReocrReviewDecision]:
+    """Current per-(pdf, page) state: the latest record wins over any
+    earlier one for the same page, per the log's append-only design."""
+    resolved: dict[tuple[str, int], ReocrReviewDecision] = {}
+    for d in decisions:
+        resolved[(d.pdf, d.page)] = d
+    return resolved

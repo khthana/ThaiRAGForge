@@ -321,3 +321,105 @@ def test_highlight_spans_handles_empty_and_blank_spans():
     assert logic.highlight_spans(body, []) == body
     assert logic.highlight_spans(body, [""]) == body
     assert logic.highlight_spans(body, ["   "]) == body
+
+
+# --- Old-vs-new re-OCR adjudication review -------------------------------
+
+
+def _adjudication_record(pdf="a.pdf", page=1, phi="new", gemma="new", **extra) -> dict:
+    record = {
+        "pdf": pdf,
+        "page": page,
+        "files": [f"2567\\ครั้งที่ 9\\{Path(pdf).stem}.md"],
+        "old_text_source": f"2567\\ครั้งที่ 9\\{Path(pdf).stem}.md",
+        "diverging_siblings": [],
+        "verdicts": {
+            "phi4:latest": {"verdict": phi, "reason": "x", "error": None, "elapsed_s": 1.0},
+            "gemma4:e4b": {"verdict": gemma, "reason": "y", "error": None, "elapsed_s": 1.0},
+        },
+        "timestamp": "t",
+    }
+    record.update(extra)
+    return record
+
+
+def test_load_jsonl_returns_empty_list_for_missing_file(tmp_path):
+    assert logic.load_jsonl(tmp_path / "missing.jsonl") == []
+
+
+def test_load_jsonl_parses_records_and_skips_blank_lines(tmp_path):
+    path = tmp_path / "records.jsonl"
+    path.write_text('{"a": 1}\n\n{"a": 2}\n', encoding="utf-8")
+    assert logic.load_jsonl(path) == [{"a": 1}, {"a": 2}]
+
+
+def test_needs_reocr_review_false_when_both_models_say_new():
+    record = _adjudication_record(phi="new", gemma="new")
+    assert logic.needs_reocr_review(record) is False
+
+
+def test_needs_reocr_review_true_on_disagreement():
+    record = _adjudication_record(phi="old", gemma="new")
+    assert logic.needs_reocr_review(record) is True
+
+
+def test_needs_reocr_review_true_when_both_say_old():
+    record = _adjudication_record(phi="old", gemma="old")
+    assert logic.needs_reocr_review(record) is True
+
+
+def test_needs_reocr_review_true_when_both_bad():
+    record = _adjudication_record(phi="both_bad", gemma="both_bad")
+    assert logic.needs_reocr_review(record) is True
+
+
+def test_staged_text_by_key_maps_pdf_page_pairs():
+    staging = [
+        {"pdf": "a.pdf", "page": 1, "files": ["a.md"], "new_text": "new1", "timestamp": "t"},
+        {"pdf": "a.pdf", "page": 2, "files": ["a.md"], "new_text": "new2", "timestamp": "t"},
+    ]
+    result = logic.staged_text_by_key(staging)
+    assert result == {("a.pdf", 1): "new1", ("a.pdf", 2): "new2"}
+
+
+def test_load_old_text_reads_the_page_from_the_corpus(tmp_path):
+    doc_dir = tmp_path / "2567" / "ครั้งที่ 9"
+    doc_dir.mkdir(parents=True)
+    (doc_dir / "a.md").write_text("## Page 1\n\nเนื้อหาเดิม\n", encoding="utf-8")
+    record = _adjudication_record(pdf="a.pdf", page=1)
+    record["old_text_source"] = "2567\\ครั้งที่ 9\\a.md"
+
+    assert logic.load_old_text(tmp_path, record) == "เนื้อหาเดิม"
+
+
+def test_load_old_text_missing_page_returns_none(tmp_path):
+    doc_dir = tmp_path / "2567" / "ครั้งที่ 9"
+    doc_dir.mkdir(parents=True)
+    (doc_dir / "a.md").write_text("## Page 1\n\nเนื้อหาเดิม\n", encoding="utf-8")
+    record = _adjudication_record(pdf="a.pdf", page=5)
+    record["old_text_source"] = "2567\\ครั้งที่ 9\\a.md"
+
+    assert logic.load_old_text(tmp_path, record) is None
+
+
+def test_reocr_review_decision_round_trips_through_resolve(tmp_path):
+    log_path = tmp_path / "reocr_review_decisions.jsonl"
+    logic.append_reocr_review_decision(log_path, "a.pdf", 1, logic.REOCR_VERDICT_APPLY_NEW)
+
+    decisions = logic.load_reocr_review_decisions(log_path)
+    assert len(decisions) == 1
+    assert decisions[0].pdf == "a.pdf"
+    assert decisions[0].page == 1
+
+    resolved = logic.resolve_reocr_review_decisions(decisions)
+    assert resolved[("a.pdf", 1)].verdict == logic.REOCR_VERDICT_APPLY_NEW
+
+
+def test_reocr_review_decision_latest_record_wins(tmp_path):
+    log_path = tmp_path / "reocr_review_decisions.jsonl"
+    logic.append_reocr_review_decision(log_path, "a.pdf", 1, logic.REOCR_VERDICT_DEFER)
+    logic.append_reocr_review_decision(log_path, "a.pdf", 1, logic.REOCR_VERDICT_KEEP_OLD)
+
+    resolved = logic.resolve_reocr_review_decisions(logic.load_reocr_review_decisions(log_path))
+    assert resolved[("a.pdf", 1)].verdict == logic.REOCR_VERDICT_KEEP_OLD
+    assert len(logic.load_reocr_review_decisions(log_path)) == 2  # append-only, both kept
