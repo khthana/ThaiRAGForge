@@ -14,7 +14,6 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "corpus_prep"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "corpus_prep" / "consensus_review"))
 import reocr_adjudicate as adjudicate  # noqa: E402
 
 
@@ -51,6 +50,31 @@ class TestLoadStagedPages:
             encoding="utf-8",
         )
         assert len(adjudicate.load_staged_pages(staging)) == 1
+
+
+class TestLoadFullPageText:
+    def test_plain_unchunked_page(self, tmp_path):
+        _write_corpus_page(tmp_path, "2567/ครั้งที่ 9/เอกสาร ก.md", 2, "เนื้อหาหน้า 2")
+        assert adjudicate.load_full_page_text(tmp_path, "2567/ครั้งที่ 9/เอกสาร ก.md", 2) == "เนื้อหาหน้า 2"
+
+    def test_reassembles_a_page_split_ns_own_sub_chunks(self, tmp_path):
+        # split_pages() breaks a page whose body exceeds PAGE_CHAR_BUDGET
+        # (6000 chars) into "Page N.1", "Page N.2", ... -- there is no plain
+        # "Page N" label to look up once that happens, so load_full_page_text
+        # has to recognise and rejoin them. A single oversized "## Page 2"
+        # body is what actually triggers this in the real pipeline (not a
+        # literal "## Page 2.1" header, which split_pages' regex wouldn't
+        # even recognise as a page marker).
+        oversized_body = "ก" * 7000
+        _write_corpus_page(tmp_path, "2567/ครั้งที่ 9/เอกสาร ก.md", 2, oversized_body)
+        assert adjudicate.load_full_page_text(tmp_path, "2567/ครั้งที่ 9/เอกสาร ก.md", 2) == oversized_body
+
+    def test_missing_file_returns_none(self, tmp_path):
+        assert adjudicate.load_full_page_text(tmp_path, "2567/ครั้งที่ 9/ไม่มีไฟล์.md", 1) is None
+
+    def test_missing_page_in_existing_file_returns_none(self, tmp_path):
+        _write_corpus_page(tmp_path, "2567/ครั้งที่ 9/เอกสาร ก.md", 1, "หน้า 1")
+        assert adjudicate.load_full_page_text(tmp_path, "2567/ครั้งที่ 9/เอกสาร ก.md", 5) is None
 
 
 class TestResolveOldText:

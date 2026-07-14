@@ -21,8 +21,7 @@ from pathlib import Path
 import ollama
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent / "consensus_review"))
-import logic  # noqa: E402
+from llm_ocr_scan import split_pages  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 CORPUS_ROOT = REPO / "academic_resolutions"
@@ -126,6 +125,28 @@ def load_staged_pages(staging_file: Path) -> list[StagedPage]:
     return pages
 
 
+def load_full_page_text(corpus_root: Path, relpath: str, page_num: int) -> str | None:
+    """The current corpus text for one physical PDF page, reassembled across
+    `llm_ocr_scan.split_pages`'s own sub-chunking of oversized pages ("Page
+    N" becomes "Page N.1", "Page N.2", ... once its body exceeds
+    PAGE_CHAR_BUDGET) -- `logic.load_page_markdown`'s exact "Page N" lookup
+    returns None for those, since split_pages never emits a plain "Page N"
+    label once a page is chunked. None if the file or page doesn't exist at
+    all."""
+    file_path = Path(corpus_root) / relpath
+    try:
+        text = file_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        text = file_path.read_text(encoding="utf-8-sig")
+    except FileNotFoundError:
+        return None
+
+    plain_label = f"Page {page_num}"
+    chunk_prefix = f"Page {page_num}."
+    chunks = [body for label, body in split_pages(text) if label == plain_label or label.startswith(chunk_prefix)]
+    return "".join(chunks) if chunks else None
+
+
 def resolve_old_text(corpus_root: Path, staged: StagedPage) -> tuple[str | None, list[str]]:
     """The current corpus text for a staged page (from the first file in
     `staged.files`), plus any sibling files whose stored text for the same
@@ -133,8 +154,7 @@ def resolve_old_text(corpus_root: Path, staged: StagedPage) -> tuple[str | None,
     byte-identical copies of shared pages (ADR-0004), so a divergence is
     worth surfacing rather than silently picking one arbitrarily -- Phase 3
     still has to decide what to do about it, this just refuses to hide it."""
-    page_label = f"Page {staged.page}"
-    texts = {f: logic.load_page_markdown(corpus_root, f, page_label) for f in staged.files}
+    texts = {f: load_full_page_text(corpus_root, f, staged.page) for f in staged.files}
     primary = texts[staged.files[0]]
     diverging = [f for f, t in texts.items() if f != staged.files[0] and t != primary]
     return primary, diverging
