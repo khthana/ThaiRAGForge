@@ -39,6 +39,10 @@ UNRESOLVED_FILE = CORPUS_ROOT / "llm_ocr_scan" / "reocr_unresolved_files.txt"
 
 _SPECIAL_SESSION = re.compile(r"^ครั้งที่ (\d+)s$")
 _PAGE_INT = re.compile(r"^Page (\d+)(?:\.\d+)?$")
+_DEDUP_SUFFIX = re.compile(r"\s\(\d+\)$")
+_HEADER_LINE = re.compile(
+    r"^# Document:\s*(?:\d+s?-\d{4}\s+)?(?P<filename>.+\.pdf)(?:\s*\(ส่วนที่\s*\d+/\d+\))?\s*$"
+)
 
 
 def resolve_src_dir(src_root: Path, year: str, meeting: str) -> Path | None:
@@ -60,11 +64,32 @@ def resolve_src_dir(src_root: Path, year: str, meeting: str) -> Path | None:
     return None
 
 
+def parse_document_header(md_path: Path) -> str | None:
+    """Every OCR'd corpus file opens with `# Document: <original filename>`
+    (optionally prefixed with `<meeting>-<year> ` and suffixed with `(ส่วนที่
+    N/M)` for a curriculum-split piece). That original filename sometimes
+    differs from the corpus .md stem -- e.g. it still carries an agenda-item
+    number/prefix that got stripped when the .md was named -- so it's worth
+    trying as a fallback source-PDF name. None if the file is missing or the
+    header doesn't match the expected shape."""
+    try:
+        first_line = md_path.open(encoding="utf-8").readline()
+    except (FileNotFoundError, UnicodeDecodeError):
+        return None
+    m = _HEADER_LINE.match(first_line.strip())
+    return m.group("filename") if m else None
+
+
 def resolve_pdf_path(src_root: Path, relpath: str) -> Path | None:
     """The source PDF for a corpus-relative .md path, collapsing split-piece
     siblings back to their shared pre-split document via `_source_key`. None
     if the session folder or the PDF itself can't be found -- callers should
-    treat that file as needing manual identification, not an error."""
+    treat that file as needing manual identification, not an error.
+
+    Tries three increasingly-indirect candidates: the corpus stem as-is; the
+    stem with a trailing corpus-only disambiguation suffix like " (2)"
+    stripped (added when the corpus held two same-titled documents); and the
+    original filename recovered from the file's own `# Document:` header."""
     parent, stem, _ = _source_key(Path(relpath))
     parts = parent.parts
     if len(parts) < 2:
@@ -72,8 +97,24 @@ def resolve_pdf_path(src_root: Path, relpath: str) -> Path | None:
     src_dir = resolve_src_dir(src_root, parts[0], parts[1])
     if src_dir is None:
         return None
-    pdf_path = src_dir / (stem + ".pdf")
-    return pdf_path if pdf_path.exists() else None
+
+    direct = src_dir / (stem + ".pdf")
+    if direct.exists():
+        return direct
+
+    deduped_stem = _DEDUP_SUFFIX.sub("", stem)
+    if deduped_stem != stem:
+        deduped = src_dir / (deduped_stem + ".pdf")
+        if deduped.exists():
+            return deduped
+
+    header_name = parse_document_header(CORPUS_ROOT / relpath)
+    if header_name:
+        by_header = src_dir / header_name
+        if by_header.exists():
+            return by_header
+
+    return None
 
 
 def page_label_to_int(label: str) -> int | None:
@@ -87,6 +128,13 @@ def page_label_to_int(label: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def _default_page_count(pdf_path: Path) -> int:
+    from pdf2image import pdfinfo_from_path
+
+    info = pdfinfo_from_path(str(pdf_path), poppler_path=POPPLER_PATH)
+    return int(info["Pages"])
+
+
 @dataclass(frozen=True)
 class WorkItem:
     pdf: str
@@ -94,10 +142,22 @@ class WorkItem:
     files: tuple[str, ...]
 
 
-def build_work_items(entries: list[logic.FileEntry], src_root: Path) -> tuple[list[WorkItem], list[str]]:
+def build_work_items(
+    entries: list[logic.FileEntry],
+    src_root: Path,
+    page_count_fn=_default_page_count,
+) -> tuple[list[WorkItem], list[str]]:
     """Group every consensus-flagged page by its physical (source PDF, page
     number), deduplicating split-document siblings that flag the same page.
-    Returns (work items, files whose source PDF could not be resolved)."""
+    Returns (work items, files whose source PDF could not be resolved).
+
+    A resolved path is only trusted once its own page count covers every
+    flagged page number -- some of `resolve_pdf_path`'s fallback matches
+    (e.g. a corpus-only "(2)" disambiguation suffix stripped back to a bare
+    title) can land on a genuinely different document that happens to share
+    the exact same title. A too-short PDF is the cheapest signal that a
+    fallback found the wrong file; treat it exactly like an unresolved file
+    rather than risk staging OCR text from the wrong document."""
     grouped: dict[tuple[str, int], list[str]] = {}
     unresolved: list[str] = []
 
@@ -106,10 +166,18 @@ def build_work_items(entries: list[logic.FileEntry], src_root: Path) -> tuple[li
         if pdf_path is None:
             unresolved.append(entry.file)
             continue
-        for page in entry.pages:
-            page_num = page_label_to_int(page.page)
-            if page_num is None:
-                continue
+        page_nums = [n for p in entry.pages if (n := page_label_to_int(p.page)) is not None]
+        if not page_nums:
+            continue
+        try:
+            total_pages = page_count_fn(pdf_path)
+        except Exception:
+            unresolved.append(entry.file)
+            continue
+        if max(page_nums) > total_pages:
+            unresolved.append(entry.file)
+            continue
+        for page_num in page_nums:
             grouped.setdefault((str(pdf_path), page_num), []).append(entry.file)
 
     items = [
