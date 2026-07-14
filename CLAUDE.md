@@ -34,6 +34,13 @@ see `docs/adr/`.
   `meeting_manifest.json` is the metadata source of truth for titles/URLs — never
   encode metadata in filenames (ADR-0003). The reconciled inventory is
   `academic_resolutions/master_list.csv`.
+- OCR-corruption remediation (LLM consensus scan + re-OCR + dual-model
+  old-vs-new adjudication) lives in `tools/corpus_prep/` (`llm_ocr_scan.py`,
+  `reocr_consensus_pages.py`, `reocr_adjudicate.py`), with a review UI at
+  `tools/corpus_prep/consensus_review/` (`streamlit run
+  tools/corpus_prep/consensus_review/review_app.py`). Status/handoff:
+  `docs/llm-ocr-scan-log.md`. Still staging-only — nothing in this pipeline
+  has been written back into the real corpus yet.
 
 ## Agent skills
 
