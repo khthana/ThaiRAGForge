@@ -104,6 +104,40 @@ def test_load_page_markdown_returns_none_for_missing_file(tmp_path):
     assert logic.load_page_markdown(tmp_path, "2567\\ครั้งที่ 9\\ไม่มีไฟล์นี้.md", "Page 1") is None
 
 
+def _write_manifest(corpus_root, year, session, entries):
+    import json
+    d = corpus_root / year / session
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "meeting_manifest.json").write_text(json.dumps(entries, ensure_ascii=False), encoding="utf-8")
+
+
+def test_meeting_info_returns_year_session_title_url_from_manifest(tmp_path):
+    _write_manifest(tmp_path, "2567", "ครั้งที่ 9", [
+        {"file": "เอกสาร ก.md", "title": "เรื่อง ทดสอบ", "url": "https://drive.google.com/x"},
+    ])
+    info = logic.meeting_info(tmp_path, "2567\\ครั้งที่ 9\\เอกสาร ก.md")
+    assert info == {
+        "year": "2567", "session": "ครั้งที่ 9",
+        "title": "เรื่อง ทดสอบ", "url": "https://drive.google.com/x",
+    }
+
+
+def test_meeting_info_none_when_manifest_missing(tmp_path):
+    assert logic.meeting_info(tmp_path, "2567\\ครั้งที่ 9\\เอกสาร ก.md") is None
+
+
+def test_meeting_info_none_title_url_when_filename_not_in_manifest(tmp_path):
+    _write_manifest(tmp_path, "2567", "ครั้งที่ 9", [
+        {"file": "อีกไฟล์.md", "title": "อื่น", "url": "https://x"},
+    ])
+    info = logic.meeting_info(tmp_path, "2567\\ครั้งที่ 9\\เอกสาร ก.md")
+    assert info == {"year": "2567", "session": "ครั้งที่ 9", "title": None, "url": None}
+
+
+def test_meeting_info_none_when_path_has_no_year_session_prefix(tmp_path):
+    assert logic.meeting_info(tmp_path, "เอกสาร ก.md") is None
+
+
 def test_is_split_piece_true_only_for_dunder_n_filenames(tmp_path):
     entries = logic.parse_consensus_priority(_write_fixture(tmp_path))
     doc_a, doc_b = entries

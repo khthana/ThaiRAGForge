@@ -36,6 +36,7 @@ DEFAULT_SRC_ROOT = Path(r"D:/academic_resolutions (ข้อมูลดิบ +
 CONSENSUS_FILE = CORPUS_ROOT / "llm_ocr_scan" / "consensus_priority.md"
 STAGING_FILE = CORPUS_ROOT / "llm_ocr_scan" / "reocr_pages_staging.jsonl"
 UNRESOLVED_FILE = CORPUS_ROOT / "llm_ocr_scan" / "reocr_unresolved_files.txt"
+MANUAL_OVERRIDES_FILE = CORPUS_ROOT / "llm_ocr_scan" / "reocr_manual_pdf_overrides.json"
 
 _SPECIAL_SESSION = re.compile(r"^ครั้งที่ (\d+)s$")
 _PAGE_INT = re.compile(r"^Page (\d+)(?:\.\d+)?$")
@@ -80,14 +81,31 @@ def parse_document_header(md_path: Path) -> str | None:
     return m.group("filename") if m else None
 
 
-def resolve_pdf_path(src_root: Path, relpath: str) -> Path | None:
+def load_manual_pdf_overrides(path: Path = MANUAL_OVERRIDES_FILE) -> dict[str, str]:
+    """Corpus files where none of `resolve_pdf_path`'s automatic candidates
+    find the right source PDF -- usually because the file was renamed, or
+    filesystem-truncated to a shorter name, on the source drive since the
+    original scrape. Maps the exact corpus-relative path (as recorded in
+    `reocr_unresolved_files.txt`) to the PDF's actual filename within that
+    meeting's src_dir. Hand-confirmed entries only: each one was found by the
+    user, then verified here against `page_label_to_int`'s flagged page
+    numbers and the candidate's real page count before being trusted -- same
+    page-count safety net `build_work_items` applies to the automatic
+    candidates. Empty dict if the file doesn't exist yet (nothing overridden)."""
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def resolve_pdf_path(src_root: Path, relpath: str, overrides: dict[str, str] | None = None) -> Path | None:
     """The source PDF for a corpus-relative .md path, collapsing split-piece
     siblings back to their shared pre-split document via `_source_key`. None
     if the session folder or the PDF itself can't be found -- callers should
     treat that file as needing manual identification, not an error.
 
-    Tries three increasingly-indirect candidates: the corpus stem as-is; the
-    stem with a trailing corpus-only disambiguation suffix like " (2)"
+    Checks `overrides` (see `load_manual_pdf_overrides`) first, then tries
+    three increasingly-indirect automatic candidates: the corpus stem as-is;
+    the stem with a trailing corpus-only disambiguation suffix like " (2)"
     stripped (added when the corpus held two same-titled documents); and the
     original filename recovered from the file's own `# Document:` header."""
     parent, stem, _ = _source_key(Path(relpath))
@@ -97,6 +115,11 @@ def resolve_pdf_path(src_root: Path, relpath: str) -> Path | None:
     src_dir = resolve_src_dir(src_root, parts[0], parts[1])
     if src_dir is None:
         return None
+
+    if overrides and relpath in overrides:
+        override_path = src_dir / overrides[relpath]
+        if override_path.exists():
+            return override_path
 
     direct = src_dir / (stem + ".pdf")
     if direct.exists():
@@ -146,6 +169,7 @@ def build_work_items(
     entries: list[logic.FileEntry],
     src_root: Path,
     page_count_fn=_default_page_count,
+    overrides: dict[str, str] | None = None,
 ) -> tuple[list[WorkItem], list[str]]:
     """Group every consensus-flagged page by its physical (source PDF, page
     number), deduplicating split-document siblings that flag the same page.
@@ -162,7 +186,7 @@ def build_work_items(
     unresolved: list[str] = []
 
     for entry in entries:
-        pdf_path = resolve_pdf_path(src_root, entry.file)
+        pdf_path = resolve_pdf_path(src_root, entry.file, overrides=overrides)
         if pdf_path is None:
             unresolved.append(entry.file)
             continue
@@ -231,7 +255,8 @@ def ocr_page(pdf_path: Path, page_num: int, tmp_dir: Path) -> str:
 
 def main() -> None:
     entries = logic.parse_consensus_priority(CONSENSUS_FILE)
-    items, unresolved = build_work_items(entries, DEFAULT_SRC_ROOT)
+    overrides = load_manual_pdf_overrides()
+    items, unresolved = build_work_items(entries, DEFAULT_SRC_ROOT, overrides=overrides)
 
     if unresolved:
         UNRESOLVED_FILE.parent.mkdir(parents=True, exist_ok=True)

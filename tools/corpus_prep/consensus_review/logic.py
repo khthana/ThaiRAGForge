@@ -288,6 +288,33 @@ def load_old_text(corpus_root: Path, record: dict) -> str | None:
     return load_full_page_text(Path(corpus_root), record["old_text_source"], record["page"])
 
 
+def meeting_info(corpus_root: Path, relpath: str) -> dict | None:
+    """Year, session, title, and source URL for the meeting a corpus-relative
+    path (e.g. "2564/ครั้งที่ 11/xxx.md") belongs to -- year/session come
+    from the path itself (corpus layout, ADR-0003), title/url come from that
+    meeting's `meeting_manifest.json` (the metadata source of truth, never
+    the filename). Reviewers need this to go find the actual source PDF/Drive
+    link to check against, since the filename alone doesn't say which meeting
+    a flagged page came from. None if `relpath` has no year/session prefix or
+    the manifest doesn't exist; title/url within the result are None if no
+    manifest entry matches this exact filename."""
+    parts = Path(relpath).parts
+    if len(parts) < 3:
+        return None
+    year, session, filename = parts[0], parts[1], parts[-1]
+    manifest_path = Path(corpus_root) / year / session / "meeting_manifest.json"
+    if not manifest_path.exists():
+        return None
+    entries = json.loads(manifest_path.read_text(encoding="utf-8"))
+    entry = next((e for e in entries if e.get("file") == filename), None)
+    return {
+        "year": year,
+        "session": session,
+        "title": entry.get("title") if entry else None,
+        "url": entry.get("url") if entry else None,
+    }
+
+
 REOCR_VERDICT_APPLY_NEW = "ใช้ข้อความใหม่ (new)"
 REOCR_VERDICT_KEEP_OLD = "เก็บของเดิม (old)"
 REOCR_VERDICT_DEFER = "รอไว้ก่อน (ทั้งคู่ยังพัง/ไม่แน่ใจ)"

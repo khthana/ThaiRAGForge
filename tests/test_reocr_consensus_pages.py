@@ -102,6 +102,37 @@ class TestResolvePdfPath:
         result = reocr.resolve_pdf_path(src_root, "2567\\ครั้งที่ 10\\เอกสาร ก.md")
         assert result is None
 
+    def test_manual_override_used_when_present_and_file_exists(self, tmp_path):
+        # None of the automatic candidates apply here -- the real PDF was
+        # renamed/truncated on the source drive since the original scrape,
+        # so only a hand-confirmed override finds it.
+        _touch(tmp_path / "2567" / "ครั้งที่ 9" / "ชื่อไม่ตรงกับ stem เลย.pdf")
+        overrides = {"2567\\ครั้งที่ 9\\เอกสาร ก.md": "ชื่อไม่ตรงกับ stem เลย.pdf"}
+        result = reocr.resolve_pdf_path(tmp_path, "2567\\ครั้งที่ 9\\เอกสาร ก.md", overrides=overrides)
+        assert result == tmp_path / "2567" / "ครั้งที่ 9" / "ชื่อไม่ตรงกับ stem เลย.pdf"
+
+    def test_manual_override_ignored_when_target_file_missing(self, tmp_path):
+        (tmp_path / "2567" / "ครั้งที่ 9").mkdir(parents=True)
+        overrides = {"2567\\ครั้งที่ 9\\เอกสาร ก.md": "ไม่มีไฟล์นี้จริง.pdf"}
+        result = reocr.resolve_pdf_path(tmp_path, "2567\\ครั้งที่ 9\\เอกสาร ก.md", overrides=overrides)
+        assert result is None
+
+    def test_manual_override_does_not_affect_other_files(self, tmp_path):
+        _touch(tmp_path / "2567" / "ครั้งที่ 9" / "เอกสาร ข.pdf")
+        overrides = {"2567\\ครั้งที่ 9\\เอกสาร ก.md": "some other file.pdf"}
+        result = reocr.resolve_pdf_path(tmp_path, "2567\\ครั้งที่ 9\\เอกสาร ข.md", overrides=overrides)
+        assert result == tmp_path / "2567" / "ครั้งที่ 9" / "เอกสาร ข.pdf"
+
+
+class TestLoadManualPdfOverrides:
+    def test_missing_file_returns_empty_dict(self, tmp_path):
+        assert reocr.load_manual_pdf_overrides(tmp_path / "missing.json") == {}
+
+    def test_parses_existing_file(self, tmp_path):
+        path = tmp_path / "overrides.json"
+        path.write_text('{"a.md": "b.pdf"}', encoding="utf-8")
+        assert reocr.load_manual_pdf_overrides(path) == {"a.md": "b.pdf"}
+
 
 class TestParseDocumentHeader:
     def test_plain_header_no_prefix_or_suffix(self, tmp_path):
@@ -192,6 +223,19 @@ class TestBuildWorkItems:
         items, unresolved = reocr.build_work_items(entries, tmp_path, page_count_fn=lambda p: 10)
         assert items == []
         assert unresolved == ["2567\\ครั้งที่ 9\\เอกสาร ก.md"]
+
+    def test_overrides_are_passed_through_to_resolve_pdf_path(self, tmp_path):
+        _touch(tmp_path / "2567" / "ครั้งที่ 9" / "ไม่ตรง stem.pdf")
+        entries = [
+            logic.FileEntry(year="2567", file="2567\\ครั้งที่ 9\\เอกสาร ก.md",
+                             pages=[logic.PageEntry(page="Page 1")]),
+        ]
+        overrides = {"2567\\ครั้งที่ 9\\เอกสาร ก.md": "ไม่ตรง stem.pdf"}
+        items, unresolved = reocr.build_work_items(
+            entries, tmp_path, page_count_fn=_unlimited_pages, overrides=overrides,
+        )
+        assert unresolved == []
+        assert len(items) == 1
 
     def test_page_count_error_is_reported_unresolved_not_raised(self, tmp_path):
         _touch(tmp_path / "2567" / "ครั้งที่ 9" / "เอกสาร ก.pdf")

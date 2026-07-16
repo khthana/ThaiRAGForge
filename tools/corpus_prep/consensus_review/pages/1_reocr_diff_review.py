@@ -114,6 +114,19 @@ st.caption(
 )
 st.subheader(f"{Path(record['pdf']).name} -- หน้า {record['page']}")
 
+info = logic.meeting_info(corpus_root, record["files"][0])
+if info is None:
+    st.warning("หาปี/ครั้งที่ประชุมไม่เจอจาก path ของไฟล์")
+else:
+    header = f"**ปี {info['year']} {info['session']}**"
+    if info["url"]:
+        header += f" -- [เปิดต้นฉบับ (PDF/Drive)]({info['url']})"
+    else:
+        header += " -- ไม่พบลิงก์ต้นฉบับใน meeting_manifest.json"
+    st.markdown(header)
+    if info["title"]:
+        st.caption(info["title"])
+
 prior_decision = decisions.get(_key(record))
 if prior_decision is not None:
     note_suffix = f" -- โน้ต: {prior_decision.note}" if prior_decision.note else ""
