@@ -61,11 +61,13 @@ class RetrievalResult(BaseModel):
 @dataclass
 class Query:
     """A prepared query representation handed to a Retriever. Different retrievers
-    use different parts: dense uses `vector`, lexical (BM25) uses `tokens`."""
+    use different parts: dense uses `vector`, lexical (BM25) uses `tokens`,
+    a DB-backed retriever (e.g. QdrantRetriever) uses `filters`."""
 
     text: str
     vector: np.ndarray | None = None
     tokens: list[str] | None = None
+    filters: dict[str, Any] | None = None
 
 
 @dataclass

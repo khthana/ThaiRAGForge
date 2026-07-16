@@ -34,6 +34,7 @@ lab = [
     "streamlit>=1.36",
     "loguru>=0.7",
     "tqdm>=4.66",
+    "qdrant-client>=1.18.0",
 ]
 
 # Test/dev tooling (installed by `uv sync` by default alongside the project).
