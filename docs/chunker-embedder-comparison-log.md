@@ -142,3 +142,41 @@ Output: `data/index/chunker_compare_full/`.
    สร้างก่อนการแก้นี้ ยังมีตาราง Mapping ปนอยู่ในทุก combo — ถ้าต้องการให้ผลสะท้อนการตัดตารางนี้
    ต้องรัน build ใหม่ทั้งหมด (การแก้นี้ไม่กระทบ defect ทั้ง 9 ไฟล์ข้างต้น เพราะ OCR-repetition
    garbage อยู่คนละตำแหน่งกับตาราง Mapping — ยังต้อง re-OCR แยกต่างหากเหมือนเดิม)
+
+## Retrieval-quality eval: Silver query set (16 ก.ค. 2569)
+
+หลังจากมีแค่การเปรียบเทียบเชิงคุณภาพ (chunk-comparison artifact) จึงรัน eval เชิงปริมาณจริง
+ด้วย Silver query set (title ของแต่ละ resolution เป็น query, ตอบตัวเองเป็น relevant —
+ฟรี ไม่ต้อง label มือ, ดู `docs/entity-extraction-and-gold-eval-log.md` สำหรับ Gold set
+ที่ยากกว่า) เทียบ 4 chunker บน e5-large embedder เดียวกัน (ตัดตัวแปร embedder ออก)
+
+**พบบั๊ก perf จริงระหว่างเตรียมรัน**: `run_query_set` (framework code เดิม) reload
+embedder + Index ทั้งก้อนใหม่ทุก query — จาก smoke test คำนวณได้ว่ารัน Silver set เต็ม
+(2,873 query) จะใช้เวลา **~36 ชั่วโมง** แก้เป็นโหลด Index/embedder ครั้งเดียวต่อ combo
+แล้ว loop query ในหน่วยความจำแทน (`src/rag_lab/query_sets.py`, commit `5f84654`) เหลือ
+**~66 นาที** จริง (2,873 query × 4 combo, script: `tools/eval/run_silver_chunker_eval.py`)
+
+**ผลลัพธ์** (k=10):
+
+| Chunker | recall@10 | MRR | nDCG@10 |
+|---|---|---|---|
+| fixed_size | **0.8398** | **0.6238** | **0.6754** |
+| recursive | 0.8188 | 0.6206 | 0.6679 |
+| sentence | 0.8267 | 0.6197 | 0.6693 |
+| semantic | 0.7602 | 0.5371 | 0.5903 |
+
+**ข้อสังเกตที่ขัดกับสามัญสำนึก**: `semantic` — chunker ที่ซับซ้อนและแพงที่สุด (ใช้
+bge-m3 embedding หา breakpoint) — **แพ้ทั้ง 3 metric ให้ทุกตัวรวมถึง `fixed_size` ที่
+เป็นวิธีง่ายที่สุด** สอดคล้องกับที่ chunk-comparison artifact เคยแสดงไว้เชิงคุณภาพ:
+`semantic` ให้ chunk ขนาดไม่สม่ำเสมอที่สุด (1 ถึง 19,427 ตัวอักษรในเอกสารเดียวกัน) ซึ่ง
+น่าจะเจือจาง/ฝังเนื้อหาที่สะท้อน title ไว้ในก้อนใหญ่เกินไป ขณะที่ `fixed_size` ตัดแบบ
+กลไกสม่ำเสมอ ทำให้เนื้อหาต้น ๆ ที่มักย้ำ subject ของมติอยู่ใน chunk ที่โฟกัสกว่า
+
+**ข้อจำกัดของผลนี้**: Silver เป็น self-retrieval แบบ "ง่าย" (title→เอกสารตัวเอง) วัด
+ความสามารถ retrieve ด้วยคำที่ทับซ้อนกับ title เป็นหลัก ไม่ใช่ query แบบ paraphrase/
+เชิงประเด็นที่ผู้ใช้จริงจะถาม (ดู Gold candidate pool ใน
+`academic_resolutions/entity_tags/gold_candidates.json`) — ผลอาจพลิกได้เมื่อทดสอบกับ
+Gold set ที่ยากกว่า ยังไม่ได้ทำ
+
+Raw retrieval results: `data/results/silver_chunker_compare/` (gitignored, 11,460 ไฟล์),
+summary: `data/results/silver_chunker_compare_report.md`
