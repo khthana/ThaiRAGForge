@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# Secrets
+.env
+
 # Corpus data (large; reproducible via tools/corpus_prep/)
 academic_resolutions/
 

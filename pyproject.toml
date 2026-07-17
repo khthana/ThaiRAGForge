@@ -13,6 +13,8 @@ dependencies = [
     "typhoon-ocr>=0.4.1",
     "requests>=2.31.0",
     "beautifulsoup4>=4.12.0",
+    "anthropic>=0.117.0",
+    "python-dotenv>=1.2.2",
 ]
 
 # Framework deps live in a separate group so corpus-prep stays lightweight.
