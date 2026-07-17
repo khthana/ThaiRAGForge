@@ -20,6 +20,18 @@ relevance risk of asking a model to read resolutions and guess what's relevant:
   substring "ธนา" over-matches 16 different canonical people (ธนากร, ธนาพล,
   ธนาดล, ...) who happen to share a name-root.
 
+- Faculty adjunct-instructor aggregate ("หลักสูตรใดของคณะวิศวกรรมศาสตร์ใช้อาจารย์
+  พิเศษมากที่สุด กี่คน ใครบ้าง"): relevant_resolution_ids = every "อาจารย์พิเศษ
+  สอนเกินร้อยละ 50" filing resolution tagged with that faculty
+  (faculties_by_file.json). This is a genuinely different retrieval shape from
+  the other two: eval only grades recall/MRR/nDCG@k of relevant_resolution_ids
+  (query_sets.py's QuerySetEntry has no answer-key field), so the "which
+  program/how many/who" part of the query is NOT separately graded -- only
+  whether retrieval surfaces the full relevant set. Answering it correctly
+  requires retrieving *every* filing for the faculty to compare across
+  programs, so the relevant set is intentionally large and flat (one program's
+  filings alone would not be a sufficient retrieval target).
+
 Output is a CANDIDATE pool, not a finished gold set: it still needs human
 review before use (person hits may include incidental mentions -- e.g. an
 attendee list -- not just committee-membership; program windows are not
@@ -215,13 +227,60 @@ def person_candidates(min_hits: int) -> list[dict]:
     return candidates
 
 
-def render_report(program_hits: list[dict], person_hits: list[dict]) -> str:
+# Matches "อาจารย์พิเศษสอนเกินร้อยละ 50" filing titles. Requires "ร้อยละ" as well
+# as "อาจารย์...พิเศษ" (not just the bare rank word) because a handful of
+# unrelated resolutions -- a policy-change discussion, a regulation about
+# titled "ผู้ช่วยศาสตราจารย์พิเศษ" appointments, a note that explicitly says
+# "ไม่ใช่อาจารย์พิเศษ" -- also mention "อาจารย์พิเศษ" without being an overload
+# filing. Verified corpus-wide: this rule reproduces the same 196 files as a
+# manually cross-checked OR of both title-phrasing variants ("...สอนเกินร้อยละ
+# 50" / "...เชิญ...มากกว่าร้อยละ 50"), with zero over/under-match either way.
+# `[\s​]*` (plain space or U+200B zero-width space) bridges an OCR quirk where
+# "อาจารย์" and "พิเศษ" are split by an invisible character in some titles.
+_ADJUNCT_FILING_PAT = re.compile(r"อาจารย์[\s​]*พิเศษ")
+
+
+def _is_adjunct_filing_title(title: str) -> bool:
+    return bool(_ADJUNCT_FILING_PAT.search(title)) and "ร้อยละ" in title
+
+
+def faculty_adjunct_candidates(min_hits: int) -> list[dict]:
+    faculties_by_file = _load_json(TAGS_DIR / "faculties_by_file.json")
+
+    by_faculty: dict[str, set[str]] = {}
+    for relpath, faculty_list in faculties_by_file.items():
+        full_path = CORPUS_ROOT / relpath
+        year, session, title = parse_path(str(full_path))
+        if not _is_adjunct_filing_title(title or ""):
+            continue
+        rid = make_resolution_id(str(full_path), year, session, title)
+        for faculty in faculty_list:
+            by_faculty.setdefault(faculty, set()).add(rid)
+
+    candidates = []
+    for faculty, rids in by_faculty.items():
+        if len(rids) < min_hits:
+            continue
+        candidates.append(
+            {
+                "entity_type": "faculty_adjunct_aggregate",
+                "entity": faculty,
+                "query": f"หลักสูตรใดของ{faculty}ใช้อาจารย์พิเศษสอนเกินร้อยละ 50 มากที่สุด กี่คน และมีใครบ้าง",
+                "relevant_resolution_ids": sorted(rids, key=_sort_key),
+                "hit_count": len(rids),
+            }
+        )
+    return candidates
+
+
+def render_report(program_hits: list[dict], person_hits: list[dict], faculty_adjunct_hits: list[dict]) -> str:
     lines = [
         "# Gold query-set candidates",
         "",
         f"- Program-anchored candidates: {len(program_hits)}",
         f"- Person-anchored candidates: {len(person_hits)}",
-        f"- Total: {len(program_hits) + len(person_hits)}",
+        f"- Faculty adjunct-instructor aggregate candidates: {len(faculty_adjunct_hits)}",
+        f"- Total: {len(program_hits) + len(person_hits) + len(faculty_adjunct_hits)}",
         "",
         "These are CANDIDATES, not a finished gold set -- pick a ~30-50 entry",
         "subset (mixing program and person entries, varied hit_count) into",
@@ -243,6 +302,9 @@ def render_report(program_hits: list[dict], person_hits: list[dict]) -> str:
     lines += ["", "## Top person candidates by event_count", ""]
     for c in sorted(person_hits, key=lambda c: -c["event_count"])[:15]:
         lines.append(f"- (event_count={c['event_count']}, hit_count={c['hit_count']}) {c['entity']}")
+    lines += ["", "## Faculty adjunct-instructor aggregate candidates (all, by hit_count)", ""]
+    for c in sorted(faculty_adjunct_hits, key=lambda c: -c["hit_count"]):
+        lines.append(f"- (hit_count={c['hit_count']}) {c['entity']}")
     return "\n".join(lines) + "\n"
 
 
@@ -250,6 +312,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--min-program-hits", type=int, default=2)
     parser.add_argument("--min-person-hits", type=int, default=2)
+    parser.add_argument("--min-faculty-adjunct-hits", type=int, default=2)
     parser.add_argument(
         "--output-dir",
         type=str,
@@ -263,16 +326,22 @@ def main() -> None:
 
     programs = program_candidates(args.min_program_hits)
     people = person_candidates(args.min_person_hits)
+    faculty_adjunct = faculty_adjunct_candidates(args.min_faculty_adjunct_hits)
 
     (out_dir / "gold_candidates.json").write_text(
-        json.dumps({"programs": programs, "people": people}, ensure_ascii=False, indent=1),
+        json.dumps(
+            {"programs": programs, "people": people, "faculty_adjunct": faculty_adjunct},
+            ensure_ascii=False,
+            indent=1,
+        ),
         encoding="utf-8",
     )
     (out_dir / "gold_candidates_report.md").write_text(
-        render_report(programs, people), encoding="utf-8"
+        render_report(programs, people, faculty_adjunct), encoding="utf-8"
     )
     print(f"program candidates: {len(programs)}")
     print(f"person candidates: {len(people)}")
+    print(f"faculty adjunct-aggregate candidates: {len(faculty_adjunct)}")
     print(f"written to {out_dir}")
 
 
