@@ -180,3 +180,50 @@ Gold set ที่ยากกว่า ยังไม่ได้ทำ
 
 Raw retrieval results: `data/results/silver_chunker_compare/` (gitignored, 11,460 ไฟล์),
 summary: `data/results/silver_chunker_compare_report.md`
+
+## Retrieval-quality eval: Gold query set (17 ก.ค. 2569)
+
+หลัง curate `config/eval/gold_query_set.yaml` จาก candidate pool (37 entries: 12
+program-history + 12 person-history + 13 faculty-adjunct-aggregate ดู
+`docs/entity-extraction-and-gold-eval-log.md` สำหรับที่มาของ 3 query shape) รัน
+`tools/eval/run_gold_chunker_eval.py` เทียบ 4 chunker บน e5-large เดียวกัน
+
+**ผลรวม** (k=10, 37 query):
+
+| Chunker | recall@10 | MRR | nDCG@10 |
+|---|---|---|---|
+| fixed_size | 0.4447 | **0.7503** | **0.5591** |
+| semantic | **0.4466** | 0.7306 | 0.5432 |
+| sentence | 0.3824 | 0.6486 | 0.4830 |
+| recursive | 0.3710 | 0.7088 | 0.5040 |
+
+**ต่างจาก Silver ตรงที่ผลไม่ได้ชี้ไปทางเดียวชัดเจน** — แยกตาม query shape (คำนวณ
+เพิ่มจาก raw retrieval results เดิม ไม่ต้องรันซ้ำ):
+
+| Chunker | program recall@10 | person recall@10 | faculty-adjunct recall@10 |
+|---|---|---|---|
+| fixed_size | **0.500** | 0.328 | 0.501 |
+| recursive | 0.270 | 0.364 | 0.470 |
+| semantic | 0.327 | **0.591** | 0.423 |
+| sentence | 0.385 | 0.323 | 0.435 |
+
+- **Program-history query**: `fixed_size` ชนะขาด (0.50 vs 0.27-0.39) — สอดคล้องกับ
+  Silver: query ประเภทนี้ผูกกับชื่อหลักสูตรที่ปรากฏชัดใน title ตรงกับจุดแข็งของ
+  fixed_size ที่เคยพบมาแล้ว
+- **Person-history query**: กลับกัน — `semantic` ชนะขาด (0.59 vs 0.32-0.36) คนละทิศกับ
+  Silver โดยสิ้นเชิง คนถูกกล่าวถึงกระจายอยู่ในเนื้อหา (ตาราง กรรมการ ผู้รับผิดชอบ)
+  ไม่ใช่ title เหมือน program จึงต้องพึ่ง embedding ที่จับ semantic boundary ของ
+  เนื้อหาจริงมากกว่าการตัดแบบกลไก
+- **Faculty-adjunct-aggregate**: recall@10 ทุก chunker แน่นอยู่แถว 0.42-0.50 (เพดาน
+  ทางคณิตศาสตร์: relevant set มีถึง 30 ไฟล์ในบางคำถาม แต่ k=10 ดึงได้สูงสุดแค่ 10
+  resolution ต่อ query ต่อให้แม่นทุกอัน recall ก็ทะลุ 10/30≈0.33 ไม่ได้มาก) แต่
+  **MRR สูงเกือบเต็ม (0.90-1.00 ทุก chunker)** — เอกสารที่เกี่ยวข้องมีสัดส่วนในคลัง
+  สูงพอที่ผลอันดับ 1 มักจะ hit เกือบเสมอ ยืนยันสมมติฐานที่ตั้งไว้ตอน scope งานนี้
+  (แนะนำโดย advisor ก่อนสร้าง): เป็นโจทย์ retrieval ที่ยากจริงในมิติ recall แม้ตัว
+  ค้นหาจะ "เจอของแรก" ได้ง่ายก็ตาม
+
+**สรุป**: chunker ที่ดีที่สุดไม่ใช่ตัวเดียวคงที่ — ขึ้นกับ query shape เป็นเรื่องที่
+Silver (self-retrieval ล้วน) มองไม่เห็นเลย เป็นเหตุผลที่ต้องมี Gold set แยกต่างหาก
+
+Raw retrieval results: `data/results/gold_chunker_compare/` (gitignored),
+summary: `data/results/gold_chunker_compare_report.md`
