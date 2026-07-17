@@ -15,6 +15,7 @@ import json
 import re
 from functools import lru_cache
 from pathlib import Path
+from typing import Iterator
 
 _DOCUMENT_HEADER = re.compile(r"^\s*#\s*Document:.*$", re.MULTILINE)
 _MANIFEST_NAME = "meeting_manifest.json"
@@ -70,6 +71,27 @@ def make_resolution_id(path: str, year: str | None, session: str | None, title: 
     if year and session:
         return f"{year}/{session}/{title}"
     return str(Path(path).as_posix())
+
+
+def iter_corpus_files(corpus_root: Path) -> Iterator[Path]:
+    """Yield every live (non-`.dup`) resolution file under `<year>/<session>/*.md`.
+
+    `academic_resolutions/` also holds gitignored non-corpus working/report
+    files (entity_tags/, llm_ocr_scan/, top-level *_review.md, ...) that live
+    at or near the same root -- a bare `corpus_root.rglob("*.md")` sweeps
+    those up too and, once matched against a real corpus resolution_id
+    accidentally quoted inside one of those reports, misattributes it as a
+    genuine mention. Gate on the same real-year/session structure
+    `make_resolution_id` uses to mint an id (vs. its path-fallback) so only
+    actual resolution files are ever walked, regardless of what else gets
+    dropped into the corpus root later."""
+    for f in sorted(corpus_root.rglob("*.md")):
+        if f.name.endswith(".dup"):
+            continue
+        parts = f.relative_to(corpus_root).parts
+        if len(parts) < 3 or not re.fullmatch(r"\d{4}", parts[0]):
+            continue
+        yield f
 
 
 def strip_document_header(text: str) -> str:

@@ -55,6 +55,28 @@ from rag_lab.loaders.common import make_resolution_id, parse_path  # noqa: E402
 
 _RID_YEAR_SESSION = re.compile(r"^(\d+)/(\d+)s?/")
 
+# ADR-0004 curriculum-bundle splits: one bundled meeting item becomes N
+# physical `<original title> — <curriculum title>` pieces, each its own
+# resolution_id. Confirmed corpus-wide (707/707 split files, 0 counter-
+# examples): every `__N` piece's manifest title contains this exact
+# " — " separator, and `__N` numbering is always a dense 1..N run (never
+# reused for title-collision disambiguation), so splitting a resolution_id
+# on the first " — " is a safe, lossless way to recover the shared original-
+# event identity without re-reading meeting_manifest.json.
+_EVENT_SEP = " — "
+
+
+def _event_key(resolution_id: str) -> str:
+    """Collapse a split-bundle piece's resolution_id back to its shared
+    original meeting-item identity, for counting "how many distinct
+    decisions/resolutions" rather than "how many retrievable files" --
+    ADR-0004 splitting duplicates the shared preamble (committee roster,
+    reviewer bios, ...) verbatim into every piece, so a person/program
+    named there shows up once per piece even though it reflects one
+    underlying event. Non-split resolutions have no separator and are
+    trivially their own singleton group."""
+    return resolution_id.split(_EVENT_SEP, 1)[0]
+
 
 def _load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
@@ -106,7 +128,12 @@ def program_candidates(min_hits: int) -> list[dict]:
             (rid for rid in resolution_ids if canonical in rid),
             key=_sort_key,
         )
-        if len(hits) < min_hits:
+        # Threshold on event_count (distinct original resolutions), not raw
+        # file count -- a program split into 3 ADR-0004 pieces from one
+        # bundle is one change event, not three, and shouldn't qualify a
+        # min_hits=2 candidate on file-count alone.
+        event_count = len({_event_key(rid) for rid in hits})
+        if event_count < min_hits:
             continue
         candidates.append(
             {
@@ -115,6 +142,7 @@ def program_candidates(min_hits: int) -> list[dict]:
                 "query": f"หลักสูตร{field}มีการเปลี่ยนแปลงกี่ครั้งและแต่ละครั้งมีรายละเอียดอะไรบ้าง",
                 "relevant_resolution_ids": hits,
                 "hit_count": len(hits),
+                "event_count": event_count,
             }
         )
     return candidates
@@ -171,7 +199,8 @@ def person_candidates(min_hits: int) -> list[dict]:
 
     candidates = []
     for canonical_name, rids in hits_by_canonical.items():
-        if len(rids) < min_hits:
+        event_count = len({_event_key(rid) for rid in rids})
+        if event_count < min_hits:
             continue
         candidates.append(
             {
@@ -180,6 +209,7 @@ def person_candidates(min_hits: int) -> list[dict]:
                 "query": f"{canonical_name} มีประวัติเกี่ยวข้องกับหลักสูตรใดบ้าง ในช่วงใด ให้แสดงรายละเอียดทั้งหมด",
                 "relevant_resolution_ids": sorted(rids, key=_sort_key),
                 "hit_count": len(rids),
+                "event_count": event_count,
             }
         )
     return candidates
@@ -200,14 +230,19 @@ def render_report(program_hits: list[dict], person_hits: list[dict]) -> str:
         "substring here, and what still needs human review before trusting a",
         "candidate as real ground truth.",
         "",
-        "## Top program candidates by hit_count",
+        "hit_count is the raw retrievable-file count; event_count collapses",
+        "ADR-0004 curriculum-bundle split pieces that share one original",
+        "meeting item back to a single count -- use event_count for \"กี่ครั้ง\"-",
+        "style stratification/expected answers, hit_count for recall grading.",
+        "",
+        "## Top program candidates by event_count",
         "",
     ]
-    for c in sorted(program_hits, key=lambda c: -c["hit_count"])[:15]:
-        lines.append(f"- ({c['hit_count']}) {c['entity']}")
-    lines += ["", "## Top person candidates by hit_count", ""]
-    for c in sorted(person_hits, key=lambda c: -c["hit_count"])[:15]:
-        lines.append(f"- ({c['hit_count']}) {c['entity']}")
+    for c in sorted(program_hits, key=lambda c: -c["event_count"])[:15]:
+        lines.append(f"- (event_count={c['event_count']}, hit_count={c['hit_count']}) {c['entity']}")
+    lines += ["", "## Top person candidates by event_count", ""]
+    for c in sorted(person_hits, key=lambda c: -c["event_count"])[:15]:
+        lines.append(f"- (event_count={c['event_count']}, hit_count={c['hit_count']}) {c['entity']}")
     return "\n".join(lines) + "\n"
 
 

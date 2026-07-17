@@ -32,7 +32,11 @@ OUT_DIR = CORPUS_ROOT / "entity_tags"
 # so src/ needs to be on sys.path explicitly to reuse the already-tested
 # matcher instead of duplicating it here.
 sys.path.insert(0, str(REPO / "src"))
-from rag_lab.loaders.common import strip_document_header, strip_mapping_tables  # noqa: E402
+from rag_lab.loaders.common import (  # noqa: E402
+    iter_corpus_files,
+    strip_document_header,
+    strip_mapping_tables,
+)
 from rag_lab.loaders.person_loader import match_people  # noqa: E402
 
 _TOP_N = 200  # how many of the most-mentioned people to print in the report
@@ -42,9 +46,7 @@ def tag_corpus(corpus_root: Path) -> dict[str, list[dict[str, str]]]:
     """relpath -> list of {title, given_name, surname, full_name} for every
     live (non-`.dup`) corpus file."""
     tags: dict[str, list[dict[str, str]]] = {}
-    for f in sorted(corpus_root.rglob("*.md")):
-        if f.name.endswith(".dup"):
-            continue
+    for f in iter_corpus_files(corpus_root):
         try:
             text = f.read_text(encoding="utf-8")
         except UnicodeDecodeError:

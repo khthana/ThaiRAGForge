@@ -51,7 +51,11 @@ OUT_REPORT_PATH = CORPUS_ROOT / "entity_tags" / "people_canonicalization_report.
 # so src/ needs to be on sys.path explicitly to reuse the already-tested
 # matcher instead of duplicating it here.
 sys.path.insert(0, str(REPO / "src"))
-from rag_lab.loaders.common import strip_document_header, strip_mapping_tables  # noqa: E402
+from rag_lab.loaders.common import (  # noqa: E402
+    iter_corpus_files,
+    strip_document_header,
+    strip_mapping_tables,
+)
 from rag_lab.loaders.person_loader import match_people  # noqa: E402
 
 # A prefix-relation merge requires both surnames to already be at least this
@@ -80,9 +84,7 @@ def collect_raw_counts(corpus_root: Path) -> Counter:
     """(title, given_name, surname) -> mention count, across every live
     (non-`.dup`) corpus file."""
     counts: Counter = Counter()
-    for f in corpus_root.rglob("*.md"):
-        if f.name.endswith(".dup"):
-            continue
+    for f in iter_corpus_files(corpus_root):
         try:
             text = f.read_text(encoding="utf-8")
         except UnicodeDecodeError:
