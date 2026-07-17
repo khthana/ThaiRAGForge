@@ -113,7 +113,10 @@ uv sync --extra lab
 PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/dev_smoke.yaml
 
 # เปิด Streamlit UI (Mode A: Build/Run, Mode B: Query & Compare)
-streamlit run app/streamlit_app.py
+# --server.fileWatcherType none กันไม่ให้ auto-reload watcher ไปเดินสำรวจ
+# submodule ของ transformers (เช่น zoedepth) แล้วขึ้น ModuleNotFoundError:
+# torchvision -- แค่ warning ไม่เป็นอันตราย แต่ log รกไม่จำเป็น
+.venv/Scripts/streamlit.exe run app/streamlit_app.py --server.fileWatcherType none
 ```
 
 รายละเอียดคำสั่งทั้งหมด (การ smoke test โมเดลจริงด้วย `RAG_LAB_SMOKE=1`, คำสั่ง CLI

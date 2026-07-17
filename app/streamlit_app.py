@@ -20,7 +20,41 @@ from rag_lab.router import classify_query  # noqa: E402
 st.set_page_config(page_title="RAG Lab — Query & Compare", layout="wide")
 st.title("RAG Lab — Query & Compare (Mode B)")
 
-output_dir = st.sidebar.text_input("Index output dir", "data/index/dev_smoke", key="output_dir")
+def _discoverable_index_dirs() -> list[str]:
+    """Subdirectories of data/index/ that actually contain built combos --
+    lets the picker be a selectbox (no risk of a stale/mistyped path) while
+    still covering every experiment output on disk, not just one hardcoded name."""
+    root = Path("data/index")
+    if not root.is_dir():
+        return []
+    found = []
+    for d in sorted(root.iterdir()):
+        if d.is_dir() and discover_indices(d):
+            found.append(str(d))
+    return found
+
+
+_CUSTOM_PATH = "Custom path..."
+_dir_options = _discoverable_index_dirs()
+# default to a dir with at least one non-toy embedder if one exists, so the
+# picker doesn't silently land on a hashing-only dev/smoke index; with no
+# discoverable dirs at all (fresh clone, nothing built yet) fall through to
+# the custom-path text input -- same widget tree either way, just which one
+# is pre-selected, so behavior doesn't depend on what happens to be on disk.
+_default_choice = next(
+    (d for d in _dir_options if any(i.embedder.type != "hashing" for i in discover_indices(d))),
+    _dir_options[0] if _dir_options else _CUSTOM_PATH,
+)
+_all_choices = _dir_options + [_CUSTOM_PATH]
+_choice = st.sidebar.selectbox(
+    "Index output dir", _all_choices, index=_all_choices.index(_default_choice), key="output_dir_choice",
+)
+output_dir = (
+    st.sidebar.text_input("Custom index dir", "", key="output_dir")
+    if _choice == _CUSTOM_PATH
+    else _choice
+)
+
 try:
     infos = discover_indices(output_dir)
 except FileNotFoundError:
@@ -34,7 +68,36 @@ if not infos:
     )
     st.stop()
 
+if all(i.embedder.type == "hashing" for i in infos):
+    st.warning(
+        "This index was built with the **hashing** embedder -- a fast placeholder "
+        "with no real semantic understanding, meant for testing the pipeline, not "
+        "for judging retrieval quality. Pick an index dir with a real embedder "
+        "(`e5` or `local`) for results that mean anything, e.g. `data/index/chunker_compare_full`."
+    )
+
 by_id = {info.combo_id: info for info in infos}
+
+
+def _param_summary(spec: StrategySpec) -> str:
+    """Short, non-exhaustive disambiguator for the one param that's actually
+    varied across combos in this repo's experiments (chunk_size) -- without
+    it, e.g. fixed_size@512 and fixed_size@256 render as the same label."""
+    chunk_size = spec.params.get("chunk_size")
+    return f"[{chunk_size}]" if chunk_size is not None else ""
+
+
+def _combo_label(combo_id: str) -> str:
+    """combo_id alone collapses distinct local-embedder models (e.g. bge-m3
+    vs ConGen-PhayaThaiBERT), or distinct chunker params (e.g. chunk_size),
+    to the same visible prefix plus an opaque hash -- show the actual
+    model_name / param so they're distinguishable."""
+    info = by_id[combo_id]
+    model = info.embedder.params.get("model_name")
+    embedder_label = f"{info.embedder.type} ({model})" if model else info.embedder.type
+    chunker_label = f"{info.chunker.type}{_param_summary(info.chunker)}"
+    return f"{chunker_label} + {embedder_label}"
+
 
 smart_routing = st.sidebar.checkbox(
     "Smart routing (route by query shape)", value=False, key="smart_routing",
@@ -50,7 +113,8 @@ smart_routing = st.sidebar.checkbox(
 )
 if not smart_routing:
     selected = st.sidebar.multiselect(
-        "Combinations to compare", list(by_id), default=list(by_id)[:2], key="selected_combos",
+        "Combinations to compare", list(by_id), default=list(by_id)[:2],
+        format_func=_combo_label, key="selected_combos",
     )
 else:
     unmatched_strategy = st.sidebar.radio(
@@ -108,4 +172,4 @@ elif search_clicked and query and not smart_routing and selected:
     )
     for col, cr in zip(st.columns(len(combos)), combos):
         with col:
-            _render_result(cr.combo_id, cr.result)
+            _render_result(_combo_label(cr.combo_id), cr.result)

@@ -40,6 +40,20 @@ from rag_lab.schema import RankedChunk, RetrievalResult
 # (freshly approved, dictionary not yet rebuilt) still carries this marker.
 _PROGRAM_FALLBACK = re.compile(r"สาขาวิชา")
 
+# match_people (loaders/person_loader.py) requires zero space between a
+# title and the name -- a deliberate choice tuned to how this corpus's own
+# tables/prose actually write it. A user typing a query naturally writes
+# "ผศ. ธนา..." with a space, though, so collapse that spacing here (query
+# classification only -- corpus tagging via PersonLoader is untouched)
+# before handing off to the same regex.
+_TITLE_TRAILING_SPACE = re.compile(
+    r"(ผู้ช่วยศาสตราจารย์|รองศาสตราจารย์|ศาสตราจารย์|ผศ\.|รศ\.|ศ\.|ดร\.)\s+(?=[ก-ฮ])"
+)
+
+
+def _collapse_title_spacing(query: str) -> str:
+    return _TITLE_TRAILING_SPACE.sub(r"\1", query)
+
 ROUTE_PERSON = "person"
 ROUTE_PROGRAM = "program"
 ROUTE_UNMATCHED = "unmatched"
@@ -77,7 +91,7 @@ def classify_query(query: str) -> str:
     also happens to name a specific program, and the person pattern is the
     more precise signal (rank + name is a strong anchor; the program
     fallback is a single common substring)."""
-    if match_people(query):
+    if match_people(_collapse_title_spacing(query)):
         return ROUTE_PERSON
     if match_programs(query, dictionary=load_dictionary()):
         return ROUTE_PROGRAM

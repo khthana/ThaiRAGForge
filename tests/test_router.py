@@ -31,6 +31,23 @@ def test_classify_person_query_via_live_regex_not_dictionary():
     assert classify_query(query) == ROUTE_PERSON
 
 
+def test_classify_person_query_tolerates_a_space_after_the_title():
+    # match_people (loaders/person_loader.py) requires zero space between
+    # title and name -- tuned to this corpus's own table/prose convention.
+    # A user typing a query naturally writes a space there ("ผศ. ธนา..."),
+    # which must still route to person, not fall through to unmatched.
+    query = "ผศ. ธนา หงษ์สุวรรณ มีประวัติเป็นกรรมการหลักสูตรใดบ้าง"
+    assert classify_query(query) == ROUTE_PERSON
+
+
+def test_classify_still_ignores_generic_rank_mention_with_a_space():
+    # The pre-existing _NOT_A_NAME guard in match_people must still apply
+    # after the title-spacing collapse -- "ศ. นั้น" is prose about the rank
+    # itself, not a specific person, and must not be misrouted to person.
+    query = "ตำแหน่ง ศ. นั้น จะได้ทรงพระกรุณาโปรดเกล้าฯ แต่งตั้ง"
+    assert classify_query(query) == ROUTE_UNMATCHED
+
+
 def test_classify_program_query_via_fallback_marker():
     # No real canonical program name here, but the "สาขาวิชา" structural
     # marker still routes it to program -- the staleness fallback for a
