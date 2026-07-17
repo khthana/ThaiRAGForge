@@ -183,34 +183,48 @@ summary: `data/results/silver_chunker_compare_report.md`
 
 ## Retrieval-quality eval: Gold query set (17 ก.ค. 2569)
 
-หลัง curate `config/eval/gold_query_set.yaml` จาก candidate pool (37 entries: 12
-program-history + 12 person-history + 13 faculty-adjunct-aggregate ดู
-`docs/entity-extraction-and-gold-eval-log.md` สำหรับที่มาของ 3 query shape) รัน
-`tools/eval/run_gold_chunker_eval.py` เทียบ 4 chunker บน e5-large เดียวกัน
+หลัง curate `config/eval/gold_query_set.yaml` จาก candidate pool (แรกเริ่ม 37
+entries: 12+12+13 ดู `docs/entity-extraction-and-gold-eval-log.md` สำหรับที่มาของ
+3 query shape) รัน `tools/eval/run_gold_chunker_eval.py` เทียบ 4 chunker บน
+e5-large เดียวกัน พบผลไม่ชี้ทางเดียวชัดเจนเหมือน Silver ต่างกันตาม query shape —
+แต่ n=12 ต่อ category บาง จึงเช็ค paired significance (fixed_size vs semantic,
+recall@10) พบ `|t| ~1.6-1.7` ที่ df=11 (ต้องการ >2.20 ถึงจะ p<0.05) — ทิศทางถูก
+แต่ยังไม่แน่นทางสถิติ **ขยายเป็น program 30 + person 30 (faculty-adjunct คงที่ 13
+เพราะใกล้เพดาน pool แล้ว) รวม 73 entries** แล้วรันใหม่ (ฟรี ไม่ต้อง label เพิ่ม
+เพราะ candidate pool มีเหลือเยอะ — คัดจาก 147 program + 1,139 person candidates)
 
-**ผลรวม** (k=10, 37 query):
+**ผลรวม** (k=10, 73 query):
 
 | Chunker | recall@10 | MRR | nDCG@10 |
 |---|---|---|---|
-| fixed_size | 0.4447 | **0.7503** | **0.5591** |
-| semantic | **0.4466** | 0.7306 | 0.5432 |
-| sentence | 0.3824 | 0.6486 | 0.4830 |
-| recursive | 0.3710 | 0.7088 | 0.5040 |
+| semantic | **0.4590** | **0.6994** | **0.5132** |
+| fixed_size | 0.4272 | 0.6281 | 0.4698 |
+| sentence | 0.4185 | 0.6526 | 0.4680 |
+| recursive | 0.3926 | 0.6569 | 0.4573 |
 
-**ต่างจาก Silver ตรงที่ผลไม่ได้ชี้ไปทางเดียวชัดเจน** — แยกตาม query shape (คำนวณ
-เพิ่มจาก raw retrieval results เดิม ไม่ต้องรันซ้ำ):
+**แยกตาม query shape**:
 
 | Chunker | program recall@10 | person recall@10 | faculty-adjunct recall@10 |
 |---|---|---|---|
-| fixed_size | **0.500** | 0.328 | 0.501 |
-| recursive | 0.270 | 0.364 | 0.470 |
-| semantic | 0.327 | **0.591** | 0.423 |
-| sentence | 0.385 | 0.323 | 0.435 |
+| fixed_size | **0.487** | 0.335 | 0.501 |
+| recursive | 0.296 | 0.456 | 0.470 |
+| semantic | 0.312 | **0.622** | 0.423 |
+| sentence | 0.401 | 0.429 | 0.435 |
 
-- **Program-history query**: `fixed_size` ชนะขาด (0.50 vs 0.27-0.39) — สอดคล้องกับ
+**Paired significance ที่ n=30/category (fixed_size vs semantic, recall@10, df=29,
+critical `|t|`≈2.05 ที่ p<0.05, ≈2.76 ที่ p<0.01)**:
+
+| Query shape | mean diff (fixed−semantic) | t | ชนะ fixed / semantic / เท่า |
+|---|---|---|---|
+| program | +0.175 | **2.91** (p<0.01) | 15 / 6 / 9 |
+| person | −0.286 | **−3.50** (p<0.01) | 6 / 19 / 5 |
+
+ทั้งสองทิศผ่านนัยสำคัญทางสถิติจริง ไม่ใช่ noise จากตัวอย่างน้อย:
+
+- **Program-history query**: `fixed_size` ชนะจริง (0.49 vs 0.31-0.40) — สอดคล้องกับ
   Silver: query ประเภทนี้ผูกกับชื่อหลักสูตรที่ปรากฏชัดใน title ตรงกับจุดแข็งของ
   fixed_size ที่เคยพบมาแล้ว
-- **Person-history query**: กลับกัน — `semantic` ชนะขาด (0.59 vs 0.32-0.36) คนละทิศกับ
+- **Person-history query**: กลับกัน — `semantic` ชนะจริง (0.62 vs 0.30-0.46) คนละทิศกับ
   Silver โดยสิ้นเชิง คนถูกกล่าวถึงกระจายอยู่ในเนื้อหา (ตาราง กรรมการ ผู้รับผิดชอบ)
   ไม่ใช่ title เหมือน program จึงต้องพึ่ง embedding ที่จับ semantic boundary ของ
   เนื้อหาจริงมากกว่าการตัดแบบกลไก
@@ -222,8 +236,9 @@ program-history + 12 person-history + 13 faculty-adjunct-aggregate ดู
   (แนะนำโดย advisor ก่อนสร้าง): เป็นโจทย์ retrieval ที่ยากจริงในมิติ recall แม้ตัว
   ค้นหาจะ "เจอของแรก" ได้ง่ายก็ตาม
 
-**สรุป**: chunker ที่ดีที่สุดไม่ใช่ตัวเดียวคงที่ — ขึ้นกับ query shape เป็นเรื่องที่
-Silver (self-retrieval ล้วน) มองไม่เห็นเลย เป็นเหตุผลที่ต้องมี Gold set แยกต่างหาก
+**สรุป**: chunker ที่ดีที่สุดไม่ใช่ตัวเดียวคงที่ — ขึ้นกับ query shape จริงตามสถิติ
+ไม่ใช่แค่ทิศทางที่ดูสมเหตุสมผล เป็นเรื่องที่ Silver (self-retrieval ล้วน) มองไม่เห็น
+เลย เป็นเหตุผลที่ต้องมี Gold set แยกต่างหาก
 
 Raw retrieval results: `data/results/gold_chunker_compare/` (gitignored),
 summary: `data/results/gold_chunker_compare_report.md`
