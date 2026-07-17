@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from dataclasses import dataclass
 
 from rag_lab.loaders.person_loader import match_people
 from rag_lab.loaders.program_loader import load_dictionary, match_programs
@@ -43,16 +44,29 @@ ROUTE_PERSON = "person"
 ROUTE_PROGRAM = "program"
 ROUTE_UNMATCHED = "unmatched"
 
+
+@dataclass(frozen=True)
+class RouteTarget:
+    """Which built index a route should query: matched against an
+    IndexInfo's chunker.type / embedder.type / embedder.params['model_name']
+    (see query_service.resolve_index). `embedder_model_name=None` matches any
+    model under that embedder type (e5 only has one variant in this repo)."""
+
+    chunker_type: str
+    embedder_type: str
+    embedder_model_name: str | None = None
+
+
 # Best-performing (chunker, embedder) combo per route, from the Gold-eval
 # breakdown (tools/eval/gold_embedder_breakdown.py): person peaks under
 # semantic+bge-m3 (recall@10 0.7504), program peaks under
 # sentence+phayathaibert-congen (0.6081). "unmatched" has no clear winner in
 # the per-category data, so it defaults to bge-m3 (the most balanced embedder
 # across every chunker) on fixed_size (a reasonable, cheap default chunker).
-ROUTE_COMBO = {
-    ROUTE_PERSON: ("semantic", "bge-m3"),
-    ROUTE_PROGRAM: ("sentence", "phayathaibert-congen"),
-    ROUTE_UNMATCHED: ("fixed_size", "bge-m3"),
+ROUTE_COMBO: dict[str, RouteTarget] = {
+    ROUTE_PERSON: RouteTarget("semantic", "local", "BAAI/bge-m3"),
+    ROUTE_PROGRAM: RouteTarget("sentence", "local", "kornwtp/ConGen-BGE_M3-model-phayathaibert"),
+    ROUTE_UNMATCHED: RouteTarget("fixed_size", "local", "BAAI/bge-m3"),
 }
 
 
