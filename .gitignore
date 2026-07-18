@@ -20,3 +20,8 @@ data/index/
 data/results/
 data/output/
 data/qdrant/
+
+# One-off generated code-explainer doc (regenerated as a new version on request,
+# not meant to be tracked/kept in sync with the code)
+docs/code-explained.html
+docs/code-explained.pdf
