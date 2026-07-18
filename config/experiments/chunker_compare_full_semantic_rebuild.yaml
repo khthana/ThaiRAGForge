@@ -1,0 +1,36 @@
+# Rebuild of the semantic-chunker combos only, after fixing the crfcut
+# fragmentation defect (min_sentence_chars merge — see
+# src/rag_lab/chunkers/semantic.py). Combo IDs are content-hashed on the YAML
+# spec (loader+chunker+embedder), which is unchanged here, so re-pointing at
+# the same output_dir overwrites exactly the 3 existing plain__semantic__*
+# directories in place without touching fixed_size/recursive/sentence.
+#
+# The first run (all 3 embedders) was killed after finishing local/bge-m3
+# (~3.5h) partway into loading weights for the next combo. This resume
+# covers only the 2 remaining embedders (e5, local/ConGen-PhayaThaiBERT) —
+# bge-m3 is already rebuilt under plain__semantic__local__8aae9bcd.
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/chunker_compare_full_semantic_rebuild.yaml
+experiment_name: chunker_compare_full
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/chunker_compare_full
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: semantic
+    params: { breakpoint_threshold: 0.5 }
+
+embedders:
+  - type: e5
+    params: { model_name: "intfloat/multilingual-e5-large" }
+  - type: local
+    params: { model_name: "kornwtp/ConGen-BGE_M3-model-phayathaibert" }
+
+run_mode: cartesian
+seed: 42

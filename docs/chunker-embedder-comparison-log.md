@@ -242,3 +242,83 @@ critical `|t|`≈2.05 ที่ p<0.05, ≈2.76 ที่ p<0.01)**:
 
 Raw retrieval results: `data/results/gold_chunker_compare/` (gitignored),
 summary: `data/results/gold_chunker_compare_report.md`
+
+---
+
+## Addendum (18 ก.ค. 2569) — SemanticChunker fragmentation fix: rebuild + re-eval
+
+หลัง dogfood Smart Routing UI ในเซสชันก่อนหน้า (17 ก.ค.) เจอบั๊ก: `SemanticChunker`
+ใช้ `pythainlp.tokenize.sent_tokenize(engine="crfcut")` ตัดประโยค ซึ่งตีความจุดใน
+คำย่อวิชาการไทย (ผศ. ดร. ภ.สถ.ม. วศ.บ.) เป็นขอบเขตประโยค และไม่รู้จัก HTML table
+markup (`</td><td>`, มาจากตารางกรรมการที่ OCR ไว้) เลย ทำให้เกิด "ประโยค" เศษ
+2-8 ตัวอักษร ซึ่งกลายเป็น chunk เดี่ยวๆ ที่ไม่มีอะไรมาเจือจาง cosine similarity
+เวลามี query ตรงกับ token เศษนั้นพอดี — อธิบายทั้งอาการ "คนผิดขึ้นอันดับ 1" และ
+"ผลลัพธ์เป็นแค่ `ผศ.ดร.` ไม่มีชื่อ" ที่ผู้ใช้เจอจริง รายละเอียด root-cause analysis
+เต็มอยู่ที่ memory `[[project_semantic_chunker_fragmentation]]`
+
+**สิ่งที่กังวลตอนนั้น**: recall@10 ตัดสินที่ระดับ Resolution (ADR-0002) ดังนั้น
+chunk ขยะจากเอกสารที่ถูกต้องก็ยังนับเป็น hit ได้ — แปลว่าข้อสรุป "semantic ชนะ
+person-history, p<0.01" (หัวข้อก่อนหน้า) และการที่ `[[project_hybrid_routing]]`
+เลือก semantic+bge-m3 เป็น route สำหรับ person **อาจเป็นผลพลอยได้จากบั๊กนี้**
+ไม่ใช่ความสามารถจริงของ chunker — เป็นคำถามค้างที่ต้อง verify หลัง fix
+
+### สิ่งที่ทำวันนี้
+
+1. **Fix**: `_merge_short_fragments()` ใน `src/rag_lab/chunkers/semantic.py` —
+   รวมประโยคสั้นต่อกันจนถึง `min_sentence_chars` (ค่าเริ่มต้น 15) ก่อนแยก chunk
+   เทสต์ใหม่ 2 ตัวใน `tests/test_semantic_chunker.py`, suite ผ่านทั้งหมด —
+   commit `e8f4b80`
+2. **Rebuild index**: `data/index/chunker_compare_full/plain__semantic__*`
+   ทั้ง 3 embedder (bge-m3, e5-large, ConGen-PhayaThaiBERT) เขียนทับ directory
+   เดิมตาม content-hash เดิม (combo id hash มาจาก YAML spec ไม่ใช่ runtime
+   params เลย hash ไม่เปลี่ยน) ได้ 81,489 chunks ทั้ง 3 ตัว ใช้ config ใหม่
+   `config/experiments/chunker_compare_full_semantic_rebuild.yaml` (ตาม pattern
+   เดียวกับ `_resume.yaml`) รันแบบ background 2 รอบ: รอบแรกโดนระบบ kill หลังทำ
+   bge-m3 เสร็จ (~3.5 ชม.), รอบสอง resume 2 combo ที่เหลือจนจบ (~2:40 ชม.)
+   รวม **~7 ชม.**
+3. **Re-eval**: รัน `tools/eval/run_gold_chunker_eval.py` ซ้ำบน 73-entry
+   deterministic Gold set (program 30 + person 30 + faculty-adjunct 13,
+   ไม่รวม thematic 179 ตัวที่รู้อยู่แล้วว่า discriminate แทบไม่ได้ — ดู
+   `[[project_thematic_query_bootstrap]]`) เทียบกับตัวเลขเดิมในหัวข้อ
+   "Retrieval-quality eval: Gold query set (17 ก.ค. 2569)" ด้านบน
+
+### ผลรวม (k=10, 73 query, e5-large embedder คงที่)
+
+| Chunker | recall@10 (เดิม → ใหม่) | MRR (เดิม → ใหม่) | nDCG@10 (เดิม → ใหม่) |
+|---|---|---|---|
+| **semantic** | 0.4590 → **0.4675** | 0.6994 → **0.7143** | 0.5132 → **0.5255** |
+| fixed_size | 0.4272 → 0.4272 | 0.6281 → 0.6281 | 0.4698 → 0.4698 |
+| sentence | 0.4185 → 0.4185 | 0.6526 → 0.6526 | 0.4680 → 0.4680 |
+| recursive | 0.3926 → 0.3926 | 0.6569 → 0.6569 | 0.4573 → 0.4573 |
+
+`fixed_size`/`sentence`/`recursive` เท่าเดิมเป๊ะทุก digit เพราะ index ของ 3 ตัวนั้น
+ไม่ถูกแตะ — เป็น sanity check ว่า rebuild กระทบเฉพาะ `semantic` จริงตามที่ตั้งใจ
+`semantic` ดีขึ้นทั้ง 3 metric (เล็กน้อยแต่ทิศทางเดียวกันหมด ไม่ใช่ noise) และยังคง
+เป็น chunker ที่ดีที่สุดในชุดนี้เหมือนเดิม สรุปว่าการตัดเศษ chunk ขยะออกไม่ได้ทำร้าย
+คะแนน ตรงข้ามคือช่วยเล็กน้อย
+
+Raw results รอบนี้: `data/results/gold_chunker_compare_73det/` (gitignored),
+summary: `data/results/gold_chunker_compare_73det_report.md` (ยังรันชุด
+252-full ที่รวม thematic ด้วยรอบแรกเป็น sanity check ก่อนสังเกตว่า thematic เจือจาง
+สัญญาณ — เก็บไว้ที่ `data/results/gold_chunker_compare_report.md`/
+`data/results/gold_chunker_compare/` แต่**อย่าใช้เทียบค่าเดิม** เพราะ query set
+ไม่ตรงกับที่ใช้สร้างตัวเลขเดิม)
+
+### ตอบคำถามค้าง: "semantic ชนะ person-history" เป็นผลจากบั๊กหรือเปล่า?
+
+รัน `tools/eval/gold_eval_breakdown.py` (per-entity_type paired t-test,
+fixed_size vs semantic, recall@10) บนผลชุด 252-full ซ้ำ:
+
+| entity_type | n | fixed_size | semantic | mean_diff (fixed−semantic) | t | ชนะ fixed/semantic/เท่า |
+|---|---|---|---|---|---|---|
+| program | 30 | 0.4871 | 0.2952 | +0.1919 | **+3.11** (p<0.01) | 16/7/7 |
+| person | 30 | 0.3353 | **0.6542** | **−0.3189** | **−4.51** (p<0.01) | 4/20/6 |
+| faculty_adjunct_aggregate | 13 | 0.5014 | 0.4346 | +0.0669 | +1.71 (n.s.) | 7/2/4 |
+
+เทียบกับตัวเลขเดิม (17 ก.ค., ก่อน fix): program `t=+2.91`, person `t=−3.50`
+(ทั้งคู่ p<0.01 เหมือนกัน) — **ทั้งสองข้อสรุปรอดหลัง fix จริง ไม่ใช่ artifact ของบั๊ก**
+โดยเฉพาะ person-history ยิ่งชัดขึ้นด้วยซ้ำ (recall 0.622→0.654, `t` แรงขึ้น
+−3.50→−4.51) แปลว่า `[[project_hybrid_routing]]` ที่เลือก semantic+bge-m3 เป็น
+route สำหรับ person query **ยังคงเป็นทางเลือกที่ถูกต้อง ไม่ต้องแก้ routing ใดๆ**
+
+ปิดคำถามค้างจาก memory `[[project_semantic_chunker_fragmentation]]` ครบทุกข้อแล้ว
