@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from rag_lab.chunkers.semantic import SemanticChunker
+from rag_lab.chunkers.semantic import SemanticChunker, _merge_short_fragments
 from rag_lab.config import StrategySpec
 from rag_lab.factory import build_chunker
 from rag_lab.schema import Resolution
@@ -97,8 +97,48 @@ def test_params_report_the_fixed_model_not_the_injected_embedders_id():
         "type": "semantic",
         "breakpoint_threshold": 0.42,
         "engine": "crfcut",
+        "min_sentence_chars": 15,
         "embedding_model": "BAAI/bge-m3",
     }
+
+
+def test_merge_short_fragments_folds_tiny_crfcut_pieces_together():
+    # Reproduces the real crfcut output for text mixing an HTML table
+    # boundary with academic-title abbreviations -- each of these fragments
+    # was observed as its own standalone (near-empty) chunk in production.
+    fragments = [
+        "ธนา หงษ์สุวรรณ (สาขาวิชาวิศวกรรมคอมพิวเตอร์)</td><td>วศ.บ.",
+        " (วิศวกรรมคอมพิวเตอร์) อาจารย์ธนา ภ.",
+        "สถ.",
+        "ม.",
+        " ผศ.",
+        " ดร.",
+        " สมชาย ",
+        "ใจดี",
+    ]
+    merged = _merge_short_fragments(fragments, min_length=15)
+
+    # No merged piece should be a bare abbreviation stub -- every piece must
+    # clear the minimum length (the whole point of the merge).
+    assert all(len(piece) >= 15 for piece in merged[:-1])  # last piece may be a short tail
+    # The trailing name must not have been left to survive alone as "ใจดี".
+    assert merged[-1] != "ใจดี"
+
+
+def test_semantic_chunker_never_produces_a_standalone_tiny_chunk():
+    # End-to-end version of the fragment-merge test: feed the same
+    # abbreviation/HTML-heavy text through the real chunker (fake embedder,
+    # threshold=0.0 so nothing gets split further by similarity) and confirm
+    # no chunk is short enough to be a bare title/abbreviation fragment.
+    text = (
+        "ธนา หงษ์สุวรรณ (สาขาวิชาวิศวกรรมคอมพิวเตอร์)</td><td>วศ.บ. "
+        "(วิศวกรรมคอมพิวเตอร์) อาจารย์ธนา ภ.สถ.ม. ผศ. ดร. สมชาย ใจดี"
+    )
+    chunker = SemanticChunker(breakpoint_threshold=0.0, embedder=BagOfWordsEmbedder())
+
+    chunks = chunker.chunk(_res(text))
+
+    assert all(len(c.text) >= 15 for c in chunks)
 
 
 def test_selectable_via_config_with_fixed_model_and_no_load_at_construction():
@@ -114,5 +154,6 @@ def test_selectable_via_config_with_fixed_model_and_no_load_at_construction():
         "type": "semantic",
         "breakpoint_threshold": 0.6,
         "engine": "crfcut",
+        "min_sentence_chars": 15,
         "embedding_model": "BAAI/bge-m3",
     }

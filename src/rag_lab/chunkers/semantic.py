@@ -16,11 +16,42 @@ def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / denom) if denom else 0.0
 
 
+def _merge_short_fragments(sentences: list[str], min_length: int) -> list[str]:
+    """Fold consecutive sentences into a running buffer until it reaches
+    min_length, then flush. Any leftover tail joins the previous flushed
+    sentence rather than surviving as its own tiny fragment.
+
+    crfcut treats the period in Thai academic-title abbreviations (ผศ. ดร.
+    ภ.สถ.ม. วศ.บ.) as a sentence boundary, and has no awareness of embedded
+    HTML table markup (</td><td>, common in this corpus's OCR'd committee
+    tables) either -- both produce degenerate 2-8 character "sentences" that
+    would otherwise become standalone chunks with almost no content, and then
+    score anomalously high on cosine similarity for any query sharing that
+    fragment (nothing else in the vector to dilute the match).
+    """
+    if not sentences:
+        return []
+    merged: list[str] = []
+    buffer = ""
+    for s in sentences:
+        buffer += s
+        if len(buffer) >= min_length:
+            merged.append(buffer)
+            buffer = ""
+    if buffer:
+        if merged:
+            merged[-1] += buffer
+        else:
+            merged.append(buffer)
+    return merged
+
+
 @chunker_registry.register("semantic")
 class SemanticChunker(BaseChunker):
-    """Split into Thai sentences (pythainlp crfcut), then group consecutive
-    sentences whose embedding similarity stays >= breakpoint_threshold into
-    one chunk; a drop below it starts a new chunk.
+    """Split into Thai sentences (pythainlp crfcut), merge degenerate
+    fragments back together (see _merge_short_fragments), then group
+    consecutive sentences whose embedding similarity stays >=
+    breakpoint_threshold into one chunk; a drop below it starts a new chunk.
 
     Uses a FIXED embedding model (bge-m3), deliberately decoupled from the
     Embedder axis under test: letting breakpoints shift with whichever
@@ -35,9 +66,11 @@ class SemanticChunker(BaseChunker):
         breakpoint_threshold: float = 0.5,
         engine: str = "crfcut",
         embedder: BaseEmbedder | None = None,
+        min_sentence_chars: int = 15,
     ) -> None:
         self.breakpoint_threshold = breakpoint_threshold
         self.engine = engine
+        self.min_sentence_chars = min_sentence_chars
         # lazy default (LocalSTEmbedder only loads the model on first .embed())
         # keeps import/construction cheap; inject a fake for unit tests.
         self._embedder = embedder if embedder is not None else LocalSTEmbedder(self._MODEL_NAME)
@@ -47,15 +80,17 @@ class SemanticChunker(BaseChunker):
             "type": "semantic",
             "breakpoint_threshold": self.breakpoint_threshold,
             "engine": self.engine,
+            "min_sentence_chars": self.min_sentence_chars,
             # the fixed model name, NOT self._embedder.model_id — an injected
             # test double must never change this chunker's cache identity.
             "embedding_model": self._MODEL_NAME,
         }
 
     def _split(self, text: str) -> list[str]:
-        sentences = sent_tokenize(text, engine=self.engine)
+        raw_sentences = sent_tokenize(text, engine=self.engine)
+        sentences = _merge_short_fragments(list(raw_sentences), self.min_sentence_chars)
         if len(sentences) <= 1:
-            return list(sentences)
+            return sentences
 
         vectors = self._embedder.embed(sentences)
         groups: list[list[str]] = [[sentences[0]]]
