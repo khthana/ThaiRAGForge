@@ -20,6 +20,10 @@ data/index/
 data/results/
 data/output/
 data/qdrant/
+data/logs/
+
+# Word lock files
+~$*.doc*
 
 # One-off generated code-explainer doc (regenerated as a new version on request,
 # not meant to be tracked/kept in sync with the code)

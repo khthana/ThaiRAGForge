@@ -1,0 +1,29 @@
+# Resume of chunker_compare_full_new_embedders_resume_qwen3.yaml: killed
+# after finishing recursive+qwen3 (1:56:26, no OOM -- the batch_size fix in
+# LocalSTEmbedder held), partway into loading weights for sentence+qwen3.
+# Covers the last 2 qwen3 combos: sentence + semantic.
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/chunker_compare_full_new_embedders_resume_qwen3_2.yaml
+experiment_name: chunker_compare_full
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/chunker_compare_full
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: sentence
+    params: { chunk_size: 512 }
+  - type: semantic
+    params: { breakpoint_threshold: 0.5 }
+
+embedders:
+  - type: qwen3
+    params: { model_name: "Qwen/Qwen3-Embedding-4B" }
+
+run_mode: cartesian
+seed: 42

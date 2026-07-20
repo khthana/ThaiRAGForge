@@ -322,3 +322,158 @@ fixed_size vs semantic, recall@10) บนผลชุด 252-full ซ้ำ:
 route สำหรับ person query **ยังคงเป็นทางเลือกที่ถูกต้อง ไม่ต้องแก้ routing ใดๆ**
 
 ปิดคำถามค้างจาก memory `[[project_semantic_chunker_fragmentation]]` ครบทุกข้อแล้ว
+
+---
+
+## Addendum (20 ก.ค. 2569) — ขยายเป็น 6 embedder (qwen3, jina_v5, m2v) + Gold eval เบื้องต้น
+
+เพิ่ม 3 embedder ใหม่เข้าไปใน matrix เดิม (4 chunker × 3 embedder เดิม) ทำให้ครบ
+**4 chunker × 6 embedder = 24 combo**: `Qwen3-Embedding-4B` (LLM-based, กลุ่ม C
+ตามกรอบวิจัยใน `docs/research-framework-gap-analysis.md`), `jina-embeddings-v5-
+text-small-retrieval`, และ `Thaweewat/jina-embedding-v3-m2v-1024` (Model2Vec
+static distillation) — commit `2aeeabf` (wiring) + `7735164` (bound batch/seq
+length + `release()` แก้ VRAM OOM บนการ์ด 12GB)
+
+### Build: กระบวนการซ้ำๆ ของการโดน kill กลางคัน
+
+เหมือนรอบ semantic-chunker rebuild — build เต็มคลังโดนระบบ kill แบบเงียบๆ
+(ไม่มี error/traceback) หลายครั้งติดกัน ต้องไล่ทำ resume แบบ content-hash
+(combo id ไม่ผูกตำแหน่งใน config) **7 รอบติดกัน**: `..._resume.yaml` →
+`resume2` → `resume3` → `resume4` (ครอบ jina_v5/m2v × 4 chunker) แล้ว
+`..._resume_qwen3.yaml` → `resume_qwen3_2` → `resume_qwen3_3` (ครอบ qwen3 ×
+4 chunker) — ตัวสุดท้าย (`semantic × qwen3`, 81,489 chunks) ใช้เวลา **6:23:10 ชม.**
+เดี่ยวๆ (embed step ช้าเพราะ batch_size ถูกจำกัดไว้กัน OOM + Qwen3-Embedding-4B
+เป็นโมเดลหนักสุดในชุด) จบแล้วไม่มี error/OOM — build ครบ 12 combo ใหม่จริง
+(ยืนยันด้วยการนับ dir ใน `data/index/chunker_compare_full/`)
+
+### ผลลัพธ์ดิบ (k=10, ทุก combo, e5-large embedder ผสมกับตัวใหม่)
+
+รัน `tools/eval/run_gold_chunker_eval.py --embedder-filter plain` (filter
+`"plain"` แปลว่าไม่กรองอะไรเลยเพราะทุก combo ขึ้นต้นด้วย loader `plain` —
+เจตนาให้ผ่านทั้ง 24 combo) **⚠️ รันบน query set เต็ม 252 ข้อ (73 deterministic +
+179 thematic) ไม่ใช่ 73-deterministic ที่ addendum ก่อนหน้าใช้** — thematic
+เจือจางสัญญาณตามที่บันทึกไว้แล้ว (`[[project_thematic_query_bootstrap]]`)
+ดังนั้น**ตัวเลขชุดนี้เป็นค่าเบื้องต้น ยังไม่ใช่ตัวเลขที่ควรอ้างอิงในเปเปอร์**
+ต้องรันซ้ำแบบ `--gold-query-set` ชี้ไปที่ 73-deterministic ก่อนถึงจะเทียบกับ
+ตัวเลขเดิม (0.4272-0.4675 ระดับ) ได้ตรงๆ
+
+**⚠️ บั๊กเล็กใน `render_report()`**: header ในไฟล์ output เขียน hardcode ว่า
+`"embedder = e5-large (held fixed...)"` ทั้งที่รอบนี้รันครบ 6 embedder จริง
+(ข้อความสืบทอดมาจากตอน script นี้เขียนไว้ให้ตรึง embedder เดียว) — **เป็นบั๊ก
+cosmetic ใน header string เท่านั้น ไม่กระทบตัวเลขที่คำนวณจริง** ยังไม่ได้แก้
+โค้ด แค่บันทึกไว้กันสับสนเวลาอ่าน raw report
+
+Decode hash → ชื่อโมเดลจริง (`local` type มี 3 โมเดลปนกันในชื่อ type เดียว
+แยกด้วย hash):
+
+| combo hash suffix | โมเดลจริง | กลุ่มตามกรอบวิจัย |
+|---|---|---|
+| `e5__*` | `intfloat/multilingual-e5-large` | B. multilingual |
+| `jina_v5__*` | `jinaai/jina-embeddings-v5-text-small-retrieval` | B. multilingual |
+| `qwen3__*` | `Qwen/Qwen3-Embedding-4B` | C. LLM-based |
+| `local__ceea7536`/`e05efbb8`/`8aae9bcd`/`bf8b7ebb` | `BAAI/bge-m3` | B. multilingual |
+| `local__7cceab27`/`d04f22ee`/`87fee2dc`/`5f573c4f` | `kornwtp/ConGen-BGE_M3-model-phayathaibert` | A. ไทยเฉพาะทาง |
+| `local__f71f693a`/`0fdddac0`/`834c4336`/`5528285a` | `Thaweewat/jina-embedding-v3-m2v-1024` | static distilled |
+
+**ค่าเฉลี่ยต่อ embedder (เฉลี่ยข้าม 4 chunker, query set 252 เต็ม — ค่าเบื้องต้น)**:
+
+| Embedder | กลุ่ม | recall@10 | MRR | nDCG@10 |
+|---|---|---|---|---|
+| BAAI/bge-m3 | B | **0.3308** | **0.3843** | **0.2998** |
+| multilingual-e5-large | B | 0.3136 | 0.3649 | 0.2785 |
+| Qwen3-Embedding-4B | C | 0.2994 | 0.3299 | 0.2666 |
+| ConGen-PhayaThaiBERT | A | 0.2957 | 0.3533 | 0.2669 |
+| jina-v5-small | B | 0.2771 | 0.3038 | 0.2424 |
+| Thaweewat/m2v (static) | — | 0.1448 | 0.1631 | 0.1191 |
+
+ผลดิบเต็ม 24 combo: `data/results/gold_full_embedder_matrix_report.md`
+(gitignored), raw retrieval: `data/results/gold_full_embedder_matrix/`
+
+### ข้อสังเกตเบื้องต้น (ยังไม่ทดสอบนัยสำคัญทางสถิติ — เป็นสมมติฐานตั้งต้นเท่านั้น)
+
+- **bge-m3 นำในค่าเฉลี่ยทุกเมตริก** สอดคล้องกับ `[[project_embedder_comparison]]`
+  เดิมที่สรุปว่า bge-m3 balanced สุดในบรรดา embedder เดิม 3 ตัว
+- **Qwen3-Embedding-4B (โมเดลใหญ่สุดในชุด) ไม่ชนะในค่าเฉลี่ย** แพ้ทั้ง bge-m3
+  และ e5-large ที่เล็กกว่ามาก — ทิศทางตรงกับที่กรอบวิจัยตั้งคำถามไว้ใน RQ2
+  ("โมเดลใหญ่คุ้มจริงไหม") แต่ **combo เดี่ยวที่คะแนนสูงสุดในตารางทั้งหมดคือ
+  `semantic × qwen3`** (recall=0.3702, nDCG=0.3344) — Qwen3 ดูจะมี interaction
+  กับ semantic chunker โดยเฉพาะ ไม่ใช่ผู้ชนะสม่ำเสมอข้าม chunker ยังไม่ได้ยืนยัน
+  ด้วย significance test
+- **ConGen-PhayaThaiBERT ไม่ชนะ multilingual ในค่าเฉลี่ยรวม** — **แต่ไม่ขัดกับ
+  `[[project_embedder_comparison]]` เดิม** ที่พบว่า ConGen เป็น "specialist"
+  (ชนะ program ทุก chunker แต่แพ้ person หนักมาก) ค่าเฉลี่ยรวมที่เจือจางด้วย
+  person+thematic ย่อมกลบจุดแข็งด้าน program ไว้ — **ยังไม่ได้รัน entity-type
+  breakdown สำหรับ embedder ใหม่ 3 ตัว** เพื่อดูว่า pattern specialist/generalist
+  เดิมยังอยู่กับ qwen3/jina_v5/m2v ไหม เป็นงานที่ควรทำต่อ
+- **m2v (static distillation) แพ้ทุกตัวขาดลอย** (recall 0.145 vs ~0.28-0.33
+  ตัวอื่น) — จ่ายคุณภาพแพงมากแลกความเร็ว จุด Pareto ต้องดูคู่กับตัวเลข
+  throughput/latency (ยังไม่ได้รวบรวมเป็นตาราง ดู Tier 1 ใน gap-analysis)
+
+### งานที่เหลือก่อนตัวเลขพร้อมอ้างอิงในเปเปอร์
+
+1. ~~รันซ้ำบน 73-deterministic Gold set~~ **ทำแล้ว — ดูหัวข้อถัดไป**
+2. รัน `gold_embedder_breakdown.py`-style per-entity_type สำหรับ qwen3/jina_v5/m2v
+   (ตอนนี้มีแค่ e5/bge-m3/ConGen)
+3. ทดสอบนัยสำคัญทางสถิติ (อย่างน้อย paired t-test แบบเดิม; กรอบวิจัยแนะนำ
+   อัปเกรดเป็น bootstrap + Holm correction เพราะเทียบ 6 embedder = 15 คู่พร้อมกัน)
+4. แก้บั๊ก header string ใน `render_report()`
+
+### Re-run บน 73-deterministic (20 ก.ค. 2569, ต่อเนื่องวันเดียวกัน) — ตัวเลขสะอาด
+
+ไฟล์ 73-only เดิมถูก merge เข้า 252 ไปแล้วตอนเพิ่ม thematic (`add_thematic_to_gold_set.py`,
+73→252) จึงสร้างใหม่จาก `config/eval/gold_query_set.yaml` โดยกรอง
+`entity_type != thematic` → เก็บไว้ที่ `config/eval/gold_query_set_73det.yaml`
+(tracked ใน repo รันซ้ำได้ในอนาคตไม่ต้อง derive ใหม่) ยืนยันจำนวนตรง: 30
+program + 30 person + 13 faculty_adjunct_aggregate = 73
+
+รัน `run_gold_chunker_eval.py --gold-query-set config/eval/gold_query_set_73det.yaml
+--embedder-filter plain` (ครบ 24 combo, 955.8s) ผลดิบ:
+`data/results/gold_73det_full_embedder_matrix_report.md` (gitignored)
+
+**ค่าเฉลี่ยต่อ embedder (73-deterministic, สะอาด — เทียบกับค่า 252-diluted ก่อนหน้า)**:
+
+| Embedder | recall@10 (252-diluted → 73det) | MRR (252→73det) | nDCG@10 (252→73det) |
+|---|---|---|---|
+| **Qwen3-Embedding-4B** | 0.2994 → **0.5155** | 0.3299 → **0.7848** | 0.2666 → **0.5912** |
+| **BAAI/bge-m3** | 0.3308 → **0.5108** | 0.3843 → 0.7543 | 0.2998 → 0.5717 |
+| jina-v5-small | 0.2771 → 0.4503 | 0.3038 → 0.7057 | 0.2424 → 0.5168 |
+| multilingual-e5-large | 0.3136 → 0.4264 | 0.3649 → 0.6630 | 0.2785 → 0.4801 |
+| ConGen-PhayaThaiBERT | 0.2957 → 0.4134 | 0.3533 → 0.6535 | 0.2669 → 0.4727 |
+| Thaweewat/m2v (static) | 0.1448 → 0.1472 | 0.1631 → 0.3107 | 0.1191 → 0.1845 |
+
+**ค่าเฉลี่ยต่อ chunker (73-deterministic, ข้ามทั้ง 6 embedder)**:
+
+| Chunker | recall@10 | MRR | nDCG@10 |
+|---|---|---|---|
+| **semantic** | **0.4939** | **0.7184** | **0.5483** |
+| recursive | 0.3922 | 0.6135 | 0.4488 |
+| fixed_size | 0.3786 | 0.6251 | 0.4417 |
+| sentence | 0.3776 | 0.6243 | 0.4393 |
+
+**Combo เดี่ยวที่ดีสุดทั้งตาราง**: `semantic × Qwen3-Embedding-4B`
+(recall@10=**0.6581**, MRR=**0.8831**, nDCG@10=**0.7339**) — ทิ้งห่างอันดับ 2
+(`semantic × jina_v5` = 0.5845/0.8104/0.6493) ชัดเจน
+
+### ข้อสังเกตหลังตัด thematic (เทียบกับข้อสังเกตเบื้องต้นด้านบน)
+
+- **การเจือจางจาก thematic มีจริงและมีขนาดใหญ่** — ทุก embedder ขยับขึ้น
+  ~30-75% เมื่อตัด thematic ออก ยืนยัน `[[project_thematic_query_bootstrap]]`
+  อีกครั้งว่า thematic queries ไม่ควรรวมในตัวเลขอ้างอิง
+- **อันดับพลิก**: บนชุด 252 ที่เจือจาง `bge-m3` นำ Qwen3 อยู่ (0.331 vs 0.299)
+  แต่บนชุด 73-deterministic ที่สะอาด **Qwen3-Embedding-4B แซงขึ้นเป็นอันดับ 1**
+  (0.5155 vs bge-m3 0.5108) แม้ระยะห่างจะเล็ก (~0.005, ยังไม่ได้ทดสอบนัยสำคัญ
+  — อาจไม่ต่างกันจริงทางสถิติ) แต่ทิศทางกลับด้าน แปลว่า **ข้อสรุปเบื้องต้นที่ว่า
+  "โมเดลใหญ่สุดไม่ชนะ" ต้องระงับไว้ก่อนจนกว่าจะมี significance test** — อย่าใช้
+  ค่า 252 เป็นข้อสรุปสุดท้ายของ RQ2
+- **semantic chunker ชนะชัดเจนขึ้นมากบนชุด 73-det** (0.494 เทียบ 0.38-0.39
+  ตัวอื่น) แรงกว่าที่เคยเห็นตอนเทียบแค่ 3 embedder เดิม — ดูเหมือน semantic
+  จะ synergize ดีเป็นพิเศษกับ embedder ที่แรงอยู่แล้ว (qwen3, jina_v5, bge-m3
+  ทั้ง 3 ตัวได้ผลดีสุดตอนจับคู่กับ semantic) ขณะที่ ConGen/m2v ไม่ได้ผลบวก
+  แบบเดียวกัน — สอดคล้องกับ "specialist vs generalist" pattern ที่เคยพบใน
+  `[[project_embedder_comparison]]` (ConGen ไม่ได้ประโยชน์จาก semantic
+  เท่าตัวอื่น)
+- **m2v แทบไม่ขยับ** (0.1448→0.1472) ต่างจากตัวอื่นที่ขยับแรง — สอดคล้องกับว่า
+  m2v เป็น static embedding ที่คุณภาพจำกัดมาแต่ต้น ไม่ได้ไวต่อความยากง่ายของ
+  query แบบเดียวกับตัวอื่น
+- ยังไม่ได้ทำ: per-entity_type breakdown สำหรับ 3 embedder ใหม่ และ
+  significance test — คือสิ่งที่ต้องทำก่อนอ้างอิง "Qwen3 ชนะ" ในเปเปอร์ได้จริง

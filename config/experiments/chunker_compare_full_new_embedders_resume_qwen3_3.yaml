@@ -1,0 +1,27 @@
+# Final resume: only semantic+qwen3 remains of the 12-combo matrix
+# (chunker_compare_full_new_embedders.yaml). Killed partway into loading
+# weights for this combo in the previous run; sentence+qwen3 (its sibling in
+# that run) finished cleanly first.
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/chunker_compare_full_new_embedders_resume_qwen3_3.yaml
+experiment_name: chunker_compare_full
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/chunker_compare_full
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: semantic
+    params: { breakpoint_threshold: 0.5 }
+
+embedders:
+  - type: qwen3
+    params: { model_name: "Qwen/Qwen3-Embedding-4B" }
+
+run_mode: cartesian
+seed: 42

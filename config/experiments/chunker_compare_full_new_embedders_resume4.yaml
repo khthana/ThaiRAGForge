@@ -1,0 +1,32 @@
+# Fourth resume of chunker_compare_full_new_embedders.yaml: resume3 got
+# killed right after finishing semantic+m2v -- log showed a confusing "2/2"
+# tqdm line but only semantic__local__834c4336 (m2v) actually landed on
+# disk. Verified with a 10-doc dev-subset smoke test that semantic+jina_v5
+# builds cleanly (no real bug, [ok] 146 chunks) -- so this is just the
+# process getting killed at an unlucky moment again, not a code issue.
+# Covers the single remaining non-qwen3 combo: semantic+jina_v5. The 3 qwen3
+# combos (chunker_compare_full_new_embedders_resume_qwen3.yaml) still come
+# after this.
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/chunker_compare_full_new_embedders_resume4.yaml
+experiment_name: chunker_compare_full
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/chunker_compare_full
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: semantic
+    params: { breakpoint_threshold: 0.5 }
+
+embedders:
+  - type: jina_v5
+    params: { model_name: "jinaai/jina-embeddings-v5-text-small-retrieval" }
+
+run_mode: cartesian
+seed: 42

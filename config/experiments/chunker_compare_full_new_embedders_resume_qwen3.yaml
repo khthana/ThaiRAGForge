@@ -1,0 +1,31 @@
+# Sibling to chunker_compare_full_new_embedders_resume.yaml: the 3 remaining
+# Qwen3-Embedding-4B combos (recursive/sentence/semantic -- fixed_size+qwen3
+# is already built). Run this AFTER the resume.yaml run finishes, not
+# concurrently with it (single GPU, and qwen3 is the heaviest model here).
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/chunker_compare_full_new_embedders_resume_qwen3.yaml
+experiment_name: chunker_compare_full
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/chunker_compare_full
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: recursive
+    params: { chunk_size: 512, chunk_overlap: 50 }
+  - type: sentence
+    params: { chunk_size: 512 }
+  - type: semantic
+    params: { breakpoint_threshold: 0.5 }
+
+embedders:
+  - type: qwen3
+    params: { model_name: "Qwen/Qwen3-Embedding-4B" }
+
+run_mode: cartesian
+seed: 42

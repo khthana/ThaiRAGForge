@@ -1,0 +1,43 @@
+# Resume of chunker_compare_full_new_embedders.yaml: the first run was killed
+# after finishing plain__fixed_size__qwen3__2e9102d3 (~4h42m), partway into
+# loading weights for the next combo -- same "killed with no error, just
+# stopped" pattern seen on the semantic-chunker rebuild. Combo ids are
+# content-hashed (loader+chunker+embedder), not position-dependent, so
+# re-pointing at the same output_dir just fills in missing combos.
+#
+# Covers the jina_v5 + m2v embedders across all 4 chunkers (8 combos) --
+# both are much lighter than Qwen3-Embedding-4B, so run them first. The 3
+# remaining qwen3 combos (recursive/sentence/semantic) are in the sibling
+# config chunker_compare_full_new_embedders_resume_qwen3.yaml, run after
+# this one finishes (sequential, not concurrent -- single GPU).
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/chunker_compare_full_new_embedders_resume.yaml
+experiment_name: chunker_compare_full
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/chunker_compare_full
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: fixed_size
+    params: { chunk_size: 512, chunk_overlap: 50 }
+  - type: recursive
+    params: { chunk_size: 512, chunk_overlap: 50 }
+  - type: sentence
+    params: { chunk_size: 512 }
+  - type: semantic
+    params: { breakpoint_threshold: 0.5 }
+
+embedders:
+  - type: jina_v5
+    params: { model_name: "jinaai/jina-embeddings-v5-text-small-retrieval" }
+  - type: local
+    params: { model_name: "Thaweewat/jina-embedding-v3-m2v-1024" }
+
+run_mode: cartesian
+seed: 42

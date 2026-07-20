@@ -1,0 +1,33 @@
+# Second resume of chunker_compare_full_new_embedders.yaml: the first resume
+# (jina_v5 + m2v, all 4 chunkers) got killed after finishing fixed_size +
+# recursive for both (4/8), partway into loading weights for sentence+jina_v5.
+# Covers the remaining 4: sentence + semantic x jina_v5/m2v. The 3 qwen3
+# combos (chunker_compare_full_new_embedders_resume_qwen3.yaml) still come
+# after this.
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/chunker_compare_full_new_embedders_resume2.yaml
+experiment_name: chunker_compare_full
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/chunker_compare_full
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: sentence
+    params: { chunk_size: 512 }
+  - type: semantic
+    params: { breakpoint_threshold: 0.5 }
+
+embedders:
+  - type: jina_v5
+    params: { model_name: "jinaai/jina-embeddings-v5-text-small-retrieval" }
+  - type: local
+    params: { model_name: "Thaweewat/jina-embedding-v3-m2v-1024" }
+
+run_mode: cartesian
+seed: 42
