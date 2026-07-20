@@ -14,7 +14,15 @@ class _FakeSTModel:
     def __init__(self) -> None:
         self.encode_calls: list[dict] = []
 
-    def encode(self, texts, prompt_name=None, normalize_embeddings=True, convert_to_numpy=True):
+    def encode(
+        self,
+        texts,
+        prompt_name=None,
+        batch_size=8,
+        normalize_embeddings=True,
+        convert_to_numpy=True,
+        show_progress_bar=False,
+    ):
         self.encode_calls.append({"texts": list(texts), "prompt_name": prompt_name})
         return np.zeros((len(texts), 3), dtype=np.float32)
 

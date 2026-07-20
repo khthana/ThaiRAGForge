@@ -101,3 +101,17 @@ class SemanticChunker(BaseChunker):
             else:
                 groups[-1].append(sentences[i])
         return ["".join(group) for group in groups]
+
+    def release(self) -> None:
+        """Free the internal bge-m3 model's GPU memory. Chunking (this
+        model) and the axis embedder are two separate model instances that
+        would otherwise both stay resident in VRAM -- observed to OOM a
+        12GB card once the axis embedder is large (Qwen3-Embedding-4B).
+
+        getattr-guarded: test doubles (BagOfWordsEmbedder etc.) are plain
+        duck-typed stand-ins, not BaseEmbedder subclasses, so they don't
+        carry the default no-op release().
+        """
+        release = getattr(self._embedder, "release", None)
+        if release is not None:
+            release()

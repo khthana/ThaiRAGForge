@@ -157,3 +157,61 @@ def test_selectable_via_config_with_fixed_model_and_no_load_at_construction():
         "min_sentence_chars": 15,
         "embedding_model": "BAAI/bge-m3",
     }
+
+
+class _SpyReleaseEmbedder(BagOfWordsEmbedder):
+    """BagOfWordsEmbedder plus a release() spy, to check SemanticChunker
+    forwards release() to its internal embedder without needing the real
+    (GPU-loaded) LocalSTEmbedder."""
+
+    def __init__(self, dim: int = 256) -> None:
+        super().__init__(dim=dim)
+        self.released = False
+
+    def release(self) -> None:
+        self.released = True
+
+
+def test_release_frees_the_internal_embedder():
+    embedder = _SpyReleaseEmbedder()
+    chunker = SemanticChunker(embedder=embedder)
+
+    chunker.release()
+
+    assert embedder.released is True
+
+
+def test_release_is_a_no_op_for_an_embedder_without_release():
+    """Regression guard: BagOfWordsEmbedder (the usual test double) is a
+    plain duck-typed stand-in with no release() method -- release() must not
+    crash just because the injected fake doesn't implement it."""
+    chunker = SemanticChunker(embedder=BagOfWordsEmbedder())
+
+    chunker.release()  # must not raise
+
+
+def test_pipeline_releases_the_chunker_between_chunking_and_embedding():
+    """The load-bearing ordering: build_index must call chunker.release()
+    after chunking finishes but before the axis embedder is asked to embed
+    anything -- releasing too early would drop the model chunking still
+    needs; too late (or never) defeats the point (both models stay resident
+    in VRAM at once)."""
+    from rag_lab.pipeline import build_index
+
+    events: list[str] = []
+
+    class _EventEmbedder(BagOfWordsEmbedder):
+        def embed(self, texts: list[str]) -> np.ndarray:
+            events.append("axis_embed")
+            return super().embed(texts)
+
+    class _EventReleaseEmbedder(BagOfWordsEmbedder):
+        def release(self) -> None:
+            events.append("chunker_release")
+
+    chunker = SemanticChunker(embedder=_EventReleaseEmbedder())
+    axis_embedder = _EventEmbedder()
+
+    build_index([_res(_BODY)], chunker, axis_embedder)
+
+    assert events == ["chunker_release", "axis_embed"]

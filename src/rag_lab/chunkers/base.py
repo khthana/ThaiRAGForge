@@ -23,6 +23,13 @@ class BaseChunker(ABC):
     def params(self) -> dict[str, Any]:
         """Parameters that identify this chunker for cache keys / manifests."""
 
+    def release(self) -> None:
+        """Free any heavyweight resources (e.g. a GPU model used internally
+        for chunking) once chunking is done, before the axis embedder runs.
+        Default: nothing to release. Override for chunkers that load their
+        own model (semantic).
+        """
+
     def chunk(self, resolution: Resolution) -> list[Chunk]:
         chunks: list[Chunk] = []
         index = 0

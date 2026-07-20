@@ -13,7 +13,14 @@ class _FakeSTModel:
     def __init__(self) -> None:
         self.encoded_batches: list[list[str]] = []
 
-    def encode(self, texts, normalize_embeddings=True, convert_to_numpy=True):
+    def encode(
+        self,
+        texts,
+        batch_size=8,
+        normalize_embeddings=True,
+        convert_to_numpy=True,
+        show_progress_bar=False,
+    ):
         self.encoded_batches.append(list(texts))
         return np.zeros((len(texts), 3), dtype=np.float32)
 

@@ -22,8 +22,9 @@ class E5Embedder(LocalSTEmbedder):
         model_name: str = "intfloat/multilingual-e5-large",
         device: str | None = None,
         model=None,
+        batch_size: int = 8,
     ) -> None:
-        super().__init__(model_name=model_name, device=device, model=model)
+        super().__init__(model_name=model_name, device=device, model=model, batch_size=batch_size)
 
     @property
     def model_id(self) -> str:

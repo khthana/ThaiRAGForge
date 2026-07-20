@@ -28,3 +28,8 @@ class BaseEmbedder(ABC):
         (e.g. e5's `query: `/`passage: ` prefixes).
         """
         return self.embed([text])[0]
+
+    def release(self) -> None:
+        """Free any heavyweight resources (e.g. a loaded GPU model). Default:
+        nothing to release. Override for embedders that hold a model in VRAM.
+        """

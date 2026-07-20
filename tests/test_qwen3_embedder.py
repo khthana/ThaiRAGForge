@@ -14,7 +14,15 @@ class _FakeSTModel:
     def __init__(self) -> None:
         self.encode_calls: list[dict] = []
 
-    def encode(self, texts, prompt_name=None, normalize_embeddings=True, convert_to_numpy=True):
+    def encode(
+        self,
+        texts,
+        prompt_name=None,
+        batch_size=8,
+        normalize_embeddings=True,
+        convert_to_numpy=True,
+        show_progress_bar=False,
+    ):
         self.encode_calls.append({"texts": list(texts), "prompt_name": prompt_name})
         return np.zeros((len(texts), 3), dtype=np.float32)
 
@@ -35,6 +43,19 @@ def test_embed_query_uses_the_built_in_query_prompt():
     embedder.embed_query("คำถาม")
 
     assert fake_model.encode_calls == [{"texts": ["คำถาม"], "prompt_name": "query"}]
+
+
+def test_defaults_to_a_bounded_max_seq_length():
+    """Without flash attention, a single very long chunk needs O(seq_len^2)
+    attention memory regardless of batch_size -- observed to OOM this model
+    (13.87 GiB for one ~18k-char outlier chunk alone) even at batch_size=1.
+    Capping max_seq_length is what actually prevents that, not batch_size."""
+    fake_model = _FakeSTModel()
+    embedder = Qwen3Embedder(model=fake_model)
+
+    embedder.embed(["สวัสดี"])
+
+    assert fake_model.max_seq_length == 2048
 
 
 def test_model_id_differs_from_plain_local_for_the_same_model_name():

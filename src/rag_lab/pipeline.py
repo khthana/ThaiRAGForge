@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 from pythainlp.tokenize import word_tokenize
+from tqdm import tqdm
 
 from rag_lab.chunkers.base import BaseChunker
 from rag_lab.embedders.base import BaseEmbedder
@@ -66,7 +67,11 @@ def build_index(
 
     t0 = time.perf_counter()
     chunks = []
-    for resolution in resolutions:
+    # A single-combo run (e.g. resuming just one leftover chunker x embedder
+    # pair) has no outer per-combo tqdm tick to produce output -- chunking a
+    # large corpus can run silent for a long stretch otherwise, which looks
+    # indistinguishable from a hang to anything watching for output.
+    for resolution in tqdm(resolutions, desc="chunking", leave=False):
         # propagate resolution-level metadata onto each chunk so the MetadataFilter
         # can narrow by year/session/faculty at query time (#6 only fills res.metadata)
         res_meta = {
@@ -78,9 +83,17 @@ def build_index(
             chunk.metadata = {**res_meta, **chunk.metadata}
             chunks.append(chunk)
     t1 = time.perf_counter()
+    # Chunking may have loaded its own GPU model (semantic's internal
+    # bge-m3); free it before the axis embedder loads its own -- both
+    # resident at once can exceed a 12GB card's VRAM for larger embedders.
+    chunker.release()
     embeddings = embedder.embed([c.text for c in chunks])
     t2 = time.perf_counter()
-    lexical = [word_tokenize(c.text) for c in chunks]  # BM25 tokens, row-aligned
+    # BM25 tokens, row-aligned. Same silent-stretch risk as the chunking loop
+    # above -- pythainlp tokenization over a full corpus's chunks with zero
+    # output looks like a hang right as the (also silent-prone) embedding
+    # phase finishes.
+    lexical = [word_tokenize(c.text) for c in tqdm(chunks, desc="lexical", leave=False)]
     meta = {
         "chunker": chunker.params(),
         "embedder": embedder.model_id,

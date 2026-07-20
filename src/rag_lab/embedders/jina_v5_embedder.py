@@ -25,8 +25,9 @@ class JinaV5Embedder(LocalSTEmbedder):
         model_name: str = "jinaai/jina-embeddings-v5-text-small-retrieval",
         device: str | None = None,
         model=None,
+        batch_size: int = 8,
     ) -> None:
-        super().__init__(model_name=model_name, device=device, model=model)
+        super().__init__(model_name=model_name, device=device, model=model, batch_size=batch_size)
 
     @property
     def model_id(self) -> str:
@@ -35,7 +36,12 @@ class JinaV5Embedder(LocalSTEmbedder):
     def embed(self, texts: list[str]) -> np.ndarray:
         model = self._load()
         return model.encode(
-            texts, prompt_name="document", normalize_embeddings=True, convert_to_numpy=True
+            texts,
+            prompt_name="document",
+            batch_size=self._batch_size,
+            normalize_embeddings=True,
+            convert_to_numpy=True,
+            show_progress_bar=True,
         ).astype(np.float32)
 
     def embed_query(self, text: str) -> np.ndarray:
