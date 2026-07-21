@@ -18,6 +18,13 @@ near-zero discriminative power (see
 [[project_thematic_query_bootstrap]] / `docs/chunker-embedder-comparison-log.md`)
 and materially changes rank order.
 
+**Status**: gap-analysis Tier 1 and Tier 2 (`docs/research-framework-gap-analysis.md`
+§8) are both fully closed as of 2026-07-21 — MAP/Precision@k/multi-k, BM25 baseline,
+bootstrap+Holm significance testing, cost/latency Pareto table, and the `sct` /
+`qwen3_0.6b` embedder additions. Tier 3 (RQ3 normalization ablation, cross-encoder
+reranker, RQ4 end-to-end RAG) has not been started. See the Open items list at the
+end of this file for what's still outstanding within the closed tiers.
+
 ## Resolved 2026-07-21: ConGen/SCT max_seq_length — investigated, model-specific answer found
 
 Both `congen` and `sct` (PhayaThaiBERT-backbone, kornwtp) ship

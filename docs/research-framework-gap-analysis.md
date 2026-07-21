@@ -5,6 +5,38 @@
 effort × คุณค่าเชิงวิจัย และกรองด้วยข้อจำกัดฮาร์ดแวร์ (RTX 3060 12GB → เพดาน ~4-5B
 params fp16)
 
+> **อัปเดตสถานะ 2026-07-21: Tier 1 (§8) ปิดครบทั้ง 4 ข้อแล้ว.** ตารางสถานะใน §3-6
+> ด้านล่างเป็น snapshot ตอนวันที่วิเคราะห์ (20 ก.ค.) — **ไม่ได้อัปเดตย้อนหลัง**
+> (คงไว้เป็นบันทึกจุดเริ่มต้น) ดูตัวเลข/ผลลัพธ์ล่าสุดที่ `docs/paper-results-summary.md`
+> แทน สรุปย่อ 4 ข้อ:
+>
+> 1. **MAP + Precision@k + multi-k** — เพิ่มใน `src/rag_lab/metrics.py` แล้ว
+>    (`evaluate()` รับ `k` เป็น int หรือ list) แต่ยังไม่มีสคริปต์ไหน re-run ด้วย
+>    multi-k จริง ตัวเลขที่อ้างในเอกสารยังเป็น k=10 ล้วน
+> 2. **BM25 standalone baseline** — รันแล้ว + sig-test กับ embedder ทั้ง 9 ตัว: BM25
+>    เฉยๆ ผูกสถิติเสมอกับ top tier (bge-m3/Qwen3-4B/Qwen3-0.6B) และชนะ embedder ที่
+>    อ่อนกว่าอย่างมีนัยสำคัญทุกตัว
+> 3. **Bootstrap + Holm stats** — เปลี่ยนจาก paired t-test เป็น paired bootstrap
+>    (n=10000) + Holm correction แล้ว ยืนยัน hybrid (RRF) ชนะ dense-alone อย่างมี
+>    นัยสำคัญทุก embedder ทุก metric — ผลที่แข็งแรงที่สุดของโครงการ
+> 4. **ตารางระบบ + Pareto (cost/latency)** — `tools/eval/cost_latency_pareto.py`
+>    พบว่า implementation ปัจจุบันของ hybrid เพิ่ม overhead คงที่ ~2.1-2.3 วินาที
+>    ต่อ query แทบไม่ขึ้นกับ embedder (BM25Okapi rebuild ทุก query + over-fetch ทั้ง
+>    corpus ก่อน fuse ไม่ใช่ต้นทุนของ RRF เอง) — รายงานไว้ ไม่ได้แก้โค้ด
+>
+> ระหว่างทางพบว่า `qwen3_0.6b × semantic × hybrid` (recall@10=0.6935) เป็นตัวเลข
+> สูงสุดในทั้ง study แต่ยังไม่ผ่าน significance test เทียบกับ combo อื่นในกลุ่มบนสุด
+> จึง **ยังไม่ยกแชมป์ให้ embedder ตัวใดตัวหนึ่ง** — headline ของเปเปอร์อยู่ที่ระดับ
+> ระบบ (semantic chunking + hybrid retrieval) ไม่ใช่ embedder ตัวเดียว รายละเอียด
+> เต็ม: `docs/paper-results-summary.md`, narrative: `docs/chunker-embedder-comparison-log.md`.
+>
+> **Tier 2 (§8) ก็ปิดครบทั้ง 2 ข้อแล้ว** ระหว่างขยายเป็น 9 embedders: ข้อ 5
+> (โมเดลไทยกลุ่ม A เพิ่ม) คือ `sct` (SCT-KD-BGE-M3-model-phayathaibert — training
+> method อื่นบน backbone เดียวกับ ConGen ที่มีอยู่แล้ว) และข้อ 6 (Qwen3 scaling)
+> คือ `qwen3_0.6b` — รายละเอียดที่ `[[project_embedder_models_to_add]]` (memory)
+> **Tier 3 ยังไม่เริ่มเลย**: RQ3 (normalization/segmentation ablation), cross-encoder
+> reranker, RQ4 (end-to-end RAG + RAGAS/LLM-judge) — ยังเป็นเฟสใหม่ทั้งก้อน
+
 **แกนหลักของเปเปอร์ (ข้อเสนอ)**: RQ1/RQ2 (embedder comparison) — ตรงกับสิ่งที่
 build ไว้แล้วมากที่สุด; RQ4 (end-to-end RAG) โน้ตเองจัดเป็น "เสริม" และเป็น subsystem
 ใหม่ทั้งก้อน จึงควรเป็น *เฟสถัดไป* ไม่ใช่ส่วนหนึ่งของรอบแรก
