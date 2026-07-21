@@ -1,0 +1,42 @@
+# Adds 1 more embedder to the chunker_compare_full matrix: multilingual-e5-small,
+# same family as the existing multilingual-e5-large (`e5`) but with a much
+# smaller backbone (~118M params) and a native embedding dim of 384 -- unlike
+# every other embedder in the matrix, which is pinned at dim=1024 (or 2560 for
+# qwen3-4B) because most are distilled/fine-tuned against a 1024-dim teacher.
+# Gives a same-family size ablation (small vs large e5) AND a genuine
+# low-dimension data point (384) that was otherwise missing from the matrix.
+#
+# Same output_dir as chunker_compare_full.yaml -- combo ids are content-hashed
+# on (loader, chunker, embedder), so this just fills in 4 new combos
+# (4 chunkers x 1 embedder) alongside the existing ones without touching them.
+# Uses type: e5 (not type: local) so query/passage prefixing is applied the
+# same way as the existing multilingual-e5-large combo.
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/chunker_compare_full_new_embedders3.yaml
+experiment_name: chunker_compare_full
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/chunker_compare_full
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: fixed_size
+    params: { chunk_size: 512, chunk_overlap: 50 }
+  - type: recursive
+    params: { chunk_size: 512, chunk_overlap: 50 }
+  - type: sentence
+    params: { chunk_size: 512 }
+  - type: semantic
+    params: { breakpoint_threshold: 0.5 }
+
+embedders:
+  - type: e5
+    params: { model_name: "intfloat/multilingual-e5-small" }
+
+run_mode: cartesian
+seed: 42

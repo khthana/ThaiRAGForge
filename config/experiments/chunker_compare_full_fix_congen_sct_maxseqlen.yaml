@@ -1,0 +1,67 @@
+# Fixes a silent-truncation bug discovered 2026-07-21: both kornwtp Thai
+# models (ConGen-BGE_M3-model-phayathaibert, SCT-KD-BGE-M3-model-phayathaibert)
+# ship a `sentence_bert_config.json` with max_seq_length=128 in their HF repo
+# -- set by the model author, not this project -- even though their shared
+# PhayaThaiBERT backbone supports up to 512 tokens (max_position_embeddings).
+#
+# Empirically verified against real built chunks (kornwtp/ConGen tokenizer):
+# fixed_size chunks (512 chars) average 172 tokens (max 515) -- 72.5% exceed
+# 128 tokens and get silently truncated (sentence-transformers does not warn
+# or error). semantic chunks are worse in the tail: up to 3116 tokens,
+# truncated to 128 = losing 96% of the chunk's content in the worst cases.
+# This directly affects every ConGen/SCT result already significance-tested
+# (see docs/paper-results-summary.md, docs/chunker-embedder-comparison-log.md)
+# -- those numbers reflect a model reading roughly the first 1-4 sentences of
+# each chunk, not the whole chunk other embedders saw.
+#
+# Fix: LocalSTEmbedder already supports a max_seq_length override param
+# (src/rag_lab/embedders/local_st_embedder.py:24) -- just wasn't set because
+# nobody knew this repo-level cap existed.
+#
+# IMPORTANT: use 510, not 512. First attempt used 512 (= config.json's
+# max_position_embeddings) and every combo crashed with a CUDA device-side
+# assert (illegal position-embedding index). RoBERTa reserves 2 position
+# slots for the padding offset, so usable positions = max_position_embeddings
+# - 2 = 510 -- confirmed via each repo's own tokenizer_config.json
+# ("model_max_length": 510 for both congen and sct). 510 is each model's
+# true safe ceiling.
+#
+# NOTE: combo IDs are a hash of the full YAML embedder params (see
+# combos.py:BuildCombo.id), and max_seq_length is a new key not present in
+# the original congen/sct configs -- so this produces NEW combo directories,
+# it does NOT overwrite the old (buggy, 128-token-capped) ones. The old
+# combos remain on disk for before/after comparison but must be treated as
+# known-bad and excluded from any headline significance-test numbers going
+# forward once this fix is evaluated.
+#
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/chunker_compare_full_fix_congen_sct_maxseqlen.yaml
+experiment_name: chunker_compare_full
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/chunker_compare_full
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: fixed_size
+    params: { chunk_size: 512, chunk_overlap: 50 }
+  - type: recursive
+    params: { chunk_size: 512, chunk_overlap: 50 }
+  - type: sentence
+    params: { chunk_size: 512 }
+  - type: semantic
+    params: { breakpoint_threshold: 0.5 }
+
+embedders:
+  - type: local
+    params: { model_name: "kornwtp/ConGen-BGE_M3-model-phayathaibert", max_seq_length: 510 }
+  - type: local
+    params: { model_name: "kornwtp/SCT-KD-BGE-M3-model-phayathaibert", max_seq_length: 510 }
+
+run_mode: cartesian
+seed: 42

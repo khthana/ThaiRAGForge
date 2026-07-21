@@ -1,0 +1,51 @@
+# Adds 2 more embedders to the chunker_compare_full matrix, extending the
+# 6-embedder set to 8: a second Thai-specific model (SCT-KD distillation of
+# BGE-M3 onto PhayaThaiBERT -- same backbone as the existing ConGen model,
+# different training method, so this is a clean training-method ablation
+# rather than an arbitrary new combination) and Qwen3-Embedding-0.6B (same
+# family/architecture as the existing Qwen3-Embedding-4B, for an intra-family
+# size-scaling comparison that isolates size from architecture -- unlike
+# bge-m3 vs Qwen3-4B, which confounds both).
+#
+# Note: the model originally queued in memory as "SEA-Embedding-ModernBERT-300M"
+# does not appear anywhere in the user's actual research notes
+# (`Embedding โมเดล.docx`) and could not be found/verified on Hugging Face --
+# substituted with kornwtp/SCT-KD-BGE-M3-model-phayathaibert instead, which
+# IS one of the notes' listed Group A candidates (via kornwtp/mrpeerat) and
+# was verified to exist with a valid sentence-transformers repo structure.
+#
+# Same output_dir as chunker_compare_full.yaml -- combo ids are content-hashed
+# on (loader, chunker, embedder), so this just fills in 8 new combos
+# (4 chunkers x 2 embedders) alongside the existing 24 without touching them,
+# same pattern as chunker_compare_full_new_embedders.yaml.
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/chunker_compare_full_new_embedders2.yaml
+experiment_name: chunker_compare_full
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/chunker_compare_full
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: fixed_size
+    params: { chunk_size: 512, chunk_overlap: 50 }
+  - type: recursive
+    params: { chunk_size: 512, chunk_overlap: 50 }
+  - type: sentence
+    params: { chunk_size: 512 }
+  - type: semantic
+    params: { breakpoint_threshold: 0.5 }
+
+embedders:
+  - type: local
+    params: { model_name: "kornwtp/SCT-KD-BGE-M3-model-phayathaibert" }
+  - type: qwen3
+    params: { model_name: "Qwen/Qwen3-Embedding-0.6B" }
+
+run_mode: cartesian
+seed: 42
