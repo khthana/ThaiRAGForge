@@ -477,3 +477,560 @@ program + 30 person + 13 faculty_adjunct_aggregate = 73
   query แบบเดียวกับตัวอื่น
 - ยังไม่ได้ทำ: per-entity_type breakdown สำหรับ 3 embedder ใหม่ และ
   significance test — คือสิ่งที่ต้องทำก่อนอ้างอิง "Qwen3 ชนะ" ในเปเปอร์ได้จริง
+
+### Significance test (21 ก.ค. 2569) — ยืนยัน: bge-m3 vs Qwen3 ไม่ต่างกันจริงทางสถิติ
+
+สคริปต์ `tools/eval/embedder_significance_test.py` — paired bootstrap
+(resample หน่วยเป็น **query**, 73 ตัว, n_boot=10,000, seed=42) เทียบทุกคู่
+embedder (15 คู่) บน 3 เมตริก แต่ละคู่: ค่าต่อ query เฉลี่ยข้าม 4 chunker
+ก่อน (ตรงกับตารางค่าเฉลี่ยต่อ embedder ที่รายงานไว้ด้านบน) แล้ว bootstrap
+ค่าเฉลี่ยผลต่าง, p-value สองด้านแบบ percentile, แก้ multiple-comparison ด้วย
+Holm-Bonferroni **แยกต่างหากต่อเมตริก** (15 การทดสอบ/เมตริก ตามที่
+gap-analysis แนะนำ) ผลดิบเต็ม: `data/results/embedder_significance_test.md`
+(gitignored)
+
+**ข้อสรุปหลัก**:
+
+- **bge-m3 vs Qwen3-Embedding-4B ไม่ต่างกันอย่างมีนัยสำคัญทางสถิติในทั้ง 3
+  เมตริก** (recall@10: diff=-0.0048, p=0.837, Holm-adj=1.0; mrr: p=0.187,
+  Holm-adj=0.657; ndcg@10: p=0.417, Holm-adj=0.835) — **ยืนยันข้อสงสัยที่ตั้ง
+  ไว้ก่อนหน้า: การที่อันดับพลิกระหว่างชุด 252 กับ 73-det เป็น noise ไม่ใช่
+  สัญญาณจริง** ข้อสรุป RQ2 ("โมเดลใหญ่สุดคุ้มไหม") **ต้องเขียนว่า "ไม่ต่างกัน
+  อย่างมีนัยสำคัญ" ไม่ใช่ "Qwen3 ชนะ" หรือ "bge-m3 ชนะ"**
+- **กลุ่มบนที่ต่างจากกลุ่มล่างอย่างมีนัยสำคัญจริง**: {bge-m3, Qwen3} ทั้งคู่
+  ชนะ e5-large, ConGen-PhayaThaiBERT, jina-v5-small อย่างมีนัยสำคัญในอย่างน้อย
+  1 เมตริก (ส่วนใหญ่ทั้ง 3) — ยกเว้น bge-m3 vs jina_v5 ที่ recall@10 ไม่ผ่าน
+  หลัง Holm correction (raw p=0.007 แต่ holm-adj=0.036 < 0.05 จริงๆ ผ่าน — แต่
+  mrr/ndcg ไม่ผ่าน) จึงสรุปว่า **{bge-m3, Qwen3} เป็นกลุ่มนำที่ต่างจาก e5/congen
+  อย่างชัดเจน แต่เทียบกับ jina_v5 ยังก้ำกึ่ง**
+- **congen vs e5-large ไม่ต่างกันเลยสักเมตริก** (p สูงสุด 0.86) — สองตัวนี้
+  อยู่ระดับเดียวกันจริง ไม่ใช่แค่บังเอิญตัวเลขใกล้กัน
+- **m2v แพ้ทุกตัวอย่างมีนัยสำคัญสุดขั้ว** (p<0.001 ทุกคู่ทุกเมตริก) ตามที่
+  คาดไว้ ยืนยันเป็นเชิงสถิติแล้วว่าไม่ใช่แค่ตัวเลขดิบต่างกัน
+- **ผลกระทบต่อกรอบวิจัย**: RQ2 เปลี่ยนจาก "โมเดลใหญ่สุดไม่คุ้ม" (สรุปเบื้องต้น
+  จากชุด 252) เป็น **"ในกลุ่มโมเดลที่แข็งแรง (bge-m3/Qwen3) ขนาดไม่ใช่ตัวชี้วัด
+  ผลต่างที่วัดได้ — แต่ต้นทุน inference ของ Qwen3-4B สูงกว่า bge-m3 มาก โดยไม่
+  ได้คุณภาพเพิ่มที่พิสูจน์ได้"** เป็นข้อสรุปที่แรงกว่าเดิม (ตอบคำถาม "คุ้มไหม"
+  ได้ตรงประเด็นกว่า "ใครชนะ")
+
+### Entity-type breakdown สำหรับ 6 embedder (21 ก.ค. 2569) — ยืนยัน pattern specialist เดิม + เจอ Qwen3 เป็น generalist ที่แข็งที่สุด
+
+สคริปต์ `tools/eval/gold_embedder_breakdown_73det.py` (สืบทอด logic จาก
+`gold_embedder_breakdown.py` เดิมที่ทำแค่ 3 embedder บนชุด 252-diluted) รันบน
+73-deterministic ที่สะอาด ครบ 6 embedder × 4 chunker ผลดิบเต็ม:
+`data/results/gold_embedder_breakdown_73det.md` (gitignored)
+
+**ค่าเฉลี่ยข้าม chunker ต่อ embedder × entity_type (recall@10)**:
+
+| embedder | faculty_adjunct | person | program | overall |
+|---|---|---|---|---|
+| bge_m3 | 0.4555 | **0.5694** | 0.4760 | 0.5107 |
+| qwen3 | **0.4741** | 0.4807 | 0.5682 | 0.5155 |
+| congen | 0.3966 | 0.2608 | **0.5732** | 0.4134 |
+| jina_v5 | 0.4130 | 0.4285 | 0.4881 | 0.4503 |
+| e5 | 0.4603 | 0.4686 | 0.3697 | 0.4265 |
+| m2v | 0.2215 | 0.0572 | 0.2049 | 0.1472 |
+
+**สรุป**:
+
+- **Pattern specialist ของ ConGen ยังยืนยันชัดเจนกับชุดข้อมูลใหม่**: ชนะ
+  program ขาดลอย (0.573, สูงสุดในตาราง) แต่แพ้ person หนักที่สุดในบรรดา
+  embedder ปกติทั้งหมด (0.261 — เหนือแค่ m2v) ตรงกับที่พบครั้งแรกใน
+  `[[project_embedder_comparison]]` (3-embedder เดิม)
+- **จุดที่ต่างจากเดิม (สำคัญ)**: bge-m3 กับ Qwen3 เฉลี่ยรวมใกล้กันมาก
+  (0.5107 vs 0.5155, ยืนยันแล้วว่าไม่ต่างกันจริงทางสถิติจาก significance
+  test ด้านบน) **แต่โปรไฟล์ต่างกันชัดเจน**: bge-m3 เป็น person-specialist
+  (ชนะ person ขาด แต่ program กลางๆ) ส่วน **Qwen3 เป็น generalist ที่แข็งสุด
+  ในตาราง** — อันดับ 2 ของ person (ตามหลัง bge-m3 ไม่มาก), อันดับ 2 ของ
+  program (ตามหลัง ConGen ไม่มาก), และ**ชนะ faculty_adjunct_aggregate สูงสุด**
+  — อธิบายได้ว่าทำไมค่าเฉลี่ยรวมของทั้งคู่ถึงมาบรรจบกัน ทั้งที่โปรไฟล์คนละแบบ
+  กันเลย
+- **นัยเชิงปฏิบัติ**: ถ้าเลือก embedder ตาม use-case เฉพาะทาง (ไม่ใช่ค่าเฉลี่ย
+  รวม) — ระบบที่เน้นค้นหาบุคคลควรใช้ bge-m3, เน้นหลักสูตร/สาขาวิชาควรใช้ ConGen
+  (เล็กกว่ามาก ถูกกว่ามาก ในเมื่อ program คือ use-case เดียว), ส่วน Qwen3
+  เหมาะกับระบบที่ต้องรับมือคำถามหลายประเภทปนกันโดยไม่รู้ล่วงหน้าว่าจะเป็น
+  ประเภทไหน (สอดคล้องกับ [[project_hybrid_routing]] ที่ routing ตาม entity
+  type อยู่แล้ว — ถ้า routing ทำงานสมบูรณ์ Qwen3's generalist strength ก็ไม่ได้
+  ให้ประโยชน์เพิ่มเหนือ specialist-per-route)
+- **m2v ล้มเหลวหนักเป็นพิเศษที่ person** (0.057, เกือบเป็นศูนย์) มากกว่าที่
+  เห็นตอนดูค่าเฉลี่ยรวม (0.147) — เป็น static embedding ที่ดูเหมือนจับ named-
+  entity context แทบไม่ได้เลย ต่างจาก program (0.205) ที่ยังพอจับ topical
+  similarity ได้บ้าง
+### Significance test แยกต่อ entity_type (21 ก.ค. 2569, ต่อเนื่อง) — Qwen3 คือ generalist ที่ tie กับ specialist ทั้งสองด้านพร้อมกัน
+
+สคริปต์ `tools/eval/embedder_significance_test_by_entity_type.py` — logic
+เดียวกับ significance test รวม แต่รันแยกต่อ entity_type (resample เฉพาะ
+query ในกลุ่มนั้น) แล้ว Holm-correct แยกใน 15 คู่ต่อ (entity_type, เมตริก)
+ผลดิบเต็ม: `data/results/embedder_significance_test_by_entity_type.md`
+(gitignored)
+
+**ข้อสรุปหลัก — ยืนยันด้วยสถิติ ไม่ใช่แค่ตัวเลขเชิงพรรณนาแล้ว**:
+
+- **person (n=30)**: bge-m3 ชนะ ConGen, e5, jina_v5, m2v **อย่างมีนัยสำคัญ
+  ทั้งหมด** (Holm-adj p<0.001 ทุกคู่) **แต่ bge-m3 vs Qwen3 ไม่ต่างกันอย่างมี
+  นัยสำคัญ** (recall@10 raw p=0.033, Holm-adj=0.131 — ไม่ผ่าน) ConGen แพ้ทุก
+  ตัวยกเว้น m2v อย่างมีนัยสำคัญ (แพ้หนักสุดในกลุ่ม normal embedder ยืนยัน
+  ชัดเจน)
+- **program (n=30)**: ConGen ชนะ bge-m3, e5, jina_v5, m2v **อย่างมีนัยสำคัญ
+  ทั้งหมด** **แต่ ConGen vs Qwen3 ไม่ต่างกันอย่างมีนัยสำคัญ** (recall@10
+  diff=+0.005, raw p=0.881 — เท่ากันจริงๆ ไม่ใช่แค่ใกล้เคียง) bge-m3 แพ้
+  Qwen3 อย่างมีนัยสำคัญที่ program (Holm-adj p=0.015)
+- **faculty_adjunct_aggregate (n=13, เล็กสุด)**: ส่วนใหญ่ยังแยกไม่ออกเพราะ
+  ตัวอย่างเล็ก (ยกเว้น m2v ที่แพ้ทุกตัวชัดเจนแม้ n เล็ก) แต่ Qwen3 ชนะ ConGen
+  และ jina_v5 อย่างมีนัยสำคัญที่ recall@10 — สัญญาณไปทางเดียวกับที่เห็นใน
+  entity type อื่น
+- **ข้อสรุปที่แรงที่สุด**: **Qwen3-Embedding-4B tie กับ specialist ทั้งสองด้าน
+  พร้อมกัน** — tie กับ bge-m3 (person-specialist) ที่ person, **และ** tie กับ
+  ConGen (program-specialist) ที่ program ในเวลาเดียวกัน ไม่มี embedder ตัวไหน
+  อื่นที่ทำได้แบบนี้ (bge-m3 แพ้ ConGen ที่ program อย่างมีนัยสำคัญ, ConGen แพ้
+  bge-m3 ที่ person อย่างมีนัยสำคัญ — ทั้งคู่มีจุดอ่อนที่พิสูจน์ได้ทางสถิติ
+  คนละด้าน) **นี่คือหลักฐานเชิงสถิติที่หนักแน่นที่สุดที่สนับสนุนกรอบ "Qwen3 =
+  generalist แข็งสุด" ที่ตั้งไว้จาก breakdown เชิงพรรณนาก่อนหน้า**
+- **นัยต่อ RQ2**: ถ้า deployment มี routing ตาม entity type ที่แม่นยำ
+  (`[[project_hybrid_routing]]`) → ใช้ specialist-per-route (bge-m3 สำหรับ
+  person, ConGen สำหรับ program) จะได้ผลเท่ากับ/ดีกว่า Qwen3 ในต้นทุนที่ต่ำกว่า
+  มาก แต่ถ้า routing ไม่แม่นยำ/ไม่มี หรือคำถามมีลักษณะผสม Qwen3 คือตัวเลือก
+  เดียวที่ไม่มีจุดอ่อนที่พิสูจน์ได้ในทั้งสองประเภทหลัก — เป็น trade-off เรื่อง
+  ความเชื่อมั่นใน routing มากกว่าคุณภาพ embedder ล้วนๆ
+
+## BM25 lexical baseline (21 ก.ค. 2569) — ผลที่พลิกกรอบ RQ2 ทั้งหมด
+
+โค้ด `BM25Retriever` (`src/rag_lab/retrievers/bm25.py`, ใช้ `rank_bm25.BM25Okapi`
+บนโทเคนคำจาก PyThaiNLP `word_tokenize` engine `newmm`) มีอยู่แล้วในโปรเจกต์
+แต่ไม่เคยรัน eval จริง — index ที่ build ไว้แล้วทุก combo มี `lexical.json`
+ติดมาด้วยอยู่แล้ว (คำนวณตอน build ไม่ขึ้นกับ embedder) จึง**ไม่ต้อง build
+index ใหม่** สคริปต์ `tools/eval/run_gold_bm25_eval.py` หยิบ index ตัวแทน
+1 embedder ต่อ chunker (เลือก e5 variant, ไม่กระทบผลเพราะ BM25 ไม่สนใจ
+embedder) รันบน Gold 73-det ครบ 4 chunker (432.9s รวม)
+
+**ผลลัพธ์ (BM25, ต่อ chunker)**:
+
+| chunker | recall@10 | mrr | ndcg@10 |
+|---|---|---|---|
+| semantic | **0.5902** | 0.7690 | **0.6174** |
+| sentence | 0.5801 | 0.7955 | **0.6379** |
+| recursive | 0.5526 | 0.7491 | 0.5889 |
+| fixed_size | 0.5476 | 0.8019 | 0.6126 |
+
+**เทียบกับค่าเฉลี่ย dense-embedder ต่อ chunker (ข้าม 6 embedder, จากตารางก่อน
+หน้า)**:
+
+| chunker | dense เฉลี่ย recall@10 | BM25 recall@10 | ผลต่าง |
+|---|---|---|---|
+| fixed_size | 0.3786 | 0.5476 | **BM25 ชนะ +0.169** |
+| recursive | 0.3922 | 0.5526 | **BM25 ชนะ +0.160** |
+| semantic | 0.4939 | 0.5902 | **BM25 ชนะ +0.096** |
+| sentence | 0.3776 | 0.5801 | **BM25 ชนะ +0.203** |
+
+**BM25 ชนะค่าเฉลี่ย dense-embedder ทุก chunker ขาดลอย** และเทียบกับ embedder
+เดี่ยวที่ดีที่สุดต่อ chunker (จากตาราง breakdown ก่อนหน้า) — BM25 ยังชนะ
+เกือบทุกกรณี ยกเว้น **semantic × Qwen3-Embedding-4B** (0.6581) ที่ยังสูงกว่า
+BM25×semantic (0.5902) — เป็น**combo เดียว**ในทั้งตารางที่เอาชนะ BM25 ได้
+ชัดเจน (fixed_size ที่ดีสุดของ dense คือ qwen3=0.4438 แพ้ BM25 0.5476 ขาด,
+recursive ดีสุด qwen3=0.4709 แพ้ BM25 0.5526, sentence ดีสุด qwen3=0.4893
+แพ้ BM25 0.5801)
+
+**ทำไมถึงเป็นแบบนี้ (สมมติฐาน, ยังไม่ยืนยัน)**: Gold query set เป็น
+entity-anchored (`[[project_gold_query_set]]`) — แม้ตัวคำถามจะ rephrase
+หนีจาก title wording ของเอกสาร แต่**ชื่อเฉพาะของ entity ยึด** (ชื่อคน/ชื่อ
+หลักสูตร/ชื่อคณะ) **ยังคงอยู่ในคำถามแบบคำต่อคำ** เพราะเป็นสิ่งเดียวที่ระบุ
+ตัวตนได้ ทำให้ BM25 ที่ match คำตรงตัวได้เปรียบธรรมชาติสำหรับงานประเภทนี้
+โดยเฉพาะ ต่างจาก paraphrase/thematic query ที่ dense embedding ควรจะได้เปรียบ
+กว่า (แต่ thematic queries มี discrimination ต่ำมากอยู่แล้วตาม
+`[[project_thematic_query_bootstrap]]` เลยไม่มีในชุด 73-det นี้)
+
+**ผลต่อกรอบ RQ2 ทั้งหมด**: ข้อสรุปก่อนหน้า ("Qwen3 ไม่ชนะจริงเทียบ bge-m3",
+"Qwen3 = generalist ที่แข็งสุด") **ยังคงจริงในกรอบ "เทียบ dense embedder
+ด้วยกันเอง"** แต่ต้องเพิ่มบริบทใหม่ที่สำคัญกว่า: **dense embedding ธรรมดา
+(ไม่ hybrid) แพ้ lexical baseline ง่ายๆ ในงานนี้แทบทุกกรณี** ยกเว้น
+combo ที่แพงที่สุดตัวเดียว (semantic×Qwen3-4B) คำถามที่ควรตอบต่อไม่ใช่แค่
+"embedder ไหนดีสุด" แต่คือ **"คุ้มไหมที่จะใช้ dense retrieval เลย ถ้า BM25
+เปล่าๆ ก็ชนะเกือบทุก combo"** — เป็นคำถามที่แรงกว่า RQ2 เดิมมาก
+
+### Significance test BM25 vs dense embedder (21 ก.ค. 2569, ต่อเนื่อง) — ต้องปรับข้อสรุปให้ระมัดระวังขึ้น
+
+สคริปต์ `tools/eval/bm25_vs_embedder_significance_test.py` — paired bootstrap
+เดียวกันกับ significance test อื่น (resample 73 query, ค่าต่อ query เฉลี่ย
+ข้าม 4 chunker ก่อน — **BM25 ก็มีค่าเฉลี่ยข้าม 4 chunker ของตัวเองเหมือนกัน**
+เพื่อเทียบแบบเดียวกับ embedder อื่น) Holm-correct แยกใน 6 คู่ (bm25 vs
+embedder แต่ละตัว) ต่อเมตริก ผลดิบเต็ม:
+`data/results/bm25_vs_embedder_significance_test.md` (gitignored)
+
+**ผล**:
+
+| A vs B | recall@10 diff | Holm-adj p | significant |
+|---|---|---|---|
+| bm25 vs m2v | +0.4205 | 0.0000 | **yes** |
+| bm25 vs congen | +0.1543 | 0.0064 | **yes** |
+| bm25 vs e5 | +0.1411 | 0.0000 | **yes** |
+| bm25 vs jina_v5 | +0.1174 | 0.0132 | **yes** |
+| bm25 vs bge_m3 | +0.0569 | 0.1832 | no |
+| bm25 vs qwen3 | +0.0521 | 0.1884 | no |
+
+**ต้องปรับข้อสรุปจากหัวข้อก่อนหน้า**: ในกรอบ**เฉลี่ยข้าม chunker แบบเดียวกับ
+ที่ใช้เทียบ embedder ทุกตัว** (ไม่ใช่ point comparison ต่อ chunker) **BM25
+ชนะ embedder กลุ่มกลาง-ล่างอย่างมีนัยสำคัญจริง** (ConGen, e5, jina_v5, m2v)
+**แต่ไม่ต่างจาก top tier (bge-m3, Qwen3) อย่างมีนัยสำคัญ** (p=0.183, 0.188
+ตามลำดับ) — ตัวเลขดิบ BM25 สูงกว่า (0.568 vs 0.511/0.516) แต่ interval ยัง
+กว้างพอที่จะไม่ผ่าน Holm-corrected threshold ที่ n=73
+
+**สรุปที่แม่นยำกว่าเดิม**: **BM25 tie กับ dense embedder ที่ดีที่สุด (bge-m3,
+Qwen3) และชนะ embedder อื่นๆ ทั้งหมดอย่างมีนัยสำคัญ** — ไม่ใช่ "BM25 ชนะแทบ
+ทุก combo" อย่างที่ตัวเลขดิบต่อ chunker (ในหัวข้อก่อนหน้า) ทำให้ดูเหมือน
+ตอนยังไม่ได้ทดสอบนัยสำคัญ ข้อสรุปที่ยัง**ยืนกรานได้อยู่**คือ **BM25 (ฟรี ไม่
+ต้อง GPU ไม่ต้อง train) ให้คุณภาพเทียบเท่า embedder ที่ดีที่สุดในชุดนี้ได้
+โดยไม่มีข้อแตกต่างที่พิสูจน์ได้** — เป็นคำถามที่แรงพอกันแต่ตอบตรงกว่าเดิม
+(ไม่ใช่ "dense ไม่คุ้มเลย" แต่เป็น "embedder ที่ดีพอจะคุ้ม ต้องดีในระดับ
+bge-m3/Qwen3 เท่านั้น ต่ำกว่านั้นสู้ BM25 ฟรีไม่ได้จริง")
+
+**ยังไม่ได้ทำ (สำคัญก่อนอ้างอิงในเปเปอร์)**:
+1. **Hybrid (BM25 + dense ผ่าน RRF)** มีโค้ดอยู่แล้ว
+   (`src/rag_lab/retrievers/hybrid.py`, ผูกกับ `[[project_hybrid_routing]]`
+   ไปแล้วบางส่วน) — ยังไม่ได้วัดผลบน Gold 73-det ชุดใหม่นี้ คำถามที่น่าสนใจ
+   คือ hybrid (BM25+bge-m3 หรือ BM25+Qwen3) จะเก่งกว่าทั้งคู่แยกกันไหม หรือ
+   ไม่ต่างเพราะ signal ซ้ำกันเยอะอยู่แล้ว (ตอนนี้รู้แล้วว่า BM25 กับ top-tier
+   dense ให้คุณภาพใกล้เคียงกันมาก อาจ correlate สูงจน RRF ไม่ได้ช่วยมาก)
+2. Point comparison ต่อ chunker (BM25 เทียบ embedder ที่ chunker เดียวกัน
+   โดยไม่เฉลี่ยข้าม chunker) ยังไม่ได้ทดสอบนัยสำคัญแยก — อาจมีรายละเอียดที่
+   ต่างจากภาพรวม เช่น semantic×Qwen3 (0.6581) vs BM25×semantic (0.5902)
+   ที่ดูต่างกันชัดในตัวเลขดิบ
+3. ผลดิบเต็ม: `data/results/gold_bm25_73det_report.md`,
+   `data/results/gold_bm25_73det/`,
+   `data/results/bm25_vs_embedder_significance_test.md` (ทั้งหมด gitignored)
+
+## Hybrid (RRF: BM25 + Dense) (21 ก.ค. 2569) — ผลบวกชัดเจน, พบ combo ที่ดีที่สุดในทั้งโปรเจกต์
+
+`HybridRetriever` (`src/rag_lab/retrievers/hybrid.py`, RRF ค่า default
+`rrf_k=60`) รวม dense + BM25 บน index เดียวกัน (ไม่ต้อง build index ใหม่
+เพราะทุก index มี `embeddings.npy` + `lexical.json` อยู่แล้ว) รันครบ
+24 combo (`tools/eval/run_gold_hybrid_eval.py`, ~1h23m บน 73 query)
+
+**ค่าเฉลี่ยข้าม chunker ต่อ embedder (recall@10) เทียบ hybrid/dense/bm25**:
+
+| embedder | hybrid | dense เดี่ยว | bm25 เดี่ยว |
+|---|---|---|---|
+| bge_m3 | **0.6472** | 0.5107 | 0.5676 |
+| congen | 0.6426 | 0.4134 | 0.5676 |
+| jina_v5 | 0.6383 | 0.4503 | 0.5676 |
+| e5 | 0.6264 | 0.4265 | 0.5676 |
+| qwen3 | 0.6235 | 0.5155 | 0.5676 |
+| m2v | 0.3244 | 0.1472 | 0.5676 |
+
+**Significance test** (`tools/eval/hybrid_significance_test.py`, bootstrap +
+Holm แยก 2 family: hybrid vs dense-เดียวกัน, hybrid vs bm25 — ผลดิบเต็ม
+`data/results/hybrid_significance_test.md`):
+
+- **hybrid ชนะ dense-alone อย่างมีนัยสำคัญทุก embedder ทุกเมตริก** (Holm-adj
+  p<0.01 เกือบทั้งหมด, ยกเว้น qwen3 บน mrr ที่ไม่ผ่าน) — เป็นผลที่ robust
+  ที่สุดในทั้ง session นี้ **การเพิ่ม BM25 เข้าไปช่วย dense เสมอ ไม่มีข้อยกเว้น
+  (นอกจาก MRR ของ qwen3)**
+- **hybrid ชนะ BM25-alone อย่างมีนัยสำคัญที่ recall@10 สำหรับ embedder ที่ดี
+  ทั้ง 5 ตัว** (bge_m3, congen, jina_v5, e5, qwen3 — Holm-adj p≤0.015 ทุกตัว)
+  **แต่ไม่ค่อยผ่านที่ mrr** (ไม่มีตัวไหนผ่านหลัง correction) **และผ่านแค่
+  บางส่วนที่ ndcg@10** (bge_m3/congen/jina_v5/qwen3 ผ่าน, e5 ไม่ผ่านเฉียดๆ)
+  — แปลว่า**การเพิ่ม dense เข้าไปช่วย BM25 ตรง recall (เจอเอกสารที่ถูกใน
+  top-10 มากขึ้น) มากกว่าช่วยเรื่อง ranking precision (การจัดอันดับให้ตัวที่
+  ถูกที่สุดขึ้นอันดับ 1)**
+- **m2v ทำให้แย่ลงอย่างมีนัยสำคัญเมื่อ hybrid กับ BM25** (recall diff=-0.243,
+  p<0.001) — เป็นตัวอย่าง failure mode ของ RRF จริง: เมื่อสัญญาณหนึ่ง
+  (m2v dense, คุณภาพเดี่ยวต่ำมาก 0.147) เกือบสุ่ม การรวมแบบ RRF ที่ให้น้ำหนัก
+  เท่ากัน (`rrf_k` เดียวกันทั้งสอง list) จะดึงเอกสารที่ผิดขึ้นมาปนกับ BM25 ที่
+  ถูกต้องอยู่แล้ว ทำให้แย่กว่า BM25 เดี่ยวๆ **ข้อควรระวังสำหรับ deployment: RRF
+  ไม่ปลอดภัยเสมอไปถ้า embedder อ่อนเกินไป**
+- **Combo ที่ดีที่สุดในทั้ง 24+24+4 การทดลองทั้งหมด (dense/hybrid/BM25) คือ
+  `semantic × bge-m3 × hybrid`** (recall@10=**0.6845**, mrr=0.8495,
+  ndcg@10=0.7264) แซง `semantic × qwen3 × dense-alone` เดิม (0.6581) และ
+  `semantic × qwen3 × hybrid` (0.6797) เฉียดๆ — **น่าสนใจว่าตอนเป็น hybrid
+  bge-m3 กลับแซง qwen3 ทั้งที่ dense-alone ทั้งคู่ tie กัน** (อาจเป็นเพราะ
+  bge-m3 กับ BM25 มี error pattern ที่ complement กันดีกว่า qwen3 กับ BM25 —
+  ยังไม่ได้สืบสาเหตุลึกกว่านี้)
+
+**สรุปสำหรับเปเปอร์**: ระบบที่ดีที่สุดโดยรวมคือ **semantic chunking + hybrid
+retrieval (BM25+bge-m3 ผ่าน RRF)** ไม่ใช่ dense-alone หรือ BM25-alone
+เดี่ยวๆ — ยืนยันว่า lexical กับ dense signal **complement กันจริง ไม่ได้
+ซ้ำซ้อนกันอย่างที่สงสัยไว้ก่อนรัน** ยกเว้นกรณี embedder อ่อนเกินไป (m2v)
+ที่ RRF กลับทำร้ายมากกว่าช่วย
+
+ผลดิบเต็ม: `data/results/gold_hybrid_73det_report.md`,
+`data/results/gold_hybrid_73det/`, `data/results/hybrid_significance_test.md`
+(ทั้งหมด gitignored)
+
+## บั๊ก: ConGen/SCT ถูก truncate เนื้อหาทิ้งแบบเงียบๆ (21 Jul, พบระหว่างตรวจ
+เรื่อง context-length diversity)
+
+ระหว่างตอบคำถาม user ว่า embedder matrix ครอบคลุมความยาว context ที่หลากหลาย
+(512-8192 tokens) พอหรือยัง ไล่เช็ค `sentence_bert_config.json` ของแต่ละโมเดลจริง
+(ไม่ใช่เดาจาก model card) พบว่า `kornwtp/ConGen-BGE_M3-model-phayathaibert` และ
+`kornwtp/SCT-KD-BGE-M3-model-phayathaibert` (ทั้งคู่ backbone PhayaThaiBERT ที่
+`max_position_embeddings=512`) ตั้ง `max_seq_length: 128` ไว้ใน repo ของตัวเอง —
+เป็นค่าที่ผู้เขียนโมเดล (kornwtp) กำหนด ไม่ใช่ค่าที่โปรเจกต์นี้ตั้ง
+
+ตรวจสอบเชิงประจักษ์ด้วย tokenizer ของ ConGen เองกับ chunk จริงที่ build ไว้แล้ว:
+- **fixed_size** (512 ตัวอักษร): เฉลี่ย 172 tokens (max 515) — **72.5% ของ
+  chunk ยาวเกิน 128 tokens** โดนตัดทิ้งแบบเงียบๆ (sentence-transformers ไม่
+  error ไม่เตือน)
+- **semantic**: เฉลี่ย 164 tokens แต่ max ถึง **3116 tokens** — 33% เกิน 128,
+  กรณีเลวร้ายสุดโดนตัดทิ้งเนื้อหาไป 96%
+
+**นี่กระทบทุกผลลัพธ์ ConGen ที่ significance-test ไปแล้วทั้งหมด** รวมถึงข้อสรุป
+"ConGen = program-query specialist" ([[project_embedder_comparison]]) — ตัวเลข
+เหล่านั้นวัดจากโมเดลที่อ่านได้แค่ 1-4 ประโยคแรกของแต่ละ chunk ไม่ใช่ทั้ง chunk
+เหมือนโมเดลอื่น `sct` ยังไม่มีผลลัพธ์ให้แก้เพราะกำลัง build ตอนที่เจอบั๊กพอดี
+
+**แก้แล้ว**: `LocalSTEmbedder` มี parameter `max_seq_length` รองรับ
+การ override อยู่แล้ว (`src/rag_lab/embedders/local_st_embedder.py:24`) แค่ไม่
+เคยตั้งเพราะไม่รู้ว่า repo นี้ cap ต่ำผิดปกติ สร้าง config ใหม่
+`config/experiments/chunker_compare_full_fix_congen_sct_maxseqlen.yaml`
+เข้าคิวรันหลัง build ปัจจุบัน (sct + qwen3_0.6b) และ e5-small เสร็จ (GPU เดียว
+รันทีละงาน) — เนื่องจาก combo id เป็น hash ของ params ทั้งหมดใน YAML
+(`combos.py:BuildCombo.id`) การเพิ่ม `max_seq_length` เป็น key ใหม่ทำให้ได้
+combo directory ใหม่ ไม่ทับของเดิม (ของเดิมเก็บไว้เทียบ before/after ได้ แต่
+ห้ามอ้างอิงเป็นตัวเลขจริงต่อไป)
+
+**พลาดรอบแรก**: ตั้ง `max_seq_length: 512` ตรงกับ `max_position_embeddings`
+ใน config.json ของ backbone — crash ทั้ง 8 combo ด้วย `CUDA error:
+device-side assert triggered` (illegal position-embedding index) สาเหตุคือ
+RoBERTa สงวน position slot ไว้ 2 ตำแหน่งสำหรับ padding offset ทำให้ตำแหน่งที่
+ใช้ได้จริงคือ 512-2=**510** ไม่ใช่ 512 — ยืนยันจาก `tokenizer_config.json`
+ของทั้ง congen และ sct ที่ระบุ `model_max_length: 510` ตรงกันทั้งคู่ (เห็นค่านี้
+ตอนสำรวจ context-length ตั้งแต่แรกแต่ตอนเขียน config ใช้ค่าจาก config.json แทน
+โดยไม่ทันสังเกต) แก้เป็น 510 แล้วรันใหม่สำเร็จ
+
+**ผล before/after (`tools/eval/congen_sct_truncation_fix_eval.py`, paired
+bootstrap บน Gold 73-det)**: ไม่ได้เป็นบั๊กเดียวกันทั้งคู่อย่างที่คิด
+
+| model | 128-cap | 510-cap | diff | สรุป |
+|---|---|---|---|---|
+| sct | 0.1374 | **0.1519** | +0.0144, p<0.0001 | 510 ดีขึ้นจริง — **เปลี่ยนไปใช้ 510** |
+| congen | **0.4134** | 0.3836 | -0.0298, p=0.0016 | 510 **แย่ลง** อย่างมีนัยสำคัญ — **คง 128 ไว้เหมือนเดิม** |
+
+**sct**: cap 128 ตัดเนื้อหาทิ้งจริง แก้เป็น 510 ช่วยได้จริง (ตัวเลข sct ชุดแรก
+ที่มีใช้ได้)
+
+**congen**: ผลตรงข้าม — ให้ context ยาวขึ้นกลับทำให้แย่ลง เดาว่าเป็นเพราะ
+ConGen เป็น pure distillation จาก `paraphrase-multilingual-mpnet-base-v2`
+(teacher ที่ปกติใช้กับ input สั้นระดับประโยคคู่) การยืด input ไปถึง 510 tokens
+เลยหลุดจาก length distribution ที่โมเดลถูก distill มา เป็น train/test
+mismatch ไม่ใช่ปัญหาเนื้อหาถูกตัดทิ้ง **สรุป: cap 128 ของ ConGen ถูกต้องอยู่แล้ว
+ไม่ใช่บั๊ก** — ข้อสรุปเกี่ยวกับ ConGen ที่ significance-test ไปก่อนหน้านี้ทั้งหมด
+(รวม "program-query specialist") **ไม่ต้องแก้ไขอะไร** วัดถูกต้องมาตั้งแต่แรก
+
+ป้ายเตือนใน `docs/paper-results-summary.md` แก้เป็นสรุปผลจริงแล้ว (section
+"Resolved 2026-07-21")
+
+## รัน full 9-embedder matrix (21 Jul, ต่อเนื่องจากบั๊ก ConGen/SCT)
+
+ก่อนรัน significance test เต็มรูปแบบ เจอความเสี่ยงจาก script เดิม
+(`embedder_significance_test.py`) — logic ติด label ตาม `type` เฉยๆ ไม่แยกตาม
+`model_name` แปลว่าถ้าเอามารันตรงๆ e5-large กับ e5-small (ทั้งคู่ type="e5")
+หรือ Qwen3-4B กับ Qwen3-0.6B (ทั้งคู่ type="qwen3") จะถูกนับรวมเป็นตัวเดียวกัน
+เงียบๆ เขียน script ใหม่ `tools/eval/embedder_matrix_9way.py` แก้ label ให้
+แยกตาม (type, model_name) และ exclude combo ที่ superseded แล้วอย่างชัดเจน
+(sct แบบ 128-cap เก่า, congen แบบ 510-cap ที่ปฏิเสธไปแล้ว)
+
+**ผลลัพธ์ significance test เต็ม 9 embedder (36 คู่, Holm-corrected)**:
+- **qwen3_0.6b vs qwen3(4B): ไม่ต่างกันนัยสำคัญเลยสักตัวชี้วัด** (Holm p=1.0
+  ทุกตัว) — โมเดลเล็กกว่า ~7 เท่า ให้ผลเท่ากัน top tier กลายเป็น 3 ทาง:
+  {bge_m3, qwen3, qwen3_0.6b} เท่ากันหมด
+- **e5 vs e5_small: ไม่ต่างกันนัยสำคัญเลยเช่นกัน** — ยืนยัน pattern
+  "เล็กเท่าใหญ่" เป็นครั้งที่สองจากคนละตระกูลโมเดล ไม่ใช่เรื่องบังเอิญของ
+  ตระกูลเดียว **นี่คือ finding ด้าน cost-efficiency ที่แข็งแรงที่สุดในการ
+  เปรียบเทียบทั้งหมด** — เลือกตัวเล็กกว่าในทั้งสองตระกูล ประหยัดโดยไม่เสีย
+  คุณภาพที่พิสูจน์ได้
+- **sct vs m2v: ไม่ต่างกันนัยสำคัญเลย** — แม้แก้ max_seq_length แล้ว sct
+  ก็ยังอยู่ bottom tier เท่ากับ m2v (static, ไม่ใช่ transformer ด้วยซ้ำ)
+  person recall ของ sct (0.0571) แทบเท่า m2v (0.0572) — ทั้งคู่แทบทำ
+  named-entity retrieval ไม่ได้เลย
+- qwen3_0.6b นำทุกตัวใน program (0.6396) แต่ยังไม่ได้ significance-test
+  แยกตาม entity_type (ยังเหลืองาน)
+
+ผลเต็ม: `data/results/embedder_significance_test_9way.md`,
+`data/results/gold_embedder_breakdown_9way.md` บันทึกลง
+`docs/paper-results-summary.md` แล้ว (section "Embedders compared (9 total)")
+
+## Per-entity_type significance test สำหรับ 9-embedder matrix (21 Jul,
+ต่อจากด้านบน)
+
+เขียน `tools/eval/embedder_significance_test_by_entity_type_9way.py` (import
+label/exclusion logic จาก `embedder_matrix_9way.py` ไม่เขียนซ้ำ) รันเลยเพราะ
+ผลลัพธ์ที่ persist ไว้จากรอบ aggregate มีครบแล้ว ไม่ต้อง retrieval ใหม่
+
+**ผลลัพธ์สำคัญที่แก้ไข headline "qwen3_0.6b เท่า qwen3" ให้ละเอียดขึ้น**:
+- **program**: กลายเป็น 3-way tie {congen, qwen3, qwen3_0.6b} ไม่ต่างกันนัย
+  สำคัญเลยสักคู่ แม้ qwen3_0.6b จะมีค่าเฉลี่ยดิบสูงสุด (0.6396)
+- **person**: bge-m3 ชนะ qwen3_0.6b อย่างมีนัยสำคัญ (Holm p<0.0001) แต่
+  bge-m3 vs qwen3(4B) ยังไม่ต่างกัน (p=0.374 เหมือนเดิม)
+- **สรุป**: **มีแค่ qwen3(4B) เท่านั้นที่ ties ทั้ง 2 specialist พร้อมกัน**
+  qwen3_0.6b มีจุดอ่อนจริง (person) ที่ qwen3-4B ไม่มี — คะแนนเฉลี่ยรวมที่
+  เท่ากันระหว่าง 0.6B กับ 4B เป็นเรื่องบังเอิญจากการเฉลี่ย (ได้ program
+  เสีย person พอดีชดเชยกัน) ไม่ใช่หลักฐานว่า 0.6B ฟรีจริง ถ้าไม่มี routing
+  หรือเจอ query ผสม ยังควรเลือก qwen3(4B) มากกว่า
+- **sct vs m2v tie ทุก entity_type** (person/program/faculty ทั้งหมด Holm
+  p=1.0) — ยืนยันว่า sct อ่อนสม่ำเสมอ ไม่ใช่แค่ค่าเฉลี่ยรวมถูกลากลงจาก
+  entity_type เดียว
+
+ผลเต็ม: `data/results/embedder_significance_test_by_entity_type_9way.md`
+บันทึกลง `docs/paper-results-summary.md` แล้ว (section "Embedder ×
+entity_type profile") ยังเหลืองาน: ขยาย BM25/hybrid ให้ครอบคลุม 3 embedder
+ใหม่
+
+## ขยาย BM25/hybrid ให้ครอบคลุม 9 embedder (2026-07-21)
+
+BM25 เองไม่ต้องรันซ้ำ (chunker-only ไม่ผูกกับ embedder) แต่ hybrid (RRF) ต้อง
+รัน retrieval ใหม่สำหรับ 12 combo ที่ยังไม่มี: `e5_small`, `qwen3_0.6b`, และ
+`sct` ที่ config ที่แก้แล้ว (max_seq_length=510 ไม่ใช่ 128 cap เดิม) × 4
+chunker. เขียน `tools/eval/run_gold_hybrid_eval_9way_new.py` ให้ระบุ combo
+dir ตรงๆ ทั้ง 12 ตัว (ไม่ใช้ substring filter เพราะคำว่า "sct" จะแมตช์ทั้ง
+combo เก่า 128-cap ที่ยังอยู่บนดิสก์ด้วย) เขียนผลลง
+`data/results/gold_hybrid_73det` ไดเรกทอรีเดียวกับรอบ 6-embedder เดิม
+เพื่อให้สคริปต์ significance test ที่ glob ทั้งโฟลเดอร์เจอทั้งเก่าทั้งใหม่
+
+รันเป็น background task ใช้เวลา 2169 วินาที (~36 นาที) เสร็จสมบูรณ์ครบ
+12/12 combo × 73/73 query ตรวจสอบแล้ว จากนั้นรัน 2 สคริปต์ significance
+test ที่เตรียมไว้ (import label/exclusion logic จาก `embedder_matrix_9way.py`
+เหมือนสคริปต์ 9-way ก่อนหน้า กัน type-label ชนกันระหว่าง e5/e5_small และ
+qwen3/qwen3_0.6b):
+
+**`bm25_vs_embedder_significance_test_9way.py`** — BM25 vs 9 embedder:
+BM25 ยัง tie 3 ตัวบนสุด (bge_m3, qwen3, **qwen3_0.6b** — ตัวใหม่ที่เข้ามา
+tie ด้วย) และชนะอย่างมีนัยสำคัญกับที่เหลือทั้งหมดรวม **sct ตัวใหม่** ด้วย
+(diff=+0.4158, Holm p<0.0001) เพราะ sct ที่ 510 token มี recall@10 แค่
+0.1519 — พอๆ กับ m2v (0.1472) คือใกล้สุ่มทั้งคู่ ไม่ใช่แค่อ่อนกว่าเฉยๆ
+
+**`hybrid_significance_test_9way.py`** — hybrid vs dense-alone / vs BM25-alone,
+9 embedder:
+- **hybrid ชนะ dense-alone อย่างมีนัยสำคัญทุก embedder ทุก metric** (ยกเว้น
+  qwen3 บน MRR) — ผลนี้ทนต่อการขยายเป็น 9 embedder แม้จะรวม sct/m2v ที่
+  dense-alone อ่อนมากๆ เข้าไปด้วย ยังไม่เคยเจอกรณีที่ hybrid แพ้ dense-alone
+  เลยสักตัว — เป็นข้อค้นพบที่ robust ที่สุดของงานทั้งหมด
+- **hybrid ชนะ BM25-alone บน recall@10 อย่างมีนัยสำคัญ 7/9 embedder**
+  (qwen3_0.6b, bge_m3, congen, jina_v5, e5, qwen3, e5_small) — **ยกเว้น
+  sct กับ m2v ที่ hybrid แพ้ BM25-alone อย่างมีนัยสำคัญทั้งคู่**
+  (sct: diff=−0.0497, Holm p=0.0312; m2v: diff=−0.2433, Holm p<0.0001)
+  **นี่คือข้อค้นพบใหม่ที่สำคัญ**: เดิมคิดว่า m2v เป็นกรณีพิเศษตัวเดียวที่
+  RRF ล้มเหลว (dense signal อ่อนเกินจนลาก hybrid ต่ำกว่า BM25 เดี่ยว) ตอนนี้
+  มีหลักฐานยืนยันซ้ำอีกตัว: sct ก็เป็นกรณีเดียวกัน เพราะ dense-alone ของมัน
+  ก็อ่อนพอๆ กับ m2v (recall 0.15 ทั้งคู่) — สรุปแพทเทิร์นได้ชัดขึ้น:
+  **RRF ล้มเหลวเมื่อ dense signal อ่อนจนเกือบสุ่ม ไม่ว่าจะมาจากสาเหตุอะไร
+  (static embedding อย่าง m2v หรือ transformer ที่ training regime ไม่เข้ากับ
+  context ยาวอย่าง sct)**
+- ตาราง aggregate hybrid recall@10: `qwen3_0.6b` ขึ้นเป็นอันดับ 1 ตัวเลขดิบ
+  (0.6543 > bge_m3 0.6472) แต่ยังไม่ได้เช็คระดับ per-chunker ว่า
+  `semantic × qwen3_0.6b × hybrid` จะแซง `semantic × bge-m3 × hybrid`
+  (0.6845, best combo เดิม) จริงหรือไม่ — ทิ้งไว้เป็น open item #8 ไม่ควรอ้าง
+  ว่า qwen3_0.6b ชนะ best-combo เดิมจนกว่าจะเช็ค
+
+บันทึกผลลง `docs/paper-results-summary.md` แล้ว (sections "BM25 lexical
+baseline", "Hybrid retrieval", "Methodology", Open item #7 ปิดแล้ว) ผลเต็ม:
+`data/results/bm25_vs_embedder_significance_test_9way.md`,
+`data/results/hybrid_significance_test_9way.md`. งานส่วน "ขยาย BM25/hybrid
+ให้ครอบคลุม 9 embedder" เสร็จสมบูรณ์
+
+## เพิ่ม MAP + Precision@k + multi-k ใน metrics.py (gap-analysis Tier 1 ข้อ #1, 2026-07-21)
+
+เพิ่ม `precision_at_k` (hit resolutions ภายใน window k หารด้วย k ตรงข้ามกับ
+`recall_at_k` ที่หารด้วยจำนวน relevant ทั้งหมด) และ `average_precision_at_k`
+(AP มาตรฐานวงการ IR: บวก precision ณ ตำแหน่งที่เจอ relevant resolution
+แต่ละตัวครั้งแรก แล้วหารด้วยจำนวน relevant ทั้งหมด — ใช้ denominator แบบ
+เดียวกับ `recall_at_k` เพื่อความสอดคล้อง) ลงใน `src/rag_lab/metrics.py`
+
+แก้ `evaluate()` ให้รับ `k` เป็น int เดี่ยว (เหมือนเดิม, backward-compatible
+100% กับผู้เรียกทั้ง 4 จุดที่มีอยู่) **หรือ** list ของ k (เช่น `[1,3,5,10]`)
+เพื่อรายงานหลาย cutoff ในรอบเดียว — output dict จะมี `recall@{k}`,
+`precision@{k}`, `ndcg@{k}` ต่อทุก k ที่ขอ บวก `mrr` และ `map` (map คำนวณ
+ครั้งเดียวที่ `max(k)` ไม่ใช่ต่อ cutoff เพราะ AP รวมทั้ง ranking อยู่แล้ว)
+
+เพิ่ม unit test 8 ตัวใหม่ใน `tests/test_metrics.py` (precision_at_k 3 ตัว,
+average_precision_at_k 4 ตัว, evaluate() หลาย-k/backward-compat 2 ตัว) รัน
+`pytest` ทั้ง suite ผ่านครบ 356 ผ่าน (เดิม 348 + ใหม่ 8), skip 3 ตัวเดิม (bge-m3
+smoke test ที่ gate ด้วย env var) ไม่มีอะไรพัง
+
+อัปเดต `render_report()` ใน `run_gold_bm25_eval.py`, `run_gold_chunker_eval.py`,
+`run_gold_hybrid_eval.py`, `run_silver_chunker_eval.py` (ทั้ง 4 มี body
+เหมือนกันทุกตัวอักษร) ให้แสดงคอลัมน์ precision@k และ map เพิ่ม
+
+**ยังไม่ทำ**: ยังไม่มีการรัน eval script จริงด้วย multi-k list (เช่น
+`k=[1,3,5,10]`) — เพิ่มแค่ความสามารถ (capability) เข้าไปเฉยๆ ตัวเลขทุกตัวใน
+`docs/paper-results-summary.md` ยังคงเป็น k=10 อย่างเดียวเหมือนเดิม การรันจริง
+ด้วย multi-k + อ้างตัวเลข MAP/P@k เป็นงานต่อยอดที่ยังไม่ได้ทำ
+
+บันทึกลง `docs/paper-results-summary.md` (Methodology + Open item #4 ปิด),
+`project_research_framework_gap_analysis.md` แล้ว
+
+## Cost/latency Pareto table (gap-analysis Tier 1 ข้อ #4, 2026-07-21)
+
+สร้าง `tools/eval/cost_latency_pareto.py` วัด vector dim, ขนาด index บนดิสก์,
+embed throughput (จาก `meta.json` ตอน build), และ query latency p50/p95 —
+แยก encode time (ขึ้นกับ embedder) กับ search time (ขึ้นกับขนาด index) — ให้
+ครบทั้ง dense, BM25, hybrid บน `semantic` chunker (chunker ที่ paper แนะนำ)
+
+**ร่างแรกมีบั๊กเชิงตัวเลข**: ใช้ recall@10 แบบ cross-chunker aggregate (ค่า
+เฉลี่ยข้าม 4 chunker) มาจับคู่กับ latency ที่วัดเฉพาะ `semantic` chunker เท่านั้น
+— เทียบกันแบบ apples-to-oranges ไม่ใช่ apples-to-apples ตรวจพบเองก่อนส่งอะไรออก
+ไปแล้วขอ advisor ช่วยรีวิวก่อนเขียนรายงานจริง — advisor ยืนยันบั๊กนี้และชี้อีก
+ประเด็นที่สำคัญกว่า (ดูหัวข้อถัดไป)
+
+**แก้บั๊ก**: เขียนฟังก์ชัน `compute_semantic_quality()` อ่านผลลัพธ์ retrieval
+ที่ persist ไว้แล้ว (`data/results/gold_73det_full_embedder_matrix/`,
+`gold_hybrid_73det/`, `gold_bm25_73det/`) กรองเฉพาะ combo ที่ chunker=='semantic'
+ผ่าน `build_combo_to_chunker_embedder()` จาก `embedder_matrix_9way.py` แล้วคำนวณ
+`recall_at_k()` ตรงๆ ไม่ต้องโหลด GPU/embedder ใหม่ เลิกใช้ dict hardcode เดิม
+(`_QUALITY_RECALL10`) ไปเลย เพื่อไม่ให้บั๊กแบบนี้เกิดซ้ำถ้ามีคนรัน script ใหม่
+ในอนาคต
+
+**ข้อค้นพบใหม่จากการคำนวณตัวเลขที่ถูกต้อง (ปิด Open item #8)**: `qwen3_0.6b ×
+semantic × hybrid` recall@10 = **0.6935** — สูงสุดในทั้ง study เลย สูงกว่า
+combo ที่เคยอ้างว่าดีที่สุดคือ `bge_m3 × semantic × hybrid` (0.6845) แบบ
+ตัวเลขดิบ (+0.009) แต่**ยังไม่ได้ทดสอบนัยสำคัญระดับ per-chunker** (test ที่มีอยู่
+เทียบแค่ cross-chunker aggregate กับเทียบแต่ละ embedder กับ
+dense-alone/BM25-alone ของตัวเอง ไม่เคยเทียบ embedder ต่อ embedder ภายใน
+chunker เดียว) — advisor ชี้ว่า `bge_m3` เองก็ไม่เคยผ่าน significance test มา
+ก่อนเหมือนกัน แค่เป็นตัวเลขสูงสุดที่เจอตอนนั้น ดังนั้นจุดยืนที่ถูกต้องคือ
+**ไม่ยกให้ใครเป็นแชมป์** — รายงาน top 5 hybrid combo (qwen3_0.6b, bge_m3,
+e5_small, qwen3, jina_v5, ช่วง 0.6796-0.6935) เป็น cluster ที่ยังไม่ผ่านการ
+ทดสอบ ระบุ qwen3_0.6b ว่าตัวเลขสูงสุด แต่ headline ของ paper ให้เป็นระดับ
+system (semantic chunking + hybrid retrieval) ไม่ใช่ embedder ตัวใดตัวหนึ่ง —
+ทิ้งเป็น open item ใหม่ (ต้องทำ per-chunker significance test)
+
+**Advisor ชี้ประเด็นสำคัญกว่าบั๊กตัวเลข**: latency ที่วัดได้เป็น
+"implementation-bound" ไม่ใช่ต้นทุนที่หลีกเลี่ยงไม่ได้ของวิธีการ ถ้าไม่บอกให้
+ชัดเจน กราฟ Pareto จะเล่าเรื่องผิด (ทำให้ดูเหมือน hybrid ต้องแลกด้วย latency
+สูงมากเพื่อคุณภาพที่ดีกว่า ทั้งที่จริงๆ ต้นทุนส่วนใหญ่หลีกเลี่ยงได้) จึงเพิ่ม
+ฟังก์ชัน `measure_intrinsic_costs()` วัดตรงๆ (ไม่ต้องโหลด GPU) สองจุดที่เคย
+เจอมาก่อนหน้านี้ในเซสชันนี้:
+
+1. `DenseRetriever` คำนวณ `row_norms` ของ embedding ใหม่ทุกครั้งที่ query
+   (ทั้งที่ corpus ไม่เปลี่ยน) — วัดได้ 39ms (dim=384) / 119ms (dim=1024) /
+   287ms (dim=2560) จาก search time รวม ~270-670ms
+2. `HybridRetriever` ขอ k=n (ทั้ง corpus 81,489 chunks) จากทั้ง dense และ BM25
+   ก่อน fuse+ตัดเหลือ k=10 จริง — และ `BM25Retriever` เองก็สร้าง `BM25Okapi`
+   ใหม่ทุก query (rebuild ~1.0s เทียบกับ `get_scores` อย่างเดียว ~43ms หรือ 23
+   เท่า) วัดผลรวม: `DenseRetriever.retrieve(k=n)` ~765ms เทียบกับ
+   `retrieve(k=10)` ~277ms ส่วนต่าง ~490ms คือค่าใช้จ่ายสร้าง `RankedChunk`
+   (พร้อม text เต็ม) ของ chunk หลายหมื่นตัวที่ไม่มีใครดู — สองจุดนี้รวมกัน
+   (ไม่ใช่ RRF fusion เอง) อธิบาย latency วัดได้ของ hybrid ~2.3-2.9 วินาที
+   เกือบทั้งหมด (intrinsic cost จริงๆ อยู่ที่ ~130-730ms เท่านั้น)
+
+   **ตัวเลขที่ควรใช้พูดถึง overhead นี้คือส่วนต่างแบบบวก ไม่ใช่อัตราส่วน**:
+   measured hybrid − intrinsic hybrid อยู่ที่ ~2.15-2.26 วินาที สำหรับทุก
+   embedder ทั้ง 9 ตัว (ตัวเลขที่นิ่งที่สุดในทั้งตาราง) ยืนยันว่า overhead
+   นี้มาจากการสแกน corpus ทั้งก้อน (ขึ้นกับขนาด corpus ไม่ใช่ embedder) ถ้า
+   มองเป็นอัตราส่วนแทน ตัวเลขจะแกว่งมาก — ~4 เท่าสำหรับ `qwen3` (embedder
+   แพงสุด: 2914ms/727ms) ไปจนถึง ~18 เท่าสำหรับ `e5_small` (ถูกสุด:
+   2326ms/130ms) — ทั้งที่ overhead ที่บวกเข้าไปจริงๆ เท่ากันแทบทุกตัว ฉบับ
+   ร่างแรกใช้คำว่า "7-18 เท่า" ซึ่งชี้นำผิด (ตัดตัวเลขต่ำกว่า 7 ทิ้งไปครึ่งนึง
+   ของ embedder ทั้งหมด แถมสื่อว่าเป็นความสัมพันธ์เชิงคูณทั้งที่จริงเป็นค่าคงที่
+   เชิงบวก) — advisor ชี้จุดนี้ แก้เป็นเน้นตัวเลขบวก ~2.2 วินาทีแทน
+
+รายงานเป็นลักษณะการทำงานจริงของ implementation ปัจจุบัน ไม่ได้แก้โค้ดในรอบนี้
+(ตามแนวทางที่ user ให้ไว้ก่อนหน้านี้ในเซสชัน — ให้รายงานสิ่งที่พบ ไม่ใช่แอบแก้เงียบๆ)
+
+**Deliverable**: รายงานเต็ม `data/results/cost_latency_pareto.md`
+(gitignored, รันซ้ำได้ด้วย `--reuse-latency-cache` เพื่อไม่ต้องวัด GPU latency
+ใหม่ ~20 นาที), ตัวเลข citation-ready ใน `docs/paper-results-summary.md`
+(section "Cost / latency characterization" ใหม่, ปิด Open item #3 และ #8),
+กราฟ Pareto แบบ interactive (recall@10 vs cost, dense/hybrid series, สลับ
+intrinsic/measured ได้) ตีพิมพ์เป็น Claude Artifact (private)
+
+บันทึกลง `docs/paper-results-summary.md`, `project_research_framework_gap_analysis.md`,
+`project_hybrid_rrf_eval.md`, `project_embedder_comparison.md`, `MEMORY.md` แล้ว
