@@ -39,13 +39,14 @@ def render_report(scores: dict[str, dict[str, float]], k: int, n_queries: int) -
         f"- Query set: Gold (hand-curated, entity-anchored, rephrased), {n_queries} queries",
         f"- k = {k}, embedder = e5-large (held fixed to isolate the chunker variable)",
         "",
-        "| combination_id | recall@{0} | mrr | ndcg@{0} |".format(k),
-        "|---|---|---|---|",
+        "| combination_id | recall@{0} | precision@{0} | mrr | ndcg@{0} | map |".format(k),
+        "|---|---|---|---|---|---|",
     ]
     for combo_id in sorted(scores):
         s = scores[combo_id]
         lines.append(
-            f"| {combo_id} | {s[f'recall@{k}']:.4f} | {s['mrr']:.4f} | {s[f'ndcg@{k}']:.4f} |"
+            f"| {combo_id} | {s[f'recall@{k}']:.4f} | {s[f'precision@{k}']:.4f} | "
+            f"{s['mrr']:.4f} | {s[f'ndcg@{k}']:.4f} | {s['map']:.4f} |"
         )
     return "\n".join(lines) + "\n"
 
