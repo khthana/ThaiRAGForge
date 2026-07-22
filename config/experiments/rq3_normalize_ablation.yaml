@@ -1,0 +1,35 @@
+# RQ3 ablation #1 (docs/research-framework-gap-analysis.md Sec.6/8-item7):
+# does Thai text normalization (rag_lab.text_normalize.normalize_thai_text --
+# digit conversion + pythainlp.util.normalize()) help retrieval?
+#
+# Builds ONLY the "normalized" arm. The "raw" baseline is NOT rebuilt here --
+# it's the already-persisted plain__semantic__local__8aae9bcd combo in
+# data/index/chunker_compare_full (params below match its manifest.json
+# exactly: chunk_size/breakpoint_threshold/model_name all identical, loader
+# is the only axis that differs).
+#
+# Build:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/rq3_normalize_ablation.yaml
+# Then evaluate (also runs retrieval for this new index):
+#   .venv/Scripts/python.exe tools/eval/rq3_normalize_significance_test.py
+experiment_name: rq3_normalize_ablation
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/rq3_normalize_ablation
+
+loaders:
+  - type: normalized
+
+chunkers:
+  - type: semantic
+    params: { breakpoint_threshold: 0.5 }
+
+embedders:
+  - type: local
+    params: { model_name: "BAAI/bge-m3" }
+
+run_mode: cartesian
+seed: 42

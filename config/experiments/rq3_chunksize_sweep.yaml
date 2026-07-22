@@ -1,0 +1,35 @@
+# RQ3 ablation #3 (docs/research-framework-gap-analysis.md Sec.6/8-item7):
+# does chunk_size (fixed at 512 everywhere else in this study) actually
+# matter for retrieval quality? Sweeps FixedSizeChunker at 256 and 1024,
+# chunk_overlap held at the same 50 used everywhere. 512 itself is NOT
+# rebuilt here -- it's the already-persisted plain__fixed_size__local__ceea7536
+# combo in data/index/chunker_compare_full, giving a free 3-point sweep
+# (256 / 512 / 1024) for the cost of 2 new builds.
+#
+# Build:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/rq3_chunksize_sweep.yaml
+# Then evaluate (also runs retrieval for these new indices):
+#   .venv/Scripts/python.exe tools/eval/rq3_chunksize_sweep_report.py
+experiment_name: rq3_chunksize_sweep
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/rq3_chunksize_sweep
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: fixed_size
+    params: { chunk_size: 256, chunk_overlap: 50 }
+  - type: fixed_size
+    params: { chunk_size: 1024, chunk_overlap: 50 }
+
+embedders:
+  - type: local
+    params: { model_name: "BAAI/bge-m3" }
+
+run_mode: cartesian
+seed: 42

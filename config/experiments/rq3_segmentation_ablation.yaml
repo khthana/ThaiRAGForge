@@ -1,0 +1,38 @@
+# RQ3 ablation #2 (docs/research-framework-gap-analysis.md Sec.6/8-item7):
+# does snapping fixed-size chunk boundaries to word edges (pythainlp `newmm`
+# segmentation, WordAwareFixedSizeChunker) beat blind raw-character slicing
+# (FixedSizeChunker), which can and does cut mid-word since Thai has no
+# inter-word spaces?
+#
+# Builds ONLY the word-aware arm. The raw-char baseline is NOT rebuilt here --
+# it's the already-persisted plain__fixed_size__local__ceea7536 combo in
+# data/index/chunker_compare_full (chunk_size/chunk_overlap/model_name below
+# match its manifest.json exactly; chunker type is the only axis that
+# differs). No query-side change is needed for this ablation (unlike the
+# normalize one) -- only the corpus side changes.
+#
+# Build:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/rq3_segmentation_ablation.yaml
+# Then evaluate (also runs retrieval for this new index):
+#   .venv/Scripts/python.exe tools/eval/rq3_segmentation_significance_test.py
+experiment_name: rq3_segmentation_ablation
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/rq3_segmentation_ablation
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: fixed_size_wordaware
+    params: { chunk_size: 512, chunk_overlap: 50 }
+
+embedders:
+  - type: local
+    params: { model_name: "BAAI/bge-m3" }
+
+run_mode: cartesian
+seed: 42
