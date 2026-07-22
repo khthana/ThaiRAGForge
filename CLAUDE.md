@@ -62,10 +62,13 @@ see `docs/adr/`.
   whenever a headline number changes — the log stays append-only). Current bottom line
   (2026-07-21, bootstrap + Holm-corrected, all 9 embedders): the best system overall is
   **`semantic` chunking + `hybrid` retrieval (BM25 + dense via RRF)** — which embedder to pair
-  it with is an open, untested horse race among the top five hybrid combos (`qwen3_0.6b`
-  0.6935, `bge-m3` 0.6845, `e5_small` 0.6821, `qwen3` 0.6797, `jina_v5` 0.6796); none of them
-  is significance-tested against the others yet, so don't cite any single one (bge-m3 included)
-  as "the best combo" — the system-level claim (semantic + hybrid) is the robust part.
+  it with is a confirmed statistical tie among the top five hybrid combos (`qwen3_0.6b`
+  0.6935, `bge-m3` 0.6845, `e5_small` 0.6821, `qwen3` 0.6797, `jina_v5` 0.6796): a dedicated
+  per-chunker (semantic-only) pairwise bootstrap test (2026-07-22,
+  `tools/eval/hybrid_significance_test_semantic_top5.py`) found none of the 10 pairwise
+  comparisons significant on recall@10/MRR/nDCG@10 after Holm correction, so don't cite any
+  single one (bge-m3 or qwen3_0.6b included) as "the best combo" — the system-level claim
+  (semantic + hybrid) is the robust part.
   Hybrid significantly beats dense-alone for every one of the 9 embedders on every metric
   (most robust finding of the comparison), and beats BM25-alone on recall for 7/9 embedders
   (not reliably on MRR/nDCG). Dense-alone, `bge-m3`, `Qwen3-Embedding-4B`, and

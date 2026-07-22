@@ -11,8 +11,11 @@ params fp16)
 > แทน สรุปย่อ 4 ข้อ:
 >
 > 1. **MAP + Precision@k + multi-k** — เพิ่มใน `src/rag_lab/metrics.py` แล้ว
->    (`evaluate()` รับ `k` เป็น int หรือ list) แต่ยังไม่มีสคริปต์ไหน re-run ด้วย
->    multi-k จริง ตัวเลขที่อ้างในเอกสารยังเป็น k=10 ล้วน
+>    (`evaluate()` รับ `k` เป็น int หรือ list) และรันซ้ำด้วย multi-k จริงแล้ว
+>    (2026-07-22, `tools/eval/multi_k_report.py` — pure recompute จากผลที่
+>    persist ไว้แล้ว top_k=10 อยู่แล้ว ไม่ต้อง retrieve ใหม่) เจอ nuance ใหม่:
+>    ที่ MAP/precision@1 `bge_m3` นำ `qwen3_0.6b` สวนทางกับที่เสมอกันบน recall@10
+>    — ยังไม่ทดสอบนัยสำคัญ เป็น open item ใหม่
 > 2. **BM25 standalone baseline** — รันแล้ว + sig-test กับ embedder ทั้ง 9 ตัว: BM25
 >    เฉยๆ ผูกสถิติเสมอกับ top tier (bge-m3/Qwen3-4B/Qwen3-0.6B) และชนะ embedder ที่
 >    อ่อนกว่าอย่างมีนัยสำคัญทุกตัว

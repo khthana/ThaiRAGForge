@@ -1034,3 +1034,216 @@ intrinsic/measured ได้) ตีพิมพ์เป็น Claude Artifact 
 
 บันทึกลง `docs/paper-results-summary.md`, `project_research_framework_gap_analysis.md`,
 `project_hybrid_rrf_eval.md`, `project_embedder_comparison.md`, `MEMORY.md` แล้ว
+
+## Per-chunker (semantic-only) significance test สำหรับ top-5 hybrid combos (2026-07-22)
+
+จากรอบก่อน (`Cost/latency Pareto table`) พบว่า `qwen3_0.6b × semantic × hybrid`
+(recall@10=0.6935) มีตัวเลขสูงกว่า `bge-m3 × semantic × hybrid` (0.6845) ที่เคยอ้างว่า
+"ดีที่สุด" แต่ยังไม่เคยทดสอบนัยสำคัญแบบ embedder-vs-embedder ภายใน chunker เดียวกันเลย
+(การทดสอบก่อนหน้านี้ทั้งหมดเทียบ hybrid_E vs BM25-alone หรือ hybrid_E vs dense-alone_E
+ของ embedder เดียวกันเท่านั้น ไม่เคยเทียบ embedder ต่าง ๆ กันเองภายใต้ hybrid+semantic)
+
+เขียนสคริปต์ใหม่ `tools/eval/hybrid_significance_test_semantic_top5.py` — reuse
+`build_combo_to_chunker_embedder` / `bootstrap_pvalue` / `holm_correct` จาก
+`embedder_matrix_9way.py` เหมือนสคริปต์ significance test อื่น ๆ ในชุดนี้ กรองเฉพาะ
+combo ที่ chunker="semantic" และ embedder อยู่ใน top 5 (`qwen3_0.6b`, `bge_m3`,
+`e5_small`, `qwen3`, `jina_v5`) แล้วทำ pairwise bootstrap ทั้ง 10 คู่ x 3 metrics
+(recall@10, MRR, nDCG@10) ไม่เฉลี่ยข้าม chunker เหมือนสคริปต์เดิม
+
+ใช้ผลที่ query ไว้แล้วจาก `data/results/gold_hybrid_73det/*.json` (ไม่ต้อง retrieve
+ใหม่) รันเสร็จในไม่กี่วินาที
+
+**ผลลัพธ์**: ไม่มีคู่ไหนใน 10 คู่มีนัยสำคัญเลยแม้แต่คู่เดียว หลัง Holm correction บน
+metric ไหนก็ตาม (raw p ต่ำสุด = 0.065, คู่ qwen3_0.6b vs jina_v5/e5_small บน MRR/nDCG
+— ก็ยังไม่ผ่าน alpha=0.05 หลัง correction) ยืนยันว่า top-5 hybrid combo เป็นกลุ่มที่
+เสมอกันทางสถิติจริง ไม่ใช่แค่ยังไม่ได้ทดสอบ — ปิดคำถาม "crown neither" ที่ค้างจากรอบ
+cost/latency Pareto ได้อย่างสมบูรณ์
+
+**Deliverable**: `tools/eval/hybrid_significance_test_semantic_top5.py`,
+`data/results/hybrid_significance_test_semantic_top5.md`
+
+บันทึกลง `docs/paper-results-summary.md` (Open item #8 ปิดสมบูรณ์, section "Top
+single-combo tier" อัปเดต), `CLAUDE.md` (bottom line ของ hybrid), `MEMORY.md` แล้ว
+
+## Multi-k report: ปิดเศษที่ค้างของ Tier 1 ข้อ #1 (2026-07-22)
+
+Tier 1 ข้อ #1 (MAP + Precision@k + multi-k) เสร็จไปแค่ครึ่งเดียวตอน 21 ก.ค. — เพิ่ม
+`precision_at_k` / `average_precision_at_k` ใน `metrics.py` และให้ `evaluate()` รับ
+`k` เป็น list ได้แล้ว แต่ไม่มี eval script ไหนถูกรันซ้ำด้วย multi-k จริง ตัวเลขทุกตัว
+ในเอกสารยังเป็น k=10 ล้วน
+
+ก่อนจะรัน เช็คก่อนว่าจะ "แพง" แค่ไหน (user ถามเพราะ quota Pro เหลือน้อย) — พบว่า
+`RetrievalResult.persisted` ทุกตัวถูก retrieve มาที่ `top_k=10` อยู่แล้ว (เช็คจาก JSON
+จริงใน `data/results/gold_73det_full_embedder_matrix/`) และ `recall_at_k`/
+`precision_at_k` ใน metrics.py แค่ filter `rc.rank <= k` จาก list ที่มีอยู่แล้ว — แปลว่า
+k∈{1,3,5,10} ทุกค่า **ไม่ต้อง retrieve ใหม่เลย ไม่ต้องใช้ GPU ไม่ต้องเรียก embedding**
+เป็นแค่การคำนวณซ้ำจาก JSON ที่มีอยู่แล้วบนดิสก์
+
+เขียน `tools/eval/multi_k_report.py` ใหม่ — โหลดผลที่ persist ไว้แล้วทั้ง 3 ระบบ (dense
+9-embedder matrix, hybrid, BM25), เรียก `evaluate(persisted, qrels, k=[1,3,5,10])`
+ครั้งเดียวต่อระบบ แล้วเฉลี่ยข้าม 4 chunker ต่อ embedder ตามธรรมเนียมเดิมที่ตารางอื่นๆ
+ในเอกสารใช้ ยืนยันความถูกต้องด้วยการเทียบ recall@10/MRR/nDCG@10 ที่คำนวณใหม่กับตัวเลข
+เดิมในเอกสาร — ตรงกันทุกตัว รันจริงใช้เวลาไม่ถึงวินาที
+
+**สิ่งที่เจอเพิ่ม (ไม่ใช่แค่ปิด item เดิม)**: ที่ MAP และ precision@1 (ให้น้ำหนักกับ "อันดับ
+ที่เจอ relevant ตัวแรก" มากกว่า recall@10) `bge_m3` มี MAP สูงสุดในกลุ่ม hybrid top-3
+(0.5224) แต่ `qwen3_0.6b` มี precision@1/nDCG@1 สูงสุด (0.7671) — สวนทางกับ recall@10
+ที่เพิ่งพิสูจน์ว่าเสมอกันทั้งคู่ (ดู section ก่อนหน้า) ยังไม่ได้ทดสอบนัยสำคัญบน MAP/precision@1
+เลย บันทึกเป็น open item ใหม่ ไม่ใช่ finding ที่ยืนยันแล้ว — ขนาด gap (+0.013 / −0.017)
+ใกล้เคียงกับ gap recall@10 (+0.009) ที่เพิ่งพิสูจน์ว่าเป็น noise ล้วนๆ ต้องระวังแบบเดียวกัน
+
+**Deliverable**: `tools/eval/multi_k_report.py`, `data/results/multi_k_report.md`
+
+บันทึกลง `docs/paper-results-summary.md` (Open item #4 ปิดสมบูรณ์ + section "Multi-k
+metrics" ใหม่) แล้ว
+
+## เพดาน recall@10 ตามจำนวนคำตอบที่ถูกต้องต่อคำถาม (2026-07-22)
+
+User ถามว่า recall@10 ~0.6-0.7 ต่ำเกินไปไหม และควรเพิ่ม graph/knowledge-graph
+เข้าไปในระบบหรือเปล่า — ก่อนตอบ เช็คโครงสร้างของ Gold set ก่อนว่า "0.6" หมายถึงอะไรจริงๆ
+
+พบว่า **Gold set ไม่ใช่ 1 คำถาม = 1 คำตอบที่ถูกต้อง** — เฉลี่ยมีคำตอบที่ถูกต้อง 8.8
+ฉบับต่อคำถาม (ต่ำสุด 2, สูงสุดถึง 43!) โดยเฉพาะหมวด `faculty_adjunct_aggregate`
+("รายชื่อการแต่งตั้งอาจารย์พิเศษทั้งหมดของคณะ X") ที่เป็นคำถามแบบ list-all จริงๆ
+(เฉลี่ย 16.8 ฉบับ/คำถาม) เพราะ `recall_at_k` หารด้วยจำนวนคำตอบที่ถูกต้องทั้งหมด
+ไม่ใช่หารด้วยจำนวนที่เจอ — คำถามที่มีคำตอบถูก 43 ฉบับ ต่อให้ retriever สมบูรณ์แบบ
+100% ก็ทำ recall@10 ได้สูงสุดแค่ 10/43 ≈ 0.23 (มีที่แค่ 10 slot ใส่คำตอบที่ถูกได้)
+
+คำนวณ "เพดานสูงสุดที่เป็นไปได้" แยกตาม entity_type:
+
+| entity_type | เฉลี่ยคำตอบถูก | เพดาน recall@10 |
+|---|---|---|
+| person | 6.0 | 0.976 (เกือบเต็ม) |
+| program | 8.2 | 0.900 |
+| faculty_adjunct_aggregate | 16.8 | **0.681** |
+| รวมทั้ง 73 ข้อ | 8.8 | 0.892 |
+
+**สรุปสำคัญ**: ตัวเลข recall@10 ที่ดูต่ำของหมวด faculty_adjunct_aggregate (เช่น
+bge_m3 dense-alone 0.4555) ส่วนหนึ่งเป็นข้อจำกัดของตัว metric เอง ไม่ใช่ retriever
+แย่ทั้งหมด — ในขณะที่หมวด person มีเพดานสูงเกือบ 1.0 (0.976) แต่ตัวเลขจริงยังอยู่แค่
+~0.5-0.6 แปลว่าหมวด person ยังมีช่องว่างที่ปรับปรุงได้จริงมากกว่าที่ตัวเลขดิบข้างๆ
+กันดูเหมือน — สองหมวดนี้เทียบกันตรงๆ ไม่ได้โดยไม่คิดเพดานนี้ก่อน
+
+**คำตอบเรื่อง graph**: ยังไม่เคยทดสอบในโปรเจกต์นี้ แต่มีเหตุผลรองรับดี — คำถามหมวด
+"list ทั้งหมด" มีเพดานต่ำโดยธรรมชาติเพราะ top-k similarity search ไม่ใช่ paradigm ที่
+เหมาะกับคำถามแบบนี้ตั้งแต่ต้น การใช้ entity tagger ที่มีอยู่แล้ว (people.json,
+faculties.json, programs.json) ทำ structured lookup ตรงๆ แทน similarity search
+น่าจะดันเพดานหมวดนี้ขึ้นไปใกล้ 1.0 ได้ — แต่เป็นแค่ข้อเสนอที่ยังไม่ได้ทดสอบ ไม่ใช่
+finding ที่ยืนยันแล้ว บันทึกเป็น candidate direction ใหม่ ไม่ใช่ส่วนหนึ่งของ Tier 1-3
+เดิม
+
+**ข้อจำกัดของการวิเคราะห์นี้**: เพดานคำนวณจาก breakdown ของ dense-alone เท่านั้น
+(อันเดียวที่มี per-entity_type breakdown) — BM25 และ hybrid ไม่เคยถูกแบ่งตาม
+entity_type เลย เลยยังบอกไม่ได้ว่า hybrid เข้าใกล้เพดาน person (0.976) แค่ไหนจริงๆ
+
+**Deliverable**: ไม่มีสคริปต์ใหม่ (คำนวณ inline จาก `config/eval/gold_query_set_73det.yaml`)
+
+บันทึกลง `docs/paper-results-summary.md` (section ใหม่ "Structural recall@10 ceiling
+by entity_type" + Open item #9, #10 ใหม่) แล้ว
+
+## BM25 vs embedder แบบ per-chunker — ปิด Open item #1 (2026-07-22)
+
+Open item #1 ที่ค้างมานาน: ตาราง aggregate (เฉลี่ยข้าม 4 chunker ก่อนเทียบ) บอกว่า
+BM25 ผูกสถิติเสมอกับ top tier (bge_m3, qwen3, qwen3_0.6b) แต่ตัวเลขดิบรายchunker
+ดูเหมือนจะเอียงไปทาง BM25 มากกว่า — ยังไม่เคยเช็คว่าจริงไหม หรือเป็นแค่ artifact ของ
+การเฉลี่ย
+
+เขียน `tools/eval/bm25_vs_embedder_significance_test_per_chunker.py` — เหมือน
+`bm25_vs_embedder_significance_test_9way.py` เดิม แต่ไม่เฉลี่ยข้าม chunker เลย
+แยกเป็น 4 family อิสระ (ต่อ chunker) x 9 คู่เทียบ, Holm-correct แยกกันต่อ family
+ต่อ metric ใช้ผลที่ persist ไว้แล้วทั้งหมด รันเสร็จในไม่กี่วินาที
+
+**ผลลัพธ์ — ยืนยันว่าข้อสงสัยเป็นเรื่องจริง ไม่ใช่แค่จินตนาการ**:
+
+1. **`bge_m3`** (ตัวที่ควรจะเสมอ BM25 ทุกที่ตาม aggregate) **แพ้ BM25 อย่างมีนัยสำคัญ
+   เฉพาะตอนใช้ chunker แบบ `sentence`** (Holm-adj p=0.0108, diff +0.1152) ส่วน
+   `fixed_size`/`recursive`/`semantic` ยังเสมอกันอยู่ — แปลว่า "เสมอ" ใน aggregate
+   table จริงๆ แล้วมาจาก semantic chunker (chunker ที่ dense embedder แข็งแรงสุด)
+   ที่ไปช่วยดึงคะแนนขึ้น พอเฉลี่ยรวมกับอีก 3 chunker ที่ BM25 ได้เปรียบกว่า เลยดูเหมือน
+   เสมอกันตลอด ทั้งที่จริงแล้วเสมอกันแค่ 3 ใน 4 chunker
+2. **`qwen3` และ `qwen3_0.6b` เป็น embedder เดียวที่ margin ของ BM25 ติดลบได้** — เฉพาะ
+   ตอนใช้ `semantic` chunker (BM25 แพ้แบบไม่มีนัยสำคัญ −0.068/−0.046) ส่วน chunker
+   อื่นๆ BM25 ยังนำอยู่ดี (แค่ไม่ถึงระดับมีนัยสำคัญ)
+
+**สรุปสำหรับเปเปอร์**: "BM25 ผูกกับ embedder ระดับบนสุด" ไม่ใช่ความจริงที่คงที่ทุก
+chunker — เป็นจริงที่สุดเฉพาะตอนใช้ semantic chunking (chunker ที่โปรเจกต์แนะนำอยู่
+แล้ว) และเป็นจริงน้อยที่สุดตอนใช้ sentence chunking ที่แม้แต่ bge_m3 ก็ยังพิสูจน์ไม่ได้
+ว่าคุ้มกว่า BM25 ฟรี — ผลนี้ **สนับสนุนข้อแนะนำ semantic chunking เดิมให้แข็งแรงขึ้น**
+ไม่ใช่ทำให้ซับซ้อนขึ้น เพราะเป็น chunker เดียวกันที่ทำให้ embedder แพงๆ คุ้มค่าที่สุดด้วย
+
+**Deliverable**: `tools/eval/bm25_vs_embedder_significance_test_per_chunker.py`,
+`data/results/bm25_vs_embedder_significance_test_per_chunker.md`
+
+บันทึกลง `docs/paper-results-summary.md` (Open item #1 ปิดสมบูรณ์ + section "Per-chunker
+BM25 vs. embedder" ใหม่) แล้ว
+
+## ทำไม bge-m3 แซง qwen3 เฉพาะตอน hybrid — ทดสอบสมมติฐานเดิม ผลออกมาตรงข้าม (2026-07-22)
+
+Open item #2 ค้างมานาน: "bge-m3 แซง qwen3 ตอนเป็น hybrid ทั้งที่เสมอกันตอน dense-เดี่ยว
+— เดาว่าเป็นเพราะ error pattern เข้ากับ BM25 ได้ดีกว่า (complementary) แต่ไม่เคยพิสูจน์"
+User ถามตรงๆ ว่าทำไม เลยทดสอบสมมติฐานนี้จริงจังแทนที่จะเดาต่อ
+
+เขียน `tools/eval/bge_qwen_bm25_complementarity.py` — ใช้ผล top-10 ที่ persist ไว้แล้ว
+(ไม่ต้อง retrieve ใหม่) วัด 3 อย่าง: (1) rescue rate — ในบรรดาคำตอบที่ dense-เดี่ยวพลาด
+BM25 (chunker เดียวกัน) เจอกี่ %, (2) union coverage — รวม dense+BM25 แล้วครอบคลุมกี่ %
+ของคำตอบทั้งหมด, (3) correlation ของ recall รายคำถามระหว่าง BM25 กับแต่ละ embedder (ยิ่ง
+ต่ำ = ยิ่ง complementary)
+
+**ผลลัพธ์ — สวนทางกับสมมติฐานเดิมทั้ง 3 ตัวชี้วัด**: qwen3 มี rescue rate สูงกว่า (0.3189
+vs bge_m3's 0.2995), union coverage สูงกว่า (0.6036 vs 0.5823), และ correlation กับ
+BM25 ต่ำกว่าใน 3 ใน 4 chunker — ทุกตัวชี้วัดบอกว่า qwen3 ควรจะ "เข้ากับ BM25" ได้ดีกว่า
+bge_m3 แต่ผลจริงกลับตรงข้าม (bge_m3 hybrid 0.6472 ชนะ qwen3 hybrid 0.6235)
+
+**สรุป: สมมติฐาน "error-pattern complementarity" ตกไป ไม่ใช่คำอธิบายที่ถูกต้อง**
+
+**ทำไมยังหาสาเหตุจริงไม่เจอ**: วิธีวัดนี้เช็คแค่ "อยู่ใน top-10 ของแต่ละระบบไหม" (เพราะ
+ข้อมูลที่ persist ไว้มีแค่ top-10) แต่ RRF จริงๆ คำนวณจาก **rank ที่แน่นอนในทั้ง corpus**
+(HybridRetriever ปัจจุบันดึงข้อมูลทั้ง corpus จากทั้งสองฝั่งมาก่อน fuse ไม่ได้ตัดที่
+top-10) — สาเหตุจริงน่าจะอยู่ที่ rank-order effect ละเอียดที่มองไม่เห็นจากข้อมูล top-10
+เท่านั้น จะขุดต่อได้ต้อง retrieve ใหม่แบบเก็บ rank เต็ม corpus (ไม่ใช่แค่ recompute ฟรี
+แบบที่ผ่านมา ต้องโหลดโมเดล bge_m3/qwen3 ขึ้น GPU จริง)
+
+**Deliverable**: `tools/eval/bge_qwen_bm25_complementarity.py`,
+`data/results/bge_qwen_bm25_complementarity.md`
+
+บันทึกลง `docs/paper-results-summary.md` (Open item #2: hypothesis REFUTED, root cause
+ยังเปิดอยู่) แล้ว
+
+## ปิด Open item #2 จริง — ไม่ต้องขุดสาเหตุ เพราะ effect ไม่มีอยู่จริง (22 ก.ค. 2569)
+
+ผู้ใช้กดยืนยัน "ทำเลย" ให้เดินหน้าขุดสาเหตุจริงด้วย GPU retrieval (full-corpus rank)
+ต่อจากที่สมมติฐาน complementarity ตกไปเมื่อกี้ ก่อนเริ่มงานที่มีต้นทุนจริง ทำ 2 เช็คฟรี
+ก่อนเพื่อลด scope:
+
+1. **ดู gap เป็นราย chunker** (recall@10, bge_m3 − qwen3, hybrid): fixed_size +0.0209,
+   recursive **+0.0371** (มากสุด), sentence +0.0320, semantic +0.0048 (แทบเป็นศูนย์ —
+   ตรงกับที่ top-5 test ยืนยันไปแล้วว่าเสมอกัน) → เลือก `recursive` เป็น case study
+2. **ดู swing queries** ใน `recursive` (คำถามที่ bge_m3-hybrid กับ qwen3-hybrid จับ
+   resolution ได้ไม่ตรงกัน): bge_m3-only ชนะ 37 คำถาม, qwen3-only ชนะ 34 คำถาม — สัดส่วน
+   ใกล้เคียงกันมาก และกระจายอยู่เกือบทั้ง 73 คำถาม ไม่ใช่กลุ่มเล็กๆ ที่ตัดได้ง่าย
+
+สัญญาณ 37-34 ที่ใกล้เคียงกันมากคือลายเซ็นของสองระบบที่ "เสมอกันจริง แลกกันแพ้ชนะ" ไม่ใช่
+ระบบหนึ่งชนะอีกระบบอย่างเป็นระบบ — ปรึกษา advisor ก่อนเริ่มงานที่มีต้นทุน GPU แล้วได้
+ข้อเสนอแนะให้ทดสอบนัยสำคัญของ gap นี้ก่อน (paired bootstrap, bge_m3 vs qwen3 ภายใต้
+hybrid) เพราะ premise "bge_m3 แซง qwen3" เองยังไม่เคยผ่านการทดสอบนัยสำคัญเลย — งานนี้
+**ฟรี** (recompute จากผลที่ persist ไว้แล้ว top_k=10 พอ ไม่ต้องรัน GPU)
+
+**ผลการทดสอบ** (paired bootstrap n_boot=10,000, seed=42, Holm-correct ข้าม 5 การทดสอบ —
+4 chunkers + aggregate):
+
+| chunker | mean(bge−qwen) | raw p | Holm-adj p |
+|---|---|---|---|
+| sentence | +0.0320 | 0.0474 | 0.2370 |
+| recursive | +0.0371 | 0.0572 | 0.2370 |
+| aggregate | +0.0237 | 0.1156 | 0.3468 |
+| fixed_size | +0.0209 | 0.3178 | 0.6356 |
+| semantic | +0.0048 | 0.8238 | 0.8238 |
+
+**ไม่มีคู่ไหนนัยสำคัญเลย แม้แต่ก่อน Holm correction** (ค่าที่ใกล้สุดคือ sentence
+raw p=0.047 แต่หลัง Holm-correct กลายเป็น 0.237) สรุปว่า **premise "bge_m3 แซง qwen3
+ตอน hybrid" เองไม่เคยเป็นจริงในเชิงสถิติ** — เป็นตัวเลขดิบที่ไม่เคยผ่านการทดสอบ เหมือน
+top-5 hybrid tie ก่อนที่จะถูกทดสอบนั่นแหละ ไม่มี effect ให้อธิบาย จึงไม่ต้องเสีย GPU
+time ไปขุดสาเหตุที่ไม่มีอยู่จริง — ปิด Open item #2 โดยไม่แตะ GPU เลย
+
+บันทึกลง `docs/paper-results-summary.md` (Open item #2 เปลี่ยนจาก "INVESTIGATED, root
+cause unresolved" เป็น "CLOSED, premise was false") แล้ว

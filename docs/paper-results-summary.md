@@ -393,6 +393,67 @@ entity_type × metric, 36-pair families)**. Full table:
   — not its 0.6B sibling — is the safer unrouted choice, since it alone
   lacks a provable weak spot across both main categories.
 
+### Structural recall@10 ceiling by entity_type (new, 2026-07-22)
+
+Prompted by a user question ("is recall@10≈0.6-0.7 too low?") — worth
+stating explicitly because it changes how every recall@10 number in this
+doc should be read. **The Gold 73-det set is not one-relevant-doc-per-query**:
+each query has on average **8.8 relevant resolutions** (min 2, max **43**),
+because several queries (especially `faculty_adjunct_aggregate`, which asks
+for "every resolution appointing adjunct faculty at X") are genuinely
+list-type questions with many correct answers. `recall_at_k` divides hits by
+*total relevant count*, so **a query with 43 relevant resolutions can score
+at most 10/43 ≈ 0.23 recall@10 even for a hypothetically perfect
+retriever** — there are only 10 chunk slots to place possibly-dozens of
+correct answers into.
+
+Computed the resulting **theoretical ceiling** (mean of `min(1.0, 10/n_relevant)`
+across queries) per entity_type:
+
+| entity_type | n queries | avg relevant docs | max relevant docs | **ceiling recall@10** |
+|---|---|---|---|---|
+| person | 30 | 6.0 | 13 | **0.9760** |
+| program | 30 | 8.2 | 24 | **0.9000** |
+| faculty_adjunct_aggregate | 13 | 16.8 | 43 | **0.6810** |
+| **all 73 (mean)** | 73 | 8.8 | 43 | **0.8922** |
+
+**Reading this**: the low-looking recall@10 numbers for
+`faculty_adjunct_aggregate` in every table above (e.g. bge_m3 dense-alone
+0.4555, congen 0.3966) are **partly a metric artifact, not purely a
+retrieval-quality gap** — no retriever, however good, can exceed ~0.68 on
+this category under a k=10 window. By contrast, `person` queries have a
+ceiling of 0.976 (near 1.0, since most person queries have few correct
+answers) — so the current person-query recall@10 numbers (bge_m3 0.5694,
+qwen3 0.4807) sit **much further below their own ceiling** than the
+faculty numbers do below theirs. **This means person-query retrieval has
+more genuine, addressable headroom than the raw numbers next to
+faculty_adjunct_aggregate make it look** — the two categories' distance
+from 1.0 is not directly comparable without this ceiling.
+
+**Not yet done**: this ceiling was computed against the dense-alone
+per-entity_type breakdown (the only one that exists — see
+`gold_embedder_breakdown_9way.md`). **BM25 and hybrid have never been
+broken down by entity_type** (only their cross-chunker aggregates exist),
+so it's not yet possible to say how close hybrid's person-query recall gets
+to the 0.976 ceiling specifically, nor whether hybrid closes the
+`faculty_adjunct_aggregate` gap to its lower 0.681 ceiling. New open item.
+
+**Implication for future work (not started, candidate direction beyond the
+current Tier 1-3 plan)**: because `faculty_adjunct_aggregate` queries are
+inherently "list all X" questions, a **top-k similarity search is the wrong
+retrieval paradigm for that category almost by construction** — no amount
+of better embedding or chunking can push its ceiling above ~0.68. The
+`faculty`/`program`/`person` entity taggers already built for this project
+(`people.json`, `faculties.json`, `programs.json` — see
+[[project_faculty_tagger]], [[project_program_tagger]],
+[[project_person_tagger]]) already provide the entity-indexed lookup
+infrastructure a structured/graph-style retrieval path would need: for a
+detected "list all" query, filtering directly by an entity tag (exact
+lookup) rather than top-k semantic/lexical similarity could raise this
+category's ceiling toward 1.0. This has **not been tested or built** — it's
+a plausible, well-motivated candidate for a future research direction, not
+a validated finding.
+
 ## BM25 lexical baseline
 
 `src/rag_lab/retrievers/bm25.py` (`rank_bm25.BM25Okapi` over PyThaiNLP
@@ -447,6 +508,59 @@ stay verbatim to specify which resolution is being asked about, which gives
 exact lexical match a structural advantage on this specific task. Not yet
 confirmed against a genuinely paraphrased/thematic-only query set (which
 would need higher discrimination than the current thematic queries have).
+
+### Per-chunker BM25 vs. embedder (resolves Open item #1 — the "tie" is chunker-dependent)
+
+The aggregate table above averages each system across the 4 chunkers before
+testing, which can hide a real interaction if BM25's advantage differs by
+chunker. Ran `tools/eval/bm25_vs_embedder_significance_test_per_chunker.py`
+— 4 independent 9-test families (one per chunker), each Holm-corrected
+separately per metric, pure recompute from already-persisted results. Full
+table: `data/results/bm25_vs_embedder_significance_test_per_chunker.md`.
+
+**recall@10, Holm-adj p per chunker (bold = BM25 significantly beats that embedder)**:
+
+| embedder | fixed_size | recursive | semantic | sentence |
+|---|---|---|---|---|
+| e5 | +0.1203 (ns) | +0.1599 (**sig**) | +0.1227 (**sig**) | +0.1616 (**sig**) |
+| e5_small | +0.1677 (**sig**) | +0.1536 (**sig**) | +0.1080 (**sig**) | +0.1623 (**sig**) |
+| bge_m3 | +0.0680 (ns) | +0.0363 (ns) | +0.0080 (ns) | **+0.1152 (sig)** |
+| congen | +0.1439 (ns) | +0.1559 (**sig**) | +0.1176 (**sig**) | +0.1996 (**sig**) |
+| jina_v5 | +0.1612 (**sig**) | +0.1021 (ns) | +0.0057 (ns) | +0.2005 (**sig**) |
+| qwen3 | +0.1038 (ns) | +0.0816 (ns) | −0.0679 (ns) | +0.0908 (ns) |
+| qwen3_0.6b | +0.0786 (ns) | +0.0470 (ns) | −0.0462 (ns) | +0.1117 (ns) |
+| sct | +0.3971 (**sig**) | +0.4273 (**sig**) | +0.3813 (**sig**) | +0.4574 (**sig**) |
+| m2v | +0.4166 (**sig**) | +0.4261 (**sig**) | +0.3919 (**sig**) | +0.4472 (**sig**) |
+
+**Confirmed: the "raw numbers look more favorable to BM25 than the
+aggregate view" suspicion was real.** Two findings the aggregate table
+couldn't show:
+
+1. **`bge_m3` — the one embedder that's supposed to statistically tie
+   BM25 everywhere — actually loses to BM25 significantly under the
+   `sentence` chunker** (Holm-adj p=0.0108, diff +0.1152). It only ties
+   BM25 in `fixed_size`/`recursive`/`semantic`. The aggregate table's "tie"
+   claim for bge_m3 is real only once semantic chunking (where dense
+   embedders are strongest) is mixed in with three chunkers where BM25's
+   lexical edge is larger — averaging across chunkers partially masks this.
+2. **`qwen3` and `qwen3_0.6b` are the only embedders where BM25's margin
+   goes *negative* in any chunker** — under `semantic` specifically, BM25
+   is numerically (not significantly) *behind* both Qwen3 variants
+   (−0.0679, −0.0462). Every other chunker still favors BM25 numerically
+   for these two. This is consistent with `semantic` being the strongest
+   chunker for dense embedders generally (see "Chunkers compared" above) —
+   the one chunker where the qwen3 family's dense signal is strong enough
+   to numerically edge past BM25's lexical baseline, though not by a
+   significant margin.
+
+**Practical framing**: "BM25 ties the top embedder tier" is not
+chunker-invariant — it's most true for `semantic` chunking specifically
+(the chunker this project already recommends), and least true for
+`sentence` chunking, where even `bge_m3` needs to beat BM25 to justify its
+cost, and per this test, does not. This strengthens (rather than
+complicates) the paper's existing semantic-chunking recommendation: it's
+also the chunker where the more expensive dense embedders earn their cost
+most reliably relative to free BM25.
 
 ## Hybrid retrieval (RRF: BM25 + Dense) — the overall best system found
 
@@ -523,11 +637,12 @@ BM25-alone — Holm-corrected separately per metric):
   asserting `bge_m3` is on top either; that claim was never significance-
   tested in the first place, it was just the highest number known before
   this check. All five clearly beat the best dense-alone combo,
-  `semantic × qwen3` (0.6581). Notable: `bge_m3` and `qwen3_0.6b` both
-  overtake `qwen3` once hybridized despite `qwen3` being the strongest (or
-  tied-strongest) dense-alone embedder — suggests error-pattern
-  complementarity with BM25 varies by embedder, though the reason hasn't
-  been investigated further (Open item #2).
+  `semantic × qwen3` (0.6581). `bge_m3` and `qwen3_0.6b` numerically overtake
+  `qwen3` once hybridized under `semantic` chunking, but a dedicated paired
+  bootstrap test (2026-07-22, resolves Open item #2) found this apparent
+  overtake is **not statistically significant anywhere** — not on any single
+  chunker, not in aggregate, not even before Holm correction across chunkers.
+  There is no effect here to explain; see Open item #2 for the numbers.
 
 **Headline system recommendation for the paper**: the best-performing
 configuration overall is not a pure embedder choice but **semantic chunking
@@ -537,6 +652,48 @@ before running this experiment. Which embedder to pair it with is an open,
 untested horse race among the top five above (see Open item #8) — the
 system-level claim (semantic chunking, hybrid retrieval) is what's robust,
 not a specific embedder pick.
+
+## Multi-k metrics (MAP, Precision@k, Recall@k, nDCG@k for k=1,3,5,10)
+
+Every table elsewhere in this doc reports k=10 only. This section adds the
+multi-k view (`tools/eval/multi_k_report.py`, full report at
+`data/results/multi_k_report.md`) — a pure recompute over already-persisted
+retrieval results (every combo was retrieved at `top_k=10`, so k≤10 needs no
+new retrieval), closing gap-analysis Tier 1 item #1's last open tail.
+
+**Dense-alone, top 3 embedders (aggregated across 4 chunkers)**:
+
+| embedder | MAP | recall@1 | recall@3 | recall@5 | recall@10 | precision@1 | precision@5 | ndcg@1 | ndcg@5 |
+|---|---|---|---|---|---|---|---|---|---|
+| qwen3_0.6b | 0.4327 | 0.1390 | 0.3178 | 0.3951 | 0.5198 | 0.7192 | 0.5068 | 0.7192 | 0.6207 |
+| qwen3 | 0.4145 | 0.1374 | 0.3017 | 0.3904 | 0.5155 | 0.7055 | 0.4884 | 0.7055 | 0.6014 |
+| bge_m3 | 0.3978 | 0.1360 | 0.2908 | 0.3736 | 0.5107 | 0.6712 | 0.4582 | 0.6712 | 0.5688 |
+
+**Hybrid (RRF), top 3 embedders (aggregated across 4 chunkers)**:
+
+| embedder | MAP | recall@1 | recall@3 | recall@5 | recall@10 | precision@1 | precision@5 | ndcg@1 | ndcg@5 |
+|---|---|---|---|---|---|---|---|---|---|
+| bge_m3 | **0.5224** | 0.1482 | 0.3642 | 0.4826 | 0.6472 | 0.7500 | 0.5726 | 0.7500 | 0.6954 |
+| qwen3_0.6b | 0.5090 | 0.1493 | 0.3461 | 0.4656 | 0.6543 | **0.7671** | 0.5753 | **0.7671** | 0.6928 |
+| congen | 0.4863 | 0.1394 | 0.3428 | 0.4546 | 0.6426 | 0.7568 | 0.5562 | 0.7568 | 0.6741 |
+
+**BM25, aggregated across 4 chunkers**: MAP=0.4542, recall@1=0.1347,
+recall@5=0.4280, precision@1=0.6918, ndcg@1=0.6918.
+
+**Reading this**: MAP and precision@1 tell a mixed story at the very top of
+the hybrid ranking compared to recall@10. `bge_m3` has the **highest MAP**
+of the three (0.5224 vs `qwen3_0.6b`'s 0.5090, a +0.013 gap), but
+`qwen3_0.6b` has the **highest precision@1/ndcg@1** (0.7671 vs `bge_m3`'s
+0.7500, a −0.017 gap the other way). Since MAP and early-precision weight
+*where in the ranking* the first relevant hit lands much more heavily than
+recall@10 does, this is a hint that the "confirmed tied cluster" finding
+(see "Top single-combo tier" below) is specifically a **recall@10 tie** —
+whether it also holds for MAP/precision@1 has **not been
+significance-tested** (only recall@10/MRR/nDCG@10 were tested in the
+semantic-top-5 pairwise test). Flagged as a new open item, not yet claimed
+as a finding — both gaps here (+0.013 MAP, −0.017 precision@1) are similar
+in size to the untested recall@10 gap (+0.009) that turned out to be pure
+noise, so the same caution applies until a dedicated test runs.
 
 ## Cost / latency characterization
 
@@ -633,39 +790,70 @@ this table (resolves Open item #8)**: `qwen3_0.6b × semantic × hybrid`
 (recall@10=**0.6935**) is numerically *higher* than every other single
 combo in the whole study, including `bge-m3 × semantic × hybrid`
 (recall@10=0.6845, previously cited as the top combo — a +0.009 gap).
-**This has not been significance-tested per-chunker** (the existing
-significance tests compare cross-chunker aggregates, where qwen3_0.6b
-already numerically leads bge_m3 too — 0.6543 vs 0.6472 — but that pairwise
-comparison hasn't been significance-tested either; the hybrid significance
-tests run so far only test each embedder against dense-alone and against
-BM25-alone, not against each other). Given every other close pairwise
-comparison in this study that looked large in a raw descriptive table (e.g.
-the ConGen/SCT truncation question) turned out to need an explicit
-bootstrap test before citing, the same caution applies here: **treat
-`qwen3_0.6b × semantic × hybrid` as numerically ahead, not yet confirmed
-ahead** — a real ~0.009 gap on 73 queries is well within the range that
-could flip under a paired bootstrap given how close every top-tier hybrid
-combo is (0.65-0.69 across five embedders: qwen3_0.6b, bge_m3, e5_small,
-qwen3, jina_v5). Note that `bge-m3` never had a stronger evidentiary basis
-for "best" than `qwen3_0.6b` does now — it was simply the highest number
-known before this check, not a significance-tested claim either. So the
-correct interim stance is to **crown neither**: report the top five as an
-untested cluster, name `qwen3_0.6b` as numerically highest, and let the
-system-level recommendation (semantic chunking + hybrid retrieval) carry
-the paper's headline rather than a specific embedder pick — until a
-dedicated per-chunker significance test (analogous to
-`hybrid_significance_test_9way.py` but restricted to the semantic chunker)
-resolves the ordering. Not yet run, added as a new Open item.
+Note that `bge-m3` never had a stronger evidentiary basis for "best" than
+`qwen3_0.6b` does now — it was simply the highest number known before this
+check, not a significance-tested claim either.
+
+**Resolved 2026-07-22**: ran the dedicated per-chunker (semantic-only)
+pairwise significance test across all five top hybrid combos
+(`tools/eval/hybrid_significance_test_semantic_top5.py`,
+`data/results/hybrid_significance_test_semantic_top5.md`) — paired
+bootstrap, Holm-corrected, 10 pairwise comparisons × 3 metrics
+(recall@10/MRR/nDCG@10), semantic chunker + hybrid retrieval only, no
+cross-chunker averaging. **Result: none of the 10 pairs is significant on
+any metric** (lowest raw p = 0.065, on qwen3_0.6b vs jina_v5/e5_small for
+MRR/nDCG — doesn't survive Holm correction either). The +0.009 recall@10
+gap between qwen3_0.6b and bge-m3 is confirmed noise, not a real
+difference. **Final stance, now confirmed rather than provisional**: the
+top five hybrid combos (qwen3_0.6b 0.6935, bge_m3 0.6845, e5_small 0.6821,
+qwen3 0.6797, jina_v5 0.6796 recall@10) are a genuine statistically-tied
+cluster. Crown neither `qwen3_0.6b` nor `bge-m3` as "the best hybrid
+combo" — the paper's headline is the system-level recommendation (semantic
+chunking + hybrid retrieval), not a specific embedder pick.
 
 ## Open items (not yet done, needed before the numbers above are "final")
 
-1. Per-chunker point comparison of BM25 vs. embedder (not averaged across
-   chunkers) not yet significance-tested — raw numbers there look more
-   favorable to BM25 than the aggregate view; worth checking if that's real
-   or a chunker-selection artifact.
-2. Why bge-m3 overtakes qwen3 specifically under hybrid despite tying it as
-   dense-alone — not investigated (error-pattern complementarity with BM25
-   is a guess, not verified).
+1. ~~Per-chunker point comparison of BM25 vs. embedder (not averaged across
+   chunkers) not yet significance-tested~~ — DONE 2026-07-22
+   (`tools/eval/bm25_vs_embedder_significance_test_per_chunker.py`, see
+   "Per-chunker BM25 vs. embedder" section above). **Confirmed real, not an
+   artifact**: `bge_m3` loses to BM25 significantly under `sentence`
+   chunking specifically (Holm-adj p=0.0108) despite tying it in the
+   aggregate and in the other 3 chunkers; `qwen3`/`qwen3_0.6b` are the only
+   embedders where BM25's margin goes numerically negative, and only under
+   `semantic` chunking. The aggregate "BM25 ties top tier" claim is most
+   true for `semantic` chunking specifically.
+2. ~~Why bge-m3 overtakes qwen3 specifically under hybrid despite tying it
+   as dense-alone~~ — CLOSED 2026-07-22, **premise was false, no GPU
+   investigation needed**. First pass
+   (`tools/eval/bge_qwen_bm25_complementarity.py`) tested the "error-pattern
+   complementarity with BM25" hypothesis directly from persisted top-10
+   results (rescue rate, union coverage, per-query recall correlation with
+   BM25) and found the opposite of what it predicted: `qwen3` has a *higher*
+   aggregate rescue rate (0.3189 vs bge_m3's 0.2995), *higher* union coverage
+   (0.6036 vs 0.5823), and *lower* correlation with BM25 in 3 of 4 chunkers —
+   yet bge_m3 still numerically led under hybrid (0.6472 vs 0.6235 aggregate
+   recall@10). Rather than escalate straight to full-corpus-rank GPU
+   retrieval to explain that gap mechanically, a cheap intermediate check was
+   run first: which chunker shows the gap, and is it driven by a small,
+   dramatic set of "swing" queries? Per-chunker recall@10 diff (bge_m3 −
+   qwen3, hybrid): fixed_size +0.0209, recursive +0.0371, sentence +0.0320,
+   semantic +0.0048 (already known tied — see top-5 test above). On
+   `recursive` (the largest gap), the swing queries split 37-for-bge_m3 vs
+   34-for-qwen3 — a broad, nearly-balanced churn across most of the 73-query
+   set, not a small dramatic subset, which is the signature of two tied
+   systems trading wins rather than one systematically beating the other.
+   That predicted the real test: a paired bootstrap on bge_m3-vs-qwen3
+   hybrid recall@10, run per chunker + aggregate (5 tests, Holm-corrected).
+   Result — **none significant**: sentence raw p=0.0474 (Holm-adj 0.2370,
+   the closest of the five), recursive raw p=0.0572 (Holm-adj 0.2370),
+   aggregate raw p=0.1156 (Holm-adj 0.3468), fixed_size raw p=0.3178
+   (Holm-adj 0.6356), semantic raw p=0.8238 (Holm-adj 0.8238). The "bge_m3
+   overtakes qwen3 under hybrid" premise itself never held up to the same
+   significance bar applied everywhere else in this study — it was a raw
+   number, not a tested effect, exactly like the top-5 hybrid tie before it
+   was tested. **No mechanism to explain, because there's no confirmed
+   effect** — closing without touching the GPU.
 3. ~~Cost/latency table (vector dim, index size on disk, query latency
    p50/p95)~~ — DONE 2026-07-21: see "Cost / latency characterization"
    section above + `data/results/cost_latency_pareto.md` +
@@ -682,11 +870,13 @@ resolves the ordering. Not yet run, added as a new Open item.
    `src/rag_lab/metrics.py`, `evaluate()` now accepts a list of k's and
    always reports `map` alongside `mrr` (backward-compatible — a plain int
    `k` still works, existing callers unaffected). `run_gold_*_eval.py`
-   report tables now render precision@k and map columns too. **Not yet
-   done**: no eval script has actually been *re-run* with a multi-k list
-   (e.g. `k=[1,3,5,10]`) — the capability exists but every number in this
-   doc is still k=10 only; re-running with multi-k and citing MAP/P@k
-   numbers is a follow-up, not part of this change.
+   report tables now render precision@k and map columns too.
+   ~~Not yet done: no eval script has actually been re-run with a multi-k
+   list~~ — DONE 2026-07-22 (`tools/eval/multi_k_report.py`,
+   `data/results/multi_k_report.md`): every combo was retrieved at
+   `top_k=10`, so k∈{1,3,5,10} needed no new retrieval/GPU/embedding calls —
+   pure recompute over already-persisted JSON, runs in seconds. See "Multi-k
+   metrics" section below for the citation-ready table.
 5. RQ3 (normalization/segmentation ablation) and RQ4 (end-to-end RAG answer
    quality) are explicitly out of scope for this first paper per the gap
    analysis — later phase.
@@ -707,17 +897,33 @@ resolves the ordering. Not yet run, added as a new Open item.
    characterization" section above): `qwen3_0.6b × semantic × hybrid` =
    0.6935, numerically the highest single combo in the whole study — ahead
    of `bge-m3 × semantic × hybrid` (0.6845, the number previously cited as
-   "best") and `e5_small × semantic × hybrid` (0.6821), also close. **Still
-   open**: none of these gaps have been significance-tested per-chunker
-   (existing significance tests only cover cross-chunker aggregates and each
-   embedder vs. its own dense-alone/BM25-alone baseline, not embedder-vs-
-   embedder within the semantic chunker) — treat the top five hybrid combos
-   as an untested cluster (see "Top single-combo tier" bullet above); don't
-   cite any one of them, `bge-m3` included, as the confirmed best until that
-   test runs. New Open item: a per-chunker (semantic-only) pairwise
-   significance test across the top hybrid combos (qwen3_0.6b, bge_m3,
-   e5_small, jina_v5, qwen3), analogous to `hybrid_significance_test_9way.py`
-   but restricted to one chunker instead of averaging across all 4.
+   "best") and `e5_small × semantic × hybrid` (0.6821), also close.
+   ~~New Open item: a per-chunker (semantic-only) pairwise significance test
+   across the top hybrid combos~~ — DONE 2026-07-22
+   (`tools/eval/hybrid_significance_test_semantic_top5.py`): **no pair among
+   the top five is significant on any of recall@10/MRR/nDCG@10** after Holm
+   correction. Confirmed genuine tied cluster — see "Top single-combo tier"
+   section above for the full writeup. Don't cite any one embedder, `bge-m3`
+   or `qwen3_0.6b` included, as the confirmed best hybrid combo.
+9. New 2026-07-22 (from "Multi-k metrics" section): `bge_m3` leads
+   `qwen3_0.6b` on MAP (0.5224 vs 0.5090) and precision@1 goes the other way
+   (`qwen3_0.6b` 0.7671 vs `bge_m3` 0.7500) under hybrid — opposite
+   directions on metrics that weight early-rank position more than
+   recall@10. Not significance-tested (only recall@10/MRR/nDCG@10 were
+   covered by the semantic-top5 script) — could easily be noise like the
+   recall@10 gap turned out to be, but not yet checked either way.
+10. New 2026-07-22 (from "Structural recall@10 ceiling by entity_type"
+    section above): BM25 and hybrid have never been broken down by
+    entity_type (only dense-alone has, via `embedder_matrix_9way.py`) — so
+    it's not yet known how close hybrid's person-query recall gets to its
+    0.976 structural ceiling, or whether hybrid narrows the
+    `faculty_adjunct_aggregate` gap to its much lower 0.681 ceiling.
+    Related, larger, unstarted idea: an entity-indexed/structured lookup
+    path (using the already-built `people.json`/`faculties.json`/
+    `programs.json` taggers) for "list all X" style queries, which are
+    structurally capped well below 1.0 under any top-k similarity
+    approach — not part of the current Tier 1-3 plan, a candidate future
+    direction only.
 
 ## Source scripts (for reproducibility / methods section)
 
@@ -740,6 +946,26 @@ resolves the ordering. Not yet run, added as a new Open item.
 - `tools/eval/hybrid_significance_test_9way.py` — hybrid vs. dense-alone and vs. BM25-alone,
   all 9 embedders (imports label/exclusion logic from `embedder_matrix_9way.py`; supersedes
   `hybrid_significance_test.py`, the original 6-embedder version)
+- `tools/eval/hybrid_significance_test_semantic_top5.py` — embedder-vs-embedder pairwise
+  significance test among the top 5 hybrid combos, semantic chunker only, no cross-chunker
+  averaging (imports `build_combo_to_chunker_embedder`/`bootstrap_pvalue`/`holm_correct` from
+  `embedder_matrix_9way.py`); resolved Open item #8's "crown neither" question
+- `tools/eval/multi_k_report.py` — MAP/Precision@k/Recall@k/nDCG@k for k=1,3,5,10 across
+  dense/hybrid (9 embedders, aggregated across 4 chunkers) and BM25; pure recompute over
+  already-persisted top-10 retrieval results, no re-retrieval needed; closed Open item #4
+- `tools/eval/bm25_vs_embedder_significance_test_per_chunker.py` — BM25 vs each of the 9
+  embedders, 4 independent per-chunker test families (no cross-chunker averaging); closed
+  Open item #1, found `bge_m3` loses to BM25 significantly under `sentence` chunking
+  specifically despite tying it in the aggregate
+- `tools/eval/bge_qwen_bm25_complementarity.py` — rescue-rate/union-coverage/correlation
+  proxies for whether bge_m3's or qwen3's dense-alone errors are more "complementary"
+  with BM25; refuted the standing complementarity hypothesis for Open item #2, and the
+  swing-query check inside it (37 vs 34, `recursive` chunker) pointed at noise rather
+  than a real effect — confirmed by the follow-up bootstrap test below, no GPU needed
+- Follow-up inline check (paired bootstrap, bge_m3 vs qwen3 hybrid recall@10, per chunker +
+  aggregate, Holm-corrected across 5 tests) — closed Open item #2 for real: no significant
+  gap anywhere (closest: sentence Holm-adj p=0.2370), so the "overtake" was never a tested
+  effect in the first place
 - `tools/eval/congen_sct_truncation_fix_eval.py` — before/after eval for the
   ConGen/SCT max_seq_length investigation
 - `tools/eval/gold_embedder_breakdown_73det.py` — per-entity_type breakdown, original 6 embedders
