@@ -23,9 +23,11 @@ and materially changes rank order.
 bootstrap+Holm significance testing, cost/latency Pareto table, and the `sct` /
 `qwen3_0.6b` embedder additions. Tier 3's RQ3 ablations (normalization,
 word-aware segmentation, chunk-size sweep) ran to completion 2026-07-23 — see
-"RQ3 ablation results" section below. Cross-encoder reranker and RQ4 (end-to-end
-RAG) remain not started. See the Open items list at the end of this file for what's
-still outstanding within the closed tiers.
+"RQ3 ablation results" section below. The cross-encoder reranker item also ran
+to completion 2026-07-23 — see "Cross-encoder reranker results" section below
+(a significant *negative* result for hybrid, literature-grounded). Only RQ4
+(end-to-end RAG) remains not started in Tier 3. See the Open items list at the
+end of this file for what's still outstanding within the closed tiers.
 
 ## Resolved 2026-07-23: RQ3 ablation results (normalization / segmentation / chunk-size)
 
@@ -60,6 +62,94 @@ only **chunk size** has a demonstrated, significant effect on this corpus
 (smaller is better for recall) — Thai-specific normalization and word-boundary
 segmentation do not move retrieval quality significantly at the 512-token
 scale already used throughout the rest of the study.
+
+## Resolved 2026-07-23: Cross-encoder reranker results — a significant negative result for hybrid
+
+Gap-analysis Tier 3, item 8. Built a `CrossEncoderReranker` stage
+(`BAAI/bge-reranker-v2-m3`, LoRA-tuned on the `bge-m3` backbone) that
+re-scores a widened retriever candidate pool (`rerank_pool_size=50`) and
+truncates to the final `k=10`. Because retrieval is deterministic, the
+no-rerank baseline is exactly the top-10-by-retriever-score slice of the
+treatment's 50-candidate pool, so the paired diff isolates the reranker's
+re-ordering effect as the only variable. Evaluated on the semantic×bge-m3
+combo (`plain__fixed_size__local__ceea7536`), Gold 73-det set, paired
+bootstrap (n_boot=10,000) + Holm-Bonferroni correction. Script:
+`tools/eval/reranker_significance_test.py`; raw table:
+`data/results/reranker_significance_test.md`.
+
+| Retriever reranked | Metric | No-rerank → Reranked | Holm-adj. p | Direction |
+|---|---|---|---|---|
+| Hybrid (BM25+dense, RRF) | MRR | 0.848 → 0.760 | 0.006 | **significantly worse** |
+| Hybrid (BM25+dense, RRF) | nDCG@10 | 0.675 → 0.617 | 0.030 | **significantly worse** |
+| Hybrid (BM25+dense, RRF) | recall@10 | 0.607 → 0.584 | 1.000 | worse, not significant |
+| Dense-alone (bge-m3) | recall@10 / MRR / nDCG@10 | — | n.s. both directions | no effect |
+
+Reranker latency (call alone, model load excluded, `rerank_pool_size=50`,
+73 queries): **p50 1191ms, p95 1522ms, mean 1259ms per query** — not cheap,
+on top of the finding being negative for hybrid.
+
+**Confirmed not an implementation bug**: the reranker was smoke-tested in
+isolation and scores semantically sensibly (a tuition-fee chunk correctly
+ranked highest for a tuition-reduction query). The isolation logic (baseline
+= deterministic slice of the treatment's own wider pool) rules out a
+confound from pool-size alone.
+
+**Literature-grounded explanation** (full citations and per-question detail
+in `docs/reranker-hybrid-interaction-research.md` — written by a dedicated
+research pass against primary IR sources, not inferred from our data alone):
+
+1. **Reranking gains shrink as the first-stage ranking strengthens, and can
+   flip to net harm.** Rosa et al. ("In Defense of Cross-Encoders for
+   Zero-Shot Retrieval", arXiv:2212.06121) show monoT5 lifts BM25
+   (avg nDCG@10 0.441→0.496, +0.055) and a stronger dense retriever, GTR-335M
+   (0.451→0.496, +0.045) to nearly the *same* post-rerank ceiling — smaller
+   absolute gain over the stronger baseline, though never negative in their
+   data. Jacob, Lindgren, Zaharia, Carbin, Khattab, Drozdov ("Drowning in
+   Documents: Consequences of Scaling Reranker Inference", ReNeuIR 2025 @
+   SIGIR 2025, arXiv:2411.11767) supply the sign-flip: reranking with
+   **`bge-reranker-v2-m3` by name** — our exact model — "frequently
+   perform[s] worse than retrievers when both rank the full dataset," and
+   names the failure mode **"phantom hits"**: confidently high scores on
+   documents with no lexical or semantic overlap with the query at all. Our
+   own result's fingerprint (MRR/nDCG hurt, recall@10 spared) is consistent
+   with phantom hits disturbing top-of-list order without necessarily
+   evicting relevant docs from the top-10 entirely.
+2. **RRF structurally protects exact-lexical-match signal that a
+   cross-encoder cannot see.** Cormack, Clarke, Büttcher ("Reciprocal Rank
+   Fusion outperforms Condorcet and individual Rank Learning Methods", SIGIR
+   2009) define RRF as combining "ranks without regard to the arbitrary
+   scores returned by particular ranking methods" — a document BM25 ranks #1
+   on exact term match is protected in the fused list by construction. A
+   cross-encoder scoring only the raw `(query, chunk)` text pair has no
+   visibility into which retrieval arm surfaced a candidate or why. (Note:
+   the 2009 paper predates dense retrieval and never itself discusses
+   lexical+dense hybrid fusion or reranker interaction — this connection is
+   this project's own architecturally-grounded inference, not the paper's
+   claim.)
+3. **Off-the-shelf rerankers may not transfer to a hybrid-fused candidate
+   distribution.** Lu, Hall, Ma, Ni (Google Research, "HYRR: Hybrid Infused
+   Reranking for Passage Retrieval", arXiv:2212.10528) motivate training a
+   reranker specifically on hybrid-retriever candidates because off-the-shelf
+   rerankers (trained on a single retriever's negative distribution, commonly
+   BM25) don't reliably transfer otherwise. `bge-reranker-v2-m3`'s public
+   training mixture (bge-m3-data, Quora, FEVER, per its model card) has no
+   documented hybrid-candidate component.
+4. **No paper tested our exact pipeline** (RRF hybrid → bge-reranker-v2-m3) —
+   this is a genuinely new data point, not a replication of a documented
+   result. Thai-specific reranker weakness came up thin/inconclusive in the
+   literature search and is not part of the explanation until tested directly
+   on this corpus.
+
+**Headline for the paper**: cross-encoder reranking should **not** be applied
+to this project's hybrid (RRF) retrieval path as currently wired — it
+significantly hurts MRR and nDCG@10, with literature support (same reranker
+model, independently observed "phantom hits" against strong baselines) rather
+than being a one-off artifact. Reranking remains untested-but-not-contra-
+indicated for weaker single-retriever paths (its dense-alone effect here was
+null, not harmful). Two literature-suggested follow-up interventions — a
+reranker trained/validated on hybrid-fused candidates specifically, or
+blending the reranker's score into RRF as a fourth ranked signal instead of a
+hard truncate-and-replace step — are untested hypotheses, not implemented.
 
 ## Resolved 2026-07-21: ConGen/SCT max_seq_length — investigated, model-specific answer found
 
@@ -919,6 +1009,11 @@ chunking + hybrid retrieval), not a specific embedder pick.
    segmentation do not. RQ4 (end-to-end RAG answer quality) remains
    explicitly out of scope for this first paper per the gap analysis — later
    phase.
+5b. ~~Cross-encoder reranker (Tier 3 item 8)~~ — DONE 2026-07-23, see
+    "Cross-encoder reranker results" section above: significantly hurts
+    hybrid MRR/nDCG@10, no significant effect on dense-alone, literature-
+    grounded explanation in `docs/reranker-hybrid-interaction-research.md`.
+    Only RQ4 remains unstarted in Tier 3.
 6. ~~Per-entity_type significance test for the 9-embedder matrix~~ — DONE
    2026-07-21 (`tools/eval/embedder_significance_test_by_entity_type_9way.py`).
    `qwen3_0.6b`'s program-query lead is NOT significant vs congen/qwen3-4B

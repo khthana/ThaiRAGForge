@@ -56,6 +56,7 @@ class RetrievalResult(BaseModel):
     results: list[RankedChunk]
     top_k: int
     retriever: str
+    reranker: str | None = None
 
 
 @dataclass

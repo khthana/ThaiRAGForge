@@ -32,6 +32,7 @@ embedders:
     assert cfg.seed == 42
     assert cfg.corpus.subset == "dev"
     assert [r.type for r in cfg.retrievers] == ["dense"]
+    assert cfg.rerankers == []
 
 
 def test_to_yaml_round_trips_through_from_yaml(tmp_path):
@@ -65,6 +66,25 @@ def test_to_yaml_string_round_trips_and_includes_chunker_params():
 
     assert "chunk_size: 256" in text
     assert ExperimentConfig.model_validate(yaml.safe_load(text)) == cfg
+
+
+def test_rerankers_round_trip_through_yaml(tmp_path):
+    cfg = ExperimentConfig(
+        experiment_name="e",
+        corpus={"input_dir": "x"},
+        output_dir="out",
+        loaders=[StrategySpec(type="plain")],
+        chunkers=[StrategySpec(type="fixed_size")],
+        embedders=[StrategySpec(type="hashing")],
+        rerankers=[StrategySpec(type="cross_encoder", params={"model_name": "m"})],
+    )
+    path = tmp_path / "rerankers.yaml"
+
+    cfg.to_yaml(path)
+    loaded = ExperimentConfig.from_yaml(path)
+
+    assert loaded == cfg
+    assert loaded.rerankers[0].params["model_name"] == "m"
 
 
 def test_to_yaml_writes_thai_text_literally_not_as_unicode_escapes(tmp_path):

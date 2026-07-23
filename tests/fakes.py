@@ -41,3 +41,30 @@ class BagOfWordsEmbedder:
 
     def embed_query(self, text: str) -> np.ndarray:
         return self.embed([text])[0]
+
+
+class FakeReranker:
+    """Deterministic reranker stand-in: scores each candidate by how many
+    whitespace tokens it shares with the query, so tests can predict the
+    resulting order by hand without loading a real cross-encoder. Also a
+    spy -- records the candidate list and k it was called with."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, int, int]] = []  # (query_text, n_candidates, k)
+
+    @property
+    def name(self) -> str:
+        return "fake_reranker"
+
+    def rerank(self, query, candidates, k):
+        self.calls.append((query.text, len(candidates), k))
+        q_tokens = set(query.text.split())
+
+        def overlap(chunk) -> int:
+            return len(q_tokens & set(chunk.text.split()))
+
+        ordered = sorted(candidates, key=overlap, reverse=True)[:k]
+        return [
+            c.model_copy(update={"score": float(overlap(c)), "rank": rank + 1})
+            for rank, c in enumerate(ordered)
+        ]

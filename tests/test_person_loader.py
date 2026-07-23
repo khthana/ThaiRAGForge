@@ -5,7 +5,26 @@ from __future__ import annotations
 
 from rag_lab.config import StrategySpec
 from rag_lab.factory import build_loader
-from rag_lab.loaders.person_loader import match_people
+from rag_lab.loaders.person_loader import match_people, match_people_by_dictionary
+
+_PEOPLE_DICT = [
+    {
+        "canonical_title": "ผศ.",
+        "canonical_given": "ธนา",
+        "canonical_surname": "หงษ์สุวรรณ",
+        "canonical_full_name": "ผศ.ธนา หงษ์สุวรรณ",
+        "count": 3,
+        "aliases": [{"given": "ธนา", "surname": "หงสุวรรณ", "count": 1}],
+    },
+    {
+        "canonical_title": "รศ.",
+        "canonical_given": "สุวัฒน์",
+        "canonical_surname": "ถิรเศรษฐ์",
+        "canonical_full_name": "รศ.สุวัฒน์ ถิรเศรษฐ์",
+        "count": 5,
+        "aliases": [],
+    },
+]
 
 
 class TestMatchPeople:
@@ -116,6 +135,33 @@ class TestMatchPeople:
         spelled = match_people("รองศาสตราจารย์ ดร.คมสัน มาลีสี")[0]
         abbreviated = match_people("รศ.ดร.คมสัน มาลีสี")[0]
         assert spelled["title"] == abbreviated["title"] == "รศ.ดร."
+
+
+class TestMatchPeopleByDictionary:
+    def test_matches_canonical_name_with_no_title(self):
+        # a user typing a search query usually won't include an academic
+        # rank the way this corpus's own documents do
+        assert match_people_by_dictionary("ธนา หงษ์สุวรรณ มีประวัติอย่างไรบ้าง", _PEOPLE_DICT) == [
+            {"given_name": "ธนา", "surname": "หงษ์สุวรรณ", "full_name": "ผศ.ธนา หงษ์สุวรรณ"}
+        ]
+
+    def test_matches_via_a_known_alias_spelling(self):
+        assert match_people_by_dictionary("ประวัติ ธนา หงสุวรรณ", _PEOPLE_DICT) == [
+            {"given_name": "ธนา", "surname": "หงษ์สุวรรณ", "full_name": "ผศ.ธนา หงษ์สุวรรณ"}
+        ]
+
+    def test_no_match_when_name_absent(self):
+        assert match_people_by_dictionary("ค่าธรรมเนียมการศึกษา", _PEOPLE_DICT) == []
+
+    def test_titled_text_is_still_matched_by_the_no_title_dictionary_too(self):
+        # match_people_by_dictionary itself doesn't require the absence of a
+        # title -- it's detect_entities' job (router.py) to try match_people
+        # first and only fall back to this; this function alone just does
+        # substring lookup regardless of what surrounds the name
+        result = match_people_by_dictionary("ผศ.ดร.ธนา หงษ์สุวรรณ เสนอวาระ", _PEOPLE_DICT)
+        assert result == [
+            {"given_name": "ธนา", "surname": "หงษ์สุวรรณ", "full_name": "ผศ.ธนา หงษ์สุวรรณ"}
+        ]
 
 
 class TestPersonLoaderIntegration:

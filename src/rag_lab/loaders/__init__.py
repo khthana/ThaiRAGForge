@@ -1,4 +1,6 @@
 from rag_lab.loaders.base import BaseLoader
+from rag_lab.loaders.course_loader import CourseLoader
+from rag_lab.loaders.entity_loader import EntityTagLoader
 from rag_lab.loaders.faculty_loader import FacultyLoader
 from rag_lab.loaders.metadata_loader import MetadataLoader
 from rag_lab.loaders.ner_loader import NERLoader
@@ -16,4 +18,6 @@ __all__ = [
     "FacultyLoader",
     "ProgramLoader",
     "PersonLoader",
+    "CourseLoader",
+    "EntityTagLoader",
 ]

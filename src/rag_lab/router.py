@@ -31,7 +31,8 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 
-from rag_lab.loaders.person_loader import match_people
+from rag_lab.loaders.course_loader import match_courses
+from rag_lab.loaders.person_loader import match_people, match_people_by_dictionary
 from rag_lab.loaders.program_loader import load_dictionary, match_programs
 from rag_lab.schema import RankedChunk, RetrievalResult
 
@@ -98,6 +99,47 @@ def classify_query(query: str) -> str:
     if _PROGRAM_FALLBACK.search(query):
         return ROUTE_PROGRAM
     return ROUTE_UNMATCHED
+
+
+def _default_program_matcher(text: str) -> list[str]:
+    return match_programs(text, dictionary=load_dictionary())
+
+
+def detect_entities(
+    query: str,
+    *,
+    people_matcher=match_people,
+    people_dict_matcher=match_people_by_dictionary,
+    program_matcher=_default_program_matcher,
+    course_matcher=match_courses,
+) -> dict[str, list[str]]:
+    """kind -> canonical values actually found in `query` (empty kinds
+    omitted). Used by the entity-lookup retrieval mode and the keyword/
+    filter-boost pre-filter (retrievers/entity_lookup.py,
+    retrievers/filters.py's EntityFilter, query_service.py) -- a different
+    question from classify_query's single route label, so this is a sibling
+    function, not an extension of it.
+
+    Person: titled match_people first (query classification collapses
+    title-trailing spacing the same way classify_query does), falling back
+    to the untitled dictionary matcher since a user typing a search query
+    usually won't include an academic rank. People are keyed on
+    'given_name surname' (title stripped) to match EntityFilter's key, so a
+    no-title query match still matches a title-anchored corpus tag.
+    Matchers are injectable so tests can substitute fakes (e.g. for courses)
+    without depending on the real regex/dictionary."""
+    people = people_matcher(_collapse_title_spacing(query)) or people_dict_matcher(query)
+    programs = program_matcher(query)
+    courses = course_matcher(query)
+
+    detected: dict[str, list[str]] = {}
+    if people:
+        detected["people"] = sorted({f"{p['given_name']} {p['surname']}" for p in people})
+    if programs:
+        detected["programs"] = list(programs)
+    if courses:
+        detected["courses"] = list(courses)
+    return detected
 
 
 def rrf_merge(

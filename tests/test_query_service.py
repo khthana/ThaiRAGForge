@@ -6,7 +6,13 @@ from pathlib import Path
 import pytest
 
 from rag_lab.config import ExperimentConfig, StrategySpec
-from rag_lab.query_service import discover_indices, query_indices, resolve_index, route_query
+from rag_lab.query_service import (
+    discover_indices,
+    entity_lookup,
+    query_indices,
+    resolve_index,
+    route_query,
+)
 from rag_lab.results import load_retrieval_result
 from rag_lab.router import RouteTarget
 from rag_lab.runner import run_experiment
@@ -237,3 +243,66 @@ def test_route_query_unmatched_rrf_strategy_merges_multiple_indices(tmp_path):
     )
     assert result.combination_id == "routed__rrf__unmatched"
     assert result.results  # merged ranking is non-empty
+
+
+def _build_entity_tags_index(tmp_path):
+    corpus = tmp_path / "corpus" / "2569" / "ครั้งที่ 1"
+    corpus.mkdir(parents=True)
+    # a real programs.json entry (also used in test_program_loader.py's
+    # test_real_dictionary_loads_and_is_usable) so match_programs matches
+    # against the real dictionary, not a fixture.
+    (corpus / "เรื่อง หลักสูตรโยธา.md").write_text(
+        "## Page 1\nหลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาวิศวกรรมโยธา (การปรับปรุงแก้ไขหลักสูตร)",
+        encoding="utf-8",
+    )
+    (corpus / "เรื่อง ค่าธรรมเนียม.md").write_text(
+        "## Page 1\nค่าธรรมเนียม การศึกษา ภาคเรียน", encoding="utf-8"
+    )
+    out = tmp_path / "out"
+    config = ExperimentConfig(
+        experiment_name="e",
+        corpus={"input_dir": (tmp_path / "corpus").as_posix()},
+        output_dir=out.as_posix(),
+        loaders=[StrategySpec(type="entity_tags")],
+        chunkers=[StrategySpec(type="fixed_size", params={"chunk_size": 200})],
+        embedders=[StrategySpec(type="hashing")],
+    )
+    run_experiment(config)
+    return out
+
+
+def test_entity_lookup_returns_hits_for_a_named_program(tmp_path):
+    out = _build_entity_tags_index(tmp_path)
+    dirs = [i.dir for i in discover_indices(out)]
+
+    combos = entity_lookup(
+        "หลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาวิศวกรรมโยธา (การปรับปรุงแก้ไขหลักสูตร) คือหลักสูตรอะไร", dirs
+    )
+
+    assert len(combos) == 1
+    result = combos[0].result
+    assert result.retriever == "entity_lookup"
+    assert len(result.results) == 1
+    assert "หลักสูตรโยธา" in result.results[0].resolution_id
+
+
+def test_entity_lookup_raises_against_a_plain_loader_index(tmp_path):
+    out = _build_two_indices(tmp_path)  # built with loader=plain
+    dirs = [i.dir for i in discover_indices(out)]
+
+    with pytest.raises(LookupError):
+        entity_lookup("หลักสูตร วิศวกรรม คอมพิวเตอร์", dirs)
+
+
+def test_query_indices_entity_boost_narrows_entity_tags_index_and_is_noop_on_plain_index(tmp_path):
+    entity_dir = discover_indices(_build_entity_tags_index(tmp_path / "entity"))[0].dir
+    plain_dir = discover_indices(_build_two_indices(tmp_path / "plain"))[0].dir
+
+    combos = query_indices(
+        "หลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาวิศวกรรมโยธา (การปรับปรุงแก้ไขหลักสูตร) คือหลักสูตรอะไร",
+        [entity_dir, plain_dir], StrategySpec(type="dense"), k=5, entity_boost=True,
+    )
+
+    by_dir = {cr.index_dir: cr for cr in combos}
+    assert by_dir[entity_dir].result.combination_id.endswith("__entity_boost")
+    assert not by_dir[plain_dir].result.combination_id.endswith("__entity_boost")

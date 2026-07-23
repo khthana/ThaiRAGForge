@@ -25,7 +25,10 @@ first pass.
 """
 from __future__ import annotations
 
+import json
 import re
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from rag_lab.loaders.base import BaseLoader
@@ -38,6 +41,8 @@ from rag_lab.loaders.common import (
 )
 from rag_lab.registries import loader_registry
 from rag_lab.schema import Resolution
+
+_PEOPLE_DICT_PATH = Path(__file__).resolve().parents[3] / "data" / "entity_dictionaries" / "people.json"
 
 # Spelled-out rank -> its abbreviated form. Prose tends to spell ranks out
 # ("รองศาสตราจารย์ ดร.คมสัน มาลีสี"); committee-member tables use the
@@ -116,6 +121,39 @@ def match_people(text: str) -> list[dict[str, str]]:
         }
         for title, given, surname in sorted(found)
     ]
+
+
+@lru_cache(maxsize=1)
+def load_people_dictionary() -> list[dict[str, Any]]:
+    return json.loads(_PEOPLE_DICT_PATH.read_text(encoding="utf-8"))
+
+
+def match_people_by_dictionary(
+    query: str, dictionary: list[dict[str, Any]] | None = None
+) -> list[dict[str, str]]:
+    """Untitled, dictionary-based fallback for query-side entity detection
+    only (see router.detect_entities) -- corpus tagging stays on
+    match_people's title-anchored regex above, unchanged. A user typing a
+    search query usually won't include an academic rank the way this
+    corpus's own documents consistently do, so this scans people.json's
+    canonical (given, surname) pairs -- and their known OCR-variant aliases
+    -- for a substring match against `query` directly, with no title
+    required. Returns the same dict shape as match_people (minus 'title',
+    which a caller keying on given_name+surname doesn't need)."""
+    dictionary = dictionary if dictionary is not None else load_people_dictionary()
+    found: dict[tuple[str, str], dict[str, str]] = {}
+    for entry in dictionary:
+        candidates = [(entry["canonical_given"], entry["canonical_surname"])]
+        candidates += [(a["given"], a["surname"]) for a in entry.get("aliases", [])]
+        for given, surname in candidates:
+            if given and surname and f"{given} {surname}" in query:
+                key = (entry["canonical_given"], entry["canonical_surname"])
+                found[key] = {
+                    "given_name": entry["canonical_given"],
+                    "surname": entry["canonical_surname"],
+                    "full_name": entry["canonical_full_name"],
+                }
+    return sorted(found.values(), key=lambda d: (d["given_name"], d["surname"]))
 
 
 @loader_registry.register("person")

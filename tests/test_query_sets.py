@@ -13,6 +13,7 @@ from rag_lab.query_sets import (
     QuerySetEntry,
     build_silver_query_set,
     load_gold_query_set,
+    run_entity_lookup_query_set,
     run_query_set,
 )
 from rag_lab.query_service import discover_indices
@@ -145,3 +146,65 @@ def test_silver_set_run_through_evaluate_scores_a_real_hit(tmp_path):
     combo_scores = next(iter(scores.values()))
     assert combo_scores["recall@3"] == 1.0
     assert combo_scores["mrr"] == 1.0
+
+
+def _build_entity_tags_index(tmp_path):
+    corpus = tmp_path / "corpus" / "2569" / "ครั้งที่ 1"
+    corpus.mkdir(parents=True)
+    (corpus / "เรื่อง หลักสูตรโยธา.md").write_text(
+        "## Page 1\nหลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาวิศวกรรมโยธา (การปรับปรุงแก้ไขหลักสูตร)",
+        encoding="utf-8",
+    )
+    (corpus / "เรื่อง ค่าธรรมเนียม.md").write_text(
+        "## Page 1\nค่าธรรมเนียม การศึกษา ภาคเรียน", encoding="utf-8"
+    )
+    out = tmp_path / "out"
+    config = ExperimentConfig(
+        experiment_name="e",
+        corpus={"input_dir": (tmp_path / "corpus").as_posix()},
+        output_dir=out.as_posix(),
+        loaders=[StrategySpec(type="entity_tags")],
+        chunkers=[StrategySpec(type="fixed_size", params={"chunk_size": 200})],
+        embedders=[StrategySpec(type="hashing")],
+    )
+    run_experiment(config)
+    return out
+
+
+def test_run_query_set_entity_boost_narrows_results(tmp_path):
+    out = _build_entity_tags_index(tmp_path)
+    index_dirs = [i.dir for i in discover_indices(out)]
+    query_set = [
+        QuerySetEntry(
+            query="หลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาวิศวกรรมโยธา (การปรับปรุงแก้ไขหลักสูตร) คือหลักสูตรอะไร",
+            relevant_resolution_ids=["ignored"],
+        ),
+    ]
+    results_dir = tmp_path / "results"
+
+    run_query_set(
+        query_set, index_dirs, StrategySpec(type="dense"), k=5,
+        results_dir=results_dir, entity_boost=True,
+    )
+
+    [result] = [load_retrieval_result(p) for p in Path(results_dir).glob("*.json")]
+    assert result.combination_id.endswith("__entity_boost")
+    assert len(result.results) == 1  # narrowed to only the resolution tagged with the program
+
+
+def test_run_entity_lookup_query_set_persists_exhaustive_results(tmp_path):
+    out = _build_entity_tags_index(tmp_path)
+    index_dirs = [i.dir for i in discover_indices(out)]
+    query_set = [
+        QuerySetEntry(
+            query="หลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาวิศวกรรมโยธา (การปรับปรุงแก้ไขหลักสูตร) คือหลักสูตรอะไร",
+            relevant_resolution_ids=["ignored"],
+        ),
+    ]
+    results_dir = tmp_path / "results"
+
+    run_entity_lookup_query_set(query_set, index_dirs, results_dir)
+
+    [result] = [load_retrieval_result(p) for p in Path(results_dir).glob("*.json")]
+    assert result.retriever == "entity_lookup"
+    assert len(result.results) == 1

@@ -33,6 +33,7 @@ class ExperimentConfig(BaseModel):
     retrievers: list[StrategySpec] = Field(
         default_factory=lambda: [StrategySpec(type="dense")]
     )
+    rerankers: list[StrategySpec] = Field(default_factory=list)
     run_mode: Literal["cartesian", "paired"] = "cartesian"
     seed: int = 42
 

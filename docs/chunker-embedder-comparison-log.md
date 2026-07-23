@@ -1290,3 +1290,51 @@ Gold 73-det):**
 ดีกว่าสำหรับ recall) — normalization กับ segmentation ไม่มีผลนัยสำคัญทั้งคู่
 ผลลัพธ์เต็มอยู่ที่ `data/results/rq3_{normalize,segmentation}_significance_test.md`
 และ `data/results/rq3_chunksize_sweep_report.md`
+
+---
+
+## Cross-encoder reranker (Tier 3 ข้อ 8) — สร้าง+รันจริง, ผลลบมีนัยสำคัญต่อ hybrid (23 ก.ค. 2569)
+
+สร้าง stage ใหม่ `CrossEncoderReranker` (`BAAI/bge-reranker-v2-m3`) เป็น
+query-time stage ทางเลือก ต่อจาก `pipeline.retrieve()` — ขยาย candidate pool
+จาก retriever (`rerank_pool_size=50`) แล้ว rerank ตัดเหลือ `k=10` จริง
+สถาปัตยกรรม: registry pattern เดิม (`reranker_registry`, `BaseReranker`
+มิเรอร์ `BaseRetriever`), ไม่แตะ `runner.py`/`combos.py` (retrieval เป็น
+query-time only เหมือน retriever เดิม) เพิ่ม unit test 16 ตัว (รวม 372 ตัว
+ผ่านหมด) รายละเอียด implementation เต็มอยู่ใน plan ที่อนุมัติ (session นี้)
+
+**ทดสอบจริง** (paired bootstrap, Holm-corrected, Gold 73-det, semantic×bge-m3
+combo `plain__fixed_size__local__ceea7536`, script
+`tools/eval/reranker_significance_test.py`):
+
+| retriever | metric | ไม่ rerank → rerank | Holm-adj p | ทิศทาง |
+|---|---|---|---|---|
+| hybrid | MRR | 0.848 → 0.760 | 0.006 | **แย่ลงมีนัยสำคัญ** |
+| hybrid | nDCG@10 | 0.675 → 0.617 | 0.030 | **แย่ลงมีนัยสำคัญ** |
+| hybrid | recall@10 | 0.607 → 0.584 | 1.000 | แย่ลงแต่ไม่มีนัยสำคัญ |
+| dense | ทั้ง 3 metric | — | ไม่มีนัยสำคัญ | ไม่มีผล |
+
+ยืนยันแล้วว่าไม่ใช่บั๊ก implementation (smoke test ด้วยมือ: reranker ให้คะแนน
+สมเหตุสมผลจริง — chunk เรื่องค่าเทอมได้คะแนนสูงสุดสำหรับ query ลดค่าเทอม)
+latency ของ reranker เอง (ไม่รวม model load) ที่ pool=50: p50 1191ms, p95
+1522ms — ไม่ถูกด้วยซ้ำ ยิ่งตอกย้ำว่าไม่คุ้ม
+
+**ส่งงานวิจัย literature review ไปหาคำอธิบาย** (background agent, primary
+source เท่านั้น) ผลอยู่ที่ `docs/reranker-hybrid-interaction-research.md`
+ประเด็นสำคัญ: paper "Drowning in Documents" (ReNeuIR 2025, arXiv:2411.11767)
+ทดสอบ **`bge-reranker-v2-m3` ตัวเดียวกับที่เราใช้** พบว่า underperform
+baseline ที่แข็งอยู่แล้วบ่อยครั้ง ตั้งชื่อ failure mode "phantom hits" (ให้
+คะแนนสูงมั่นใจกับเอกสารที่ไม่เกี่ยวเลย) ตรงกับ fingerprint ผลของเรา (MRR/nDCG
+พัง แต่ recall@10 รอด) นอกจากนี้ paper RRF ต้นฉบับ (Cormack et al. 2009) และ
+paper HYRR (Google, arXiv:2212.10528) ให้กลไกเพิ่มเติม: RRF ปกป้องสัญญาณ
+lexical โดยโครงสร้าง (ไม่สนใจคะแนนดิบ ใช้แค่ rank) ซึ่ง cross-encoder มองไม่
+เห็นเลย และ off-the-shelf reranker อาจไม่ transfer ดีกับ candidate
+distribution ของ hybrid retriever ที่ไม่เคยถูก train ด้วย **ไม่มี paper ไหน
+ทดสอบ pipeline แบบเราเป๊ะๆ (RRF hybrid แล้วค่อย rerank)** — เป็น data point
+ใหม่จริง ระบุไว้ตรงๆ ไม่ได้อ้างว่าเป็นการ replicate ของเดิม
+
+**สรุปสำหรับเปเปอร์**: ไม่ควร rerank เส้นทาง hybrid ด้วยการต่อสายแบบปัจจุบัน
+— แนวทางทดลองต่อที่วรรณกรรมชี้ไว้ (ยังไม่ได้ทำ): train/validate reranker บน
+hybrid-fused candidates โดยเฉพาะ หรือเอาคะแนน reranker ไปเป็น "ระบบที่ 4" ใน
+RRF แทนการ truncate-แทนที่ตรงๆ ปิด Tier 3 ข้อ 8 — เหลือแค่ RQ4 (end-to-end
+RAG) ที่ยังไม่เริ่มใน Tier 3

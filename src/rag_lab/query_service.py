@@ -12,13 +12,38 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from rag_lab.config import StrategySpec
-from rag_lab.factory import build_embedder, build_retriever
+from rag_lab.factory import build_embedder, build_reranker, build_retriever
 from rag_lab.io.artifact_store import ArtifactStore
 from rag_lab.pipeline import retrieve
 from rag_lab.results import save_retrieval_result
-from rag_lab.retrievers.filters import MetadataFilter
-from rag_lab.router import ROUTE_COMBO, ROUTE_UNMATCHED, RouteTarget, classify_query, rrf_merge
+from rag_lab.retrievers.filters import EntityFilter, MetadataFilter
+from rag_lab.router import (
+    ROUTE_COMBO,
+    ROUTE_UNMATCHED,
+    RouteTarget,
+    classify_query,
+    detect_entities,
+    rrf_merge,
+)
 from rag_lab.schema import RetrievalResult
+
+ENTITY_TAGS_LOADER = "entity_tags"
+
+
+def check_entity_tags_loader(manifest: dict, index_dir: str | Path) -> None:
+    """Loud guard for entity_lookup: metadata['people']/['programs']/
+    ['courses'] only exist on chunks from an index built with
+    loaders.entity_loader.EntityTagLoader -- a missing key is
+    indistinguishable from a genuinely empty match (see EntityFilter), so
+    pointing entity_lookup at the wrong index must fail loudly, not
+    silently return nothing."""
+    loader_type = manifest["combo"]["loader"]["type"]
+    if loader_type != ENTITY_TAGS_LOADER:
+        raise LookupError(
+            f"{index_dir} was built with loader {loader_type!r}, not "
+            f"{ENTITY_TAGS_LOADER!r} -- entity_lookup needs "
+            "metadata['people']/['programs']/['courses'] on every chunk."
+        )
 
 
 @dataclass
@@ -70,9 +95,14 @@ def query_indices(
     k: int,
     results_dir: str | Path | None = None,
     filter_criteria: dict | None = None,
+    reranker_spec: StrategySpec | None = None,
+    rerank_pool_size: int | None = None,
+    entity_boost: bool = False,
 ) -> list[ComboRetrieval]:
     store = ArtifactStore()
     retriever = build_retriever(retriever_spec)
+    reranker = build_reranker(reranker_spec) if reranker_spec is not None else None
+    detected = detect_entities(query) if entity_boost else {}
 
     out: list[ComboRetrieval] = []
     for index_dir in index_dirs:
@@ -83,10 +113,62 @@ def query_indices(
         index = store.load(index_dir)
         if filter_criteria:
             index = MetadataFilter(filter_criteria).apply(index)
+        # query_indices compares potentially-heterogeneous combos side by
+        # side, so an index not built with entity_tags must degrade
+        # gracefully (skip narrowing, keep comparing) rather than hard-fail
+        # the whole comparison the way entity_lookup does for a single,
+        # deliberately-chosen index.
+        applied_boost = bool(detected) and manifest["combo"]["loader"]["type"] == ENTITY_TAGS_LOADER
+        if applied_boost:
+            index = EntityFilter(detected).apply(index)
 
         combination_id = f"{manifest['combo_id']}__{retriever.name}"
+        if reranker is not None:
+            combination_id = f"{combination_id}__{reranker.name}"
+        if applied_boost:
+            combination_id = f"{combination_id}__entity_boost"
         result: RetrievalResult = retrieve(
-            query, index, embedder, retriever, k, combination_id=combination_id
+            query, index, embedder, retriever, k,
+            reranker=reranker, rerank_pool_size=rerank_pool_size,
+            combination_id=combination_id,
+        )
+        if results_dir is not None:
+            save_retrieval_result(result, results_dir)
+        out.append(
+            ComboRetrieval(
+                combo_id=manifest["combo_id"], index_dir=str(index_dir), result=result
+            )
+        )
+    return out
+
+
+def entity_lookup(
+    query: str,
+    index_dirs: list[str],
+    results_dir: str | Path | None = None,
+) -> list[ComboRetrieval]:
+    """Exhaustive entity-lookup mode: returns every matching Resolution for
+    a query naming a known person/program/course, bypassing top-k ranking
+    entirely. A separate top-level function from query_indices/route_query
+    (not an extension of either) -- route_query picks one pre-designated
+    index and ranks it; query_indices compares heterogeneous combos and
+    degrades gracefully on an untagged index; this always runs against
+    caller-specified entity_tags-loader index dirs and hard-fails loudly if
+    one isn't (see check_entity_tags_loader)."""
+    store = ArtifactStore()
+    retriever = build_retriever(StrategySpec(type="entity_lookup"))
+
+    out: list[ComboRetrieval] = []
+    for index_dir in index_dirs:
+        manifest = _read_manifest(index_dir)
+        check_entity_tags_loader(manifest, index_dir)
+        embedder = build_embedder(
+            StrategySpec.model_validate(manifest["combo"]["embedder"])
+        )
+        index = store.load(index_dir)
+        combination_id = f"{manifest['combo_id']}__entity_lookup"
+        result: RetrievalResult = retrieve(
+            query, index, embedder, retriever, k=0, combination_id=combination_id,
         )
         if results_dir is not None:
             save_retrieval_result(result, results_dir)

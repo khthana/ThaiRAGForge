@@ -16,6 +16,7 @@ from tqdm import tqdm
 from rag_lab.chunkers.base import BaseChunker
 from rag_lab.embedders.base import BaseEmbedder
 from rag_lab.io.artifact_store import ArtifactStore
+from rag_lab.rerankers.base import BaseReranker
 from rag_lab.retrievers.base import BaseRetriever
 from rag_lab.schema import Index, Query, Resolution, RetrievalResult
 
@@ -114,14 +115,29 @@ def retrieve(
     embedder: BaseEmbedder,
     retriever: BaseRetriever,
     k: int,
+    *,
+    reranker: BaseReranker | None = None,
+    rerank_pool_size: int | None = None,
     combination_id: str | None = None,
 ) -> RetrievalResult:
+    # An exhaustive retriever (e.g. EntityLookupRetriever) never reads
+    # query.vector, so skip the embed call -- otherwise every entity-lookup
+    # query would pay a real embedder's (possibly GPU) cost for nothing.
+    exhaustive = getattr(retriever, "exhaustive", False)
     prepared = Query(
         text=query,
-        vector=embedder.embed_query(query),
+        vector=None if exhaustive else embedder.embed_query(query),
         tokens=word_tokenize(query),
     )
-    ranked = retriever.retrieve(prepared, index, k)
+    # When reranking, fetch a wider candidate pool from the retriever so the
+    # reranker has room to fix mistakes -- reranking only k already-good
+    # candidates gives it little to work with. Both DenseRetriever and
+    # BM25Retriever always score the full corpus and only slice at k, so
+    # widening the pool costs nothing extra.
+    pool_k = rerank_pool_size if (reranker is not None and rerank_pool_size) else k
+    ranked = retriever.retrieve(prepared, index, pool_k)
+    if reranker is not None:
+        ranked = reranker.rerank(prepared, ranked, k)
     if combination_id is None:
         combination_id = (
             f"{index.meta.get('chunker')}|{index.meta.get('embedder')}|{retriever.name}"
@@ -130,6 +146,7 @@ def retrieve(
         query=query,
         combination_id=combination_id,
         results=ranked,
-        top_k=k,
+        top_k=len(ranked) if exhaustive else k,
         retriever=retriever.name,
+        reranker=reranker.name if reranker is not None else None,
     )

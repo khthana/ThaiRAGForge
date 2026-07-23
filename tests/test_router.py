@@ -7,6 +7,7 @@ from rag_lab.router import (
     ROUTE_PROGRAM,
     ROUTE_UNMATCHED,
     classify_query,
+    detect_entities,
     rrf_merge,
 )
 from rag_lab.schema import RankedChunk, RetrievalResult
@@ -59,6 +60,59 @@ def test_classify_program_query_via_fallback_marker():
 def test_classify_unmatched_query():
     query = "ในการประชุมครั้งนี้ มีการพิจารณาเรื่องค่าธรรมเนียมการศึกษาในกรณีใดบ้าง"
     assert classify_query(query) == ROUTE_UNMATCHED
+
+
+def test_detect_entities_person_via_titled_regex():
+    detected = detect_entities("ผศ.ดร.สมชาย ใจดี มีประวัติเป็นกรรมการหลักสูตรใดบ้าง")
+    assert detected == {"people": ["สมชาย ใจดี"]}
+
+
+def test_detect_entities_person_via_no_title_dictionary_fallback():
+    def fake_dict_matcher(query):
+        return [{"given_name": "ธนา", "surname": "หงษ์สุวรรณ", "full_name": "ธนา หงษ์สุวรรณ"}]
+
+    detected = detect_entities(
+        "ธนา หงษ์สุวรรณ มีประวัติอย่างไรบ้าง", people_dict_matcher=fake_dict_matcher
+    )
+    assert detected == {"people": ["ธนา หงษ์สุวรรณ"]}
+
+
+def test_detect_entities_program():
+    # a "(" right after the program name bounds match_programs' fuzzy-match
+    # span (see program_loader.py's _bounded_span) -- mirrors
+    # test_program_loader.py's test_real_dictionary_loads_and_is_usable
+    detected = detect_entities(
+        "หลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาวิศวกรรมโยธา (การปรับปรุงแก้ไขหลักสูตร) เปลี่ยนแปลงอย่างไรบ้าง"
+    )
+    assert "programs" in detected
+    assert detected["programs"]
+
+
+def test_detect_entities_course_via_injected_fake_matcher():
+    detected = detect_entities("รายวิชานี้คืออะไร", course_matcher=lambda q: ["01276764"])
+    assert detected == {"courses": ["01276764"]}
+
+
+def test_detect_entities_multiple_kinds_at_once():
+    detected = detect_entities(
+        "ผศ.ดร.สมชาย ใจดี สอนวิชานี้หรือไม่", course_matcher=lambda q: ["01276764"]
+    )
+    assert detected["people"] == ["สมชาย ใจดี"]
+    assert detected["courses"] == ["01276764"]
+
+
+def test_detect_entities_no_match_returns_empty_dict():
+    # Fakes injected for every kind, not just courses -- isolates this "no
+    # match anywhere" case from the real people.json/programs.json
+    # dictionaries, which a long enough generic sentence could otherwise
+    # risk an accidental substring collision against.
+    detected = detect_entities(
+        "ในการประชุมครั้งนี้ มีการพิจารณาเรื่องค่าธรรมเนียมการศึกษาในกรณีใดบ้าง",
+        people_dict_matcher=lambda q: [],
+        program_matcher=lambda q: [],
+        course_matcher=lambda q: [],
+    )
+    assert detected == {}
 
 
 def test_rrf_merge_promotes_resolution_ranked_well_in_multiple_lists():
