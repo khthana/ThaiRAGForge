@@ -1,0 +1,29 @@
+# Full-corpus index for the entity-lookup retrieval mode (see
+# docs: project_entity_lookup_next_plan memory / commit de52041). Uses the
+# `entity_tags` loader (people/programs/courses metadata on every chunk)
+# with the project's confirmed best chunker+embedder combo (semantic +
+# bge-m3, see CLAUDE.md bottom line) so entity_boost can compose with real
+# dense/hybrid ranking, not just power the exhaustive entity_lookup path.
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/entity_tags_full.yaml
+experiment_name: entity_tags_full
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/entity_tags_full
+
+loaders:
+  - type: entity_tags
+
+chunkers:
+  - type: semantic
+    params: { breakpoint_threshold: 0.5 }
+
+embedders:
+  - type: local
+    params: { model_name: "BAAI/bge-m3" }
+
+run_mode: cartesian
+seed: 42

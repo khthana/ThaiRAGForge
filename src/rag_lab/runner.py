@@ -19,6 +19,7 @@ from rag_lab.combos import enumerate_build_combos
 from rag_lab.config import ExperimentConfig
 from rag_lab.factory import build_chunker, build_embedder, build_loader
 from rag_lab.io.artifact_store import ArtifactStore
+from rag_lab.loaders.common import parse_path
 from rag_lab.manifest import build_manifest, write_manifest
 from rag_lab.pipeline import build_index
 
@@ -34,7 +35,23 @@ class ComboResult:
 
 
 def _discover_paths(config: ExperimentConfig) -> list[str]:
-    paths = sorted(Path(config.corpus.input_dir).rglob("*.md"))
+    """A bare rglob also sweeps up gitignored non-corpus tooling reports that
+    live under `academic_resolutions/` (llm_ocr_scan/, entity_tags/, ...) --
+    `make_resolution_id`'s path-fallback means these don't error, they
+    silently get ingested as fake resolutions. Gate on parse_path finding a
+    real year+session (same signal `make_resolution_id` uses to choose the
+    real id over its path-fallback) rather than iter_corpus_files' relative-
+    to-root gate, since `input_dir` can itself point inside a year folder
+    (see dev_smoke.yaml)."""
+    all_paths = sorted(Path(config.corpus.input_dir).rglob("*.md"))
+    paths = []
+    for p in all_paths:
+        if p.name.endswith(".dup"):
+            continue
+        year, session, _ = parse_path(str(p))
+        if year is None or session is None:
+            continue
+        paths.append(p)
     if config.corpus.subset == "dev" and config.corpus.limit:
         paths = paths[: config.corpus.limit]
     return [str(p) for p in paths]
