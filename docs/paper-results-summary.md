@@ -29,6 +29,15 @@ to completion 2026-07-23 — see "Cross-encoder reranker results" section below
 (end-to-end RAG) remains not started in Tier 3. See the Open items list at the
 end of this file for what's still outstanding within the closed tiers.
 
+**Methodology caveat, added 2026-07-23 (see Open item 11)**: every number in
+this document was built before a corpus-discovery bug was found and fixed —
+the full-corpus indices behind these results contain ~7-8% chunks from
+non-resolution files that should never have been in the corpus. The rate is
+comparable across chunkers, so it's unlikely to flip the qualitative
+conclusions, but treat exact figures as accurate to within that noise band
+until the underlying indices are rebuilt clean (not yet done — deferred, see
+Open item 11 for why).
+
 ## Resolved 2026-07-23: RQ3 ablation results (normalization / segmentation / chunk-size)
 
 Full-corpus builds + paired bootstrap (n_boot=10,000, seed=42, Holm-Bonferroni
@@ -1058,6 +1067,34 @@ chunking + hybrid retrieval), not a specific embedder pick.
     structurally capped well below 1.0 under any top-k similarity
     approach — not part of the current Tier 1-3 plan, a candidate future
     direction only.
+11. New 2026-07-23: found + fixed a corpus-discovery bug affecting **every
+    number in this document**. `runner.py::_discover_paths` (and
+    `cli.py::build`) did a bare `rglob("*.md")` with no filtering, unlike
+    `loaders/common.py::iter_corpus_files` which already guarded against
+    this. `academic_resolutions/` also holds ~19 gitignored tooling-report
+    files (`llm_ocr_scan/`, `llm_thematic_scan/`, `entity_tags/`,
+    `ocr_repetition_review.md`) that don't match the real
+    `<year>/<session>/file.md` structure; `make_resolution_id` has a
+    silent path-fallback for non-conforming paths (no crash), so these
+    were ingested as fake resolutions in every historical full-corpus
+    build. Confirmed directly in `chunker_compare_full`'s built indices:
+    6.87% (fixed_size), 7.03% (recursive), 8.25% (semantic) of chunks
+    trace to these bogus files — one alone (`consensus_priority.md`, a
+    637KB OCR-scan report) contributed 1,517 chunks to the semantic index,
+    ~50x a typical real resolution's share. Contamination rate is
+    comparable across chunkers, so it's probably not the reason semantic
+    won the chunker comparison, but it is real noise inside every number
+    above. Fixed (commit `8c86b63` + a follow-up `cli.py` fix, same
+    session) — verified `_discover_paths` now returns exactly the correct
+    2,853 real resolutions with zero contamination, full test suite green.
+    **Historical indices were not rebuilt** — a single clean
+    semantic+bge-m3 combo took 1h17m to rebuild from scratch (most of it
+    one bulk `embedder.embed()` call over ~70k chunks at `batch_size=8`);
+    a full clean rebuild across 4 chunkers × 9 embedders would be a
+    multi-day background undertaking (consistent with the original
+    9-embedder sweep itself having needed nine separate `_resume*`
+    configs). Deferred by user decision 2026-07-23, given the contamination
+    rate is small and roughly uniform across compared conditions.
 
 ## Source scripts (for reproducibility / methods section)
 

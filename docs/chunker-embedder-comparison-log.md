@@ -1338,3 +1338,51 @@ distribution ของ hybrid retriever ที่ไม่เคยถูก tra
 hybrid-fused candidates โดยเฉพาะ หรือเอาคะแนน reranker ไปเป็น "ระบบที่ 4" ใน
 RRF แทนการ truncate-แทนที่ตรงๆ ปิด Tier 3 ข้อ 8 — เหลือแค่ RQ4 (end-to-end
 RAG) ที่ยังไม่เริ่มใน Tier 3
+
+---
+
+## บั๊ก corpus discovery ปนเปื้อนทุก full-corpus index ที่เคยสร้างมา (23 ก.ค. 2569)
+
+พบระหว่างการ build index `entity_tags_full` ใหม่ (ไม่เกี่ยวกับ eval หลัก
+โดยตรง แต่ build ค้าง 8+ ชั่วโมงที่ไฟล์สุดท้าย ทำให้ต้องสืบสาเหตุ) —
+`runner.py::_discover_paths` (ฟังก์ชันที่ full-corpus experiment ทุกตัวใช้หา
+ไฟล์ corpus) ทำ `Path(input_dir).rglob("*.md")` แบบไม่กรองอะไรเลย ต่างจาก
+`loaders/common.py::iter_corpus_files` (ที่ `tools/corpus_prep/tag_*.py` ใช้)
+ซึ่งมี comment เตือนอันตรายนี้ไว้อยู่แล้วแต่ไม่เคยถูกเอาไปใช้ใน `runner.py`
+จริง
+
+`academic_resolutions/` มีไฟล์รายงานเครื่องมือ (gitignored) ปนอยู่ ~19 ไฟล์
+(`llm_ocr_scan/`, `llm_thematic_scan/`, `entity_tags/`,
+`ocr_repetition_review.md`) ที่ path ไม่ตรง pattern `<ปี>/<ครั้งที่>/ไฟล์.md`
+จริง — `make_resolution_id` มี fallback เงียบ (คืน path ดิบแทนการ throw error)
+สำหรับ path ที่ไม่ตรง pattern เลยทำให้ไฟล์พวกนี้หลุดเข้าไปเป็น "มติปลอม" ใน
+ทุก full-corpus build ที่เคยรันมา โดยไม่มี error ใดๆ ให้เห็น
+
+**ตรวจสอบจริงใน index ที่ build ไว้แล้ว** (`data/index/chunker_compare_full/`
+— index ที่อยู่เบื้องหลังตัวเลขหลักทั้งหมดใน `docs/paper-results-summary.md`):
+chunk ที่มาจากไฟล์ปลอมพวกนี้คิดเป็น **6.87% (fixed_size), 7.03% (recursive),
+8.25% (semantic)** ของ chunk ทั้งหมด ไฟล์เดียว (`consensus_priority.md`
+รายงาน OCR-scan ขนาด 637KB) สร้าง chunk ถึง 1,517 chunk ใน index semantic —
+ราว 50 เท่าของสัดส่วนที่เอกสารจริงทั่วไปควรมี อัตราปนเปื้อนใกล้เคียงกันในทุก
+chunker เลยไม่น่าจะเป็นสาเหตุหลักที่ทำให้ semantic ชนะการเปรียบเทียบ
+chunker แต่ก็เป็น noise จริงที่แฝงอยู่ในทุกตัวเลขที่รายงานไปแล้ว (9-embedder
+matrix, hybrid/BM25 test, reranker eval, RQ3 ablation — ทั้งหมด build ก่อน
+บั๊กนี้จะถูกแก้)
+
+**แก้แล้ว** (commit `8c86b63` + ตามด้วยแก้ `cli.py::build` ที่มี pattern
+เดียวกันเป๊ะในเซสชันเดียวกัน): เปลี่ยนให้กรองด้วย `parse_path()` ต้องได้ปี+
+ครั้งที่จริงก่อนจะรวมไฟล์เข้าไป (ไม่ใช้ `iter_corpus_files`'s relative-to-root
+gate ตรงๆ เพราะ `dev_smoke.yaml` ชี้ `input_dir` เข้าไปในโฟลเดอร์ปีอยู่แล้ว จะ
+กรองเกิน) ยืนยันแล้ว: `_discover_paths` เจอไฟล์มติจริงครบ 2,853 ไฟล์ ไม่มีการ
+ปนเปื้อนเลย test suite ผ่านหมด
+
+**ยังไม่ได้ rebuild index ประวัติศาสตร์** — ลอง build ใหม่ 1 combo (semantic
++ bge-m3) บน corpus ที่กรองแล้วจริง ใช้เวลา **1 ชั่วโมง 17 นาที** (ส่วนใหญ่คือ
+`embedder.embed()` แบบ bulk ครั้งเดียวกับ ~70,789 chunk ที่ `batch_size=8` —
+ค่า default ที่ตั้งใจให้เล็กเพื่อความปลอดภัยด้าน VRAM) การ rebuild ทั้งชุด
+(4 chunker × 9 embedder ≈ 30+ combo) ตามจริงน่าจะเป็นงานหลายวัน สอดคล้องกับที่
+การ sweep 9-embedder ครั้งแรกเองก็ต้องใช้ config `_resume*` แยกกันถึง 9 ไฟล์
+(เป็นงาน background ที่ทำต่อเนื่องหลายรอบอยู่แล้ว ไม่ใช่ครั้งเดียวจบ) —
+ผู้ใช้ตัดสินใจ **เลื่อนการ rebuild ไปก่อน** (23 ก.ค. 2569) เนื่องจากอัตรา
+ปนเปื้อนต่ำและใกล้เคียงกันในทุกเงื่อนไขที่เปรียบเทียบ ไม่น่าจะพลิกผลสรุปเชิง
+คุณภาพของงานวิจัย

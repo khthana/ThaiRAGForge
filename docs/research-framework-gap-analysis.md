@@ -49,6 +49,16 @@ params fp16)
 > `docs/reranker-hybrid-interaction-research.md` รายละเอียดตัวเลขเต็มที่
 > `docs/paper-results-summary.md` § "Cross-encoder reranker results" — **เหลือแค่
 > RQ4 (end-to-end RAG + RAGAS/LLM-judge) ที่ยังไม่เริ่มใน Tier 3**
+>
+> **อัปเดต 2026-07-23 (ท้ายวัน) — methodology caveat สำคัญ**: พบ+แก้บั๊ก
+> corpus-discovery ที่ทำให้ full-corpus index ทุกอันที่เคยสร้างมา (รวมถึง
+> index เบื้องหลังตัวเลขทั้งหมดข้างบนนี้) ปนเปื้อนไฟล์ที่ไม่ใช่มติจริง
+> ~6.87-8.25% ของ chunk ทั้งหมด (รายละเอียดเต็ม:
+> `docs/chunker-embedder-comparison-log.md` § "บั๊ก corpus discovery ปนเปื้อน
+> ทุก full-corpus index ที่เคยสร้างมา") อัตราใกล้เคียงกันในทุก chunker เลยไม่
+> น่าพลิกผลสรุปเชิงคุณภาพ แต่ตัวเลขที่แม่นยำควรถือว่ามี noise แฝงอยู่ในระดับนี้
+> จนกว่าจะ rebuild index ให้สะอาด (ยังไม่ได้ทำ — ผู้ใช้ตัดสินใจเลื่อนไปก่อน
+> เพราะเป็นงานหลายวัน)
 
 **แกนหลักของเปเปอร์ (ข้อเสนอ)**: RQ1/RQ2 (embedder comparison) — ตรงกับสิ่งที่
 build ไว้แล้วมากที่สุด; RQ4 (end-to-end RAG) โน้ตเองจัดเป็น "เสริม" และเป็น subsystem
