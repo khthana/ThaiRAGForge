@@ -73,6 +73,19 @@ def make_resolution_id(path: str, year: str | None, session: str | None, title: 
     return str(Path(path).as_posix())
 
 
+def is_real_resolution_path(path: Path) -> bool:
+    """True if `path` is a genuine resolution file, not one of the
+    gitignored non-corpus report files that can share the same root (see
+    `iter_corpus_files`). Shared by every `rglob("*.md")` walker that can't
+    use `iter_corpus_files`'s relative-to-corpus-root gate directly (its
+    `parts[0]` check breaks when `input_dir` already points inside a year
+    folder, e.g. `dev_smoke.yaml`) -- this checks the same year+session
+    signal via `parse_path`/`make_resolution_id` instead, gate-independent
+    of where `path` sits relative to any particular root."""
+    year, session, _ = parse_path(str(path))
+    return year is not None and session is not None
+
+
 def iter_corpus_files(corpus_root: Path) -> Iterator[Path]:
     """Yield every live (non-`.dup`) resolution file under `<year>/<session>/*.md`.
 

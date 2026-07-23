@@ -23,7 +23,7 @@ from rag_lab.config import ExperimentConfig
 from rag_lab.embedders.local_st_embedder import LocalSTEmbedder
 from rag_lab.io.artifact_store import ArtifactStore
 from rag_lab.loaders import PlainLoader
-from rag_lab.loaders.common import parse_path
+from rag_lab.loaders.common import is_real_resolution_path
 from rag_lab.pipeline import build_index, retrieve
 from rag_lab.retrievers import DenseRetriever
 from rag_lab.runner import run_experiment
@@ -52,12 +52,8 @@ def build(
 ) -> None:
     """Load .md resolutions -> chunk -> embed -> save an Index artifact."""
     # Same non-corpus-report-file hazard runner.py::_discover_paths guards
-    # against -- gate on parse_path finding a real year+session.
-    paths = [
-        p
-        for p in sorted(Path(input_dir).rglob("*.md"))
-        if not p.name.endswith(".dup") and all(parse_path(str(p))[:2])
-    ]
+    # against -- see is_real_resolution_path.
+    paths = [p for p in sorted(Path(input_dir).rglob("*.md")) if is_real_resolution_path(p)]
     if limit:
         paths = paths[:limit]
     loader = PlainLoader()
