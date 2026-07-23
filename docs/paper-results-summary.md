@@ -21,9 +21,45 @@ and materially changes rank order.
 **Status**: gap-analysis Tier 1 and Tier 2 (`docs/research-framework-gap-analysis.md`
 §8) are both fully closed as of 2026-07-21 — MAP/Precision@k/multi-k, BM25 baseline,
 bootstrap+Holm significance testing, cost/latency Pareto table, and the `sct` /
-`qwen3_0.6b` embedder additions. Tier 3 (RQ3 normalization ablation, cross-encoder
-reranker, RQ4 end-to-end RAG) has not been started. See the Open items list at the
-end of this file for what's still outstanding within the closed tiers.
+`qwen3_0.6b` embedder additions. Tier 3's RQ3 ablations (normalization,
+word-aware segmentation, chunk-size sweep) ran to completion 2026-07-23 — see
+"RQ3 ablation results" section below. Cross-encoder reranker and RQ4 (end-to-end
+RAG) remain not started. See the Open items list at the end of this file for what's
+still outstanding within the closed tiers.
+
+## Resolved 2026-07-23: RQ3 ablation results (normalization / segmentation / chunk-size)
+
+Full-corpus builds + paired bootstrap (n_boot=10,000, seed=42, Holm-Bonferroni
+correction), Gold 73-det set. Config/eval scripts: `config/experiments/rq3_*.yaml`,
+`tools/eval/rq3_*_significance_test.py` / `rq3_chunksize_sweep_report.py`. Raw
+tables: `data/results/rq3_normalize_significance_test.md`,
+`data/results/rq3_segmentation_significance_test.md`,
+`data/results/rq3_chunksize_sweep_report.md`.
+
+- **Normalization** (Thai digit + `pythainlp.util.normalize()`, on `semantic ×
+  bge-m3`): **no significant effect on any metric** (Holm-adj p ≥ 0.414 across
+  dense + hybrid × {recall@10, MRR, nDCG@10}). Raw diffs are small and
+  inconsistent in sign across metrics — not citable as either a help or a harm.
+- **Segmentation** (word-aware `newmm`-boundary chunking vs. raw-character
+  slicing, on `fixed_size(512) × bge-m3`): **no significant effect on any
+  metric** (Holm-adj p = 1.0 across the board). Chunk count/length are nearly
+  identical between arms (61,766 vs 62,018 chunks; mean length 447.4 vs 438.9
+  chars) — snapping chunk boundaries to Thai word edges does not measurably
+  change retrieval quality on this corpus.
+- **Chunk size** (256 / 512 / 1024, `fixed_size × bge-m3`): **the one ablation
+  with a real, significant effect** — smaller chunks significantly beat larger
+  ones on recall@10: 256 > 1024 (dense Holm-adj p=0.0012, hybrid p=0.0006),
+  512 > 1024 (dense p=0.0132), 256 > 512 (hybrid p=0.0056). Recall@10 declines
+  monotonically with chunk size (dense: 256=0.510, 512=0.480, 1024=0.395;
+  hybrid: 256=0.661, 512=0.607, 1024=0.570). MRR/nDCG@10 differences are mostly
+  not significant after Holm correction — the effect is concentrated in
+  recall@10, not ranking quality among already-found results.
+
+**Headline for the paper**: of the three RQ3 preprocessing variables tested,
+only **chunk size** has a demonstrated, significant effect on this corpus
+(smaller is better for recall) — Thai-specific normalization and word-boundary
+segmentation do not move retrieval quality significantly at the 512-token
+scale already used throughout the rest of the study.
 
 ## Resolved 2026-07-21: ConGen/SCT max_seq_length — investigated, model-specific answer found
 
@@ -877,9 +913,12 @@ chunking + hybrid retrieval), not a specific embedder pick.
    `top_k=10`, so k∈{1,3,5,10} needed no new retrieval/GPU/embedding calls —
    pure recompute over already-persisted JSON, runs in seconds. See "Multi-k
    metrics" section below for the citation-ready table.
-5. RQ3 (normalization/segmentation ablation) and RQ4 (end-to-end RAG answer
-   quality) are explicitly out of scope for this first paper per the gap
-   analysis — later phase.
+5. ~~RQ3 (normalization/segmentation ablation)~~ — DONE 2026-07-23, see
+   "RQ3 ablation results" section above: only chunk-size has a significant
+   effect (smaller is better for recall); normalization and word-aware
+   segmentation do not. RQ4 (end-to-end RAG answer quality) remains
+   explicitly out of scope for this first paper per the gap analysis — later
+   phase.
 6. ~~Per-entity_type significance test for the 9-embedder matrix~~ — DONE
    2026-07-21 (`tools/eval/embedder_significance_test_by_entity_type_9way.py`).
    `qwen3_0.6b`'s program-query lead is NOT significant vs congen/qwen3-4B

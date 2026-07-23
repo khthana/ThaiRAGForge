@@ -1247,3 +1247,46 @@ time ไปขุดสาเหตุที่ไม่มีอยู่จร
 
 บันทึกลง `docs/paper-results-summary.md` (Open item #2 เปลี่ยนจาก "INVESTIGATED, root
 cause unresolved" เป็น "CLOSED, premise was false") แล้ว
+
+---
+
+## RQ3 ablation — รัน build จริงเต็มคอร์ปัสแล้ว (23 ก.ค. 2569)
+
+โค้ดเขียน+smoke-test ไว้แล้วตั้งแต่ 22 ก.ค. (commit `5a06c5b`, ดู
+`docs/research-framework-gap-analysis.md` §8 ข้อ 7) — วันนี้รัน build จริงทั้ง 3
+ablation แบบ background ทีละตัว (segmentation → chunksize sweep → normalize,
+เรียงจากเบาไปหนัก) ครบทั้ง build + significance test, exit code 0 ทุกขั้นตอน
+เร็วกว่าที่ประมาณไว้มาก (คาด normalize ~6-7 ชม. จากตัวเลข `semantic × bge-m3`
+เก่าก่อนแก้ fragmentation bug — รันจริงเสร็จเร็วกว่านั้นมาก น่าจะเป็นผลจาก
+[[project_semantic_chunker_fragmentation]] ที่ปิดไปแล้ว 18 ก.ค. ลด breakpoint
+count ลงมาก ยังไม่ได้วัด wall-clock แยกส่วนยืนยัน)
+
+**ผลลัพธ์ทั้ง 3 ablation (paired bootstrap n_boot=10000, seed=42, Holm-correct,
+Gold 73-det):**
+
+1. **Normalization** (`normalize_thai_text` ผ่าน loader `normalized`, จับคู่
+   `semantic × bge-m3`) — **ไม่มีผลนัยสำคัญเลยสักตัว** (Holm-adj p ≥ 0.414 ทุก
+   metric ทั้ง dense/hybrid) ตัวเลขดิบสลับทิศทางกันเองระหว่าง metric (บาง
+   metric normalized ดีขึ้นเล็กน้อย บางอันแย่ลงเล็กน้อย) — สรุป: การ normalize
+   เลขไทย/วรรณยุกต์ **ไม่ช่วยและไม่ทำร้าย** retrieval quality อย่างมีนัยสำคัญ
+   บน combo ที่ทดสอบ
+2. **Segmentation** (`fixed_size_wordaware` ตัดขอบคำด้วย newmm เทียบ
+   `fixed_size` ตัดดิบ, จับคู่กับ bge-m3) — **ไม่มีผลนัยสำคัญเลยสักตัวเช่นกัน**
+   (Holm-adj p = 1.0 ทุก metric) จำนวน/ขนาด chunk แทบไม่ต่างกัน (61,766 vs
+   62,018 chunks, mean length 447 vs 439 ตัวอักษร) — สรุป: การ snap ขอบ chunk
+   ให้ตรงขอบคำภาษาไทยไม่กระทบผลลัพธ์อย่างมีนัยสำคัญ (การตัดกลางคำแบบดิบไม่ได้
+   สร้างความเสียหายมากอย่างที่อาจคาดไว้)
+3. **Chunk-size sweep** (256/512/1024, `fixed_size` + bge-m3) — **มีผลจริงและ
+   มีนัยสำคัญ** โดยเฉพาะ recall@10: 256 > 1024 อย่างมีนัยสำคัญทั้ง dense
+   (Holm-adj p=0.0012) และ hybrid (p=0.0006); 512 > 1024 นัยสำคัญบน dense
+   recall@10 (p=0.0132); 256 > 512 นัยสำคัญบน hybrid recall@10 (p=0.0056)
+   เท่านั้น (dense 256 vs 512 ไม่นัยสำคัญ) ตัวเลข recall@10 เฉลี่ยไล่ตามขนาด
+   ชัดเจน: dense 256=0.510, 512=0.480, 1024=0.395; hybrid 256=0.661,
+   512=0.607, 1024=0.570 — **chunk เล็กกว่าดีกว่าอย่างสม่ำเสมอสำหรับ recall**
+   แต่ MRR/nDCG@10 ส่วนใหญ่ไม่นัยสำคัญหลัง Holm correction (สัญญาณอ่อนกว่า
+   recall มาก)
+
+**สรุปรวม RQ3**: ตัวแปรเดียวที่ทดสอบแล้วมีผลจริงคือ **chunk_size** (เล็กกว่า
+ดีกว่าสำหรับ recall) — normalization กับ segmentation ไม่มีผลนัยสำคัญทั้งคู่
+ผลลัพธ์เต็มอยู่ที่ `data/results/rq3_{normalize,segmentation}_significance_test.md`
+และ `data/results/rq3_chunksize_sweep_report.md`
