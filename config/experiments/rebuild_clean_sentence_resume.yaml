@@ -1,0 +1,36 @@
+# Resume of batch 3/4 (sentence) after background task b6a9lupb3 was killed
+# externally (not by us, not an error -- combos 1-5 (e5_large, e5_small,
+# bge_m3, congen, sct) had already written cleanly to disk with today's
+# 2026-07-24 timestamps when it happened; combo 6 (qwen3-4B) was 43% through
+# and was NOT partially written, since pipeline.build_index writes each
+# combo's artifacts atomically only on completion). This config covers only
+# the 4 remaining embedders so we don't re-embed the corpus 5 extra times.
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/rebuild_clean_sentence_resume.yaml
+experiment_name: rebuild_clean_sentence_resume
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/chunker_compare_full
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: sentence
+    params: { chunk_size: 512 }
+
+embedders:
+  - type: qwen3
+    params: { model_name: "Qwen/Qwen3-Embedding-4B" }
+  - type: qwen3
+    params: { model_name: "Qwen/Qwen3-Embedding-0.6B" }
+  - type: jina_v5
+    params: { model_name: "jinaai/jina-embeddings-v5-text-small-retrieval" }
+  - type: local
+    params: { model_name: "Thaweewat/jina-embedding-v3-m2v-1024" }
+
+run_mode: cartesian
+seed: 42

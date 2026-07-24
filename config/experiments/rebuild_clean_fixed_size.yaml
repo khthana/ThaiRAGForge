@@ -1,0 +1,47 @@
+# Clean rebuild, batch 1/4 (fixed_size x 9 embedders) -- replaces the
+# corpus-discovery-contaminated combos in data/index/chunker_compare_full/
+# in place (same combo_ids, since discovery only affects which documents
+# get loaded, not the loader/chunker/embedder config the id is hashed
+# from). Canonical embedder params match tools/eval/embedder_matrix_9way.py's
+# _MODEL_LABELS / EMBEDDER_ORDER exactly (congen = original/no max_seq_length
+# override, sct = 510-cap -- these are NOT symmetric, see that script's
+# docstring on the superseded-combo exclusion list).
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/rebuild_clean_fixed_size.yaml
+experiment_name: rebuild_clean_fixed_size
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/chunker_compare_full
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: fixed_size
+    params: { chunk_size: 512, chunk_overlap: 50 }
+
+embedders:
+  - type: e5
+    params: { model_name: "intfloat/multilingual-e5-large" }
+  - type: e5
+    params: { model_name: "intfloat/multilingual-e5-small" }
+  - type: local
+    params: { model_name: "BAAI/bge-m3" }
+  - type: local
+    params: { model_name: "kornwtp/ConGen-BGE_M3-model-phayathaibert" }
+  - type: local
+    params: { model_name: "kornwtp/SCT-KD-BGE-M3-model-phayathaibert", max_seq_length: 510 }
+  - type: qwen3
+    params: { model_name: "Qwen/Qwen3-Embedding-4B" }
+  - type: qwen3
+    params: { model_name: "Qwen/Qwen3-Embedding-0.6B" }
+  - type: jina_v5
+    params: { model_name: "jinaai/jina-embeddings-v5-text-small-retrieval" }
+  - type: local
+    params: { model_name: "Thaweewat/jina-embedding-v3-m2v-1024" }
+
+run_mode: cartesian
+seed: 42

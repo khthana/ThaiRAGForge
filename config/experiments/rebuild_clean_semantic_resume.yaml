@@ -1,0 +1,39 @@
+# Resume of batch 4/4 (semantic) after background task byllajo7x stopped
+# externally (machine went to sleep -- not an error, not a code bug).
+# Combos 1-4 (e5_large, e5_small, bge_m3, congen) had already written
+# cleanly to disk with today's 2026-07-24 timestamps when it happened;
+# combo 5 (sct) was 58% through its chunking phase and was NOT partially
+# written, since pipeline.build_index writes each combo's artifacts
+# atomically only on completion. This config covers only the 5 remaining
+# embedders so we don't re-chunk+re-embed the corpus 4 extra times.
+# Run with:
+#   PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/rebuild_clean_semantic_resume.yaml
+experiment_name: rebuild_clean_semantic_resume
+
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+
+output_dir: data/index/chunker_compare_full
+
+loaders:
+  - type: plain
+
+chunkers:
+  - type: semantic
+    params: { breakpoint_threshold: 0.5 }
+
+embedders:
+  - type: local
+    params: { model_name: "kornwtp/SCT-KD-BGE-M3-model-phayathaibert", max_seq_length: 510 }
+  - type: qwen3
+    params: { model_name: "Qwen/Qwen3-Embedding-4B" }
+  - type: qwen3
+    params: { model_name: "Qwen/Qwen3-Embedding-0.6B" }
+  - type: jina_v5
+    params: { model_name: "jinaai/jina-embeddings-v5-text-small-retrieval" }
+  - type: local
+    params: { model_name: "Thaweewat/jina-embedding-v3-m2v-1024" }
+
+run_mode: cartesian
+seed: 42
