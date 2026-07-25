@@ -1,0 +1,145 @@
+"""Score EntityLookupRetriever (exhaustive person/program/course name-match,
+see project_entity_lookup_next_plan) against the Gold 73-deterministic query
+set, broken out by entity_type -- this has never been run before. The
+entity_tags_full index (70,789 chunks, semantic + bge-m3, zero corpus-discovery
+contamination) was built and committed (de52041) but never evaluated.
+
+entity_lookup is exhaustive, not ranked (see run_entity_lookup_query_set's
+docstring): every matching resolution comes back in arbitrary corpus order.
+Score with k >= the largest per-query result-set size so recall@k/precision@k
+reduce to plain set recall/precision; mrr/ndcg are computed but not meaningful
+for an unranked result and are reported for completeness only, not compared
+to ranked retrievers' numbers.
+
+Run with:
+    .venv/Scripts/python.exe tools/eval/run_gold_entity_lookup_eval.py
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+from collections import defaultdict
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+sys.path.insert(0, str(REPO / "src"))
+import yaml  # noqa: E402
+
+from rag_lab.metrics import evaluate  # noqa: E402
+from rag_lab.query_sets import load_gold_query_set, run_entity_lookup_query_set  # noqa: E402
+from rag_lab.results import load_retrieval_result  # noqa: E402
+
+_ENTITY_INDEX_DIR = REPO / "data" / "index" / "entity_tags_full" / "entity_tags__semantic__local__e4fe19d6"
+_GOLD_QUERY_SET_PATH = REPO / "config" / "eval" / "gold_query_set_73det.yaml"
+_K = 1000  # exhaustive retriever: must exceed the largest per-query result-set size
+
+
+def render_report(
+    scores: dict[str, dict[str, float]],
+    per_type: dict[str, dict[str, list[float]]],
+    etypes: list[str],
+    n_queries: int,
+) -> str:
+    lines = [
+        "# Gold query-set eval: entity_lookup (exhaustive person/program/course match)",
+        "",
+        f"- Query set: Gold 73-deterministic, {n_queries} queries",
+        f"- Index: entity_tags_full (semantic + bge-m3, 70,789 chunks, zero contamination)",
+        f"- retriever = entity_lookup (exhaustive, unranked); scored at k={_K} so "
+        "recall/precision@k reduce to plain set recall/precision",
+        "- mrr/ndcg computed but not meaningful (arbitrary corpus order) -- not "
+        "comparable to ranked retrievers",
+        "",
+        "## Overall",
+        "",
+        f"| recall@{_K} | precision@{_K} | mrr | ndcg@{_K} | map |",
+        "|---|---|---|---|---|",
+    ]
+    for combo_id, s in scores.items():
+        lines.append(
+            f"| {s[f'recall@{_K}']:.4f} | {s[f'precision@{_K}']:.4f} | "
+            f"{s['mrr']:.4f} | {s[f'ndcg@{_K}']:.4f} | {s['map']:.4f} |"
+        )
+
+    lines += ["", "## Per entity_type (recall/precision as plain set recall/precision)", ""]
+    lines.append("| entity_type | n | recall | precision | mrr | ndcg |")
+    lines.append("|---|---|---|---|---|---|")
+    for et in etypes:
+        row = per_type[et]
+        n = len(row["recall"])
+        lines.append(
+            f"| {et} | {n} | {sum(row['recall'])/n:.4f} | {sum(row['precision'])/n:.4f} | "
+            f"{sum(row['mrr'])/n:.4f} | {sum(row['ndcg'])/n:.4f} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--gold-query-set", type=str, default=str(_GOLD_QUERY_SET_PATH))
+    parser.add_argument("--index-dir", type=str, default=str(_ENTITY_INDEX_DIR))
+    parser.add_argument(
+        "--results-dir", type=str,
+        default=str(REPO / "data" / "results" / "gold_entity_lookup_73det"),
+    )
+    parser.add_argument(
+        "--output", type=str,
+        default=str(REPO / "data" / "results" / "gold_entity_lookup_73det_report.md"),
+    )
+    parser.add_argument("--limit", type=int, default=None, help="Cap query count (smoke testing)")
+    args = parser.parse_args()
+
+    query_set = load_gold_query_set(args.gold_query_set)
+    if args.limit:
+        query_set = query_set[: args.limit]
+    print(f"gold query set: {len(query_set)} queries")
+
+    entries_raw = yaml.safe_load(Path(args.gold_query_set).read_text(encoding="utf-8"))
+    entity_type_by_query = {e["query"]: e.get("entity_type", "unknown") for e in entries_raw}
+
+    t0 = time.time()
+    run_entity_lookup_query_set(query_set, [args.index_dir], results_dir=args.results_dir)
+    print(f"retrieval done in {time.time() - t0:.1f}s")
+
+    persisted = [load_retrieval_result(p) for p in Path(args.results_dir).glob("*.json")]
+    qrels = {e.query: e.relevant_resolution_ids for e in query_set}
+    scores = evaluate(persisted, qrels, k=_K)
+
+    from rag_lab.metrics import ndcg_at_k, precision_at_k, recall_at_k, reciprocal_rank
+
+    by_combo_query = {(r.combination_id, r.query): r for r in persisted}
+    combo_id = next(iter(scores))
+    queries_by_type: dict[str, list[str]] = defaultdict(list)
+    for q, et in entity_type_by_query.items():
+        queries_by_type[et].append(q)
+    etypes = sorted(queries_by_type)
+
+    per_type: dict[str, dict[str, list[float]]] = {
+        et: {"recall": [], "precision": [], "mrr": [], "ndcg": []} for et in etypes
+    }
+    for et, queries in queries_by_type.items():
+        for q in queries:
+            relevant = qrels[q]
+            r = by_combo_query.get((combo_id, q))
+            if r is None:
+                per_type[et]["recall"].append(0.0)
+                per_type[et]["precision"].append(0.0)
+                per_type[et]["mrr"].append(0.0)
+                per_type[et]["ndcg"].append(0.0)
+                continue
+            per_type[et]["recall"].append(recall_at_k(r, relevant, _K))
+            per_type[et]["precision"].append(precision_at_k(r, relevant, _K))
+            per_type[et]["mrr"].append(reciprocal_rank(r, relevant))
+            per_type[et]["ndcg"].append(ndcg_at_k(r, relevant, _K))
+
+    report = render_report(scores, per_type, etypes, len(query_set))
+    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.output).write_text(report, encoding="utf-8")
+    print(report)
+    print(f"written to {args.output}")
+
+
+if __name__ == "__main__":
+    main()
