@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from rag_lab.config import StrategySpec  # noqa: E402
 from rag_lab.query_service import discover_indices, query_indices, route_query  # noqa: E402
-from rag_lab.router import classify_query  # noqa: E402
+from rag_lab.router import classify_query, detect_entities  # noqa: E402
 
 st.set_page_config(page_title="RAG Lab — Query & Compare", layout="wide")
 st.title("RAG Lab — Query & Compare (Mode B)")
@@ -129,15 +129,39 @@ else:
 retriever = st.sidebar.selectbox("Retriever", ["dense", "bm25", "hybrid"], index=0, key="retriever")
 k = st.sidebar.slider("top-k", min_value=1, max_value=20, value=5, key="k")
 year_filter = st.sidebar.text_input("Filter by year (พ.ศ., optional)", "", key="year_filter")
+entity_boost = st.sidebar.checkbox(
+    "Entity boost (narrow to detected person/program/course/faculty before ranking)",
+    value=False, key="entity_boost",
+    help=(
+        "Detects named people/programs/courses/faculties in the query "
+        "(src/rag_lab/router.py's detect_entities) and, for any selected "
+        "combo built with the entity_tags loader (e.g. data/index/"
+        "entity_tags_full), narrows to only resolutions mentioning that "
+        "entity before ranking with the chosen retriever -- fixes cases "
+        "where the entity's name alone doesn't carry enough weight to rank "
+        "the right resolutions into the top-k. No effect on a combo built "
+        "with any other loader (narrowing is skipped for it, not an error)."
+    ),
+)
 query = st.text_input("Query (คำค้น)", key="query")
 
 
 def _render_result(label: str, result) -> None:
-    st.subheader(label)
+    boosted = result.combination_id.endswith("__entity_boost")
+    st.subheader(f"{label} (entity-boosted)" if boosted else label)
     for r in result.results:
         st.markdown(f"**#{r.rank}** · score `{r.score:.3f}` · p{r.page} · `{r.resolution_id}`")
         st.write(r.text[:300])
         st.divider()
+
+
+def _show_detected_entities(q: str) -> None:
+    detected = detect_entities(q)
+    if detected:
+        parts = [f"{kind}: {', '.join(values)}" for kind, values in detected.items()]
+        st.caption("Detected entities — " + " · ".join(parts))
+    elif entity_boost:
+        st.caption("Detected entities — none (entity boost has no effect on this query)")
 
 
 search_clicked = st.button("Search", type="primary", key="search_button")
@@ -162,6 +186,7 @@ if search_clicked and query and smart_routing:
 elif search_clicked and query and not smart_routing and selected:
     dirs = [by_id[c].dir for c in selected]
     criteria = {"year": year_filter.strip()} if year_filter.strip() else None
+    _show_detected_entities(query)
     combos = query_indices(
         query,
         dirs,
@@ -169,6 +194,7 @@ elif search_clicked and query and not smart_routing and selected:
         k,
         results_dir="data/results/mode_b",
         filter_criteria=criteria,
+        entity_boost=entity_boost,
     )
     for col, cr in zip(st.columns(len(combos)), combos):
         with col:

@@ -107,6 +107,46 @@ def test_hashing_only_index_shows_a_toy_embedder_warning(tmp_path):
     assert any("hashing" in w.value for w in at.warning)
 
 
+def test_entity_boost_checkbox_narrows_and_labels_the_result(tmp_path):
+    """entity_boost is a pass-through to query_indices (query_service.py) --
+    this only needs to prove the checkbox is actually wired, not re-test
+    EntityFilter/detect_entities themselves (covered by their own unit
+    tests). A person-naming query against an entity_tags-loader index must
+    come back labeled '(entity-boosted)', and the detected-entity caption
+    must render."""
+    corpus = tmp_path / "corpus" / "2569" / "ครั้งที่ 1"
+    corpus.mkdir(parents=True)
+    (corpus / "เรื่อง ประวัติ.md").write_text(
+        "## Page 1\nผศ.ดร.สมชาย ใจดี เป็นกรรมการหลักสูตร", encoding="utf-8"
+    )
+    out = tmp_path / "out"
+    config = ExperimentConfig(
+        experiment_name="e",
+        corpus={"input_dir": (tmp_path / "corpus").as_posix()},
+        output_dir=out.as_posix(),
+        loaders=[StrategySpec(type="entity_tags")],
+        chunkers=[StrategySpec(type="fixed_size", params={"chunk_size": 100})],
+        embedders=[StrategySpec(type="hashing")],
+    )
+    run_experiment(config)
+
+    at = AppTest.from_file(_APP)
+    at.run(timeout=30)
+    _point_at_custom_index_dir(at, out)
+
+    combo_ids = [info.combo_id for info in discover_indices(out)]
+    at.sidebar.multiselect(key="selected_combos").set_value(combo_ids)
+    at.sidebar.checkbox(key="entity_boost").set_value(True)
+    at.run(timeout=30)
+
+    at.text_input(key="query").set_value("ผศ.ดร.สมชาย ใจดี มีประวัติอย่างไรบ้าง")
+    at.button(key="search_button").click().run(timeout=30)
+
+    assert not at.exception
+    assert any("Detected entities" in c.value for c in at.caption)
+    assert any("(entity-boosted)" in h.value for h in at.subheader)
+
+
 def test_combo_label_disambiguates_same_chunker_type_by_chunk_size(tmp_path):
     """Two fixed_size combos differing only by chunk_size used to render as
     the identical label ('fixed_size + hashing' twice) in the multiselect --
