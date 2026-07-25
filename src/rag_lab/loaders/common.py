@@ -17,6 +17,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Iterator
 
+from pythainlp.util import thai_digit_to_arabic_digit
+
 _DOCUMENT_HEADER = re.compile(r"^\s*#\s*Document:.*$", re.MULTILINE)
 _MANIFEST_NAME = "meeting_manifest.json"
 
@@ -32,6 +34,15 @@ _MAPPING_FALLBACK_WINDOW = 8000  # used only when no table follows the heading
 # tools/corpus_prep/scan_ocr_repetition.py's curriculum_map_spans(), kept as a
 # separate implementation because that tool is a read-only diagnostic outside
 # this package's boundary, not something src/rag_lab imports from
+
+_COURSE_TABLE_MARKER = re.compile(
+    r"รหัส\s*/\s*หน่วยกิต|Title\s+and\s+Course\s+description|เปลี่ยนเป็น", re.I
+)
+_TABLE_CODE = re.compile(r"\d{8}")
+_HTML_TAG = re.compile(r"<[^>]*>?")
+_WS = re.compile(r"\s+")
+_TD_CELL = re.compile(r"<td[^>]*>(.*?)</td>", re.S | re.I)
+_CREDIT_TUPLE = re.compile(r"\d\s*\(\s*\d+\s*-\s*\d+\s*-\s*\d+\s*\)")
 
 
 def read_text(path: str) -> str:
@@ -154,6 +165,93 @@ def strip_mapping_tables(text: str) -> str:
     for start, end in spans:
         out.append(text[cursor:start])
         cursor = end
+    out.append(text[cursor:])
+    return "".join(out)
+
+
+def _compact_course_table(table_html: str) -> str:
+    """Collapse one course-comparison `<table>` to one `CODE title` line per
+    unique course code, dropping everything else -- notably the
+    paragraph-long English course-description prose that makes these tables
+    the corpus's single largest chunks (17,077 chars in one real document,
+    see docs/chunker-embedder-comparison-log.md). The credit-tuple (e.g.
+    `4 (2-4-6)`) is deliberately dropped from the output, not just the
+    description -- it's not searchable content, and keeping code+title with
+    nothing but whitespace between them means match_courses's existing
+    "followed by a letter" plausibility check tags these codes for free, no
+    regex change needed (it previously never matched here: a credit-tuple
+    sat between code and title in both the raw HTML and an earlier version
+    of this compaction that kept it).
+
+    Anchors on `<td>` cell boundaries, not a flat char-window: in every
+    sampled table, a code+credit-tuple cell (e.g. `20626214<br/>4 (2-4-6)`)
+    is immediately followed by a cell holding *only* the short title (e.g.
+    `Respiratory and Excretory System`) -- the long description lives in a
+    *separate* `<tr>` (a `rowspan`'d continuation with no code in its own
+    row), so "next cell" reliably lands on the title, never mid-description,
+    unlike a char-count window.
+
+    Deduped to first occurrence per code: `rowspan`-driven table
+    reconstruction re-emits the same code+title header cells on every
+    spanned row (confirmed against raw HTML -- not an OCR misread, since
+    the repeated description text differs slightly each time; a table-
+    extraction artifact instead), so a naive per-occurrence line would
+    repeat the same course 5-20x."""
+    normalized = thai_digit_to_arabic_digit(table_html)
+    cells = [m.group(1) for m in _TD_CELL.finditer(normalized)]
+    seen: set[str] = set()
+    lines = []
+    for i, cell in enumerate(cells):
+        codes = _TABLE_CODE.findall(cell)
+        if not codes or codes[0] in seen:
+            continue
+        code = codes[0]
+        seen.add(code)
+        title = ""
+        if i + 1 < len(cells):
+            title = _WS.sub(" ", _HTML_TAG.sub(" ", cells[i + 1])).strip(" -,:")
+        lines.append(f"{code} {title}" if title else code)
+    return "\n".join(lines)
+
+
+def strip_course_comparison_tables(text: str) -> str:
+    """Simplify (not remove) old/new course-comparison tables -- a different
+    table type than strip_mapping_tables targets (that one strips a
+    checkbox/PLO grid entirely; this one keeps the course code + a short
+    label per course, only dropping the long description prose).
+
+    Detected by header markers unique to this table type ("รหัส/หน่วยกิต",
+    "Title and Course description", "เปลี่ยนเป็น") -- but the loosest of
+    those three ("เปลี่ยนเป็น", "changed to") is ordinary Thai prose, not
+    table-specific, and produced one confirmed false positive: an MoA/joint-
+    degree fee table with no course codes at all matched on that phrase
+    alone. A second, structural gate fixes it -- also require the table to
+    contain at least one course-code-shaped or credit-tuple-shaped run
+    (`\\d{8}` / `N (x-y-z)`), which every real course-comparison table has
+    and the MoA table didn't -- without narrowing to the single strictest
+    header marker, which would also drop real course tables that only use
+    the other two headers. Every detected code is preserved verbatim, only
+    the text following it is shortened -- but the ORDER matters for
+    CourseLoader.match_courses: running this BEFORE match_courses actively
+    *improves* tagging coverage (compacted `CODE title` text satisfies
+    match_courses's "followed by a letter" check; the raw HTML's
+    `CODE<br/>credit-tuple` never did), so a loader that wants both should
+    call this first, not after."""
+    out = []
+    cursor = 0
+    touched = False
+    for m in _TABLE.finditer(text):
+        table = m.group(0)
+        if not _COURSE_TABLE_MARKER.search(table):
+            continue
+        if not (_TABLE_CODE.search(table) or _CREDIT_TUPLE.search(table)):
+            continue
+        touched = True
+        out.append(text[cursor : m.start()])
+        out.append(_compact_course_table(table))
+        cursor = m.end()
+    if not touched:
+        return text
     out.append(text[cursor:])
     return "".join(out)
 
