@@ -1,0 +1,6190 @@
+[
+ {
+  "code": "01005095",
+  "canonical": "Electronic Circuit 1 1"
+ },
+ {
+  "code": "01005140",
+  "canonical": "Exercise for Electrical 1 1"
+ },
+ {
+  "code": "01005141",
+  "canonical": "Exercise for Electrical 1"
+ },
+ {
+  "code": "01005142",
+  "canonical": "Energy Engineering 1"
+ },
+ {
+  "code": "01005143",
+  "canonical": "Electronics 1"
+ },
+ {
+  "code": "01005144",
+  "canonical": "Mechatronics Seminar 1 1"
+ },
+ {
+  "code": "01005145",
+  "canonical": "Mechatronics Seminar 2 1"
+ },
+ {
+  "code": "01006000",
+  "canonical": "ACADEMIC LISTENING AND SPEAKING 3 A S"
+ },
+ {
+  "code": "01006001",
+  "canonical": "ACADEMIC READING AND WRITING 3 A S C1"
+ },
+ {
+  "code": "01006001",
+  "canonical": "Academic Reading and Writing 3 A S"
+ },
+ {
+  "code": "01006001",
+  "canonical": "ENGINEERING MATHEMATICS 1 01096131"
+ },
+ {
+  "code": "01006001",
+  "canonical": "ENGINEERING MATHEMATICS 1 or"
+ },
+ {
+  "code": "01006005",
+  "canonical": "OVERSEA 01066466"
+ },
+ {
+  "code": "01006006",
+  "canonical": "INDUSTRIAL EXPERIENCE FOR ENGINEERS"
+ },
+ {
+  "code": "01006022",
+  "canonical": "GENERAL PHYSICS 2 05366030"
+ },
+ {
+  "code": "01006022",
+  "canonical": "GENERAL PHYSICS 2 05366031"
+ },
+ {
+  "code": "01006030",
+  "canonical": "CALCULUS 1 -6"
+ },
+ {
+  "code": "01006031",
+  "canonical": "CALCULUS 2"
+ },
+ {
+  "code": "01006031",
+  "canonical": "CALCULUS 2 01156238"
+ },
+ {
+  "code": "01006050",
+  "canonical": "COMPUTER ALGORITHM, CODING AND NETWORK"
+ },
+ {
+  "code": "01006093",
+  "canonical": "CO-OPERATIVE EDUCATION or 4"
+ },
+ {
+  "code": "01006301",
+  "canonical": "CO-OPERATIVE EDUCATION or 3"
+ },
+ {
+  "code": "01006301",
+  "canonical": "COOPERATIVE OR 006301 CED EDUCATION EDUCATION OR"
+ },
+ {
+  "code": "01006302",
+  "canonical": "STUDY ABOARD"
+ },
+ {
+  "code": "01006302",
+  "canonical": "STUDY ABROAD CAPSTONE DESIGN OPERATION"
+ },
+ {
+  "code": "01006304",
+  "canonical": "OVERSEA TRAINING 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
+ },
+ {
+  "code": "01006311",
+  "canonical": "FUNDAMENTALS OF MATERIALS SCIENCE"
+ },
+ {
+  "code": "01006500",
+  "canonical": "ACADEMIC LISTENING AND SPEAKING"
+ },
+ {
+  "code": "01006500",
+  "canonical": "ACADEMIC LISTENING AND SPEAKING 4 A S"
+ },
+ {
+  "code": "01006501",
+  "canonical": "ACADEMIC READING AND WRITING 4 A S"
+ },
+ {
+  "code": "01006501",
+  "canonical": "Academic Reading and Writing 4 A S IELTS 6 TOEFL"
+ },
+ {
+  "code": "01006502",
+  "canonical": "PROFESSIONAL ETHICS"
+ },
+ {
+  "code": "01006505",
+  "canonical": "CREATIVE HINKING"
+ },
+ {
+  "code": "01006507",
+  "canonical": "PERSONAL ECONOMICS"
+ },
+ {
+  "code": "01006516",
+  "canonical": "NNOVATION MANAGEMENT"
+ },
+ {
+  "code": "01006520",
+  "canonical": "LEADERSHIP AND PERSONAL DEVELOPMENT"
+ },
+ {
+  "code": "01006525",
+  "canonical": "HOSPITAL ACCREDITATION"
+ },
+ {
+  "code": "01006525",
+  "canonical": "HOSPITAL ACCREDITATION O"
+ },
+ {
+  "code": "01006531",
+  "canonical": "BUSINESS COMMUNICATION"
+ },
+ {
+  "code": "01006531",
+  "canonical": "BUSINESS COMMUNICATION O"
+ },
+ {
+  "code": "01006531",
+  "canonical": "BUSINESS COMMUNICATION O O O O O O O O O O O O"
+ },
+ {
+  "code": "01006531",
+  "canonical": "Business Communication ng"
+ },
+ {
+  "code": "01006532",
+  "canonical": "LOGIC AND CRITICAL THINKING"
+ },
+ {
+  "code": "01006532",
+  "canonical": "LOGIC AND CRITICAL THINKING 5"
+ },
+ {
+  "code": "01006538",
+  "canonical": "INTRODUCTION TO CREATIVE ENGINEERING AND EMERGING TECHNOLOGY"
+ },
+ {
+  "code": "01006543",
+  "canonical": "UNDERSTANDING HUMAN BEHAVIOR O"
+ },
+ {
+  "code": "01006543",
+  "canonical": "UNDERSTANDING HUMAN BEHAVIOR O O O O O O O O O O"
+ },
+ {
+  "code": "01006544",
+  "canonical": "ENGLISH FOR HEALTH PROFESSIONS"
+ },
+ {
+  "code": "01006544",
+  "canonical": "ENGLISH FOR HEALTH PROFESSIONS O"
+ },
+ {
+  "code": "01006544",
+  "canonical": "ENGLISH FOR HEALTH PROFESSIONS O O O O O O O O O"
+ },
+ {
+  "code": "01006545",
+  "canonical": "MEDICAL ETHICS, LAWS AND PROFESSIONALISM"
+ },
+ {
+  "code": "01006545",
+  "canonical": "MEDICAL ETHICS, LAWS AND PROFESSIONALISM O"
+ },
+ {
+  "code": "01006545",
+  "canonical": "MEDICAL ETHICS, LAWS AND PROFESSIONALISM O O O O O O"
+ },
+ {
+  "code": "01006546",
+  "canonical": "GENES &amp"
+ },
+ {
+  "code": "01006547",
+  "canonical": "ACADEMIC READING AND WRITING FOR HEALTH SCIENCES"
+ },
+ {
+  "code": "01006547",
+  "canonical": "ACADEMIC READING AND WRITING FOR HEALTH SCIENCES O"
+ },
+ {
+  "code": "01006547",
+  "canonical": "ACADEMIC READING AND WRITING FOR HEALTH SCIENCES O O O"
+ },
+ {
+  "code": "01006548",
+  "canonical": "INTRODUCTION TO MEDICAL PROFESSION"
+ },
+ {
+  "code": "01006548",
+  "canonical": "INTRODUCTION TO MEDICAL PROFESSION O"
+ },
+ {
+  "code": "01006548",
+  "canonical": "INTRODUCTION TO MEDICAL PROFESSION O O O O O O O O"
+ },
+ {
+  "code": "01006549",
+  "canonical": "WORLD CULTURE"
+ },
+ {
+  "code": "01006549",
+  "canonical": "WORLD CULTURE O"
+ },
+ {
+  "code": "01006549",
+  "canonical": "WORLD CULTURE O O O O O O O O O O O O O O O"
+ },
+ {
+  "code": "01006549",
+  "canonical": "WORLD CULTURE beginning-of-life and end-of-life issues"
+ },
+ {
+  "code": "01006552",
+  "canonical": "PRACTICE UNDER LANGUAGE AND COMMUNICATON"
+ },
+ {
+  "code": "01006553",
+  "canonical": "PRACTICE UNDER LANGUAGE AND COMMUNICATfns"
+ },
+ {
+  "code": "01006555",
+  "canonical": "PRACTICE UNDER PERSONAL AND PROFESSIONAL SKILLS 1"
+ },
+ {
+  "code": "01006556",
+  "canonical": "PRACTICE UNDER PERSONAL AND PROFESSIONAL SKILLS 2"
+ },
+ {
+  "code": "01006557",
+  "canonical": "PRACTICE UNDER PERSONAL AND PROFESSIONAL SKILL"
+ },
+ {
+  "code": "01006557",
+  "canonical": "PRACTICE UNDER PERSONAL AND PROFESSIONAL SKILLS 3"
+ },
+ {
+  "code": "01006559",
+  "canonical": "BASIC HUMAN ANATOMY AND PHYSIOLOGY"
+ },
+ {
+  "code": "01006701",
+  "canonical": "MATEHMATICS OF DATA SCIENCE"
+ },
+ {
+  "code": "01006701",
+  "canonical": "MATHEMATICS OF DATA SCIENCE"
+ },
+ {
+  "code": "01006702",
+  "canonical": "PHYSICS 1 2"
+ },
+ {
+  "code": "01006703",
+  "canonical": "PHYSICS 2"
+ },
+ {
+  "code": "01006703",
+  "canonical": "PHYSICS 2 10"
+ },
+ {
+  "code": "01006708",
+  "canonical": "CHEMISTRY 5"
+ },
+ {
+  "code": "01006710",
+  "canonical": "INTRO TO CALCULUS 8"
+ },
+ {
+  "code": "01006710",
+  "canonical": "INTRODUCTION TO CALCULUS"
+ },
+ {
+  "code": "01006710",
+  "canonical": "INTRODUCTION TO CALCULUS 3"
+ },
+ {
+  "code": "01006710",
+  "canonical": "Intro to Calculus 3 A"
+ },
+ {
+  "code": "01006710",
+  "canonical": "Intro to Calculus 3 A 3"
+ },
+ {
+  "code": "01006710",
+  "canonical": "Intro to Calculus 3 A Calculus AB 3 B"
+ },
+ {
+  "code": "01006710",
+  "canonical": "Intro to Calculus 3 B"
+ },
+ {
+  "code": "01006710",
+  "canonical": "Intro to Calculus 4 A IB Math HL 6 - 7 5 Mathematics"
+ },
+ {
+  "code": "01006710",
+  "canonical": "Intro to Calculus 4 B"
+ },
+ {
+  "code": "01006710",
+  "canonical": "Intro to calculus"
+ },
+ {
+  "code": "01006710",
+  "canonical": "Introduction To Calculus Physics 1"
+ },
+ {
+  "code": "01006711",
+  "canonical": "ADVANCED CALCULUS"
+ },
+ {
+  "code": "01006711",
+  "canonical": "ADVANCED CALCULUS 3 3 Unit 3"
+ },
+ {
+  "code": "01006711",
+  "canonical": "ADVANCED CALCULUS 3 Unit 3"
+ },
+ {
+  "code": "01006711",
+  "canonical": "ADVANCED CALCULUS 9"
+ },
+ {
+  "code": "01006711",
+  "canonical": "Advanced Calculus 3 A"
+ },
+ {
+  "code": "01006711",
+  "canonical": "Advanced Calculus 3 A 4 - 5"
+ },
+ {
+  "code": "01006711",
+  "canonical": "Advanced Calculus 3 A 5 3"
+ },
+ {
+  "code": "01006711",
+  "canonical": "Advanced Calculus 3 B"
+ },
+ {
+  "code": "01006712",
+  "canonical": "Differential Equation and Linear Algebra"
+ },
+ {
+  "code": "01006719",
+  "canonical": "PROBABILITY AND STATISTICS 1"
+ },
+ {
+  "code": "01006722",
+  "canonical": "Introduction to Stochastic Process"
+ },
+ {
+  "code": "01006722",
+  "canonical": "Introduction to Stochastic Processes"
+ },
+ {
+  "code": "01006723",
+  "canonical": "GENERAL PHYSICS 1 3"
+ },
+ {
+  "code": "01006723",
+  "canonical": "General Physics 1 3 A 5 B 1 A AP P"
+ },
+ {
+  "code": "01006724",
+  "canonical": "GENERAL PHYSICS LABORATORY 1 1"
+ },
+ {
+  "code": "01006724",
+  "canonical": "GENERAL PHYSICS LABORATORY 1 3 1"
+ },
+ {
+  "code": "01006724",
+  "canonical": "GENERAL PHYSICS LABORATORY 1 4"
+ },
+ {
+  "code": "01006724",
+  "canonical": "General Physic Laboratory 1"
+ },
+ {
+  "code": "01006724",
+  "canonical": "General Physics Laboratory"
+ },
+ {
+  "code": "01006724",
+  "canonical": "General Physics Laboratory 1 1 A Physics 9702 A-A"
+ },
+ {
+  "code": "01006724",
+  "canonical": "General Physics Laboratory 1 4 A 3"
+ },
+ {
+  "code": "01006724",
+  "canonical": "General Physics Laboratory 1 A - - - B 01006702 B"
+ },
+ {
+  "code": "01006725",
+  "canonical": "GENERAL PHYSICS 2 11"
+ },
+ {
+  "code": "01006725",
+  "canonical": "GENERAL PHYSICS 2 3"
+ },
+ {
+  "code": "01006725",
+  "canonical": "General Physics 2 3 B"
+ },
+ {
+  "code": "01006725",
+  "canonical": "General Physics 2 4 B"
+ },
+ {
+  "code": "01006726",
+  "canonical": "GENERAL PHYSICS LABORATORY 2 1"
+ },
+ {
+  "code": "01006726",
+  "canonical": "General Physics 2 3 A"
+ },
+ {
+  "code": "01006726",
+  "canonical": "General Physics Laboratory 2 1 A"
+ },
+ {
+  "code": "01006726",
+  "canonical": "General Physics Laboratory 2 1 A AP Physics 2"
+ },
+ {
+  "code": "01006726",
+  "canonical": "General Physics Laboratory 2 4 A IB Chemistry 6 - 7"
+ },
+ {
+  "code": "01006727",
+  "canonical": "GENERAL CHEMISTRY 6"
+ },
+ {
+  "code": "01006727",
+  "canonical": "General Chemistry 3 A 5 Mathematics 9709 A - A"
+ },
+ {
+  "code": "01006727",
+  "canonical": "General Chemistry 3 A IB Math HL 6 - 7 Mathematics 9"
+ },
+ {
+  "code": "01006728",
+  "canonical": "GENERAL CHEMISTRY LABORATORY 7"
+ },
+ {
+  "code": "01006728",
+  "canonical": "General Chemistry Laboratory"
+ },
+ {
+  "code": "01006728",
+  "canonical": "General Chemistry Laboratory 1 A Chemistry 9701 A-A"
+ },
+ {
+  "code": "01006728",
+  "canonical": "General Chemistry Laboratory 3 B"
+ },
+ {
+  "code": "01006728",
+  "canonical": "General Chemistry Laboratory 4 A 3"
+ },
+ {
+  "code": "01006728",
+  "canonical": "General Chemistry Laboratory 4 A B"
+ },
+ {
+  "code": "01006728",
+  "canonical": "General Chemistry Laboratory A 01006708 - - B 0100"
+ },
+ {
+  "code": "01006740",
+  "canonical": "Biology 3 A 3 B"
+ },
+ {
+  "code": "01006740",
+  "canonical": "Biology Unit 1"
+ },
+ {
+  "code": "01006801",
+  "canonical": "INTRODUCTION TO ENGINEERING PROGRAMMING"
+ },
+ {
+  "code": "01006801",
+  "canonical": "INTRODUCTION TO ENGINEERING PROGRAMMING OR Equivalent"
+ },
+ {
+  "code": "01006801",
+  "canonical": "Introduciton to Engineering Programming"
+ },
+ {
+  "code": "01006802",
+  "canonical": "ENGINEERIN DRAWING"
+ },
+ {
+  "code": "01006803",
+  "canonical": "ENGINEERING MECHANICS"
+ },
+ {
+  "code": "01006804",
+  "canonical": "ENGINEERING MATERIAL"
+ },
+ {
+  "code": "01006804",
+  "canonical": "ENGINEERING MATERIALS 3"
+ },
+ {
+  "code": "01006805",
+  "canonical": "INDUSTRIAL INTERNSHIP"
+ },
+ {
+  "code": "01006813",
+  "canonical": "INTRODUCTION TO PROGRAMMING"
+ },
+ {
+  "code": "01008000",
+  "canonical": "Foundation of Programming"
+ },
+ {
+  "code": "01008002",
+  "canonical": "Data Structure algorithm"
+ },
+ {
+  "code": "01008004",
+  "canonical": "Operating Systems"
+ },
+ {
+  "code": "01008005",
+  "canonical": "Computer Net&amp"
+ },
+ {
+  "code": "01008006",
+  "canonical": "Computer Graphics"
+ },
+ {
+  "code": "01008007",
+  "canonical": "Full stack Web Development"
+ },
+ {
+  "code": "01008008",
+  "canonical": "Introduction to System Administration and Virtualization"
+ },
+ {
+  "code": "01016357",
+  "canonical": "ANTENNA ENGINEERING"
+ },
+ {
+  "code": "01016607",
+  "canonical": "ELECTROMAGNETIC WAVES AND PROPAGATIONS"
+ },
+ {
+  "code": "01016610",
+  "canonical": "EMBEDDED SYSTEMS AND APPLICATIONS 01016650"
+ },
+ {
+  "code": "01016610",
+  "canonical": "Embedded system experi"
+ },
+ {
+  "code": "01016619",
+  "canonical": "MACHINE TYPE COMMUNICATIONS AND IOT PROTOCOLS"
+ },
+ {
+  "code": "01016619",
+  "canonical": "MACHINE TYPE COMMUNICATIONS AND IOT PROTOCOLS 01016651"
+ },
+ {
+  "code": "01026215",
+  "canonical": "Electrical Engineering Laboratory"
+ },
+ {
+  "code": "01026215",
+  "canonical": "Electrical Engineering Laboratory 2"
+ },
+ {
+  "code": "01026303",
+  "canonical": "ELECTRICAL POWER SYSTEMS 01026438"
+ },
+ {
+  "code": "01046614",
+  "canonical": "EMBEDDED SYSTEMS AND APPLICATIONS 01046779"
+ },
+ {
+  "code": "01046619",
+  "canonical": "SIGNALS AND SYSTEMS 01046778"
+ },
+ {
+  "code": "01046624",
+  "canonical": "ANALOG INTEGRATED CIRCUITS 01046777"
+ },
+ {
+  "code": "01046701",
+  "canonical": "ENGINEERING MATHEMATICS 4"
+ },
+ {
+  "code": "01046704",
+  "canonical": "ELECTRIC CIRCUIT ANALYSIS 1"
+ },
+ {
+  "code": "01046706",
+  "canonical": "ELECTRONICS ENGINEERING 1"
+ },
+ {
+  "code": "01046707",
+  "canonical": "CONTROL SYSTEM"
+ },
+ {
+  "code": "01046709",
+  "canonical": "SEMICONDUCTOR DEVICES"
+ },
+ {
+  "code": "01046713",
+  "canonical": "ELECTRIC CIRCUIT ANALYSIS 2"
+ },
+ {
+  "code": "01046713",
+  "canonical": "ELECTRIC CIRCUIT ANALYSIS 3 - 2"
+ },
+ {
+  "code": "01046719",
+  "canonical": "SIGNALS AND SYSTEMS"
+ },
+ {
+  "code": "01046719",
+  "canonical": "SIGNALS AND SYSTEMS 01046779"
+ },
+ {
+  "code": "01046724",
+  "canonical": "ANALOG INTEGRATED CIRCUITS 01046778"
+ },
+ {
+  "code": "01046761",
+  "canonical": "ARTIFICIAL NEURAL NETWORKS AND MACHINE LEARNING"
+ },
+ {
+  "code": "01046778",
+  "canonical": "DIGITRONICS AL SIGNING"
+ },
+ {
+  "code": "01046778",
+  "canonical": "RADIO-FREQUENCY MICROELECTRONICS"
+ },
+ {
+  "code": "01066065",
+  "canonical": "DIGITAL CIRCUITS AND MICROPROCESSORS"
+ },
+ {
+  "code": "01066457",
+  "canonical": "SAFETY INSTRUMENTATION SYSTEM DESIGN"
+ },
+ {
+  "code": "01066458",
+  "canonical": "ARTIFICIAL INTELLIGENCE AND INTERNET OF THINGS"
+ },
+ {
+  "code": "01066458",
+  "canonical": "ARTIFICIAL INTELLIGENCE AND INTERNET OF THINGS LABORATORY"
+ },
+ {
+  "code": "01066460",
+  "canonical": "INSTRUMENTATION AND CONTROL ENGINEERING"
+ },
+ {
+  "code": "01066460",
+  "canonical": "INSTRUMENTATION AND CONTROL ENGINEERING LABORATORY"
+ },
+ {
+  "code": "01066460",
+  "canonical": "INSTRUMENTATION AND CONTROLENGINEERING LABORATORY"
+ },
+ {
+  "code": "01066462",
+  "canonical": "PROCESS INSTRUMENTAION AND CALIBRATION LABORATORY"
+ },
+ {
+  "code": "01066462",
+  "canonical": "PROCESS INSTRUMENTATION AND"
+ },
+ {
+  "code": "01066462",
+  "canonical": "PROCESS INSTRUMENTATION AND CALIBRATION"
+ },
+ {
+  "code": "01066462",
+  "canonical": "PROCESS INSTRUMENTATION AND CALIBRATION LABORATORY"
+ },
+ {
+  "code": "01066462",
+  "canonical": "PROCESS INSTRUMENTATION AND LABORATORY 3"
+ },
+ {
+  "code": "01066463",
+  "canonical": "INDUSTRIAL NETWORKS AND SCADA SYSTEM LABORATORY"
+ },
+ {
+  "code": "01066464",
+  "canonical": "INDUSTRIAL ROBOTICS AND MACHINE VISION LABORATORY"
+ },
+ {
+  "code": "01066465",
+  "canonical": "INSTRUMENTATION AND CONTROL ENGINEERING PROJECT OR EQUIVALE"
+ },
+ {
+  "code": "01066571",
+  "canonical": "MECHATRONICS ENGINEERING LABORATORY 1"
+ },
+ {
+  "code": "01066573",
+  "canonical": "MECHATRONICS ENGINEERING LABORATORY 3"
+ },
+ {
+  "code": "01066574",
+  "canonical": "MECHATRONICS ENGINEERING PROJECT OR EQUIVALENT SUBJECT"
+ },
+ {
+  "code": "01066653",
+  "canonical": "MACHINE AUTOMATION"
+ },
+ {
+  "code": "01066671",
+  "canonical": "AUTOMATION ENGINEERING LABORATORY 1"
+ },
+ {
+  "code": "01066674",
+  "canonical": "AUTOMATION ENGINEERING PROJECT OR EQUIVALENT SUBJECT"
+ },
+ {
+  "code": "01066686",
+  "canonical": "SPECIAL TOPICS IN INDUSTRIAL AUTOMATION"
+ },
+ {
+  "code": "01068001",
+  "canonical": "THERMO-FLUIDS 54 3 5"
+ },
+ {
+  "code": "01068003",
+  "canonical": "ELECTRICAL MEASUREMENT AND INSTRUMENTATIONS"
+ },
+ {
+  "code": "01068010",
+  "canonical": "PROCESS DYNAMICS AND CONTROLS"
+ },
+ {
+  "code": "01068024",
+  "canonical": "ADVANCED ENERGY STORAGE"
+ },
+ {
+  "code": "01068025",
+  "canonical": "HYBRID AND ELECTRIC VEHICLE"
+ },
+ {
+  "code": "01068101",
+  "canonical": "INSTRUMENTATION ENGINEERING LABORATORY 1"
+ },
+ {
+  "code": "01068103",
+  "canonical": "INSTRUMENTATION ENGINEERING LABORATORY 3"
+ },
+ {
+  "code": "01076028",
+  "canonical": "INFORMATION AND COMPUTER SECURITY"
+ },
+ {
+  "code": "01076113",
+  "canonical": "DIGITAL SYSTEM FUNDAMENTALS IN PRACTICE"
+ },
+ {
+  "code": "01076421",
+  "canonical": "EMBEDDED SYSTEM DESIGN"
+ },
+ {
+  "code": "01076421",
+  "canonical": "EMBEDED SYSTEM DESIGN"
+ },
+ {
+  "code": "01076535",
+  "canonical": "INTRODUCTION TO MACH LEARNIN"
+ },
+ {
+  "code": "01076535",
+  "canonical": "INTRODUCTION TO MACHINE LEARNING AND"
+ },
+ {
+  "code": "01076535",
+  "canonical": "INTRODUCTION TO MACHINE LEARNING AND DEEP LEARNING 0107664"
+ },
+ {
+  "code": "01076535",
+  "canonical": "INTRODUCTION TO MACHINE LEARNING AND DEEP LEARNING 01076645"
+ },
+ {
+  "code": "01076537",
+  "canonical": "IMAGE PROCESSING 01076644"
+ },
+ {
+  "code": "01076537",
+  "canonical": "MULTIMODAL MACHINE LEARNING"
+ },
+ {
+  "code": "01076627",
+  "canonical": "ICT SECURITY ARCHITECTURE AND MANAGEMENT"
+ },
+ {
+  "code": "01076628",
+  "canonical": "INFORMATION TECHNOLOGY SECURITY ASSESSMENT"
+ },
+ {
+  "code": "01076629",
+  "canonical": "BASIC PENETRATION TESTING AND ETHICAL HACKING"
+ },
+ {
+  "code": "01076635",
+  "canonical": "OFFENSIVE CYBER SECURITY"
+ },
+ {
+  "code": "01076641",
+  "canonical": "INTRODUCTION TO MACHINE LEARNING AND DEEP LEARNING 01076644"
+ },
+ {
+  "code": "01076643",
+  "canonical": "IMAGE PROCESSING 01076645"
+ },
+ {
+  "code": "01096014",
+  "canonical": "HYDRAULICS 01096333"
+ },
+ {
+  "code": "01096033",
+  "canonical": "ROUTE SURVEY"
+ },
+ {
+  "code": "01096033",
+  "canonical": "ROUTE SURVEY 01096055"
+ },
+ {
+  "code": "01096145",
+  "canonical": "GROUND IMPROVEMENT TECHNIQUES GROUND IMPROVEMENT TECHNIQUES"
+ },
+ {
+  "code": "01096334",
+  "canonical": "SOIL MECHANICS 01096142"
+ },
+ {
+  "code": "01096335",
+  "canonical": "FUNDAMENTALS OF GEOLOGY AND SOIL MECHANICS"
+ },
+ {
+  "code": "01096336",
+  "canonical": "SOIL MECHANICS AND FOUNDATION ENGINEERING"
+ },
+ {
+  "code": "01097740",
+  "canonical": "INTRODUCTION TO ENVIRONMENT ENGINEERING"
+ },
+ {
+  "code": "01097752",
+  "canonical": "ANALYTICAL AND NUMERICAL METHODS FOR ENGINEERING"
+ },
+ {
+  "code": "01098010",
+  "canonical": "DOCTORAL THESIS 4"
+ },
+ {
+  "code": "01106100",
+  "canonical": "PROBABILITY AND STATISTICS FOR ENGINEERING"
+ },
+ {
+  "code": "01106110",
+  "canonical": "FUNDAMENTAL OF ELECTRICALENGINEERING"
+ },
+ {
+  "code": "01106110",
+  "canonical": "FUNDAMENTAL OF ELECTRICALENGINEERING PREREQUISITe"
+ },
+ {
+  "code": "01106111",
+  "canonical": "ENGINEERING ECONOMICS AND AGRICULTURAL SUSTAINABILITY"
+ },
+ {
+  "code": "01106112",
+  "canonical": "AGRICULTURAL MACHINERY"
+ },
+ {
+  "code": "01106113",
+  "canonical": "Soil and Water Engineering 2 - 2 - 3 5"
+ },
+ {
+  "code": "01106120",
+  "canonical": "PLANT FACTORY AND GREENHOUSE TECHNOLOGY"
+ },
+ {
+  "code": "01106121",
+  "canonical": "PRECISION AGRICULTURE TECHNOLOGY"
+ },
+ {
+  "code": "01106122",
+  "canonical": "DATA ANALYTICS AND INTRODUCTIO"
+ },
+ {
+  "code": "01106122",
+  "canonical": "DATA ANALYTICS AND INTRODUCTION TO ARTIFICIAL INTELLIGENCE"
+ },
+ {
+  "code": "01106122",
+  "canonical": "DATA SCIENCE AND ARTIFICIAL INTELLIGENCE FOR AGRICULTURE 01106142"
+ },
+ {
+  "code": "01108427",
+  "canonical": "NEAR-INFRARED SPECTROSCOPY OF AGRICULTURAL PRODUCT AND FOOD"
+ },
+ {
+  "code": "01108612",
+  "canonical": "DOCTORAL THESIS 3"
+ },
+ {
+  "code": "01156128",
+  "canonical": "Tribology in Rail Engineering"
+ },
+ {
+  "code": "01156205",
+  "canonical": "Mechanical Workshop"
+ },
+ {
+  "code": "01156220",
+  "canonical": "RAIL TRANSPORTATION ENGINEERING"
+ },
+ {
+  "code": "01156221",
+  "canonical": "RAIL TRACK ENGINEERING"
+ },
+ {
+  "code": "01156221",
+  "canonical": "RAILTRACK ENGINEERING"
+ },
+ {
+  "code": "01156226",
+  "canonical": "RAIL SYSTEM OPERATION AND MAINTENANCE"
+ },
+ {
+  "code": "01156226",
+  "canonical": "RAIL SYSTEM OPERATION AND MAINTENANCE 1"
+ },
+ {
+  "code": "01156226",
+  "canonical": "RAIL SYSTEM OPERATION AND MAINTENANCE 2"
+ },
+ {
+  "code": "01156252",
+  "canonical": "RAILWAY TRACK ENGINEERING"
+ },
+ {
+  "code": "01206105",
+  "canonical": "CHEMISTRY FOR"
+ },
+ {
+  "code": "01217303",
+  "canonical": "DETERMINISTIC DECISION MODEL"
+ },
+ {
+  "code": "01217306",
+  "canonical": "ADVANCED ENGINEERING STATISTICS"
+ },
+ {
+  "code": "01217422",
+  "canonical": "SUPPLY CHAIN MANAGEMENT"
+ },
+ {
+  "code": "01236004",
+  "canonical": "INTENETWORKING DESIGN PRACTICE"
+ },
+ {
+  "code": "01236078",
+  "canonical": "MICROCONTROLLER AND SENSOR"
+ },
+ {
+  "code": "01236083",
+  "canonical": "ARTIFICIAL INTELLIGENCE FOR INTERNET OF THINGS"
+ },
+ {
+  "code": "01236086",
+  "canonical": "INDUSTR 6"
+ },
+ {
+  "code": "01236087",
+  "canonical": "IOT CYBER SECURITY"
+ },
+ {
+  "code": "01236206",
+  "canonical": "INTRODUCTION TO DATA ANALYTICS"
+ },
+ {
+  "code": "01236249",
+  "canonical": "FUNDAMENTAL OF DIGITAL SYSTEM DESIGN"
+ },
+ {
+  "code": "01236256",
+  "canonical": "MICROCONTROLLER AND EMBEDDED SYSTEMS"
+ },
+ {
+  "code": "01236257",
+  "canonical": "OBJECT-ORIENTED PROGRAMMING AND DATA STRUCTURE"
+ },
+ {
+  "code": "01236257",
+  "canonical": "OBJECT-ORIENTED PROGRAMMING AND DATATRUCTURE"
+ },
+ {
+  "code": "01236258",
+  "canonical": "PRINCIPLES OF COMMUNICATIONS"
+ },
+ {
+  "code": "01236267",
+  "canonical": "IOT SYSTEM AND INFORMATION LABORATORY 2"
+ },
+ {
+  "code": "01236301",
+  "canonical": "IOT WIRELESSSENSOR NETV 3-0-0"
+ },
+ {
+  "code": "01236310",
+  "canonical": "EMBEDDED SEM DESIGN S SEKS"
+ },
+ {
+  "code": "01236330",
+  "canonical": "MACHINE AND COMPUTER VISION"
+ },
+ {
+  "code": "01236334",
+  "canonical": "INTENETWORKING DESI"
+ },
+ {
+  "code": "01236335",
+  "canonical": "WIRELESS COMMUNICATION SYSTEMS FOR IOT"
+ },
+ {
+  "code": "01236335",
+  "canonical": "WIRELESS COMMUNICATION SYSTEMS FOR loT"
+ },
+ {
+  "code": "01236338",
+  "canonical": "NEXT GENERATION MOBILE COMMUNICATION"
+ },
+ {
+  "code": "01236404",
+  "canonical": "SELECTED TOPIC IN IOT SYSTEM AND INFORMATION ENGINEERING"
+ },
+ {
+  "code": "01236404",
+  "canonical": "SELECTED TOPIC IN LOT SYSTEM AND INFORMATION ENGINEERING"
+ },
+ {
+  "code": "01236442",
+  "canonical": "ADVANCED IOT AND EMBEDDED SYSTEM DESIGN"
+ },
+ {
+  "code": "01266111",
+  "canonical": "FUNDAMENTAL S OF PROGRAMMING"
+ },
+ {
+  "code": "01266111",
+  "canonical": "FUNDAMENTALS OF PROGRAMMING"
+ },
+ {
+  "code": "01266215",
+  "canonical": "DATABASE TECHNOLOGY"
+ },
+ {
+  "code": "01266311",
+  "canonical": "ELEMENTS OF"
+ },
+ {
+  "code": "01266311",
+  "canonical": "ELEMENTS OF SOFTWARE CONSTRUCTION"
+ },
+ {
+  "code": "01266311",
+  "canonical": "ELEMENTS OF SOFTWARE CONSTRUCTIONS"
+ },
+ {
+  "code": "01266410",
+  "canonical": "COGNITIVE COMPUTING APPLICATIONS"
+ },
+ {
+  "code": "01266423",
+  "canonical": "FUNDAMENTAL S OF AR, VR AND MIXED REALITY"
+ },
+ {
+  "code": "01266424",
+  "canonical": "BLOCKCHAIN TECHNOLOGIES"
+ },
+ {
+  "code": "01266511",
+  "canonical": "CAPSTONE DESIGN,PREPARATION"
+ },
+ {
+  "code": "01276764",
+  "canonical": "AUGMENTED REALITY"
+ },
+ {
+  "code": "01286111",
+  "canonical": "CIRCUITS AND ELECTRONICS"
+ },
+ {
+  "code": "01286112",
+  "canonical": "DIGITAL SYSTEM FUNDAMENTALS"
+ },
+ {
+  "code": "01286120",
+  "canonical": "ELEMENTARY SYSTEMS PROGRAMMING"
+ },
+ {
+  "code": "01286131",
+  "canonical": "Object- Oriented Programming"
+ },
+ {
+  "code": "01286131",
+  "canonical": "Object- Oriented Programming or 01286121 Computer Programmi"
+ },
+ {
+  "code": "01286131",
+  "canonical": "Object-Oriented Programming or 01286121 Computer Programming"
+ },
+ {
+  "code": "01286213",
+  "canonical": "COMPUTER ARCHITECTURE AND ORGANIZATION"
+ },
+ {
+  "code": "01286232",
+  "canonical": "Software Engineering"
+ },
+ {
+  "code": "01286325",
+  "canonical": "Information and Computer"
+ },
+ {
+  "code": "01286334",
+  "canonical": "SOFTWARE DESIGN AND ARCHITECTURE"
+ },
+ {
+  "code": "01286391",
+  "canonical": "SEMINAR IN SOFTWARE ENGINEERING"
+ },
+ {
+  "code": "01286609",
+  "canonical": "SOFTWARE QUALITY ASSURANCE"
+ },
+ {
+  "code": "01286621",
+  "canonical": "COMPUTER GRAPHICS AND MIXED REALITY"
+ },
+ {
+  "code": "01286622",
+  "canonical": "WEB SERVICE DEVELOPMENT AND SERVICE-ORIENTED ARCHITECTURE"
+ },
+ {
+  "code": "01286622",
+  "canonical": "Web Service Development and - Service- Oriented Architecture"
+ },
+ {
+  "code": "01286623",
+  "canonical": "Distributed Computing Security"
+ },
+ {
+  "code": "01286624",
+  "canonical": "Advanced Database System"
+ },
+ {
+  "code": "01286641",
+  "canonical": "REAL-TIME EMBEDDED SYSTEM DESIGN AND DEVELOPMENT"
+ },
+ {
+  "code": "01286641",
+  "canonical": "Real-Time Embedded"
+ },
+ {
+  "code": "01286642",
+  "canonical": "INDUSTRIAL IOT NETWORKS AND COMMUNICATIONS"
+ },
+ {
+  "code": "01286643",
+  "canonical": "CYBER-PHYSICAL SYSTEMS AND INDUSTRY 4"
+ },
+ {
+  "code": "01286663",
+  "canonical": "DATA SCIENCE AND DATA ANALYTICS"
+ },
+ {
+  "code": "01286663",
+  "canonical": "DATA SCIENCE AND DATA ANALYTICS 3-0-6"
+ },
+ {
+  "code": "01286851",
+  "canonical": "SOFTWARE PRODUCT RELEASE ENGINEERING"
+ },
+ {
+  "code": "01286852",
+  "canonical": "CLOUD SYSTEMS"
+ },
+ {
+  "code": "01286853",
+  "canonical": "DATA PRODUCT ENGINEERING"
+ },
+ {
+  "code": "01306010",
+  "canonical": "COMPLEX ANALYSIS AND LINEAR ALGEBRA"
+ },
+ {
+  "code": "01306023",
+  "canonical": "CONTROL SYSTEMS"
+ },
+ {
+  "code": "01306023",
+  "canonical": "CONTROL SYSTEMS Genetic Algorithms"
+ },
+ {
+  "code": "01306033",
+  "canonical": "Microprocessors and Microcontrollers"
+ },
+ {
+  "code": "01306091",
+  "canonical": "JUNIOR ENGINEERING DESIGN"
+ },
+ {
+  "code": "01306203",
+  "canonical": "MECHATRONICS AND EMBEDDED MICROCOMPUTER"
+ },
+ {
+  "code": "01306211",
+  "canonical": "NUMERICAL METHODS AND MATHEMATICAL"
+ },
+ {
+  "code": "01306212",
+  "canonical": "PROGRAMMABLE LOGIC AND SEQUENCES CONTROL"
+ },
+ {
+  "code": "01306291",
+  "canonical": "MECHATRONIC LABORATORY 1"
+ },
+ {
+  "code": "01317045",
+  "canonical": "HEAL THCARE TECHNOLOGY MANAGEMENT"
+ },
+ {
+  "code": "01317045",
+  "canonical": "HEALTHCARE TECHNOLOGY MANAGEMENT"
+ },
+ {
+  "code": "01326221",
+  "canonical": "ENGINEERING GEOLOGY AND ENVIRONMENT"
+ },
+ {
+  "code": "01326221",
+  "canonical": "ENGINEERING GEOLOGY AND ENVIRONMENT Soil mechanics will"
+ },
+ {
+  "code": "01326231",
+  "canonical": "MECHANICS OF MATERIALS 1 and"
+ },
+ {
+  "code": "01326301",
+  "canonical": "REINFORCED CONCRETE DESIGN Basics concept of prestressing"
+ },
+ {
+  "code": "01326323",
+  "canonical": "FOUNDATION ENGINEERING AND DESIGN"
+ },
+ {
+  "code": "01326332",
+  "canonical": "THEORY OF STRUCTURES Design of timber and steel structures"
+ },
+ {
+  "code": "01326332",
+  "canonical": "THEORY OF STRUCTURES Fundamental behavior in thrust"
+ },
+ {
+  "code": "01326332",
+  "canonical": "THEORY OF STRUCTURES Fundamental behavior in thrust, flexur"
+ },
+ {
+  "code": "01326353",
+  "canonical": "INTRODUCTION TO GEOGRAPHIC INFORMATION SYSTEM"
+ },
+ {
+  "code": "01326361",
+  "canonical": "HYDRAULICS ENGINEERING"
+ },
+ {
+  "code": "01326418",
+  "canonical": "BUILDING INFORMATION MODELING AND INTEGRATION"
+ },
+ {
+  "code": "01326424",
+  "canonical": "FUNDAMENTALS OF ROCK MECHANICS"
+ },
+ {
+  "code": "01326442",
+  "canonical": "PRESTRESSED CONCRETE DESIGN"
+ },
+ {
+  "code": "01326456",
+  "canonical": "RAILWAY INFRASTRUCTURE ENGINEERING"
+ },
+ {
+  "code": "01326501",
+  "canonical": "Numerical Modelling in Geotechnics"
+ },
+ {
+  "code": "01326502",
+  "canonical": "HIGHWAY AND"
+ },
+ {
+  "code": "01326601",
+  "canonical": "HYDRAULICS Introduction to hydrology, application of fluid"
+ },
+ {
+  "code": "01326602",
+  "canonical": "HYDRAULIC ENGINEERING"
+ },
+ {
+  "code": "01336022",
+  "canonical": "PHYSIOLOGY AND ANATOMY"
+ },
+ {
+  "code": "01336108",
+  "canonical": "ADVANCED ELECTRIC CIRCUIT ANALYSES OF BIOMEDICAL ENGINEER"
+ },
+ {
+  "code": "01336108",
+  "canonical": "ADVANCED ELECTRIC CIRCUIT ANALYSIS"
+ },
+ {
+  "code": "01336530",
+  "canonical": "TISSUE AND CELL CULTURE ENGINEERING"
+ },
+ {
+  "code": "01336532",
+  "canonical": "MEDICAL DEVICE STANDARDS AND REGULATIONS"
+ },
+ {
+  "code": "01336533",
+  "canonical": "MEDICAL IMAGE PROCESSING"
+ },
+ {
+  "code": "01336541",
+  "canonical": "MICRO/NANOTECHNOLOGY AND BIOPHOTONICS"
+ },
+ {
+  "code": "01336542",
+  "canonical": "COSMETICS AND ENGINEERING"
+ },
+ {
+  "code": "01336543",
+  "canonical": "INTRODUCTION TO INNOVATION AND ENTREPRENEURSHIP"
+ },
+ {
+  "code": "01336546",
+  "canonical": "FINITE ELEMENT ANALYSIS AND APPLICATION IN BIOMEDICAL ENGINEERING"
+ },
+ {
+  "code": "01336547",
+  "canonical": "MOLECULAR MODELING FOR DRUG DELIVERY"
+ },
+ {
+  "code": "01336548",
+  "canonical": "MOLECULAR GENETIC AND GENETIC ENGINEERING"
+ },
+ {
+  "code": "01336550",
+  "canonical": "ROBOTICS IN MEDICINE"
+ },
+ {
+  "code": "01336550",
+  "canonical": "ROBOTICS IN MEDICINE O"
+ },
+ {
+  "code": "01336551",
+  "canonical": "BIOSENSOR DEVELOPMENT"
+ },
+ {
+  "code": "01336553",
+  "canonical": "CHEMICAL ENGINEERING KINETICS AND REACTOR DESIGN"
+ },
+ {
+  "code": "01336554",
+  "canonical": "SYNTHETIC BIOLOGY - ENGINEERING APPROACHES TO MODIFYING LIV"
+ },
+ {
+  "code": "01336554",
+  "canonical": "SYNTHETIC BIOLOGY - ENGINEERING APPROACHES TO MODIFYING LIVING ORGANISM"
+ },
+ {
+  "code": "01336555",
+  "canonical": "MECHANICS OF BIOMATERIALS"
+ },
+ {
+  "code": "01336556",
+  "canonical": "MEDICAL DEVICES ACCREDITATION"
+ },
+ {
+  "code": "01336557",
+  "canonical": "ADVANCED BIOCHEMISTRY"
+ },
+ {
+  "code": "01336558",
+  "canonical": "LINEAR ALGEBRA AND APPLICATION"
+ },
+ {
+  "code": "01336559",
+  "canonical": "CONTROL AND SYSTEM"
+ },
+ {
+  "code": "01336560",
+  "canonical": "CHARACTERIZATIONS AND APPLICATIONS OF BIOMICROFLUIDIC"
+ },
+ {
+  "code": "01336561",
+  "canonical": "STATISTICS AND CLINICAL TRIALS FOR MEDICAL DEVICE"
+ },
+ {
+  "code": "01336562",
+  "canonical": "ESSENTIAL CELL BIOLOGY"
+ },
+ {
+  "code": "01336573",
+  "canonical": "WAFER TECHNOLOGY"
+ },
+ {
+  "code": "01336574",
+  "canonical": "DRONE IN MEDICINE"
+ },
+ {
+  "code": "01356001",
+  "canonical": "INTRODUCTION TO STOCHASTIC MODELS"
+ },
+ {
+  "code": "01356208",
+  "canonical": "PRODUCTION PLANNING AND CONTROL 3"
+ },
+ {
+  "code": "01356208",
+  "canonical": "PRODUCTION PLANNING AND CONTROL 3 3 Unit 13"
+ },
+ {
+  "code": "01356251",
+  "canonical": "MANUFACTURING PROCESSES 3 3 Unit 17"
+ },
+ {
+  "code": "01356251",
+  "canonical": "MANUFACTURING PROCESSES 3 6 Unit 17"
+ },
+ {
+  "code": "01356252",
+  "canonical": "THERMODYNAMICS 3 2 Unit 15"
+ },
+ {
+  "code": "01356252",
+  "canonical": "THERMODYNAMICS 3 4 Unit 15"
+ },
+ {
+  "code": "01356319",
+  "canonical": "MAINTENANCE ENGINEERING 3 4 Unit 49"
+ },
+ {
+  "code": "01356319",
+  "canonical": "MAINTENANCE ENGINEERING 3 6 Unit 49"
+ },
+ {
+  "code": "01356323",
+  "canonical": "AUTOMATION SYSTEMS 3 3 Unit 18"
+ },
+ {
+  "code": "01356323",
+  "canonical": "AUTOMATION SYSTEMS 3 5 Unit 18"
+ },
+ {
+  "code": "01356323",
+  "canonical": "AUTOMATION SYSTEMS 3 8 Unit 51"
+ },
+ {
+  "code": "01356326",
+  "canonical": "SUPPLY CHAIN AND LOGISTICS MANAGEMENT 3 5 Unit 51"
+ },
+ {
+  "code": "01356326",
+  "canonical": "SUPPLY CHAIN AND LOGISTICS MANAGEMENT 3 7 Unit 23"
+ },
+ {
+  "code": "01356333",
+  "canonical": "QUALITY ENGINEERING 3"
+ },
+ {
+  "code": "01356334",
+  "canonical": "TRANSPORTATION AND DISTRIBUTION 0-6"
+ },
+ {
+  "code": "01356419",
+  "canonical": "INDUSTRIAL WORK STUDY 3"
+ },
+ {
+  "code": "01356419",
+  "canonical": "INDUSTRIALDRK STUD 2 Unit 2"
+ },
+ {
+  "code": "01356422",
+  "canonical": "DATABASE DESIGN AND IMPLEMENTATION OR"
+ },
+ {
+  "code": "01356422",
+  "canonical": "DATABASE DESIGN AND IMPLEMENTATION OR Equivalent"
+ },
+ {
+  "code": "01356434",
+  "canonical": "MANAGEMENT SYSTEM SUSTAINABILITY 3"
+ },
+ {
+  "code": "01356439",
+  "canonical": "WINDOWS APPLICATION"
+ },
+ {
+  "code": "01356439",
+  "canonical": "WINDOWS APPLICATION DEVELOPMENT FOR INDUSTRIAL ENGINEERING"
+ },
+ {
+  "code": "01356465",
+  "canonical": "PROCESS ANALYSIS AND REDESIGN 3"
+ },
+ {
+  "code": "01356465",
+  "canonical": "PROCESS AYYSIS AND WE"
+ },
+ {
+  "code": "01356603",
+  "canonical": "IELM PROJECT PREPARATION"
+ },
+ {
+  "code": "01356603",
+  "canonical": "INDUSTRIAL ENGINEERING AND LOGISTICS MANAGEMENT PROJECT PRE"
+ },
+ {
+  "code": "01356604",
+  "canonical": "INDUSTRIAL ENGINEERING AND LOGISTICS MANAGEMENT PROJECT 3"
+ },
+ {
+  "code": "01356605",
+  "canonical": "INDUSTRIAL ENGINEERING AND LOGISTIC MANAGEMENT CAPSTONE DES"
+ },
+ {
+  "code": "01366121",
+  "canonical": "Applications of numerical methods"
+ },
+ {
+  "code": "01366302",
+  "canonical": "SEPARATION PROCESSES Mathematical models of chemical eng"
+ },
+ {
+  "code": "01366531",
+  "canonical": "Chemical engineering processes"
+ },
+ {
+  "code": "01366532",
+  "canonical": "Chemical process simulation"
+ },
+ {
+  "code": "01366631",
+  "canonical": "Sustainable operations"
+ },
+ {
+  "code": "01366741",
+  "canonical": "Capstone project for chemical engineering plant design"
+ },
+ {
+  "code": "01366742",
+  "canonical": "Capstone project for industrial problem solving"
+ },
+ {
+  "code": "01366803",
+  "canonical": "Selected Topics in Energy and Environment"
+ },
+ {
+  "code": "01366807",
+  "canonical": "Green chemical products"
+ },
+ {
+  "code": "01366807",
+  "canonical": "Green chemical products and processes"
+ },
+ {
+  "code": "01366809",
+  "canonical": "Energy Management in Industry"
+ },
+ {
+  "code": "01366817",
+  "canonical": "Sustainable Energy"
+ },
+ {
+  "code": "01386112",
+  "canonical": "CHEMICAL PROPERTIES OF AGRICULTURAL PRODUCTS"
+ },
+ {
+  "code": "01406618",
+  "canonical": "DIGITAL PHOTOGRAFMETRY"
+ },
+ {
+  "code": "01406618",
+  "canonical": "DIGITAL PHOTOGRAMMETRY"
+ },
+ {
+  "code": "01406622",
+  "canonical": "ORBITAL MECHANICS"
+ },
+ {
+  "code": "01407201",
+  "canonical": "INTRODUCTION TO INDUSTRIAL ROBOTICS"
+ },
+ {
+  "code": "01407203",
+  "canonical": "MODERN CONTROL THEORY"
+ },
+ {
+  "code": "01407204",
+  "canonical": "CRYPTOGRAPHY AND COMPUTER SECURITY"
+ },
+ {
+  "code": "01407321",
+  "canonical": "BIG DATA ANALYTICS"
+ },
+ {
+  "code": "01407326",
+  "canonical": "PHYSICS-INFORMED MACHINE LEARNING"
+ },
+ {
+  "code": "01407326",
+  "canonical": "PHYSICS-INFORMED MACHINE LEARNING O O O O O O O O"
+ },
+ {
+  "code": "01416003",
+  "canonical": "INTERPRETATION AND ARGUMENTS 1 3 4 5 6 7 8 9 10 11 12 13 14"
+ },
+ {
+  "code": "01416303",
+  "canonical": "INTRODUCTION TO ROBOTICS"
+ },
+ {
+  "code": "01416304",
+  "canonical": "FEEDBACK CONTROL"
+ },
+ {
+  "code": "01416305",
+  "canonical": "ARTIFICIAL INTELLIGENCE TECHNOLOGY"
+ },
+ {
+  "code": "01416306",
+  "canonical": "SAFETY AND STANDARDIZATION IN RAI"
+ },
+ {
+  "code": "01416306",
+  "canonical": "SAFETY AND STANDARDIZATION IN RAI 3 Unit 4"
+ },
+ {
+  "code": "01416306",
+  "canonical": "SAFETY AND STANDAROIZATION IN RAJ"
+ },
+ {
+  "code": "01416306",
+  "canonical": "SAFTY AND STANDAROZATION IN RAI"
+ },
+ {
+  "code": "01416308",
+  "canonical": "KINEMATICS AND DYNAMICS"
+ },
+ {
+  "code": "01416309",
+  "canonical": "ENGINEERING 3D DRAWING"
+ },
+ {
+  "code": "01416309",
+  "canonical": "ENGINEERING 3D DRAWING 3 Unit 14"
+ },
+ {
+  "code": "01416310",
+  "canonical": "STRENGTH OF MATERIALS"
+ },
+ {
+  "code": "01416315",
+  "canonical": "INDUSTRIAL ELECTRONICS"
+ },
+ {
+  "code": "01416319",
+  "canonical": "MANUFACTURING PROCESS 3 2 Unit 17"
+ },
+ {
+  "code": "01416320",
+  "canonical": "INTRODUCTION TO ROBOTICS AND AI"
+ },
+ {
+  "code": "01416408",
+  "canonical": "COMPUTER AID MECHANICAL DESIGN"
+ },
+ {
+  "code": "01416408",
+  "canonical": "COMPUTER AID MECHANICAL DESIGN 3 Unit 23"
+ },
+ {
+  "code": "01416408",
+  "canonical": "COMPUTER BASED MECHANICAL DESIGN"
+ },
+ {
+  "code": "01416416",
+  "canonical": "INFORMATION SYSTEMS, DATABASES AND APPLICATION"
+ },
+ {
+  "code": "01416417",
+  "canonical": "DEEP LEARNING AND APPLICATION"
+ },
+ {
+  "code": "01416417",
+  "canonical": "DEEP LEARNING APPLICATION"
+ },
+ {
+  "code": "01416500",
+  "canonical": "COMPUTER VISIONS"
+ },
+ {
+  "code": "01416504",
+  "canonical": "MACHINE LEARNING IN PRACTICE"
+ },
+ {
+  "code": "01416508",
+  "canonical": "ROBOTICS AND AI CAPSTONE"
+ },
+ {
+  "code": "01416508",
+  "canonical": "ROBOTICS AND AI CAPSTONE DESIGN"
+ },
+ {
+  "code": "01416515",
+  "canonical": "ROBOTICS LABORATORY 2"
+ },
+ {
+  "code": "01416518",
+  "canonical": "INDUSTRIAL AUTOMATION"
+ },
+ {
+  "code": "01416520",
+  "canonical": "VISION SYSTEM FOR MOBILE ROBOTICS"
+ },
+ {
+  "code": "01416521",
+  "canonical": "INTRODUCTION TO ALGORITHMS"
+ },
+ {
+  "code": "01416522",
+  "canonical": "BIG DATA"
+ },
+ {
+  "code": "01416523",
+  "canonical": "IT PROJECT MANAGEMENT"
+ },
+ {
+  "code": "01416526",
+  "canonical": "MICROPROCESSOR AND CONTROL SYSTEMS"
+ },
+ {
+  "code": "01416527",
+  "canonical": "DIGITAL ELECTRONICS AND ELECTRICAL MACHINES"
+ },
+ {
+  "code": "01416528",
+  "canonical": "COMMUNICATION NETWORK"
+ },
+ {
+  "code": "01416532",
+  "canonical": "MECHATRONICS AND CONTROL ENGINEERING"
+ },
+ {
+  "code": "01416551",
+  "canonical": "SECURED HIGH-PERFORMANCE CODING"
+ },
+ {
+  "code": "01416552",
+  "canonical": "FUNDAMENTAL DIGITAL SIGNAL PROCESSING"
+ },
+ {
+  "code": "01416552",
+  "canonical": "FUNDAMETAIL DIGITAL SIGNAL PROCESSING"
+ },
+ {
+  "code": "01416553",
+  "canonical": "AI AND INDUSTRIAL IOT PRODUCT DEVELOPMENT"
+ },
+ {
+  "code": "01416554",
+  "canonical": "ADVANCED DATA ANALYTICS"
+ },
+ {
+  "code": "01416555",
+  "canonical": "ADVANCED COMPUTER VISION"
+ },
+ {
+  "code": "01416607",
+  "canonical": "STARTUP ENGINEERING"
+ },
+ {
+  "code": "01416610",
+  "canonical": "SOFTWARE-DEFINED DATA CENT"
+ },
+ {
+  "code": "01416611",
+  "canonical": "WIRELESS SENSOR NETWORK"
+ },
+ {
+  "code": "01416614",
+  "canonical": "ADVANCED COMPUTER PROGRAMMING FOR RAI"
+ },
+ {
+  "code": "01416620",
+  "canonical": "BLOCKCHAIN TECHNOLOGY AND APPLICATION"
+ },
+ {
+  "code": "01416621",
+  "canonical": "LEAN MANAGEMENT 3"
+ },
+ {
+  "code": "01416621",
+  "canonical": "Lean Management"
+ },
+ {
+  "code": "01416622",
+  "canonical": "INTEGRATED DESIGN PROJECT 2 4"
+ },
+ {
+  "code": "01416624",
+  "canonical": "POWER ELECTRONICS AND POWER SYSTEMS"
+ },
+ {
+  "code": "01416625",
+  "canonical": "THE INTERNET OF THINGS"
+ },
+ {
+  "code": "01416626",
+  "canonical": "TELEROBOTICS, TELEPRESENCE AND AUGMENTED REALITY"
+ },
+ {
+  "code": "01416627",
+  "canonical": "ELECTRONIC ENGINEERING"
+ },
+ {
+  "code": "01416628",
+  "canonical": "Experiments and Exercise for Intelligent and Control System"
+ },
+ {
+  "code": "01416629",
+  "canonical": "INFORMATION AND CYBER SECURITY"
+ },
+ {
+  "code": "01416630",
+  "canonical": "INFORMATION SYSTEM SECURITY AND IT LAW"
+ },
+ {
+  "code": "01416631",
+  "canonical": "ROBOTICS AND AI EXPERIENCE"
+ },
+ {
+  "code": "01416632",
+  "canonical": "SPACE SCIENCE"
+ },
+ {
+  "code": "01416633",
+  "canonical": "REINFORCEMENT LEARNING"
+ },
+ {
+  "code": "01416634",
+  "canonical": "INTRODUCTION TO PROMPT ENGINEERING"
+ },
+ {
+  "code": "01416634",
+  "canonical": "INTRODUCTION TO PROMPT ENGINEERING 3"
+ },
+ {
+  "code": "01416635",
+  "canonical": "ADVANCED TECHNIQUES IN ChatGPT CUSTOMIZATION AND APPLICATION"
+ },
+ {
+  "code": "01416642",
+  "canonical": "INTELLIGENT CONTROL SYSTEM DESIGN"
+ },
+ {
+  "code": "01416650",
+  "canonical": "ADVANCED NATURAL LANGUAGE PROCESSING"
+ },
+ {
+  "code": "01416651",
+  "canonical": "GENERATIVE ADVERSARIAL NETWORKS"
+ },
+ {
+  "code": "01416652",
+  "canonical": "PRACTICAL INTERDISCIPLINARY RESEARCH FOR INDUSTRY"
+ },
+ {
+  "code": "01416653",
+  "canonical": "SPEECH RECOGNITION AND TEXT-TO-SPEECH DEVELOPMENT"
+ },
+ {
+  "code": "01416654",
+  "canonical": "AI IN CAR INDUSTRY"
+ },
+ {
+  "code": "01416655",
+  "canonical": "CHATBOT DEVELOPMENT"
+ },
+ {
+  "code": "01416701",
+  "canonical": "RAI ENGINEERING CAPSTONE DESIGN 3 PREPARATION"
+ },
+ {
+  "code": "01416701",
+  "canonical": "RAI ENGINEERING CAPSTONE DESIGN PREPARATION"
+ },
+ {
+  "code": "01416702",
+  "canonical": "RAI ENGINEERING"
+ },
+ {
+  "code": "01416702",
+  "canonical": "RAI ENGINEERING CAPSTONE DESIGN"
+ },
+ {
+  "code": "01416702",
+  "canonical": "RAI ENGINEERING CAPSTONE DESIGN 3"
+ },
+ {
+  "code": "01416800",
+  "canonical": "RAI DESIGN PREPARATION CAPSTONE DESIGN OPERATION OR"
+ },
+ {
+  "code": "01416801",
+  "canonical": "MATHEMATICS OF DATA SCIENCE AND DATA ANALYTIC"
+ },
+ {
+  "code": "01416801",
+  "canonical": "MATHEMATICS OF DATA SCIENCE AND DATA ANALYTICS"
+ },
+ {
+  "code": "01416801",
+  "canonical": "MATHEMATICS OF DATA SCIENCE AND DATA ANALYTICS 3"
+ },
+ {
+  "code": "01416802",
+  "canonical": "ADVANCED ENGINEERING MATHEMATICS"
+ },
+ {
+  "code": "01426004",
+  "canonical": "THERMODYNAMICS 1"
+ },
+ {
+  "code": "01426024",
+  "canonical": "POWER PLANTS"
+ },
+ {
+  "code": "01426102",
+  "canonical": "CAPSTONE DESIGN PROJECT"
+ },
+ {
+  "code": "01426311",
+  "canonical": "Study abroad on engineering and technology I"
+ },
+ {
+  "code": "01426312",
+  "canonical": "Study abroad on engineering and technology II"
+ },
+ {
+  "code": "01426313",
+  "canonical": "Study abroad on general education I"
+ },
+ {
+  "code": "01426314",
+  "canonical": "Study abroad on general education II"
+ },
+ {
+  "code": "01476101",
+  "canonical": "PROGRAMMING FUNDAMENTAL"
+ },
+ {
+  "code": "01516000",
+  "canonical": "ELECTRICAL ENGINEERING"
+ },
+ {
+  "code": "01516007",
+  "canonical": "ENERGY IN BUILDING"
+ },
+ {
+  "code": "01516008",
+  "canonical": "INTECIED ROANAGEMEN ENVIRONMENTAL FO"
+ },
+ {
+  "code": "01516008",
+  "canonical": "INTEGRATED ENVIRONMENTAL MANAGEMENT"
+ },
+ {
+  "code": "01516108",
+  "canonical": "MECHANICS OF MACHINERY"
+ },
+ {
+  "code": "01516114",
+  "canonical": "ENERGY IN BUILDING AND TRANSPORT"
+ },
+ {
+  "code": "01516116",
+  "canonical": "FUNDAMENTAL OF EJES MACHIN EC3-0-6"
+ },
+ {
+  "code": "01516116",
+  "canonical": "FUNDAMENTAL OF ELECTRICAL"
+ },
+ {
+  "code": "01516118",
+  "canonical": "PHOTOVOLTAIC AND ELECTROLYSIS"
+ },
+ {
+  "code": "01516120",
+  "canonical": "ENERGY ECONOMICS AND WASTE HEAT RECOVERY SYSTEMS"
+ },
+ {
+  "code": "01516121",
+  "canonical": "CAPSTONE DESIGN IN ENERGY ENGINEERING3"
+ },
+ {
+  "code": "01516122",
+  "canonical": "RENEWABLE AND SUSTAINABLE ENERGY 3 2 Unit 11"
+ },
+ {
+  "code": "01516122",
+  "canonical": "RENEWABLE AND SUSTAINABLE ENERGY 3 2 Unit 9"
+ },
+ {
+  "code": "01516125",
+  "canonical": "ENERGY ENGINEERING"
+ },
+ {
+  "code": "01516125",
+  "canonical": "ENERGY ENGINEERING SPECIAL PROJECT 1"
+ },
+ {
+  "code": "01516132",
+  "canonical": "SOLAR ENERGY"
+ },
+ {
+  "code": "01516132",
+  "canonical": "SOLAR RNERGY"
+ },
+ {
+  "code": "01516133",
+  "canonical": "ENERGY ENGINEERING CAPS 3 APSTONE PROJECT"
+ },
+ {
+  "code": "01516133",
+  "canonical": "ENERGY ENGINEERING CAPSTONE DESIGN"
+ },
+ {
+  "code": "01516134",
+  "canonical": "ENERGY EN"
+ },
+ {
+  "code": "01516134",
+  "canonical": "ENERGY ENGINEERING CAPSTONE PROJECT"
+ },
+ {
+  "code": "01516134",
+  "canonical": "ENERGY ENGINEERING CAPSTONE PROJECT 3 3"
+ },
+ {
+  "code": "01516143",
+  "canonical": "FLUID MECHANICS 3 3 Unit 30"
+ },
+ {
+  "code": "01516143",
+  "canonical": "FLUID MECHANICS 3 4 Unit 30"
+ },
+ {
+  "code": "01516146",
+  "canonical": "THERMAL SYSTEM DESIGN AND SIMULATION 3"
+ },
+ {
+  "code": "01516150",
+  "canonical": "DYNAMICS ANALYSIS OF POWER GENERATION MACHINES"
+ },
+ {
+  "code": "01516155",
+  "canonical": "ENERGY MATERIALS"
+ },
+ {
+  "code": "01526104",
+  "canonical": "INFORMATION SYSTEMS AND DATABASES"
+ },
+ {
+  "code": "01526126",
+  "canonical": "MACHINE LEARNING or"
+ },
+ {
+  "code": "01526127",
+  "canonical": "SOFTWARE DEVELOPMENT PROCESS"
+ },
+ {
+  "code": "01526207",
+  "canonical": "EQUITY AND FIXED INCOME VALUATION"
+ },
+ {
+  "code": "01526209",
+  "canonical": "FINANCIAL DERIVATIVES"
+ },
+ {
+  "code": "01526211",
+  "canonical": "FINANCIAL RISK MANAGEMENT"
+ },
+ {
+  "code": "01526301",
+  "canonical": "ETHICS AND LAW FOR FINANCIAL ENGINEERINGS"
+ },
+ {
+  "code": "01526301",
+  "canonical": "Ethics and Law for Financial Engineeri"
+ },
+ {
+  "code": "01526301",
+  "canonical": "Ethics and Law for Financial Engineering"
+ },
+ {
+  "code": "01526301",
+  "canonical": "Ethics and Law for Financial Engineers"
+ },
+ {
+  "code": "01526302",
+  "canonical": "FINANCIAL ECONOMETRICS"
+ },
+ {
+  "code": "01526303",
+  "canonical": "FINANCIAL TECHNOLOGY"
+ },
+ {
+  "code": "01536101",
+  "canonical": "CONSTRUCTION TECHNOLOGY"
+ },
+ {
+  "code": "01536102",
+  "canonical": "STRUCTURAL MECHANICS AND DESIGN"
+ },
+ {
+  "code": "01536103",
+  "canonical": "ENGINEERING CAD, GRAPHICS AND MODELING"
+ },
+ {
+  "code": "01536104",
+  "canonical": "FUNDAMENTALS OF BUILDING CONSTRUCTION MATERIALS AND METHODS"
+ },
+ {
+  "code": "01536109",
+  "canonical": "BUILDING SERVICES"
+ },
+ {
+  "code": "01536202",
+  "canonical": "BUSINESS INFORMATION SYSTEMS"
+ },
+ {
+  "code": "01536205",
+  "canonical": "DISTRIBUTED AND COLLABORATIVE COMPUTING"
+ },
+ {
+  "code": "01536205",
+  "canonical": "DISTRIBUTED AND COLLABORATIVE COUING"
+ },
+ {
+  "code": "01536311",
+  "canonical": "FUNDAMENTALS OF ACCOUNTING"
+ },
+ {
+  "code": "01536312",
+  "canonical": "MICROECONOMICS AND BUSINESS DECISION MAKING"
+ },
+ {
+  "code": "01536313",
+  "canonical": "MACROECONOMICS ANALYSIS"
+ },
+ {
+  "code": "01536314",
+  "canonical": "ECONOMICS FOR OPERATION AND MARKETING MANAGEMENT"
+ },
+ {
+  "code": "01536402",
+  "canonical": "INVENTION, INNOVATION AND ENTREPRENEURSHIP"
+ },
+ {
+  "code": "01536404",
+  "canonical": "INNOVATION MANAGEMENT AND CREATIVE ENTREPRENEURSHIP"
+ },
+ {
+  "code": "01536405",
+  "canonical": "HUMAN RESOURCE MANAGEMENT FOR ENTREPRENEUR"
+ },
+ {
+  "code": "01536405",
+  "canonical": "HUMAN RESOURCE MANAGEMENT FOR ENTREPRENEURS"
+ },
+ {
+  "code": "01536504",
+  "canonical": "QUALITY CONTROL AND MANAGEMENT"
+ },
+ {
+  "code": "01536506",
+  "canonical": "DESIGN AND INTEGRATION"
+ },
+ {
+  "code": "01536509",
+  "canonical": "ENGINEERING ECONOMICS AND INVESTMENT PROJECT ANALYSIS"
+ },
+ {
+  "code": "01536605",
+  "canonical": "ENTREPRENEURSHIP AND SMALL BUSINESS MANAGEMENT"
+ },
+ {
+  "code": "01536611",
+  "canonical": "ENTREPRENEURIAL MANAGEMENT FOR ENGINEERS"
+ },
+ {
+  "code": "01536612",
+  "canonical": "ENGINEERING ENTREPRENEURSHIP"
+ },
+ {
+  "code": "01536613",
+  "canonical": "ENGINEERING ENTREPRENEURIAL PRODUCT AND PROCESS DESIGN"
+ },
+ {
+  "code": "01536614",
+  "canonical": "ENGINEERING NEGOTIATION"
+ },
+ {
+  "code": "01536615",
+  "canonical": "INTELLECTUAL PROPERTY AND BUSINESS LAW FOR ENGINEERS"
+ },
+ {
+  "code": "01536616",
+  "canonical": "ENTREPRENEURIAL MARKETING"
+ },
+ {
+  "code": "01536622",
+  "canonical": "CONSTRUCTION ESTIMATE AND COST ANALYSIS"
+ },
+ {
+  "code": "01536662",
+  "canonical": "MODELING, SIMULATION AND OPTIMIZATION"
+ },
+ {
+  "code": "01536663",
+  "canonical": "URBAN VISUALIZATION TECHNIQUES"
+ },
+ {
+  "code": "01536685",
+  "canonical": "LOGISTICS AND SUPPLY CHAIN PROJECT"
+ },
+ {
+  "code": "01536701",
+  "canonical": "PROJECT 1 The students are assigned to work either individu"
+ },
+ {
+  "code": "01536702",
+  "canonical": "PROJECT 2"
+ },
+ {
+  "code": "01536704",
+  "canonical": "SPECIAL STUDIES 2"
+ },
+ {
+  "code": "01536704",
+  "canonical": "business applications, or presently offered in other cour"
+ },
+ {
+  "code": "01536801",
+  "canonical": "BUSINESS AND ENTREPRENEURSHIP ENGINEERING"
+ },
+ {
+  "code": "01536801",
+  "canonical": "BUSINESS AND ENTREPRENEURSHIP ENGINEERING DESIGN AND INTEGRATION"
+ },
+ {
+  "code": "01546101",
+  "canonical": "Basic Mathematics for AI Engineering and Entrepreneurship F"
+ },
+ {
+  "code": "01546102",
+  "canonical": "APPLIED MATHEMATICS FOR AI ENGINEERING AND ENTREPRENEURSHI"
+ },
+ {
+  "code": "01546102",
+  "canonical": "APPLIED MATHEMATICS FOR AI ENGINEERING AND ENTREPRENEURSHIP"
+ },
+ {
+  "code": "01926810",
+  "canonical": "Introduction to Artificial Intelligence and Machine Learning 4"
+ },
+ {
+  "code": "01926811",
+  "canonical": "Control 4"
+ },
+ {
+  "code": "01926812",
+  "canonical": "Robotics 4"
+ },
+ {
+  "code": "01926813",
+  "canonical": "Control system 4"
+ },
+ {
+  "code": "01926814",
+  "canonical": "MATERIAL ENGINEERING"
+ },
+ {
+  "code": "02216105",
+  "canonical": "ARCHITECTURAL DESIGN 4"
+ },
+ {
+  "code": "02216107",
+  "canonical": "ARCHITECTURAL DESIGN 6 8 - 6"
+ },
+ {
+  "code": "02216108",
+  "canonical": "INTEGRATE ARCHITECTURAL DESIGN AND BUILDING TECHNOLOGY"
+ },
+ {
+  "code": "02216109",
+  "canonical": "THESIS PREPARATION"
+ },
+ {
+  "code": "02216117",
+  "canonical": "ARCHITECTURAL DESIGN 7"
+ },
+ {
+  "code": "02216121",
+  "canonical": "ARCHITECTURAL PROGRAMMING 2"
+ },
+ {
+  "code": "02216303",
+  "canonical": "BUILDING TECHNOLOGY 2"
+ },
+ {
+  "code": "02216304",
+  "canonical": "BUILDING TECHNOLOGY 3"
+ },
+ {
+  "code": "02216305",
+  "canonical": "BUILDING TECHNOLOGY 4"
+ },
+ {
+  "code": "02216306",
+  "canonical": "BUILD TECHNOLOGY 5"
+ },
+ {
+  "code": "02216306",
+  "canonical": "BUILDING TECHNOLOGY 5"
+ },
+ {
+  "code": "02216307",
+  "canonical": "BUILDING TECHNOLOGY 6"
+ },
+ {
+  "code": "02216315",
+  "canonical": "BUILDING TECHNOLOGY 7"
+ },
+ {
+  "code": "02226391",
+  "canonical": "INTERNSHIP IN FILM"
+ },
+ {
+  "code": "02227211",
+  "canonical": "AUDITS, MANAGEMENT OF ENERGY UTILIZATION AND EVALUATION OF BUILDING ENV"
+ },
+ {
+  "code": "02237815",
+  "canonical": "MASTER THESIS 2"
+ },
+ {
+  "code": "02288803",
+  "canonical": "DISSERTATION 3"
+ },
+ {
+  "code": "02288803",
+  "canonical": "DISSERTATION PLAN 2"
+ },
+ {
+  "code": "02306215",
+  "canonical": "DIGITAL PHOTOGRAPHY 3"
+ },
+ {
+  "code": "02306223",
+  "canonical": "LIGHTING PEOPLE 2"
+ },
+ {
+  "code": "02306311",
+  "canonical": "DOCUMENTARY PHOTOGRAPHY"
+ },
+ {
+  "code": "02306322",
+  "canonical": "FASHION PHOTOGRAPHY"
+ },
+ {
+  "code": "02306325",
+  "canonical": "SEMINAR IN CREATIVE PHOTOGRAPHY"
+ },
+ {
+  "code": "02316017",
+  "canonical": "THAI ART 1"
+ },
+ {
+  "code": "02316908",
+  "canonical": "PHOTOGRAPHY 1"
+ },
+ {
+  "code": "02316910",
+  "canonical": "COMPUTER ART 1"
+ },
+ {
+  "code": "02326001",
+  "canonical": "Sculpture 1"
+ },
+ {
+  "code": "02326001",
+  "canonical": "Sculpture 1 02326029"
+ },
+ {
+  "code": "02326003",
+  "canonical": "Sculpture 3 02326031"
+ },
+ {
+  "code": "02326030",
+  "canonical": "Sculpture 2 02326004"
+ },
+ {
+  "code": "02326031",
+  "canonical": "Sculpture 4"
+ },
+ {
+  "code": "02366058",
+  "canonical": "COMPUTER FOR 3D- BASED COMMUNICATION DESIGN 3"
+ },
+ {
+  "code": "02366058",
+  "canonical": "COMPUTER FOR 3D-BASED COMMUNICATION DESIGN"
+ },
+ {
+  "code": "02366150",
+  "canonical": "PROJECTION MAPPING AND MOTION MEDIA"
+ },
+ {
+  "code": "02366512",
+  "canonical": "COMPUTER FOR DESIGN 2"
+ },
+ {
+  "code": "02376113",
+  "canonical": "LANDSCAPE ARCHITECTURAL DESIGN 2"
+ },
+ {
+  "code": "02376114",
+  "canonical": "LANDSCAPE ARCHITECTURAL DESIGN 3"
+ },
+ {
+  "code": "02376115",
+  "canonical": "LANDSCAPE ARCHITECTURAL DESIGN 4"
+ },
+ {
+  "code": "02376215",
+  "canonical": "INTRODUCTION TO PLANTS AND GARDEN"
+ },
+ {
+  "code": "02376216",
+  "canonical": "PLANTS DESIGN"
+ },
+ {
+  "code": "02376308",
+  "canonical": "LANDSCAPE TECHNOLOGY AND PLANT MATERIAL 5"
+ },
+ {
+  "code": "02376315",
+  "canonical": "LANDSCAPE CONSTRUCTION TECHNOLOGY 2"
+ },
+ {
+  "code": "02376319",
+  "canonical": "DIGITAL TECHNOLOGY FOR LANDSCAPE ARCHITECTURE 2"
+ },
+ {
+  "code": "02376615",
+  "canonical": "REMOTE SENSING AND GIS"
+ },
+ {
+  "code": "02456103",
+  "canonical": "COMPUTER FOR DESIGN"
+ },
+ {
+  "code": "02456104",
+  "canonical": "ART PHILOSOPHY"
+ },
+ {
+  "code": "02456105",
+  "canonical": "DESIGN FUNDAMENTAL IN 3D MODELING"
+ },
+ {
+  "code": "02456106",
+  "canonical": "FUNDAMENTAL OF INTERACTION DESIGN"
+ },
+ {
+  "code": "02456201",
+  "canonical": "PHOTOGRAPHY AND MOVING IMAGE"
+ },
+ {
+  "code": "02456202",
+  "canonical": "VISUAL WRITING"
+ },
+ {
+  "code": "02456203",
+  "canonical": "MOTION DESIGN 1"
+ },
+ {
+  "code": "02456204",
+  "canonical": "MOTION DESIGN 2"
+ },
+ {
+  "code": "02456206",
+  "canonical": "PHYSICAL UI"
+ },
+ {
+  "code": "02646101",
+  "canonical": "INTRODUCTION TO MICROCOMPUTER APPLICATION"
+ },
+ {
+  "code": "02646102",
+  "canonical": "ECOLOGY, CONSERVATION AND ENVIRONMENTALISM"
+ },
+ {
+  "code": "02646203",
+  "canonical": "ENGLISH FOR ARCHITECTURAL COMMUNICATION"
+ },
+ {
+  "code": "02646204",
+  "canonical": "ENGLISH FOR ARCHITECTURAL"
+ },
+ {
+  "code": "02646204",
+  "canonical": "ENGLISH FOR ARCHITECTURAL PRESENTATION"
+ },
+ {
+  "code": "02646302",
+  "canonical": "ETHICS AND AESTHETICS"
+ },
+ {
+  "code": "02646402",
+  "canonical": "PRINCIPLES OF COMMUNITY DEVELOPMENT"
+ },
+ {
+  "code": "02656003",
+  "canonical": "INTEGRATED ARCHITECTURAL DESIGN 1"
+ },
+ {
+  "code": "02656003",
+  "canonical": "Integrated Architectural Design I"
+ },
+ {
+  "code": "02656004",
+  "canonical": "INTEGRATED ARCHITECTURAL DESIGN 2"
+ },
+ {
+  "code": "02656004",
+  "canonical": "Sutinee Pornsith 100 100 100 100 100 100"
+ },
+ {
+  "code": "02656005",
+  "canonical": "INTEGRATED ARCHITECTURAL DESIGN 3"
+ },
+ {
+  "code": "02656006",
+  "canonical": "INTEGRATED ARCHITECTURAL DESIGN 4"
+ },
+ {
+  "code": "02656007",
+  "canonical": "THEORY OF HUMAN FACTOR FOR ARCHITECTURAL DESIGN PRFRFOL"
+ },
+ {
+  "code": "02656007",
+  "canonical": "THEORY OF INTERACTION DESIGN AND COGNITIVE HUMAN FACTOR"
+ },
+ {
+  "code": "02656008",
+  "canonical": "PRINCIPLE OF ARCHITECTURAL DESIGN RESEARCH"
+ },
+ {
+  "code": "02656008",
+  "canonical": "PRINCIPLE OF DESIGN RESEARCH"
+ },
+ {
+  "code": "02656010",
+  "canonical": "ARCHITECTURAL CAPSTONE PROJECT"
+ },
+ {
+  "code": "02666001",
+  "canonical": "Basic Architectural Drawing"
+ },
+ {
+  "code": "02666002",
+  "canonical": "History of Architecture"
+ },
+ {
+  "code": "02666003",
+  "canonical": "Model and Prototype Development"
+ },
+ {
+  "code": "02666004",
+  "canonical": "DRAWDRAWING IN CREATIVE ART"
+ },
+ {
+  "code": "02666004",
+  "canonical": "DRAWING IN CREATIVE ART 1"
+ },
+ {
+  "code": "02666005",
+  "canonical": "DRAWDRAWING IN CREATIVE ART 2"
+ },
+ {
+  "code": "02666005",
+  "canonical": "DRAWING IN CREATIVE ART 2"
+ },
+ {
+  "code": "02666022",
+  "canonical": "COMPARATIVE ART HISTORY"
+ },
+ {
+  "code": "02676004",
+  "canonical": "BUILDING STRUCTURAL SYSTEM 1"
+ },
+ {
+  "code": "02676004",
+  "canonical": "BUILDING STRUCTURAL SYSTEMS 1"
+ },
+ {
+  "code": "02676005",
+  "canonical": "BUILDING STRUCTURAL SYSTEMS 2"
+ },
+ {
+  "code": "02686001",
+  "canonical": "COMPUTER-AIDDED ARCHITECTURAL DESIGN 2 19 3 22"
+ },
+ {
+  "code": "02686001",
+  "canonical": "COMPUTER-AIDDED ARCHITECTURAL DESIGN 2 20 3 23"
+ },
+ {
+  "code": "02686001",
+  "canonical": "COMPUTER-AIDED ARCHITECTURAL"
+ },
+ {
+  "code": "02686001",
+  "canonical": "Computer-aid Architectural Design"
+ },
+ {
+  "code": "02686001",
+  "canonical": "INTRODUCTION TO ECONOMICS 2 21 3 24"
+ },
+ {
+  "code": "02686004",
+  "canonical": "INTRO TO BUILDING INFORMATION MODELING IN ARCHITECTURE"
+ },
+ {
+  "code": "02686004",
+  "canonical": "INTRO TO BUILDING INFORMATION MODELING IN ARCHITECTURE 3"
+ },
+ {
+  "code": "02686004",
+  "canonical": "INTRODUCTION TO BUILDING INFORMATION MODELING IN ARCHITECTURE"
+ },
+ {
+  "code": "02686005",
+  "canonical": "BUILDING INFORMATION MODELING IN ARCHITECTURE"
+ },
+ {
+  "code": "02686006",
+  "canonical": "INVESTMENT PROJECT ANALYSIS"
+ },
+ {
+  "code": "02686011",
+  "canonical": "EXHIBITION DESIGN AND INSTALLMENT"
+ },
+ {
+  "code": "02686014",
+  "canonical": "MUSEUM AND GALLERY ENTREPRENEUR"
+ },
+ {
+  "code": "02686014",
+  "canonical": "MUSEUM AND GALLERY ENTREPRENEURSHIP"
+ },
+ {
+  "code": "02686015",
+  "canonical": "COMPUTER-AIDDed ARCHITECTURAL DESIGN 1"
+ },
+ {
+  "code": "02696001",
+  "canonical": "Digital Design Media"
+ },
+ {
+  "code": "02696002",
+  "canonical": "Digital Media and Fabrication"
+ },
+ {
+  "code": "02696003",
+  "canonical": "Digital Construction and Facility Management"
+ },
+ {
+  "code": "02696004",
+  "canonical": "Artificial Intelligence in Architecture &amp"
+ },
+ {
+  "code": "02696005",
+  "canonical": "Advanced Visualization"
+ },
+ {
+  "code": "02696006",
+  "canonical": "Advanced Projects in Digital Design Media"
+ },
+ {
+  "code": "02696007",
+  "canonical": "Interactive and Generative Programming for Architecture"
+ },
+ {
+  "code": "02696008",
+  "canonical": "Building Information Modeling in Practice"
+ },
+ {
+  "code": "02696009",
+  "canonical": "Introduction to sustainable architecture design"
+ },
+ {
+  "code": "02696010",
+  "canonical": "Thermal performance of buildings and Simulation tools for sustainable a"
+ },
+ {
+  "code": "02696011",
+  "canonical": "Acoustic and lighting design for sustainable"
+ },
+ {
+  "code": "02696012",
+  "canonical": "Climate analysis for Architectural Design"
+ },
+ {
+  "code": "02696013",
+  "canonical": "Principle of Infrastructure"
+ },
+ {
+  "code": "02696014",
+  "canonical": "Construction Estimate"
+ },
+ {
+  "code": "02696015",
+  "canonical": "Construction Management"
+ },
+ {
+  "code": "02696017",
+  "canonical": "Service Design"
+ },
+ {
+  "code": "02696018",
+  "canonical": "USER EXPERIENCE DESIGN"
+ },
+ {
+  "code": "02696019",
+  "canonical": "Business Design"
+ },
+ {
+  "code": "02696020",
+  "canonical": "Innovation Development and Marketing Strategy"
+ },
+ {
+  "code": "02696021",
+  "canonical": "Inclusive Design"
+ },
+ {
+  "code": "02696027",
+  "canonical": "COLLECTION MANAGEMENT"
+ },
+ {
+  "code": "03005141",
+  "canonical": "Exercise for Electrical and Electronic Engineering 1"
+ },
+ {
+  "code": "03005142",
+  "canonical": "Exercise for Electrical and Electronic Engineering"
+ },
+ {
+  "code": "03005145",
+  "canonical": "Green Energy System"
+ },
+ {
+  "code": "03246202",
+  "canonical": "MATHEMATICS FOR SECONDARY SCHOOL"
+ },
+ {
+  "code": "03257001",
+  "canonical": "Innovation and Education Technology Research Methods"
+ },
+ {
+  "code": "03257002",
+  "canonical": "Integrating Educational Technology in Teaching &amp"
+ },
+ {
+  "code": "03257103",
+  "canonical": "Educational Design of Media Environments"
+ },
+ {
+  "code": "03257106",
+  "canonical": "Interactivity and Learning Design"
+ },
+ {
+  "code": "03258001",
+  "canonical": "Advance Research Methodology in Education"
+ },
+ {
+  "code": "03258002",
+  "canonical": "Advanced Instructional System Design"
+ },
+ {
+  "code": "03258103",
+  "canonical": "Emerging Trends in Technology-Enhanced Learning and Innovat"
+ },
+ {
+  "code": "03258103",
+  "canonical": "Emerging Trends in Technology-Enhanced Learning and Innovation"
+ },
+ {
+  "code": "03258214",
+  "canonical": "Selected Issue in Innovation and Educational Technology Enhanced Learni"
+ },
+ {
+  "code": "03258214",
+  "canonical": "Selected Issue in Innovation and EducationalTechnology Educ"
+ },
+ {
+  "code": "03267002",
+  "canonical": "Educational Administration Innovation Theory and Methodolog"
+ },
+ {
+  "code": "03267002",
+  "canonical": "Educational Administration Innovation Theory and Methodology for Indust"
+ },
+ {
+  "code": "03267103",
+  "canonical": "Academic Management for Humankind Advancement"
+ },
+ {
+  "code": "03267105",
+  "canonical": "Educational Resource Management and Technological Integrati"
+ },
+ {
+  "code": "03267105",
+  "canonical": "Educational Resource Management and Technological Integration"
+ },
+ {
+  "code": "03267207",
+  "canonical": "Educational Leadership and Coping with Future Challenge"
+ },
+ {
+  "code": "03268001",
+  "canonical": "Advanced Educational Administration Innovation Design"
+ },
+ {
+  "code": "03268103",
+  "canonical": "Educational Administration Innovation for Humankind Advancement"
+ },
+ {
+  "code": "03268206",
+  "canonical": "Contemporary Educational Issue and The Determination of Nat"
+ },
+ {
+  "code": "03268206",
+  "canonical": "Contemporary Educational Issue and The Determination of National Educat"
+ },
+ {
+  "code": "03268211",
+  "canonical": "Technology and Educational Administration Innovation"
+ },
+ {
+  "code": "03268802",
+  "canonical": "Educational Administration Innovation for Humankind Advancement Seminar"
+ },
+ {
+  "code": "03376407",
+  "canonical": "TEACHING PRACTICE IN EDUCATIONALAL INSTITUTE 1"
+ },
+ {
+  "code": "03376509",
+  "canonical": "BASIC DIGITAL AND LOGIC CIRCUIT"
+ },
+ {
+  "code": "03376514",
+  "canonical": "PRINCIPLES OF PROBLEM SOLVING AND BASIC PROGRAMMING"
+ },
+ {
+  "code": "03376519",
+  "canonical": "ELECTRICAL AND ELECTRONICS LABORATORY 3"
+ },
+ {
+  "code": "03376519",
+  "canonical": "ELECTRICAL ELECTRONICS LABORATORY 3"
+ },
+ {
+  "code": "03376605",
+  "canonical": "PRINCIPLES OF COMMUNICATION SYSTEMS"
+ },
+ {
+  "code": "03376619",
+  "canonical": "DIGITAL COMMUNICATION SYSTEMS"
+ },
+ {
+  "code": "03376623",
+  "canonical": "OPTICAL FIBER COMMUNICATION"
+ },
+ {
+  "code": "03376811",
+  "canonical": "DATABASE SYSTEM"
+ },
+ {
+  "code": "03376831",
+  "canonical": "INSTRUCTIONAL MEDIA DEVELOPMENT WITH COMPUTER"
+ },
+ {
+  "code": "03386402",
+  "canonical": "ELECTRONICS TECHNOLOGY LABORATORY 2"
+ },
+ {
+  "code": "03386402",
+  "canonical": "ELECTRONICS TECHNOLOGY LABORATORY 2 03386403"
+ },
+ {
+  "code": "03386416",
+  "canonical": "INDUSTRIAL ROBOTIC AND APPLICATION"
+ },
+ {
+  "code": "03386514",
+  "canonical": "INDUSTRIAL TRAINING"
+ },
+ {
+  "code": "03386605",
+  "canonical": "ROBOTICS TECHNOLOGY AND APPLICATIONS"
+ },
+ {
+  "code": "03416022",
+  "canonical": "RESEARCH IN ARCHITECTURE CLASSES"
+ },
+ {
+  "code": "03416035",
+  "canonical": "PROFESSIONAL PRACTICE IN EDUCATIONAL INSTITUTE 2"
+ },
+ {
+  "code": "03416303",
+  "canonical": "ARCHITECTURE DESIGN 3"
+ },
+ {
+  "code": "03416303",
+  "canonical": "Architecture Design 3 44-6-11"
+ },
+ {
+  "code": "03416305",
+  "canonical": "ARCHITECTURE DESIGN 5"
+ },
+ {
+  "code": "03416316",
+  "canonical": "REINFORCE CONCRETE BUILDING 3"
+ },
+ {
+  "code": "03416316",
+  "canonical": "Reinforce Concrete Building Structure Design"
+ },
+ {
+  "code": "03416325",
+  "canonical": "ARCHITECTURAL TRAINING"
+ },
+ {
+  "code": "03416430",
+  "canonical": "ENERGY CONSCIOUS BUILDING DESIGN"
+ },
+ {
+  "code": "03416501",
+  "canonical": "ARCHITECTURE DESIGN 1 2"
+ },
+ {
+  "code": "03416501",
+  "canonical": "Architecture Design 1"
+ },
+ {
+  "code": "03416509",
+  "canonical": "CONSTRUCTION DRAWING 1"
+ },
+ {
+  "code": "03416510",
+  "canonical": "CONSTRUCTION DRAWING"
+ },
+ {
+  "code": "03456103",
+  "canonical": "ART HISTORY"
+ },
+ {
+  "code": "03456106",
+  "canonical": "INTERIOR ENVIRONMENTAL DESIGN 1"
+ },
+ {
+  "code": "03456133",
+  "canonical": "INTEGRATED DESIGN VISUALIZATION"
+ },
+ {
+  "code": "03456141",
+  "canonical": "ART OF DELINEATION"
+ },
+ {
+  "code": "03456144",
+  "canonical": "INTERIOR ENVIRONMENTAL DESIGN 4 03456122"
+ },
+ {
+  "code": "03456144",
+  "canonical": "INTERIOR ENVIRONMENTAL DESIGN 4 03456123"
+ },
+ {
+  "code": "03456145",
+  "canonical": "INTERIOR ENVIRONMENTAL DESIGN 5 03456122"
+ },
+ {
+  "code": "03456145",
+  "canonical": "INTERIOR ENVIRONMENTAL DESIGN 5 03456125"
+ },
+ {
+  "code": "03506161",
+  "canonical": "INDUSTRIAL DESIGN 1"
+ },
+ {
+  "code": "03506162",
+  "canonical": "INDUSTRIAL DESIGN 2"
+ },
+ {
+  "code": "03506163",
+  "canonical": "INDUSTRIAL DESIGN 3"
+ },
+ {
+  "code": "03506163",
+  "canonical": "INDUSTRIAL DESIGN 3 03506164"
+ },
+ {
+  "code": "03506183",
+  "canonical": "FUNDAMENTAL DESIGN"
+ },
+ {
+  "code": "03506186",
+  "canonical": "TEACHING PRACTICE IN EDUCATIONAL INSTITUTE 1 03506187"
+ },
+ {
+  "code": "03506805",
+  "canonical": "EVOLUTION AND DESIGN HISTORY"
+ },
+ {
+  "code": "03517105",
+  "canonical": "STATISTICS AND RESEARCH"
+ },
+ {
+  "code": "03517105",
+  "canonical": "STATISTICS AND RESEARCH 37"
+ },
+ {
+  "code": "03517321",
+  "canonical": "ADVANCED TECHNOLOGY OF INDUSTRIAL PRODUCT DESIGN"
+ },
+ {
+  "code": "03517321",
+  "canonical": "ADVANCED TECHNOLOGY OF INDUSTRIAL PRODUCT DESIGN 1"
+ },
+ {
+  "code": "03517321",
+  "canonical": "Advance Technology of Industrial Product Design 1"
+ },
+ {
+  "code": "03606014",
+  "canonical": "TEACHING PRACTICE IN EDUCATION INSTITUTE 1 03606018"
+ },
+ {
+  "code": "03606103",
+  "canonical": "PROFESSIONAL AGRICULTURAL 03606014"
+ },
+ {
+  "code": "03688008",
+  "canonical": "DOCTORAL DISSERTATION"
+ },
+ {
+  "code": "03706100",
+  "canonical": "FUNDAMENTALS HOME PRODUCT DESIGN"
+ },
+ {
+  "code": "03706101",
+  "canonical": "MATERIALS INNOVATION AND TECHNOLOGY DESIGN"
+ },
+ {
+  "code": "03706103",
+  "canonical": "BUILDING INFORMATION MODELING"
+ },
+ {
+  "code": "03706200",
+  "canonical": "DIGITAL MARKTING"
+ },
+ {
+  "code": "03706201",
+  "canonical": "PRODUCTS AND BRAND MANAGEME"
+ },
+ {
+  "code": "04036187",
+  "canonical": "SPECIAL PROBLEM 1 GENERAL BIOLOGY GENERAL BIOLOGY LABORATO"
+ },
+ {
+  "code": "04047861",
+  "canonical": "SEED QUALITY CONTROL"
+ },
+ {
+  "code": "04047898",
+  "canonical": "SEED PHYSIOLOGY"
+ },
+ {
+  "code": "04146101",
+  "canonical": "SOIL FERTILIZERS AND WATER FOR PLANT"
+ },
+ {
+  "code": "04146102",
+  "canonical": "PLANT PATHOLOGY AND N"
+ },
+ {
+  "code": "04166301",
+  "canonical": "ENGINEERING PROPERTIES OF AGRICULTURAL"
+ },
+ {
+  "code": "04166303",
+  "canonical": "FLUID MECHANICAL"
+ },
+ {
+  "code": "05016210",
+  "canonical": "LINEAR ALGEBRA 1"
+ },
+ {
+  "code": "05016212",
+  "canonical": "NUMERICAL METHODS 1"
+ },
+ {
+  "code": "05016213",
+  "canonical": "Mathematical Analysis"
+ },
+ {
+  "code": "05016215",
+  "canonical": "ORDINARY DIFFERENTIAL EQUATION"
+ },
+ {
+  "code": "05016216",
+  "canonical": "Partial Differential Equation"
+ },
+ {
+  "code": "05016223",
+  "canonical": "MATHEMATICS PACKAGES"
+ },
+ {
+  "code": "05016224",
+  "canonical": "Algorithm Design and Analysis"
+ },
+ {
+  "code": "05016231",
+  "canonical": "LINEAR ALGEBRA 2"
+ },
+ {
+  "code": "05016235",
+  "canonical": "Abstract Algebra1"
+ },
+ {
+  "code": "05016242",
+  "canonical": "MATHEMATICAL MODELING"
+ },
+ {
+  "code": "05016258",
+  "canonical": "THEORY OF"
+ },
+ {
+  "code": "05016258",
+  "canonical": "THEORY OF EQUATIONS"
+ },
+ {
+  "code": "05016301",
+  "canonical": "Logistics and Supply Chain"
+ },
+ {
+  "code": "05016306",
+  "canonical": "Financial Mathematics 1"
+ },
+ {
+  "code": "05016315",
+  "canonical": "Risk Analysis and Credibility Theory"
+ },
+ {
+  "code": "05016379",
+  "canonical": "Data Mining Techniques"
+ },
+ {
+  "code": "05106715",
+  "canonical": "PRINCIPLES OF BIOCHEMISTRY"
+ },
+ {
+  "code": "05106801",
+  "canonical": "CHEMISTRY FOR ENGINEERING"
+ },
+ {
+  "code": "05106808",
+  "canonical": "PHYSICAL CHEMISTRY 1"
+ },
+ {
+  "code": "05106815",
+  "canonical": "ORGANIC CHEMISTRY"
+ },
+ {
+  "code": "05126601",
+  "canonical": "BASIC PRINCIPLES IN CHEMICAL ENGINEERING"
+ },
+ {
+  "code": "05126603",
+  "canonical": "CHEMICAL ENGINEERING"
+ },
+ {
+  "code": "05177011",
+  "canonical": "Data SCIENCE PROGRAMMING &amp"
+ },
+ {
+  "code": "05177013",
+  "canonical": "Data Governance and Data Quality Assessment"
+ },
+ {
+  "code": "05177153",
+  "canonical": "TRENDS IN DATA SCIENCE AND ANALYTICS 1"
+ },
+ {
+  "code": "05206003",
+  "canonical": "GENERAL MICROBIOLOGY"
+ },
+ {
+  "code": "05206003",
+  "canonical": "GENERAL MICROBIOLo"
+ },
+ {
+  "code": "05216299",
+  "canonical": "BACTERIOLOGY AND"
+ },
+ {
+  "code": "05366001",
+  "canonical": "PHYSICS AND APPLICATIONS 1"
+ },
+ {
+  "code": "05366001",
+  "canonical": "PHYSICS AND APPLICATIONS 1 or"
+ },
+ {
+  "code": "05366001",
+  "canonical": "THERMAL AND STATISTICS PHYSICS"
+ },
+ {
+  "code": "05366003",
+  "canonical": "MODERN PHYSICS"
+ },
+ {
+  "code": "05366003",
+  "canonical": "PHYSICS AND APPLICATIONS 2"
+ },
+ {
+  "code": "05366003",
+  "canonical": "PHYSICS AND APPLICATIONS 2 or"
+ },
+ {
+  "code": "05366003",
+  "canonical": "QUANTUM MECHANICS AND QUANTUM TECHNOLOGY"
+ },
+ {
+  "code": "05366036",
+  "canonical": "MICROCONTROLLER AND INTERFACING"
+ },
+ {
+  "code": "05406002",
+  "canonical": "PRINCIPLE STATISTICS"
+ },
+ {
+  "code": "05406026",
+  "canonical": "ACTUARIAL STATISTICS"
+ },
+ {
+  "code": "05406096",
+  "canonical": "STATISTICAL ANALYSIS FOR BUSINESS"
+ },
+ {
+  "code": "05506003",
+  "canonical": "DATA SCIENCE AND ANALYTICS"
+ },
+ {
+  "code": "05506003",
+  "canonical": "PROGRAMMING FUNDAMENTALS"
+ },
+ {
+  "code": "05506012",
+  "canonical": "DATABASE STSTEMS"
+ },
+ {
+  "code": "05506012",
+  "canonical": "DATABASE SYSTEMS"
+ },
+ {
+  "code": "05506099",
+  "canonical": "SROBLEM 2"
+ },
+ {
+  "code": "05506231",
+  "canonical": "STATISTICS AND PROBABILITY"
+ },
+ {
+  "code": "05507003",
+  "canonical": "COMPUTER ALGORITHMS"
+ },
+ {
+  "code": "05508021",
+  "canonical": "THESIS 4"
+ },
+ {
+  "code": "05508080",
+  "canonical": "DESIGN AND ANALYSIS OF ADVANCED ALGORITHM"
+ },
+ {
+  "code": "05656051",
+  "canonical": "SPECIAL PROJECT"
+ },
+ {
+  "code": "05696110",
+  "canonical": "DATABASE PROGRAMMING IN PRACTICE"
+ },
+ {
+  "code": "05696400",
+  "canonical": "FINANCIAL AND INSURANCE TECHNOLOGY 1"
+ },
+ {
+  "code": "05696601",
+  "canonical": "INTRODUCTION TO BIG DATA ECOSYSTEM"
+ },
+ {
+  "code": "06016318",
+  "canonical": "Seminar on Professional Communican Skills"
+ },
+ {
+  "code": "06016328",
+  "canonical": "SOFTWARE DEVELOPMENT TOOLS AND ENVIRONMENTS"
+ },
+ {
+  "code": "06016328",
+  "canonical": "Software Development Tools and"
+ },
+ {
+  "code": "06016344",
+  "canonical": "GRAPHICS DESIGN PRINCIPLES"
+ },
+ {
+  "code": "06016347",
+  "canonical": "FUNDAMENTALS OF DIGITAL STORYTELLING AND CINEMATOGRAPHY"
+ },
+ {
+  "code": "06016383",
+  "canonical": "SPECIAL TOPICS IN SOFTWARE ENGINEERING"
+ },
+ {
+  "code": "06016384",
+  "canonical": "Dock end"
+ },
+ {
+  "code": "06016384",
+  "canonical": "Special topics in Software Engineering 2"
+ },
+ {
+  "code": "06016392",
+  "canonical": "SPECIAL WORKSHOP IN INFORMATION TECHNOLOGY 2"
+ },
+ {
+  "code": "06016429",
+  "canonical": "CLIENT-SIDE WEB DEVELOPMENT"
+ },
+ {
+  "code": "06016431",
+  "canonical": "MOBILE DEVICE PROGRAMMING"
+ },
+ {
+  "code": "06016444",
+  "canonical": "WEB DESIGN"
+ },
+ {
+  "code": "06016445",
+  "canonical": "ADVANCED SCRIPTING FOR DESIGN"
+ },
+ {
+  "code": "06016446",
+  "canonical": "GAME DESIGN"
+ },
+ {
+  "code": "06016474",
+  "canonical": "SPECIAL TOPICS IN INFORMATION TECHNOLOGY 2"
+ },
+ {
+  "code": "06016477",
+  "canonical": "SPECIAL WORKSHOP 3"
+ },
+ {
+  "code": "06016477",
+  "canonical": "SPECIAL WORKSHOP IN INFORMATION TECHNOLOGY 1"
+ },
+ {
+  "code": "06017453",
+  "canonical": "Big Data Engine"
+ },
+ {
+  "code": "06017524",
+  "canonical": "Internet of Things"
+ },
+ {
+  "code": "06017527",
+  "canonical": "BUSINESS INTELLIGENCE AND DATA VISUALIZATION"
+ },
+ {
+  "code": "06017532",
+  "canonical": "Artificial Neural Network and Deep Learning"
+ },
+ {
+  "code": "06018344",
+  "canonical": "TECHNOLOGY RESEARCH METHODOLOGY"
+ },
+ {
+  "code": "06026114",
+  "canonical": "Business Process and Enterprise Resource Planning"
+ },
+ {
+  "code": "06026126",
+  "canonical": "BUSINESS STRATEGIC AND PERFORMANCE MANAGEMENT 3"
+ },
+ {
+  "code": "06026163",
+  "canonical": "SPECIAL TOPICS IN DATA SCIENCE AND BUSINESS ANALYTICS"
+ },
+ {
+  "code": "06026163",
+  "canonical": "SPECIAL TOPICS IN DATA SCIENCE AND BUSINESS ANALYTICS 1"
+ },
+ {
+  "code": "06026165",
+  "canonical": "SPECIAL WORKSHOP IN DATA SCIENCE AND BUSINESS ANALYTICS 1"
+ },
+ {
+  "code": "06026201",
+  "canonical": "Fundamental of Data Management"
+ },
+ {
+  "code": "06026202",
+  "canonical": "LINEAR AL GEBRA"
+ },
+ {
+  "code": "06026202",
+  "canonical": "Statistical Programming"
+ },
+ {
+  "code": "06026203",
+  "canonical": "Data Preparation and Visualization"
+ },
+ {
+  "code": "06026205",
+  "canonical": "Data Mining Techniques and Tools"
+ },
+ {
+  "code": "06026243",
+  "canonical": "ADVANCED DATABASE SYSTEMS"
+ },
+ {
+  "code": "06036006",
+  "canonical": "MANAGEMENT INFORMATION SYSTEMS"
+ },
+ {
+  "code": "06036017",
+  "canonical": "ENTERPRISE SYSTEMS"
+ },
+ {
+  "code": "06036018",
+  "canonical": "SOCIAL MEDIA AND SOCIAL NETWORK"
+ },
+ {
+  "code": "06036018",
+  "canonical": "SOCIAL MEDIA AND SOCIAL NETWORKING"
+ },
+ {
+  "code": "06036018",
+  "canonical": "SYS BIG DATA"
+ },
+ {
+  "code": "06036042",
+  "canonical": "SPECIAL TOPICS IN INFORMATION TECHNOLOGY 1"
+ },
+ {
+  "code": "06036101",
+  "canonical": "MATHEMATICS FOR BUSINESS"
+ },
+ {
+  "code": "06036106",
+  "canonical": "MANAGING BUSINESS INFORMATION AND EMERGING TECHNOLOGIES"
+ },
+ {
+  "code": "06036111",
+  "canonical": "DIGITAL TECHNOLOGY FOR BUSINESS"
+ },
+ {
+  "code": "06036114",
+  "canonical": "WEB APPLICATION DEVELOPMENT USING FRAMEWORKS"
+ },
+ {
+  "code": "06036122",
+  "canonical": "VISUAL COMMUNICATION FOR BUSINESS"
+ },
+ {
+  "code": "06036138",
+  "canonical": "ORGANIZATIONAL KNOWLEDGE MANAGEMENT"
+ },
+ {
+  "code": "06046001",
+  "canonical": "Elements of Artificial Intelligence"
+ },
+ {
+  "code": "06046002",
+  "canonical": "Python Programming for Machine Learning"
+ },
+ {
+  "code": "06048202",
+  "canonical": "DATA SCIENCE"
+ },
+ {
+  "code": "06048302",
+  "canonical": "ADVANCED PYTHON PROGRAMMING FOR MACHINE LEARNING"
+ },
+ {
+  "code": "06048303",
+  "canonical": "Deep Learning for Computer Vision"
+ },
+ {
+  "code": "06048304",
+  "canonical": "SPEECH AND SIGNAL PROCESSING"
+ },
+ {
+  "code": "06048305",
+  "canonical": "INTERNET OF THINGS WITH ARTIFICIAL INTELLIGENCE"
+ },
+ {
+  "code": "06048308",
+  "canonical": "Intelligent Chatbot Development"
+ },
+ {
+  "code": "06066100",
+  "canonical": "INFORMATION TECHNOLOGY PROJECT MANAGEMENT"
+ },
+ {
+  "code": "06066302",
+  "canonical": "FUNDAMENTAL WEB PROGRAMMING"
+ },
+ {
+  "code": "08016430",
+  "canonical": "INTRODUCTION TO AGRO INDUSTRY"
+ },
+ {
+  "code": "08016430",
+  "canonical": "INTRODUCTION TO AGRO INDUSTRY INTRODUCTION TO AGRO INDU"
+ },
+ {
+  "code": "08016794",
+  "canonical": "COOKING OF INTERNATIONAL CUISINES AND DESSERTS"
+ },
+ {
+  "code": "08016800",
+  "canonical": "SPECIAL PROBLEM 1 08026811"
+ },
+ {
+  "code": "08046010",
+  "canonical": "GERMAN 2"
+ },
+ {
+  "code": "08046103",
+  "canonical": "CULINARY FOOD MICROBIOLOGY"
+ },
+ {
+  "code": "08046107",
+  "canonical": "SENSORY EVALUATION CULINARY"
+ },
+ {
+  "code": "08046107",
+  "canonical": "SENSORY EVALUATION FOR CULINARY"
+ },
+ {
+  "code": "08046107",
+  "canonical": "SENSORY EVALUATION FOR CULUNARY"
+ },
+ {
+  "code": "08046108",
+  "canonical": "CULINARY SCIENCE AND FOOD INNOVATION"
+ },
+ {
+  "code": "08046201",
+  "canonical": "WORLD GASTRONOMY"
+ },
+ {
+  "code": "08046202",
+  "canonical": "THAI CUISINE 1"
+ },
+ {
+  "code": "08046202",
+  "canonical": "THAICUISINE 1"
+ },
+ {
+  "code": "08046203",
+  "canonical": "THAI CUISINE 2"
+ },
+ {
+  "code": "08046203",
+  "canonical": "THAI CUISINE2"
+ },
+ {
+  "code": "08046204",
+  "canonical": "ART OF BANANA LEAF AND FRUIT- VEGETABLE CARVING"
+ },
+ {
+  "code": "08046204",
+  "canonical": "ART OF BANANA LEAF AND FRUIT-VEGETABLE CARVING"
+ },
+ {
+  "code": "08046205",
+  "canonical": "TRADITIONAL THAI DESERT"
+ },
+ {
+  "code": "08046205",
+  "canonical": "TRADITIONAL THAI DESSERT"
+ },
+ {
+  "code": "08046206",
+  "canonical": "INTERNATIONAL CUISINE"
+ },
+ {
+  "code": "08046301",
+  "canonical": "FOOD SERVICE OPERATION"
+ },
+ {
+  "code": "08046301",
+  "canonical": "FOODSERVICE OPERATION"
+ },
+ {
+  "code": "08046304",
+  "canonical": "CULINARY MEDIA AND PRESENTATION SKILLS"
+ },
+ {
+  "code": "08046401",
+  "canonical": "BAKES AND BREADS"
+ },
+ {
+  "code": "08046402",
+  "canonical": "CAKE AND CREAM"
+ },
+ {
+  "code": "08117111",
+  "canonical": "SUSTAINABLE FOOD PROCESSING"
+ },
+ {
+  "code": "08117111",
+  "canonical": "SUSTAINABLE FOOD PRODUCTION"
+ },
+ {
+  "code": "08117113",
+  "canonical": "RESEARCH PROGRESS"
+ },
+ {
+  "code": "08117238",
+  "canonical": "SHELF-LIFE EVALUATION OF FOOD 1"
+ },
+ {
+  "code": "08117252",
+  "canonical": "SCIENCE AND TECHNOLOGY OF MEAT"
+ },
+ {
+  "code": "08117262",
+  "canonical": "SCIENCE AND TECHNOLOGY OF EDIBLE FAT OIL PRODUCTS SCIENCE"
+ },
+ {
+  "code": "08117280",
+  "canonical": "Intellectual Property for Innovative Research and Developme"
+ },
+ {
+  "code": "08117280",
+  "canonical": "Intellectual Property for Innovative Research and Development in Food I"
+ },
+ {
+  "code": "08117303",
+  "canonical": "THESIS SEMINAR"
+ },
+ {
+  "code": "08118131",
+  "canonical": "Advanced Fermented Food for Health Benefits"
+ },
+ {
+  "code": "08127100",
+  "canonical": "Food Sanitation and Quality Assurance"
+ },
+ {
+  "code": "08127121",
+  "canonical": "FOOD PROCESS CONTROL AND EFFICIENCY MODELS"
+ },
+ {
+  "code": "08127122",
+  "canonical": "FOOD LAWS AND CERTIFICATION SYSTEM FOR FOOD"
+ },
+ {
+  "code": "08127122",
+  "canonical": "FOOD LAWS AND CERTIFICATION SYSTEM FOR FOOD SAFETY MANAGEMENT"
+ },
+ {
+  "code": "08127123",
+  "canonical": "FOOD SAFETY MANAGEMENT"
+ },
+ {
+  "code": "08127128",
+  "canonical": "PRINCIPLE OF RISK ANALYSIS IN FOOD 6"
+ },
+ {
+  "code": "08127128",
+  "canonical": "PRINCIPLE OF RISK ANALYSIS IN FOODS"
+ },
+ {
+  "code": "08127129",
+  "canonical": "FOOD LAWS AND FOOD SAFETY REGULATION"
+ },
+ {
+  "code": "08127231",
+  "canonical": "LEARNING FROM EXPERTS FOR FOOD SAFETY"
+ },
+ {
+  "code": "08127231",
+  "canonical": "LEARNING FROM EXPERTS FOR FOOD SAFETY MANAGEMENT"
+ },
+ {
+  "code": "08127234",
+  "canonical": "LEARNING FROM EXPERTS FOR FOOD PROCESS CONTROL"
+ },
+ {
+  "code": "08127239",
+  "canonical": "FOOD ADDITIVES AND FUNCTIONAL INGREDIENTS"
+ },
+ {
+  "code": "08127242",
+  "canonical": "FOOD SAFETY MANAGEMENT SYSTEM"
+ },
+ {
+  "code": "08127243",
+  "canonical": "QUALITY MANAGEMENT SYSTEM IN FOOD INDUSTRY"
+ },
+ {
+  "code": "08127243",
+  "canonical": "QUALITY MANAGEMENT SYSTEM IN FOODINDUSTR"
+ },
+ {
+  "code": "08137004",
+  "canonical": "Fundamental Food Science and Technology"
+ },
+ {
+  "code": "08137005",
+  "canonical": "PRINCIPLE OF FOOD PREPARATION AND COOKING"
+ },
+ {
+  "code": "08137112",
+  "canonical": "Science and Technology of Food Preparation and Cooling"
+ },
+ {
+  "code": "08137116",
+  "canonical": "PRACTICE IN PROFESSIONAL FOODSERVICE OPERATION"
+ },
+ {
+  "code": "08137119",
+  "canonical": "Sanitation and Safety in Foodservice"
+ },
+ {
+  "code": "08137120",
+  "canonical": "RESEARCH TECHNIQUE FOR FOODSERVICE BUSINESS"
+ },
+ {
+  "code": "08137120",
+  "canonical": "RESEARCH THECHNIQUE FOR FOODSERVICEBUSINEE"
+ },
+ {
+  "code": "08137121",
+  "canonical": "CULINARY NATRITION"
+ },
+ {
+  "code": "08137121",
+  "canonical": "CULINARY NUTRITION"
+ },
+ {
+  "code": "08137122",
+  "canonical": "CURRENT ISSUE IN CULINARY SCIE IN NCE AND FC"
+ },
+ {
+  "code": "08137122",
+  "canonical": "CURRENT ISSUE IN CULINARY SCIENCE AND FOOD"
+ },
+ {
+  "code": "08137122",
+  "canonical": "CURRENT ISSUE IN CULINARY SCIENCE AND FOOD SERVICE"
+ },
+ {
+  "code": "08137122",
+  "canonical": "CURRENT ISSUE IN CULINARY SCIENCE AND FOOD SERVICE BUSINESS"
+ },
+ {
+  "code": "08137122",
+  "canonical": "Current Issue in Culinary Science and Foodservice Business"
+ },
+ {
+  "code": "08137123",
+  "canonical": "FOODSERVICE BUSINESS OPERATION"
+ },
+ {
+  "code": "08137208",
+  "canonical": "FOOD PRODUCT DEVELOPMENT AND SENSORY EVALUATION IN FOODSERVICE"
+ },
+ {
+  "code": "08137262",
+  "canonical": "Thai Cuisine"
+ },
+ {
+  "code": "08137264",
+  "canonical": "FOOD SERVICE MANAGEMENT"
+ },
+ {
+  "code": "08137264",
+  "canonical": "FOODSERVICE MANAGEMENT"
+ },
+ {
+  "code": "08137265",
+  "canonical": "ON LINE APPLICATION AND DIGITAL MARKETING IN FOOD SERVICE BUSINESS"
+ },
+ {
+  "code": "08137265",
+  "canonical": "ON LINE APPLICATIONS AND DIGITAL RKETING"
+ },
+ {
+  "code": "08137265",
+  "canonical": "ONLINE APPLICATIONS AND DIGITAL MARKETING IN FOODSERVICE BU"
+ },
+ {
+  "code": "08137267",
+  "canonical": "PRODUCT DEVELOPMENT AND SENSORY EVALUATION"
+ },
+ {
+  "code": "08137267",
+  "canonical": "PRODUCT DEVELOPMENT AND SENSORY EVALUATION IN"
+ },
+ {
+  "code": "08137267",
+  "canonical": "PRODUCT DEVELOPMENT AND SENSORY EVALUATION IN FOODSERVICE B"
+ },
+ {
+  "code": "08137267",
+  "canonical": "PRODUCT DEVELOPMENT AND SENSORY EVALUATION IN FOODSERVICE BUSINESS"
+ },
+ {
+  "code": "08137269",
+  "canonical": "Modernist Cooking and Innovative Cuisine"
+ },
+ {
+  "code": "08137275",
+  "canonical": "CREATIVITY AND ENTREPRENEURSHIP SKILL"
+ },
+ {
+  "code": "08218130",
+  "canonical": "FUNCTIONAL AND MEDICAL FOOD"
+ },
+ {
+  "code": "08218138",
+  "canonical": "ADVANCE INDUSTRIAL FERMENTATION TECHNOLOGY"
+ },
+ {
+  "code": "08218138",
+  "canonical": "ADVANCED INDUSTRIAL FERMENTATION TECHNOLOGY"
+ },
+ {
+  "code": "09106500",
+  "canonical": "INTRODUCTION TO NANOTECHNOLOGY"
+ },
+ {
+  "code": "09106551",
+  "canonical": "CAPSTONE DESIGN PREPARATION FOR SMART MATERIALS"
+ },
+ {
+  "code": "09106551",
+  "canonical": "CAPSTONE DESIGN PREPARATION FOR SMART MATERIALS O O O O"
+ },
+ {
+  "code": "09106803",
+  "canonical": "SMART MATERIALS FOR ENERGY STORAGE"
+ },
+ {
+  "code": "09106804",
+  "canonical": "LIGHT EMITTING DEVICES AND DISPLAY TECHNOLOGY"
+ },
+ {
+  "code": "09106805",
+  "canonical": "SOLAR CELL AND NANOSTRUCTURE PHOTOVOLTAIC"
+ },
+ {
+  "code": "09106806",
+  "canonical": "LAB-ON-CHIP TECHNOLOGY"
+ },
+ {
+  "code": "09106807",
+  "canonical": "MICROELECTROMECHANICAL SYSTEM"
+ },
+ {
+  "code": "09106808",
+  "canonical": "SEMICONDUCTOR TECHNOLOGY"
+ },
+ {
+  "code": "09106809",
+  "canonical": "MATERIALS DESIGN AND SIMULATIONS"
+ },
+ {
+  "code": "09106810",
+  "canonical": "ADVANCED CHEMISTRY"
+ },
+ {
+  "code": "09106811",
+  "canonical": "SMART MATERIAL CAPSTONE STUDY 1"
+ },
+ {
+  "code": "09106812",
+  "canonical": "SMART MATERIAL CAPSTONE STUDY 2"
+ },
+ {
+  "code": "10049351",
+  "canonical": "Kurdish S918/440"
+ },
+ {
+  "code": "10114927",
+  "canonical": "B2, United States, 30 October 2018"
+ },
+ {
+  "code": "10322084",
+  "canonical": "TPhasukkit, 2untiwong, P"
+ },
+ {
+  "code": "11126008",
+  "canonical": "PRE-ACTIVITIES FOR ENGINEERS"
+ },
+ {
+  "code": "11126013",
+  "canonical": "COMPUTER AIDED DESIGN"
+ },
+ {
+  "code": "11126084",
+  "canonical": "MODERN POST HARVEST ENGINEERING"
+ },
+ {
+  "code": "11126264",
+  "canonical": "Machine Design"
+ },
+ {
+  "code": "11126358",
+  "canonical": "AIR CONDITIONING"
+ },
+ {
+  "code": "11186303",
+  "canonical": "THEORY OF STRUCTURES"
+ },
+ {
+  "code": "11206413",
+  "canonical": "PROJECT 1 11206478"
+ },
+ {
+  "code": "11216001",
+  "canonical": "ROBOTS AND INTELLIGENT ELECTRONICS 1"
+ },
+ {
+  "code": "11216001",
+  "canonical": "ROBOTS AND INTELLIGENT ELECTRONICS LABORATORY 1"
+ },
+ {
+  "code": "11216001",
+  "canonical": "ROBOTS AND INTELLIGENT ELECTRONICS LABORATORY 1 11216002"
+ },
+ {
+  "code": "11216206",
+  "canonical": "DIGITAL CIRCUIT FOR ROBOTICS 11216209"
+ },
+ {
+  "code": "11216206",
+  "canonical": "DIGITAL CIRCUIT FOR ROBOTICS CROPS"
+ },
+ {
+  "code": "11256008",
+  "canonical": "DATA STRUCTURES AND ALGORITHMS 11256011"
+ },
+ {
+  "code": "11316202",
+  "canonical": "PHYSIOLOGY OF HORTICULTURAL CROPS 11316232"
+ },
+ {
+  "code": "11316205",
+  "canonical": "PHYSIOLOGY OF HORTICULTURAL CROPS"
+ },
+ {
+  "code": "11446251",
+  "canonical": "FISHERIES STATISTICS 11336511"
+ },
+ {
+  "code": "11446501",
+  "canonical": "ELEMENTARY STATISTICS FOR FISHERIES"
+ },
+ {
+  "code": "11456153",
+  "canonical": "General Physics 4-0-8"
+ },
+ {
+  "code": "11466243",
+  "canonical": "BIOCHEMISTRY 11486341"
+ },
+ {
+  "code": "11536111",
+  "canonical": "PRINCIPLES OF MICROECONOMICS"
+ },
+ {
+  "code": "11536207",
+  "canonical": "PRODUCTION AND OPERATIONS MANAGEMENT"
+ },
+ {
+  "code": "11608511",
+  "canonical": "INDUSTRIAL MARKETING MANAGEMENT 1"
+ },
+ {
+  "code": "11608521",
+  "canonical": "PUBLIC ADMINISTRATION 1"
+ },
+ {
+  "code": "11608541",
+  "canonical": "DIGITAL ECONOMICS 1"
+ },
+ {
+  "code": "12026106",
+  "canonical": "ELECTICAL ENGINEERING 2"
+ },
+ {
+  "code": "12026110",
+  "canonical": "FUNDAMENTAL OF CONTROL SYSTEM"
+ },
+ {
+  "code": "12026110",
+  "canonical": "FUNDAMENTAL OF CONTROL SYSTEMS"
+ },
+ {
+  "code": "12026112",
+  "canonical": "PRECISION ENGINEERING"
+ },
+ {
+  "code": "12026118",
+  "canonical": "APPLICATION OF ARTIFICIAL INTELLIGENCE IN ADVANCED MANUFACTURING"
+ },
+ {
+  "code": "12026118",
+  "canonical": "SENSOR AND ACTUATORS"
+ },
+ {
+  "code": "12026129",
+  "canonical": "ELECTRICAL ENGINEERING 2"
+ },
+ {
+  "code": "12026203",
+  "canonical": "CORROSION AND"
+ },
+ {
+  "code": "12026203",
+  "canonical": "CORROSION AND CORROSION CONTROL"
+ },
+ {
+  "code": "12026410",
+  "canonical": "FUNDAMENTAL OF INDUSTRIAL ROBOTICS"
+ },
+ {
+  "code": "12026501",
+  "canonical": "ENGINEERING STATISTICS AND OPERATION RESEARCH"
+ },
+ {
+  "code": "12026502",
+  "canonical": "SAFETY ENGINEERING"
+ },
+ {
+  "code": "12026503",
+  "canonical": "APPLIED STATISTICS FOR MANUFACTURING"
+ },
+ {
+  "code": "12026507",
+  "canonical": "TOOL ENGINEERING"
+ },
+ {
+  "code": "12046401",
+  "canonical": "THERMODYANMICS IN MANUFACTURING"
+ },
+ {
+  "code": "12046401",
+  "canonical": "THERMODYNAMICS IN MANUFACTURING"
+ },
+ {
+  "code": "13006208",
+  "canonical": "ACADEMIC ENGLISH 1 3"
+ },
+ {
+  "code": "13006208",
+  "canonical": "ACADEMIC ENGLISH 1 3 A S"
+ },
+ {
+  "code": "13006209",
+  "canonical": "ACADEMIC ENGLISH 2"
+ },
+ {
+  "code": "13006209",
+  "canonical": "ACADEMIC ENGLISH 2 3 A S"
+ },
+ {
+  "code": "13006303",
+  "canonical": "CULTURAL STUDIES"
+ },
+ {
+  "code": "13006303",
+  "canonical": "CULTURE STUDIES"
+ },
+ {
+  "code": "13006401",
+  "canonical": "COMPUTER ETHICS AND LAW"
+ },
+ {
+  "code": "13006403",
+  "canonical": "BUSINESS ADMINISTRATION"
+ },
+ {
+  "code": "13016210",
+  "canonical": "Object-Oriented Concepts and Programming Lab"
+ },
+ {
+  "code": "13016235",
+  "canonical": "C PROGRAMMING"
+ },
+ {
+  "code": "13016236",
+  "canonical": "C PROGRAMMING LABORATORY"
+ },
+ {
+  "code": "13016243",
+  "canonical": "HUMAN- COMPUTER INTERACTION"
+ },
+ {
+  "code": "13016243",
+  "canonical": "HUMAN-COMPUTER INTERACTION"
+ },
+ {
+  "code": "13016308",
+  "canonical": "SERVICE ORIENTED ARCHITECTURE"
+ },
+ {
+  "code": "13016390",
+  "canonical": "EMBEDDED SYSTEM SOFTWARE"
+ },
+ {
+  "code": "13016391",
+  "canonical": "COMPUTER NETWORKING FOR THE INTERNET OF THINGS"
+ },
+ {
+  "code": "13016399",
+  "canonical": "SOFWARE ENTREPRENEURSHIP"
+ },
+ {
+  "code": "13016400",
+  "canonical": "DIGITAL IMAGE PROCESSING"
+ },
+ {
+  "code": "13916333",
+  "canonical": "DATA FUNDAMENTALS"
+ },
+ {
+  "code": "13916334",
+  "canonical": "TEXT AS DATA - AN INTRODUCTION TO DOCUMENT ANALYTICS"
+ },
+ {
+  "code": "13916335",
+  "canonical": "ROBOTICS FOUNDATIONS"
+ },
+ {
+  "code": "13916336",
+  "canonical": "COMPUTATIONAL SOCIAL INTELLIGENCE"
+ },
+ {
+  "code": "13916337",
+  "canonical": "DISTRIBUTED AND PARALLEL TECHNOLOGIES"
+ },
+ {
+  "code": "13916338",
+  "canonical": "START-UP GROWTH ENGINEERING"
+ },
+ {
+  "code": "13916339",
+  "canonical": "SECURED SOFTWARE ENGINEERING"
+ },
+ {
+  "code": "13916340",
+  "canonical": "ADVANCED NETWORKED SYSTEMS"
+ },
+ {
+  "code": "13916340",
+  "canonical": "ADVANCED NETWORKED SYSTEMS O O O O O O O O O O O"
+ },
+ {
+  "code": "13916341",
+  "canonical": "ADVANCED SYSTEMS PROGRAMMING"
+ },
+ {
+  "code": "13916341",
+  "canonical": "ADVANCED SYSTEMS PROGRAMMING O O O O O O O O O O"
+ },
+ {
+  "code": "13916342",
+  "canonical": "THEORY OF COMPUTATION O O O O O O O O O O O O"
+ },
+ {
+  "code": "13916343",
+  "canonical": "WEB SCIENCE"
+ },
+ {
+  "code": "13916343",
+  "canonical": "WEB SCIENCE O O O O O O O O O O O O O O O O"
+ },
+ {
+  "code": "13916344",
+  "canonical": "CONVERSATIONAL INTERFACES"
+ },
+ {
+  "code": "13916344",
+  "canonical": "CONVERSATIONAL INTERFACES O O O O O O O O O O O"
+ },
+ {
+  "code": "13916345",
+  "canonical": "DEEP LEARNING O O O O O O O O O O O O O O O"
+ },
+ {
+  "code": "13916346",
+  "canonical": "EMERGING TOPICS IN CYBER SECURITY"
+ },
+ {
+  "code": "13916346",
+  "canonical": "EMERGING TOPICS IN CYBER SECURITY O O O O O O O O"
+ },
+ {
+  "code": "13916347",
+  "canonical": "FORENSICS O O O O O O O O O O O O O O O O"
+ },
+ {
+  "code": "13916348",
+  "canonical": "INFORMATION VISUALISATION"
+ },
+ {
+  "code": "13916348",
+  "canonical": "INFORMATION VISUALISATION O O O O O O O O O O O"
+ },
+ {
+  "code": "13916349",
+  "canonical": "RECOMMENDER SYSTEMS"
+ },
+ {
+  "code": "13916349",
+  "canonical": "RECOMMENDER SYSTEMS O O O O O O O O O O O O O"
+ },
+ {
+  "code": "13916350",
+  "canonical": "CONSTRAINT PROGRAMMING"
+ },
+ {
+  "code": "13916351",
+  "canonical": "CRYPTOGRAPHY AND SECURE DEVELOPMENT"
+ },
+ {
+  "code": "14011207",
+  "canonical": "INDUSTRIAL PROJECT FEASIBILITY STUDIES"
+ },
+ {
+  "code": "14011207",
+  "canonical": "INDUSTRIAL PROJECT FEASIBILITY STUDY"
+ },
+ {
+  "code": "14011210",
+  "canonical": "PRODUCTIVITY IMPROVEMENT TECHNIQUES AND MANUFACTURING COST CONTROL"
+ },
+ {
+  "code": "14011309",
+  "canonical": "FINANCIAL MANAGEMENT FOR INNOVATIVE ENTREPRENEUR"
+ },
+ {
+  "code": "14011408",
+  "canonical": "PRODUCTION PLANNING AND CONTROL SYSTEMS"
+ },
+ {
+  "code": "14011409",
+  "canonical": "SELECTED TOPICS IN INNOVATIVE INDUSAL MANAGEMENT"
+ },
+ {
+  "code": "14011409",
+  "canonical": "SELECTED TOPICS IN INNOVATIVE INDUSTRIAL MANAGEMENT 1"
+ },
+ {
+  "code": "14011502",
+  "canonical": "CONSUMER BEHAVIOR FOR INNOVATIVE ENTREPRENEUR"
+ },
+ {
+  "code": "14011505",
+  "canonical": "STRATEGIC MANAGEMENT FOR INNOVATIVE ENTERPRISES"
+ },
+ {
+  "code": "14011505",
+  "canonical": "STRATEGIC MANAGEMENT FOR INNOVATIVE ENTREPRENEUR"
+ },
+ {
+  "code": "14021101",
+  "canonical": "MICROECONOMICS 1"
+ },
+ {
+  "code": "14021102",
+  "canonical": "MACROECONOMICS 2"
+ },
+ {
+  "code": "14021102",
+  "canonical": "MACROECONOMICS 2 14021117"
+ },
+ {
+  "code": "14021102",
+  "canonical": "MACROECONOMICS 2 2"
+ },
+ {
+  "code": "14021102",
+  "canonical": "MACROECONOMICS 2 SEMINAR IN BUSINESS ECONOMICS AND MANAGEM"
+ },
+ {
+  "code": "14021119",
+  "canonical": "DATA SCIENCE FOR ECONOMIC APPLICATION"
+ },
+ {
+  "code": "14021210",
+  "canonical": "SELECTED TOPICS IN DIGITAL ECONOMY 1"
+ },
+ {
+  "code": "14021311",
+  "canonical": "MODERN RETAILING"
+ },
+ {
+  "code": "14021314",
+  "canonical": "SELECTED TOPICS IN BUSINESS AND INDUSTRY ANALYSIS 2"
+ },
+ {
+  "code": "14021404",
+  "canonical": "BOND AND DERIVATIVE MARKET"
+ },
+ {
+  "code": "14021404",
+  "canonical": "BOND AND DERIVATIVE MARKET INVESTMENT ANALYSIS"
+ },
+ {
+  "code": "14021405",
+  "canonical": "HOLISTIC INVESTMENT ANALYSIS AND SUSTAINABLE INVESTMENTS"
+ },
+ {
+  "code": "14026154",
+  "canonical": "BUSINESS ECONOMICS RESEARCH"
+ },
+ {
+  "code": "14026329",
+  "canonical": "COMPUTER SYSTEM FOR BUSINESS"
+ },
+ {
+  "code": "14026330",
+  "canonical": "BUSINESS SOFTWARE"
+ },
+ {
+  "code": "14026341",
+  "canonical": "INDUSTRIAL AND TECHNOLOGY ECONOMICS"
+ },
+ {
+  "code": "14026345",
+  "canonical": "PROJECT FEASIBILITY STUDY"
+ },
+ {
+  "code": "14026348",
+  "canonical": "ECONOMICS FOR CHANGE AND RISK MANAGEMENT"
+ },
+ {
+  "code": "14026350",
+  "canonical": "SELECTED TOPICS IN INDUSTRIAL AND TECHNOLOGY ECONOMICS 1"
+ },
+ {
+  "code": "14026351",
+  "canonical": "SELECTED TOPICS IN INDUSTRIAL AND TECHNOLOGY ECONOMICS 2"
+ },
+ {
+  "code": "14026415",
+  "canonical": "INDUSTRIAL PRODUCTION SYSTEM ANALYSIS"
+ },
+ {
+  "code": "14026415",
+  "canonical": "INDUSTRIAL PRODUCTION SYSTEM AND PROCESS MANAGEMENT"
+ },
+ {
+  "code": "14026441",
+  "canonical": "INTERNATIONAL TRADE AND ECONOMICS"
+ },
+ {
+  "code": "14026443",
+  "canonical": "INTERNATIONAL ECONOMIC COOPERATION AND TRADE NEGOTIATIONS"
+ },
+ {
+  "code": "14026449",
+  "canonical": "SELECTED TOPICS IN INTERNATIONAL ECONOMICS"
+ },
+ {
+  "code": "14026449",
+  "canonical": "SELECTED TOPICS IN INTERNATIONAL ECONOMICS 1"
+ },
+ {
+  "code": "14026526",
+  "canonical": "INTERNATIONAL BUSINESS ENVIRONMENT"
+ },
+ {
+  "code": "14036109",
+  "canonical": "QUANTITATIVE ANALYSIS FOR BUSINESS"
+ },
+ {
+  "code": "14036111",
+  "canonical": "Managerial Economics"
+ },
+ {
+  "code": "14036117",
+  "canonical": "GLOBAL BUSINESS LAW AND ETHICS"
+ },
+ {
+  "code": "14036202",
+  "canonical": "SMALL BUSINESS MANAGEMENT"
+ },
+ {
+  "code": "14036209",
+  "canonical": "INNOVATION MARKETING"
+ },
+ {
+  "code": "14036308",
+  "canonical": "MICE, TRADESHOW AND EXHIBITON"
+ },
+ {
+  "code": "14036969",
+  "canonical": "ENGLISH FOR INTERLECTUAL COMMUNICATION"
+ },
+ {
+  "code": "14036972",
+  "canonical": "Basic Chinese 1"
+ },
+ {
+  "code": "14036973",
+  "canonical": "Basic Chinese 2"
+ },
+ {
+  "code": "14046103",
+  "canonical": "International Human Capital Management"
+ },
+ {
+  "code": "14046105",
+  "canonical": "INTERNATIONAL MARKETING MANAGEMENT"
+ },
+ {
+  "code": "14046107",
+  "canonical": "Business Finan 10"
+ },
+ {
+  "code": "14046108",
+  "canonical": "Management Information"
+ },
+ {
+  "code": "14046109",
+  "canonical": "International Organizational Management and Behavior"
+ },
+ {
+  "code": "14046110",
+  "canonical": "OPERATIONS MANAGEMENT"
+ },
+ {
+  "code": "14046201",
+  "canonical": "Business Ideation and Product Development"
+ },
+ {
+  "code": "14046202",
+  "canonical": "Global Business Law and Intellectual"
+ },
+ {
+  "code": "14046203",
+  "canonical": "Cost Analysis and Decision Making for"
+ },
+ {
+  "code": "14046204",
+  "canonical": "Business Plan and Feasibility Study for"
+ },
+ {
+  "code": "14046205",
+  "canonical": "New Venture Creation"
+ },
+ {
+  "code": "14046206",
+  "canonical": "Entrepreneurial Finance"
+ },
+ {
+  "code": "14046207",
+  "canonical": "Personal Finance for Entrepreneurs"
+ },
+ {
+  "code": "14046208",
+  "canonical": "PITCHING, SALES, AND PRESENTATION SKILLS FOR ENTREPRENEURS"
+ },
+ {
+  "code": "14046208",
+  "canonical": "Pitching, Sales, and Presentation Skills for"
+ },
+ {
+  "code": "14046209",
+  "canonical": "E-COMMERCE AND E-CRM FOR ENTREPRENEURS"
+ },
+ {
+  "code": "14046210",
+  "canonical": "DIGITAL MARKETING AND SOCIAL MEDIA FOR ENTREPRENEURS"
+ },
+ {
+  "code": "14046210",
+  "canonical": "Digital Marketing and Social Media for"
+ },
+ {
+  "code": "14046211",
+  "canonical": "ENTREPRENEURIAL LEADERSHIP AND STRATEGY"
+ },
+ {
+  "code": "14046211",
+  "canonical": "Entrepreneurial Leadership Strategy"
+ },
+ {
+  "code": "14046212",
+  "canonical": "Creative Teamwork, Collaboration, and"
+ },
+ {
+  "code": "14046213",
+  "canonical": "Performance Measurement for"
+ },
+ {
+  "code": "14046214",
+  "canonical": "FAMILY BUSINESS AND TRANS GENERATION"
+ },
+ {
+  "code": "14046214",
+  "canonical": "FAMILY BUSINESS AND TRANSGENERATION"
+ },
+ {
+  "code": "14046215",
+  "canonical": "SUSTAINABILITY FOR SOCIAL ENTREPRENEURS"
+ },
+ {
+  "code": "14046216",
+  "canonical": "Entrepreneurship skills for new ventures"
+ },
+ {
+  "code": "14046217",
+  "canonical": "Data Analytic in Marketing, Entrepreneurship"
+ },
+ {
+  "code": "14046218",
+  "canonical": "Enterprise Architecture for Digital Business"
+ },
+ {
+  "code": "14046303",
+  "canonical": "ARTIFICIAL INTELLIGENCE FOR BUSINESS STRATEGY"
+ },
+ {
+  "code": "14046309",
+  "canonical": "ASEAN AND EMERGING MARKETS STUDY FOR ENTREPRENEURS"
+ },
+ {
+  "code": "14046906",
+  "canonical": "COMPUTER IN DAILY LIFE"
+ },
+ {
+  "code": "14046947",
+  "canonical": "KNOWLEDGE MANAGEMENT"
+ },
+ {
+  "code": "14046947",
+  "canonical": "KNOWLEDGE MANGEMENT"
+ },
+ {
+  "code": "14046961",
+  "canonical": "ENGLISH FOR"
+ },
+ {
+  "code": "14046962",
+  "canonical": "DEVELOPMENT OF READING AND WRITINGILLS IN EN"
+ },
+ {
+  "code": "14056110",
+  "canonical": "MANAGEMENT INFORMATION SYSTEM"
+ },
+ {
+  "code": "14056206",
+  "canonical": "MARKETING TOOLS &amp"
+ },
+ {
+  "code": "14056209",
+  "canonical": "MARKETING STRATEGY FOR SUSTAINABILITY"
+ },
+ {
+  "code": "14056211",
+  "canonical": "ADVERTISING AND BEYOND"
+ },
+ {
+  "code": "14056211",
+  "canonical": "ADVERTISING AND BEYOND-CUSTOMER-CENTRIC BRAND DEVELOPMENT"
+ },
+ {
+  "code": "14056304",
+  "canonical": "INTERNATIONAL TAX PLANNING FOR BUSINESS"
+ },
+ {
+  "code": "14056306",
+  "canonical": "FINANCIAL STATEMENT ANALYSIS &amp"
+ },
+ {
+  "code": "14056307",
+  "canonical": "FINANCIAL RISK ANALYSIS FOR BUSINESS DECISION"
+ },
+ {
+  "code": "14056309",
+  "canonical": "INVESTMENT ANALYSIS AND PORTFOLIO MANAGEMENT"
+ },
+ {
+  "code": "14056403",
+  "canonical": "INTRODUCTION TO INTELLIGENT TRANSPORT SYSTEMS"
+ },
+ {
+  "code": "14056405",
+  "canonical": "CURRENT ISSUES IN LOGISTICS"
+ },
+ {
+  "code": "14056407",
+  "canonical": "SMART LOGISTICS AND SUPPLY CHAIN SYSTEMS"
+ },
+ {
+  "code": "14056410",
+  "canonical": "SUSTAINABLE SUPPLY CHAIN"
+ },
+ {
+  "code": "14066111",
+  "canonical": "ACCOUNTING AND FINANCE"
+ },
+ {
+  "code": "14097602",
+  "canonical": "Jing Tian"
+ },
+ {
+  "code": "14097602",
+  "canonical": "Thesis 2"
+ },
+ {
+  "code": "14138102",
+  "canonical": "ADVANCED QUANTITATIVE RESEARCH"
+ },
+ {
+  "code": "14138305",
+  "canonical": "Doctoral Seminar 5"
+ },
+ {
+  "code": "14138306",
+  "canonical": "Doctoral Seminar 6"
+ },
+ {
+  "code": "14148102",
+  "canonical": "ADVANCED RESEARCH METHOD"
+ },
+ {
+  "code": "14148102",
+  "canonical": "ADVANCED RESEARCH METHODS"
+ },
+ {
+  "code": "15006101",
+  "canonical": "Contemporary science and technology 3"
+ },
+ {
+  "code": "15016601",
+  "canonical": "Pre-engineering activities 1"
+ },
+ {
+  "code": "15016602",
+  "canonical": "AUTOMATICS FLIGHT CONTROL"
+ },
+ {
+  "code": "15016603",
+  "canonical": "FLIGHT MECHANICS"
+ },
+ {
+  "code": "15016608",
+  "canonical": "PRE-PILOT ACTIVITIES 1"
+ },
+ {
+  "code": "15016610",
+  "canonical": "PRE-PILOT ACTIVITIES 2"
+ },
+ {
+  "code": "15016612",
+  "canonical": "PRE-PILOT ACTIVITIES 3"
+ },
+ {
+  "code": "15016624",
+  "canonical": "UNMANNED AIRCRAFT SYSTEMS"
+ },
+ {
+  "code": "15016626",
+  "canonical": "AVIICS SYSTEREQ"
+ },
+ {
+  "code": "15016626",
+  "canonical": "AVIONICS SYSTEMS CBT"
+ },
+ {
+  "code": "15016628",
+  "canonical": "PROJECT MANAGEMENT"
+ },
+ {
+  "code": "15016630",
+  "canonical": "Pre - Engineering Activities 1"
+ },
+ {
+  "code": "15016631",
+  "canonical": "FLIGHT STABILITY AND CONTRO"
+ },
+ {
+  "code": "15016631",
+  "canonical": "FLIGHT STABILITY AND CONTROL"
+ },
+ {
+  "code": "15016706",
+  "canonical": "AVIATION TRAINING"
+ },
+ {
+  "code": "15016803",
+  "canonical": "CO-OPERATIVE EDUCATION IN AERONAUTICAL ENGINEERING"
+ },
+ {
+  "code": "15016931",
+  "canonical": "AVIONICS AND ELECTRICAL SYSTEMS Aircraft navigation and com"
+ },
+ {
+  "code": "15016933",
+  "canonical": "AIRCRAFT AND PERSONNEL SECURITY"
+ },
+ {
+  "code": "15026301",
+  "canonical": "INTRODUCTION TO INFORMATION SYSTEMS"
+ },
+ {
+  "code": "15026304",
+  "canonical": "SYSTEM AND PROCESS IMULATION"
+ },
+ {
+  "code": "15026305",
+  "canonical": "Production and Operation Analysis"
+ },
+ {
+  "code": "15026401",
+  "canonical": "LOGISTICS AND SUPPLY CHAIN MANAGEMENT -Procurement and sour"
+ },
+ {
+  "code": "15026401",
+  "canonical": "LOGISTICS AND SUPPLY CHAIN MANAGEMENT Contemporary issues i"
+ },
+ {
+  "code": "15026401",
+  "canonical": "LOGISTICS AND SUPPLY CHAIN MANAGEMENT History of informatio"
+ },
+ {
+  "code": "15026401",
+  "canonical": "LOGISTICS AND SUPPLY CHAIN MANAGEMENT Introduction to facil"
+ },
+ {
+  "code": "15026401",
+  "canonical": "LOGISTICS AND SUPPLY CHAIN MANAGEMENT Principle of strategi"
+ },
+ {
+  "code": "15026401",
+  "canonical": "LOGISTICS AND SUPPLY CHAIN MANAGEMENT Principle of transpor"
+ },
+ {
+  "code": "15026401",
+  "canonical": "LOGISTICS AND SUPPLY CHAIN MANAGEMENT Principles and practi"
+ },
+ {
+  "code": "15026401",
+  "canonical": "LOGISTICS AND SUPPLY CHAIN MANAGEMENT Procurement and sourc"
+ },
+ {
+  "code": "15026401",
+  "canonical": "LOGISTICS AND SUPPLY CHAIN MANAGEMENT Study of material han"
+ },
+ {
+  "code": "15026402",
+  "canonical": "FUNDAMENTALS OF AVIATION"
+ },
+ {
+  "code": "15026403",
+  "canonical": "INVENTORY AND"
+ },
+ {
+  "code": "15026405",
+  "canonical": "FACILITY LOGISTICS AND PLANNING"
+ },
+ {
+  "code": "15026408",
+  "canonical": "DANGEROUS GOODS MANAGEMENT"
+ },
+ {
+  "code": "15026409",
+  "canonical": "CENTER OF GRAVITY AND LOAD CONTROL"
+ },
+ {
+  "code": "15026410",
+  "canonical": "SELECTED TOPICS IN LOGISTICS MANAGEMENT"
+ },
+ {
+  "code": "15026413",
+  "canonical": "SHIPPING BUSINESS"
+ },
+ {
+  "code": "15026414",
+  "canonical": "AIRLINE BUSINESS MANAGEMENT"
+ },
+ {
+  "code": "15026423",
+  "canonical": "INNOVATIVE EXPORT MARKETING"
+ },
+ {
+  "code": "15026902",
+  "canonical": "CONSUMER BEHAVIORS"
+ },
+ {
+  "code": "15026906",
+  "canonical": "SAFETY MANAGEMENT SYSTEMS"
+ },
+ {
+  "code": "15046102",
+  "canonical": "MATHEMATICS 2"
+ },
+ {
+  "code": "15046204",
+  "canonical": "PRINCIPLES OF MARKETING"
+ },
+ {
+  "code": "15046206",
+  "canonical": "COST MANAGEMENT FOR DECISION MAKING"
+ },
+ {
+  "code": "15046303",
+  "canonical": "ENTERPRISE RESOURCE PLANNING"
+ },
+ {
+  "code": "15046305",
+  "canonical": "OPERATIONS RESEARCH"
+ },
+ {
+  "code": "15046404",
+  "canonical": "FREIGHT TRANSPORTATION AND DISTRIBUTION"
+ },
+ {
+  "code": "15046405",
+  "canonical": "PROCUREMENT AND GLOBAL SOURCING"
+ },
+ {
+  "code": "15046431",
+  "canonical": "MATERIAL HANDLING AND PACKAGING SYSTEM"
+ },
+ {
+  "code": "15046451",
+  "canonical": "TECHNOLOGIES FOR LOGISTICS MANAGEMENT"
+ },
+ {
+  "code": "15046461",
+  "canonical": "CAREER PREPARATIONS"
+ },
+ {
+  "code": "15046463",
+  "canonical": "SUPPLY CHAIN FINANCE"
+ },
+ {
+  "code": "15046464",
+  "canonical": "INNOVATION LEADERSHIP"
+ },
+ {
+  "code": "15046465",
+  "canonical": "INTERMODAL TRANSPORTATION"
+ },
+ {
+  "code": "15046466",
+  "canonical": "CONSUMER BEHAVIOR"
+ },
+ {
+  "code": "15046467",
+  "canonical": "MARKETING CHANNEL MANAGEMENT"
+ },
+ {
+  "code": "16016104",
+  "canonical": "ENGLISH LISTENING AND SPEAKING FOR PROFESSIONAL PRESENTATION AND DISCUS"
+ },
+ {
+  "code": "16016112",
+  "canonical": "Introduction to Media Writing"
+ },
+ {
+  "code": "16016118",
+  "canonical": "INTERCULTURAL COMMUNICATION"
+ },
+ {
+  "code": "16016119",
+  "canonical": "Introduction to Literature"
+ },
+ {
+  "code": "16016120",
+  "canonical": "British and"
+ },
+ {
+  "code": "16016120",
+  "canonical": "British and American Literature"
+ },
+ {
+  "code": "16016128",
+  "canonical": "ENGLISH FOR AIRLINE BUSINESS"
+ },
+ {
+  "code": "16016129",
+  "canonical": "ENGLISH FOR FOOD SERVICE INDUSTRY"
+ },
+ {
+  "code": "16016130",
+  "canonical": "ENGLISH FOR ENTREPRENEURS"
+ },
+ {
+  "code": "16016130",
+  "canonical": "ENGLISH FOR ENTREPRENEURSHIP"
+ },
+ {
+  "code": "16016131",
+  "canonical": "ENGLISH FOR PUBLIC RELATIONS"
+ },
+ {
+  "code": "16016133",
+  "canonical": "ENGLISH IN DIGITAL MEDIA"
+ },
+ {
+  "code": "16016134",
+  "canonical": "TEACHING ENGLISH AS A FOREIGN LANGUAGE"
+ },
+ {
+  "code": "16016136",
+  "canonical": "English-Thai Translation"
+ },
+ {
+  "code": "16016137",
+  "canonical": "THAI-ENGLISH TRANSLATION"
+ },
+ {
+  "code": "16016138",
+  "canonical": "TRANSLATION FOR PROFESSIONAL PURPOSES"
+ },
+ {
+  "code": "16016138",
+  "canonical": "TRANSLATION PROFESSIONAL PURPOSES"
+ },
+ {
+  "code": "16016139",
+  "canonical": "INTRODUCTION TO INTERPRETING"
+ },
+ {
+  "code": "16016141",
+  "canonical": "TRANSLATION IN ENTERTAINMENT MEDIA"
+ },
+ {
+  "code": "16016145",
+  "canonical": "North American Literature and Culture"
+ },
+ {
+  "code": "16016146",
+  "canonical": "Popular Literature and Culture"
+ },
+ {
+  "code": "16016155",
+  "canonical": "GLOBAL ENGLISHES"
+ },
+ {
+  "code": "16016165",
+  "canonical": "ENGLISH FOR ADVANCED STUDIES"
+ },
+ {
+  "code": "16016168",
+  "canonical": "ENGLISH FOR SCIENCE AND TECHNOLOGY"
+ },
+ {
+  "code": "16016169",
+  "canonical": "CONTEMPORARY WORLDVIEWS"
+ },
+ {
+  "code": "16016179",
+  "canonical": "EFFECTIVE ENGLISH COMMUNICATION IN THE WORKPLACE"
+ },
+ {
+  "code": "16016179",
+  "canonical": "INTEGRATED LISTENING AND SPEAKING SKILLS FOR PROFESSIONAL PURPOSES"
+ },
+ {
+  "code": "16016180",
+  "canonical": "INTEGRATED READING AND WRITING SKILLS FOR PROFESSIONAL, PUBLICATIONS"
+ },
+ {
+  "code": "16016180",
+  "canonical": "INTERNATIONAL WORKPLACE COMMUNICATION"
+ },
+ {
+  "code": "16016181",
+  "canonical": "INTERNATIONAL COMMUNICATION"
+ },
+ {
+  "code": "16127031",
+  "canonical": "ACADEMIC ENGLISH"
+ },
+ {
+  "code": "16127035",
+  "canonical": "SELECTED TOPICS"
+ },
+ {
+  "code": "16127035",
+  "canonical": "SELECTED TOPICS IN APPLIED LINGUISTICS"
+ },
+ {
+  "code": "16127037",
+  "canonical": "RESEARCH WRITING"
+ },
+ {
+  "code": "16166006",
+  "canonical": "INFORMATION TECHNOLOGY FOR TOURISM"
+ },
+ {
+  "code": "16166006",
+  "canonical": "INFORMATION TECHNOLOGY FOR TOURISM AND HOSPITALITY"
+ },
+ {
+  "code": "17017005",
+  "canonical": "COGNITIVE SCIENCE"
+ },
+ {
+  "code": "17616002",
+  "canonical": "Applied physics and mathematics for health sciences"
+ },
+ {
+  "code": "17616012",
+  "canonical": "Basic human anatomy and physiology non-credit"
+ },
+ {
+  "code": "17616022",
+  "canonical": "Applied physics and mathematics for health sciences non-credit"
+ },
+ {
+  "code": "17616023",
+  "canonical": "Basic human anatomy and physiology non-credit 125 9664XXX Artificia"
+ },
+ {
+  "code": "17656004",
+  "canonical": "Clinical Anatomy and Medical Imaging"
+ },
+ {
+  "code": "17656006",
+  "canonical": "Body Fluid Hemostasis I"
+ },
+ {
+  "code": "17656007",
+  "canonical": "Body Fluid Hemostasis II"
+ },
+ {
+  "code": "17656008",
+  "canonical": "Body Energy Homeostasis"
+ },
+ {
+  "code": "17656012",
+  "canonical": "Human Genetics, Growth and Development"
+ },
+ {
+  "code": "17656206",
+  "canonical": "Clinical pathology and laboratory medicine"
+ },
+ {
+  "code": "17666003",
+  "canonical": "FAMILY MEDICINE CLERKSHIP"
+ },
+ {
+  "code": "17676407",
+  "canonical": "Elective practicum I"
+ },
+ {
+  "code": "17676408",
+  "canonical": "Elective practicum II"
+ },
+ {
+  "code": "17687007",
+  "canonical": "Seminar in Biomedical"
+ },
+ {
+  "code": "17687007",
+  "canonical": "Seminar in Biomedical Research II"
+ },
+ {
+  "code": "17687008",
+  "canonical": "Seminar in"
+ },
+ {
+  "code": "17687008",
+  "canonical": "Seminar in Biomedical Research III"
+ },
+ {
+  "code": "18018016",
+  "canonical": "SEMINAR AND STUDY ON INNOVATION RESEARCH IN OVERSEAS"
+ },
+ {
+  "code": "18018127",
+  "canonical": "INNOVATION AND INDUSTRIAL MANAGEMENT SEMINAR 2"
+ },
+ {
+  "code": "18018128",
+  "canonical": "INNOVATION AND INDUSTRIAL MANAGEMENT SEMINAR 3"
+ },
+ {
+  "code": "18018155",
+  "canonical": "AI FOR ENTREPRISE"
+ },
+ {
+  "code": "19016002",
+  "canonical": "ELECTRO - ACOUSTICS"
+ },
+ {
+  "code": "19016110",
+  "canonical": "ACOUSTIC MATERIALS AND DESIGN"
+ },
+ {
+  "code": "19016110",
+  "canonical": "ACOUSTIC MATERIALS AND DESIGN 6"
+ },
+ {
+  "code": "19016207",
+  "canonical": "MUSICIANSHIP FOR ENGINEERS 2"
+ },
+ {
+  "code": "19016208",
+  "canonical": "MUSICIANSHIP FOR ENGINEERS 3"
+ },
+ {
+  "code": "19016301",
+  "canonical": "SOUND FOR FILM AND TELEVISION"
+ },
+ {
+  "code": "19016301",
+  "canonical": "SOUND FOR FILM AND TELEVISION 1 - 2"
+ },
+ {
+  "code": "19016514",
+  "canonical": "Sonic Arts"
+ },
+ {
+  "code": "19016520",
+  "canonical": "SOUND FOR GAME"
+ },
+ {
+  "code": "19126002",
+  "canonical": "Electric Circuit Analysis"
+ },
+ {
+  "code": "19146001",
+  "canonical": "WESTERN MUSIC"
+ },
+ {
+  "code": "19146003",
+  "canonical": "MUSIC THEORY 2 2"
+ },
+ {
+  "code": "19146008",
+  "canonical": "MUSCIANSHIP FOR ENGINEER 1"
+ },
+ {
+  "code": "19146008",
+  "canonical": "MUSICIANSHIP FOR ENGINEER 1"
+ },
+ {
+  "code": "19146008",
+  "canonical": "MUSICIANSHIP FOR ENGINEERS 1"
+ },
+ {
+  "code": "19146009",
+  "canonical": "MUSICIANSHIP FOR ENGINEER 1 1 - 2 - 3"
+ },
+ {
+  "code": "19146009",
+  "canonical": "MUSICIANSHIP FOR ENGINEER 2"
+ },
+ {
+  "code": "19166003",
+  "canonical": "PRE-PROJECT 1 19166005"
+ },
+ {
+  "code": "19166003",
+  "canonical": "PREE-PROJECT 1"
+ },
+ {
+  "code": "19176001",
+  "canonical": "PREE-PROJECT 2"
+ },
+ {
+  "code": "19186002",
+  "canonical": "ACOUSTICS 2"
+ },
+ {
+  "code": "19186002",
+  "canonical": "ACOUSTICS 2 19106009"
+ },
+ {
+  "code": "19186009",
+  "canonical": "ACOUSTICS DESIGN"
+ },
+ {
+  "code": "19196001",
+  "canonical": "MUSCIANSHIP FOR ENGINEER 3"
+ },
+ {
+  "code": "19196001",
+  "canonical": "MUSICIANSHIP FOR ENGINEER 3"
+ },
+ {
+  "code": "19196001",
+  "canonical": "MUSICIANSHIP FOR ENGINEER 3 3 - 4 - 5"
+ },
+ {
+  "code": "19196002",
+  "canonical": "AUDIO POSTPRODUCTION TECHNIQUES 19106007"
+ },
+ {
+  "code": "19196007",
+  "canonical": "ADVANCE MUSIC MIXING"
+ },
+ {
+  "code": "19196009",
+  "canonical": "SOUND FOR GAMES"
+ },
+ {
+  "code": "19206021",
+  "canonical": "CREATIVE ECONOMY ENTREPRENEUR"
+ },
+ {
+  "code": "19216001",
+  "canonical": "INTRODUCTION TO 3D DESIGN"
+ },
+ {
+  "code": "19216005",
+  "canonical": "SOUND RECORDING 1"
+ },
+ {
+  "code": "19226001",
+  "canonical": "WORLD MUSIC"
+ },
+ {
+  "code": "19226002",
+  "canonical": "STORY TELLING"
+ },
+ {
+  "code": "19236004",
+  "canonical": "EXPERIENCE/USER INTERFACE FOR CREATIVE ARTS"
+ },
+ {
+  "code": "19236004",
+  "canonical": "USER EXPERIENCE/ USER INTERFACE FOR CREATIVE ARTS"
+ },
+ {
+  "code": "19236004",
+  "canonical": "USER EXPERIENCE/USER INTERFACE FOR CREATIVE ARTS"
+ },
+ {
+  "code": "19961073",
+  "canonical": "Yang, G"
+ },
+ {
+  "code": "20626102",
+  "canonical": "Fundamental of Material Science"
+ },
+ {
+  "code": "20626104",
+  "canonical": "General Microbiology for Dental Science"
+ },
+ {
+  "code": "20626105",
+  "canonical": "Medical Biochemistry and Molecular Biology 20626107 2"
+ },
+ {
+  "code": "20626105",
+  "canonical": "Medical Biochemistry and molecular Biology"
+ },
+ {
+  "code": "20626105",
+  "canonical": "Molecular Biology and Cell Physiology"
+ },
+ {
+  "code": "20626105",
+  "canonical": "Molecular Biology and Cell Physiology Lratory safeaure"
+ },
+ {
+  "code": "20626106",
+  "canonical": "Cell and Tissue Physiology"
+ },
+ {
+  "code": "20626106",
+  "canonical": "Cell and tissue physiology 20626108 2"
+ },
+ {
+  "code": "20626207",
+  "canonical": "Body Regulation and defense"
+ },
+ {
+  "code": "20626208",
+  "canonical": "Molecular medicine and Pharmacotherapy"
+ },
+ {
+  "code": "20626217",
+  "canonical": "Cellular Pathophysiology and Pharmacotherapeutics"
+ },
+ {
+  "code": "20636013",
+  "canonical": "REPRODUCTION AND SEX HORMONE"
+ },
+ {
+  "code": "20636101",
+  "canonical": "Dental Anatomy"
+ },
+ {
+  "code": "20636102",
+  "canonical": "Dental Professional Roles and Ethics"
+ },
+ {
+  "code": "20636201",
+  "canonical": "ORAL BIOLOGY AND HISTOLOGY I"
+ },
+ {
+  "code": "20636201",
+  "canonical": "Oral Biology and Histology"
+ },
+ {
+  "code": "20636204",
+  "canonical": "Research Methodology, Biostatistics and Epidemiology"
+ },
+ {
+  "code": "20636301",
+  "canonical": "Integrated Oral Pathology and Oral Medicine"
+ },
+ {
+  "code": "20636309",
+  "canonical": "Dental Biomaterials"
+ },
+ {
+  "code": "20636310",
+  "canonical": "PHARMACOLOGY AND THERAPEUTICS IN DENTISTRY"
+ },
+ {
+  "code": "20636313",
+  "canonical": "Removable Prosthodontics I"
+ },
+ {
+  "code": "20636317",
+  "canonical": "Laboratory skill for basic treatment of chronic gingivitis and periodon"
+ },
+ {
+  "code": "20636318",
+  "canonical": "Radiographic interpretation"
+ },
+ {
+  "code": "20636320",
+  "canonical": "Intra-and Extra-Oral Radiology and Imaging II"
+ },
+ {
+  "code": "20636321",
+  "canonical": "Evaluation and diagnosis of disorders and conditions affect"
+ },
+ {
+  "code": "20636321",
+  "canonical": "Integrated Oral Pathology and Oral Medicine I"
+ },
+ {
+  "code": "20636321",
+  "canonical": "Integrated Oral Pathology and Oral Medicine I INT ORA PAT"
+ },
+ {
+  "code": "20636322",
+  "canonical": "Integrated Oral Pathology and Oral Medicine II"
+ },
+ {
+  "code": "20636322",
+  "canonical": "Integrated Oral Pathology and Oral Medicine II INT ORA PAT"
+ },
+ {
+  "code": "20636403",
+  "canonical": "Periodontal Disease II"
+ },
+ {
+  "code": "20636405",
+  "canonical": "DEVELOPMENT OF CRANIOFACIAL COMPLEX"
+ },
+ {
+  "code": "20636407",
+  "canonical": "Laws for Dental Student and Forensics"
+ },
+ {
+  "code": "20636409",
+  "canonical": "Comprehensive Care and Communication"
+ },
+ {
+  "code": "20636410",
+  "canonical": "Biostatistics Application to Medical Research"
+ },
+ {
+  "code": "20636411",
+  "canonical": "Endodontics I"
+ },
+ {
+  "code": "20636413",
+  "canonical": "Dental Traumatology"
+ },
+ {
+  "code": "20636414",
+  "canonical": "Implant Dentistry"
+ },
+ {
+  "code": "20636418",
+  "canonical": "Dental Management of Medically Compromised Patients and Special Needs"
+ },
+ {
+  "code": "20636420",
+  "canonical": "Orthodontics I"
+ },
+ {
+  "code": "20636420",
+  "canonical": "Principle of fixed appliances, fixed orthodontics appliance"
+ },
+ {
+  "code": "20636421",
+  "canonical": "Ergonomic and Clinic Management I"
+ },
+ {
+  "code": "20636422",
+  "canonical": "Laboratory Periodontal Disease"
+ },
+ {
+  "code": "20636423",
+  "canonical": "Orthodontics II"
+ },
+ {
+  "code": "20636507",
+  "canonical": "International Learning Experience"
+ },
+ {
+  "code": "20636508",
+  "canonical": "Research/Innovation Project III"
+ },
+ {
+  "code": "20636605",
+  "canonical": "Ergonomic and Clinic Management II"
+ },
+ {
+  "code": "20646511",
+  "canonical": "Temporomandibular Disorder and Pain Clinic"
+ },
+ {
+  "code": "21016017",
+  "canonical": "Advanced Mathematics for Engineering 3"
+ },
+ {
+  "code": "21016018",
+  "canonical": "Advanced Science 3"
+ },
+ {
+  "code": "90102005",
+  "canonical": "INTRODUCTION TO INFORMATION SYSTEMS FOR MANAGEMENT"
+ },
+ {
+  "code": "90104003",
+  "canonical": "HEALTH AND NUTRITION"
+ },
+ {
+  "code": "90201001",
+  "canonical": "FOUNDATON ENGLISH 1"
+ },
+ {
+  "code": "90201012",
+  "canonical": "DEVELOPMENT OF READING AND WING SKILL II"
+ },
+ {
+  "code": "90201018",
+  "canonical": "ENGLISH FOR COMMUNICATIVE WRITING"
+ },
+ {
+  "code": "90201020",
+  "canonical": "ENGLISH FOR INDUSTRY -S"
+ },
+ {
+  "code": "90201040",
+  "canonical": "ORAL ENGLISH COMMUNICATION AT WORK"
+ },
+ {
+  "code": "90302003",
+  "canonical": "HUMAN RELATIONS"
+ },
+ {
+  "code": "90302010",
+  "canonical": "PSYCHOLOGY FOR SELF DEVELOPMENT"
+ },
+ {
+  "code": "90302012",
+  "canonical": "INDUSTRIAL BUSINESS PSYCHOLOGY"
+ },
+ {
+  "code": "90302013",
+  "canonical": "PERSONALITY AND MENTAL HEALTH DEVELOPMENT"
+ },
+ {
+  "code": "90303006",
+  "canonical": "HEALTH MANAGEMENT"
+ },
+ {
+  "code": "90303011",
+  "canonical": "ENHANCEMENT OF QUALITY OF LIFE"
+ },
+ {
+  "code": "90304004",
+  "canonical": "REPORT WRITING"
+ },
+ {
+  "code": "90304005",
+  "canonical": "ART OF COMMUNICATION"
+ },
+ {
+  "code": "90305003",
+  "canonical": "THE WORLD TODAY"
+ },
+ {
+  "code": "90306003",
+  "canonical": "LIVING SKILLS"
+ },
+ {
+  "code": "90306004",
+  "canonical": "LOVING FAMILY"
+ },
+ {
+  "code": "90401007",
+  "canonical": "INTRODUCTION TO THAI ECONOMY"
+ },
+ {
+  "code": "90401010",
+  "canonical": "INTRODUCTION TO INVESTMENT"
+ },
+ {
+  "code": "90402007",
+  "canonical": "INTRODUCTION TO PRINCIPLES OF SOCIAL AND FAMILY RIGHTS"
+ },
+ {
+  "code": "90402012",
+  "canonical": "INTRODUCTION TO ASEAN TRADE AND LABOR MARKET"
+ },
+ {
+  "code": "90403011",
+  "canonical": "CHNOLOGY MANAGEMENT IN DAILY LIFE"
+ },
+ {
+  "code": "90403011",
+  "canonical": "TECHNICAL MANAGING IN DAILY LIFE"
+ },
+ {
+  "code": "90403012",
+  "canonical": "SELF-EFFICIENCY AND CAREER MANAGEMENT"
+ },
+ {
+  "code": "90403012",
+  "canonical": "SELF-EFFICIENCY AND CAREER NAGEMENT"
+ },
+ {
+  "code": "90591001",
+  "canonical": "I LOVE KMITL 59 2"
+ },
+ {
+  "code": "90591002",
+  "canonical": "SPORT AND RECREATIONA"
+ },
+ {
+  "code": "90591002",
+  "canonical": "SPORT AND RECREATIONAL ACTIVITIES"
+ },
+ {
+  "code": "90591002",
+  "canonical": "SPORTS AND RECREATIONAL"
+ },
+ {
+  "code": "90591002",
+  "canonical": "SPORTS AND RECREATIONAL ACTIVITIES 59 1"
+ },
+ {
+  "code": "90591003",
+  "canonical": "IMMUNITY OF MINE"
+ },
+ {
+  "code": "90591013",
+  "canonical": "MAN &amp"
+ },
+ {
+  "code": "90591027",
+  "canonical": "RAP APPRECIATION"
+ },
+ {
+  "code": "90592001",
+  "canonical": "WORLD SOCIETY AWARENESS"
+ },
+ {
+  "code": "90592004",
+  "canonical": "CONTEMPORARY CULTURE"
+ },
+ {
+  "code": "90592006",
+  "canonical": "THAI GEOSOCIAL BASE"
+ },
+ {
+  "code": "90592013",
+  "canonical": "NATIONAL SECURITY DEVELOPMENT"
+ },
+ {
+  "code": "90592021",
+  "canonical": "THE REVIEWER"
+ },
+ {
+  "code": "90592022",
+  "canonical": "THAI ASTROLOGY"
+ },
+ {
+  "code": "90592028",
+  "canonical": "TREE DOCTOR"
+ },
+ {
+  "code": "90592029",
+  "canonical": "GAMBLING LITERACY"
+ },
+ {
+  "code": "90593007",
+  "canonical": "SERIES IN DAILY LIFE"
+ },
+ {
+  "code": "90593016",
+  "canonical": "INFOGRAPHIC DESIGN"
+ },
+ {
+  "code": "90593019",
+  "canonical": "DIGITAL STORY TELLING IN JOURNEY"
+ },
+ {
+  "code": "90593021",
+  "canonical": "BCG ECONOMY IN ACTION"
+ },
+ {
+  "code": "90593025",
+  "canonical": "TEAM PROJECT 2 10"
+ },
+ {
+  "code": "90593025",
+  "canonical": "TEAM PROJECT 2 54"
+ },
+ {
+  "code": "90593026",
+  "canonical": "TEAM PROJECT 3 311"
+ },
+ {
+  "code": "90594006",
+  "canonical": "LAW FOR NEW GENERATION"
+ },
+ {
+  "code": "90594007",
+  "canonical": "LAW FOR ENTREPRENEURS"
+ },
+ {
+  "code": "90594010",
+  "canonical": "TEAM WORK"
+ },
+ {
+  "code": "90594014",
+  "canonical": "E-GALLERY OWNER"
+ },
+ {
+  "code": "90594016",
+  "canonical": "SMART TIPS FOR BEGINNING INVERS"
+ },
+ {
+  "code": "90595003",
+  "canonical": "ENGLISH FOR ACADEMIC PUR"
+ },
+ {
+  "code": "90595009",
+  "canonical": "ENGLISH FOR TOURISM AND TRAVELLING"
+ },
+ {
+  "code": "90595010",
+  "canonical": "ENGLISH FOR UNDERSTANDING NEWS AND INFORMATION IN MASS MEDIA"
+ },
+ {
+  "code": "90595037",
+  "canonical": "FOUNDATION CHINESE"
+ },
+ {
+  "code": "90641004",
+  "canonical": "TEAM PROJECT 1 101-104"
+ },
+ {
+  "code": "90641004",
+  "canonical": "TEAM PROJECT 1 51"
+ },
+ {
+  "code": "90641004",
+  "canonical": "TEAM PROJECT 1 52"
+ },
+ {
+  "code": "90641005",
+  "canonical": "TEAM PROJECT 2"
+ },
+ {
+  "code": "90642036",
+  "canonical": "PRE ACTIVITES FOR ENGINEERS"
+ },
+ {
+  "code": "90642093",
+  "canonical": "COMMUNITY ENGAGEMENT"
+ },
+ {
+  "code": "90642107",
+  "canonical": "DIGITAL MEDIA PRODUCTION"
+ },
+ {
+  "code": "90642115",
+  "canonical": "GREEN TECHNOLOGY AND ALTERNATIVE ENERGY"
+ },
+ {
+  "code": "90642118",
+  "canonical": "APPLICATION SOFTWARE FOR BUSINESS"
+ },
+ {
+  "code": "90642150",
+  "canonical": "ART IN EVERYDAY LIFE"
+ },
+ {
+  "code": "90642151",
+  "canonical": "MAN AND ART"
+ },
+ {
+  "code": "90642171",
+  "canonical": "TEAM PROJECT"
+ },
+ {
+  "code": "90642171",
+  "canonical": "Team Project 1"
+ },
+ {
+  "code": "90642172",
+  "canonical": "TEAM PROJECT 2 259"
+ },
+ {
+  "code": "90642204",
+  "canonical": "HEALTHY RELATIONSHIP"
+ },
+ {
+  "code": "90642208",
+  "canonical": "FROM DEV TO THE MOON"
+ },
+ {
+  "code": "90644015",
+  "canonical": "ENGLISH FOR FURTHER STUDIES"
+ },
+ {
+  "code": "90644020",
+  "canonical": "ENGLISH MEDIA"
+ },
+ {
+  "code": "90644028",
+  "canonical": "ENGLISH FOR DESIGN"
+ },
+ {
+  "code": "90644039",
+  "canonical": "COMMUNICATION SKILLS THROUGH DEBATE"
+ },
+ {
+  "code": "90644040",
+  "canonical": "COMMUNICATION SKILLS THROUGH DRAMA"
+ },
+ {
+  "code": "90644042",
+  "canonical": "PROFESSIONAL COMMUNICATION"
+ },
+ {
+  "code": "90644047",
+  "canonical": "DEVELOPMENT OF THAI CREATIVE WRITING SKILLS"
+ },
+ {
+  "code": "90644049",
+  "canonical": "THAI LANGUAGE FOR CREATIVITY"
+ },
+ {
+  "code": "90644058",
+  "canonical": "CHINESE FANDOM"
+ },
+ {
+  "code": "90959103",
+  "canonical": "PRACTICE UNDER ES OF LIFE O 59 3"
+ },
+ {
+  "code": "90959103",
+  "canonical": "PRACTICE UNDER VALUES OF LIFE OUTCOMES 3 59 3"
+ },
+ {
+  "code": "90959203",
+  "canonical": "PRACTICE UNDER WAY OF LIVING OUTCOMES 3 59 3"
+ },
+ {
+  "code": "90959303",
+  "canonical": "PRACTICE UNDER SCIENCE OF THINKING OUTCOMES 3 59 3"
+ },
+ {
+  "code": "90959403",
+  "canonical": "PRACTICE UNDER ARTS OF MANAGEMENT OUTCOMES 3 59 3"
+ },
+ {
+  "code": "90959503",
+  "canonical": "PRACTICE UNDER LANGUAGES AND COMMUNICATION OUTCOMES 3 59"
+ },
+ {
+  "code": "91000001",
+  "canonical": "ENGLISH FOR GRADUATE STUDIES"
+ },
+ {
+  "code": "91000002",
+  "canonical": "Academic Paper Writing"
+ },
+ {
+  "code": "91000003",
+  "canonical": "ENGLISH FOR ACADEMIC ORAL PRESENTATION"
+ },
+ {
+  "code": "91000003",
+  "canonical": "ENGLISH FOR ACADEMIC ORAL PRESENTATION S"
+ },
+ {
+  "code": "91000004",
+  "canonical": "ACADEMIC SPEAKING SKILLS S"
+ },
+ {
+  "code": "91000004",
+  "canonical": "Academic Speaking Skills"
+ },
+ {
+  "code": "91000004",
+  "canonical": "Academic Speech Skills"
+ },
+ {
+  "code": "96641003",
+  "canonical": "Sports and Recreational Activities 3 9064xxxx"
+ },
+ {
+  "code": "96641009",
+  "canonical": "Intercultural communication skill in English 1"
+ },
+ {
+  "code": "96641010",
+  "canonical": "INTERCULTURAL COMMUNICATION SKILLS IN ENGLISH 2"
+ },
+ {
+  "code": "96641010",
+  "canonical": "Intercultural communication skill"
+ },
+ {
+  "code": "96642031",
+  "canonical": "PROFESSIONAL ETHICS AND LAWS"
+ },
+ {
+  "code": "96642034",
+  "canonical": "LAW AND REGULATION IN AVIATION INDUSTRY"
+ },
+ {
+  "code": "96642037",
+  "canonical": "PROFESSIONAL SKILLS AND ISSUES"
+ },
+ {
+  "code": "96642037",
+  "canonical": "SKILLS AND I"
+ },
+ {
+  "code": "96642083",
+  "canonical": "FILM APPRECIATION"
+ },
+ {
+  "code": "96642114",
+  "canonical": "SMART FARMING"
+ },
+ {
+  "code": "96642121",
+  "canonical": "DATA ANALYSIS AND MANAGEMENT WITH COMPUTATIONAL PROGRAM"
+ },
+ {
+  "code": "96642129",
+  "canonical": "ALTERNATIVE TOURISM"
+ },
+ {
+  "code": "96642146",
+  "canonical": "POWER OF CHANGE"
+ },
+ {
+  "code": "96642149",
+  "canonical": "IMAGINATIVE AR"
+ },
+ {
+  "code": "96642153",
+  "canonical": "Understanding human behaviors"
+ },
+ {
+  "code": "96642161",
+  "canonical": "ELECTRONIC MUSIC HISTORY"
+ },
+ {
+  "code": "96642164",
+  "canonical": "INTELLECTUAL PROPERTY LAWS FOR ENTREPRENEUR"
+ },
+ {
+  "code": "96642167",
+  "canonical": "SLICE OF LIFE"
+ },
+ {
+  "code": "96642168",
+  "canonical": "INTERESTING TOPICS IN MEDICINAL PLANTS FOR WELLNESS AND AESTHETICS"
+ },
+ {
+  "code": "96642169",
+  "canonical": "CANNABIS FOR LIFE"
+ },
+ {
+  "code": "96642170",
+  "canonical": "INTRODUCTION TO LOGIC"
+ },
+ {
+  "code": "96642173",
+  "canonical": "TEAM-PROJECT 3"
+ },
+ {
+  "code": "96642174",
+  "canonical": "DESIGN METHODS FOR INNOVATION"
+ },
+ {
+  "code": "96642175",
+  "canonical": "INTERPRETATION AND ARGUMENT"
+ },
+ {
+  "code": "96642180",
+  "canonical": "PERSONAL TRAINER"
+ },
+ {
+  "code": "96642181",
+  "canonical": "DIVING FOR ECOTOURISM"
+ },
+ {
+  "code": "96642183",
+  "canonical": "INTEGRATED CREATIVE ART AND DESIGN"
+ },
+ {
+  "code": "96642202",
+  "canonical": "Artificial intelligence non-credit"
+ },
+ {
+  "code": "96642202",
+  "canonical": "MIRACLE SMILE"
+ },
+ {
+  "code": "96642207",
+  "canonical": "A GOOD LIFE PARTNER"
+ },
+ {
+  "code": "96642207",
+  "canonical": "LOVE AND PASSION"
+ },
+ {
+  "code": "96642211",
+  "canonical": "CODING WITH PYTHON"
+ },
+ {
+  "code": "96642212",
+  "canonical": "SCIENCES BEHIND FOOD"
+ },
+ {
+  "code": "96642213",
+  "canonical": "NON ALCOHOLIC BEVERAGE"
+ },
+ {
+  "code": "96642214",
+  "canonical": "BASIC FOOD DESIGN AND NUTRITION"
+ },
+ {
+  "code": "96642215",
+  "canonical": "DEBT DETOX"
+ },
+ {
+  "code": "96642216",
+  "canonical": "CREATIVE UX/UI DESIGN"
+ },
+ {
+  "code": "96642888",
+  "canonical": "IN LOVE &amp"
+ },
+ {
+  "code": "96643010",
+  "canonical": "CONTEMPORARY MARKETING"
+ },
+ {
+  "code": "96643014",
+  "canonical": "GENERAL BUSINESS"
+ },
+ {
+  "code": "96643018",
+  "canonical": "INTERNATIONAL BUSINESS"
+ },
+ {
+  "code": "96643020",
+  "canonical": "INNOVATIVE ENTREPRENEURS"
+ },
+ {
+  "code": "96643030",
+  "canonical": "GENERAL ECONOMICS AND PROJECT FEASIBILITY STUDY"
+ },
+ {
+  "code": "96643039",
+  "canonical": "KMITL INNOVATION"
+ },
+ {
+  "code": "96643041",
+  "canonical": "GLOBAL GOVERNANCE"
+ },
+ {
+  "code": "96643042",
+  "canonical": "HARD POWER AND SOFT POWER"
+ },
+ {
+  "code": "96643043",
+  "canonical": "MUSIC BUSINESS"
+ },
+ {
+  "code": "96643046",
+  "canonical": "RAISING OF SUSTAINABLE AWARENESS"
+ },
+ {
+  "code": "96643049",
+  "canonical": "AI FOR EVERYONE"
+ },
+ {
+  "code": "96643888",
+  "canonical": "DIGITAL ERA FINANCE AND INVESTMENT"
+ },
+ {
+  "code": "96644004",
+  "canonical": "ACADEMIC LISTENING AND SPEAKING 0 - S Pearson PTE 55"
+ },
+ {
+  "code": "96644004",
+  "canonical": "ACADEMIC LISTENING AND SPEAKING 0 - S Pearson PTE 59"
+ },
+ {
+  "code": "96644005",
+  "canonical": "ACADEMIC READING AND WRITING 0 - S"
+ },
+ {
+  "code": "96644006",
+  "canonical": "PREPARATORY ENGLISH"
+ },
+ {
+  "code": "96644007",
+  "canonical": "FOUNDATION ENGLISH 1 3 A"
+ },
+ {
+  "code": "96644007",
+  "canonical": "Foundation English 1 2566 90641008"
+ },
+ {
+  "code": "96644010",
+  "canonical": "Development of"
+ },
+ {
+  "code": "96644020",
+  "canonical": "ENGLISH FOR MEDIA"
+ },
+ {
+  "code": "96644032",
+  "canonical": "ENGLISH FOR AVIATION"
+ },
+ {
+  "code": "96644054",
+  "canonical": "FUNDAMENTAL CHINESE READING AND WRITING"
+ },
+ {
+  "code": "96644067",
+  "canonical": "CHINESE CONVERSATION FOR IT"
+ },
+ {
+  "code": "96644069",
+  "canonical": "FOUNDATION JAPANESE"
+ },
+ {
+  "code": "96644070",
+  "canonical": "INTRODUCTION TO SIGN LANGUAGE FOR COMMUNICATION"
+ },
+ {
+  "code": "96644888",
+  "canonical": "PRESENT LIKE A PRO"
+ }
+]

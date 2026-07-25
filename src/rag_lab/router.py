@@ -31,7 +31,7 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 
-from rag_lab.loaders.course_loader import match_courses
+from rag_lab.loaders.course_loader import match_courses, match_courses_by_name
 from rag_lab.loaders.faculty_loader import match_faculties
 from rag_lab.loaders.person_loader import match_people, match_people_by_dictionary
 from rag_lab.loaders.program_loader import load_dictionary, match_programs
@@ -106,13 +106,17 @@ def _default_program_matcher(text: str) -> list[str]:
     return match_programs(text, dictionary=load_dictionary())
 
 
+def _default_course_matcher(text: str) -> list[str]:
+    return sorted(set(match_courses(text)) | set(match_courses_by_name(text)))
+
+
 def detect_entities(
     query: str,
     *,
     people_matcher=match_people,
     people_dict_matcher=match_people_by_dictionary,
     program_matcher=_default_program_matcher,
-    course_matcher=match_courses,
+    course_matcher=_default_course_matcher,
     faculty_matcher=match_faculties,
 ) -> dict[str, list[str]]:
     """kind -> canonical values actually found in `query` (empty kinds
@@ -133,6 +137,11 @@ def detect_entities(
     query-side fallback needed -- Gold-eval spot check (2026-07-25, the
     faculty_adjunct_aggregate entity_type) found every real query names a
     faculty/college by its exact canonical text, 13/13 detected unmodified.
+
+    Course: `match_courses` (8-digit code) OR `match_courses_by_name`
+    (course_loader.py's unique-name dictionary) -- a real user names a
+    course by its title, not its code, so the code-only matcher alone
+    (sufficient for corpus tagging) would never fire on a realistic query.
 
     Matchers are injectable so tests can substitute fakes (e.g. for courses)
     without depending on the real regex/dictionary."""

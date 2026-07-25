@@ -7,7 +7,12 @@ from __future__ import annotations
 
 from rag_lab.config import StrategySpec
 from rag_lab.factory import build_loader
-from rag_lab.loaders.course_loader import match_courses
+from rag_lab.loaders.course_loader import match_courses, match_courses_by_name
+
+_FAKE_DICT = [
+    {"code": "01416522", "canonical": "BIG DATA"},
+    {"code": "13016226", "canonical": "COMPILER CONSTRUCTION"},
+]
 
 
 class TestMatchCourses:
@@ -38,6 +43,30 @@ class TestMatchCourses:
     def test_no_match_for_unrelated_text(self):
         text = "สภาสถาบันมีมติเห็นชอบตามที่เสนอ"
         assert match_courses(text) == []
+
+
+class TestMatchCoursesByName:
+    def test_matches_name_with_spaces_around_it(self):
+        assert match_courses_by_name("วิชา BIG DATA เปิดเทอมไหน", _FAKE_DICT) == ["01416522"]
+
+    def test_matches_name_with_no_space_at_the_thai_latin_seam(self):
+        # \b never fires between a Thai char (\w under Unicode) and a Latin
+        # one with no space at the seam -- this is the case that motivated
+        # the manual neighbor-character boundary check instead of \b.
+        assert match_courses_by_name("วิชาBIG DATAเปิดเทอมไหน", _FAKE_DICT) == ["01416522"]
+
+    def test_does_not_match_a_longer_word_containing_the_name(self):
+        assert match_courses_by_name("อยากรู้เรื่อง BIG DATABASE หน่อย", _FAKE_DICT) == []
+
+    def test_case_insensitive(self):
+        assert match_courses_by_name("big data คืออะไร", _FAKE_DICT) == ["01416522"]
+
+    def test_no_match_for_unrelated_query(self):
+        assert match_courses_by_name("ขอความเห็นชอบหลักสูตรใหม่", _FAKE_DICT) == []
+
+    def test_multiple_names_in_one_query(self):
+        got = match_courses_by_name("BIG DATA กับ COMPILER CONSTRUCTION ต่างกันยังไง", _FAKE_DICT)
+        assert got == ["01416522", "13016226"]
 
 
 class TestCourseLoaderIntegration:

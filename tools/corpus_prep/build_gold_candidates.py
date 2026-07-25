@@ -32,6 +32,23 @@ relevance risk of asking a model to read resolutions and guess what's relevant:
   programs, so the relevant set is intentionally large and flat (one program's
   filings alone would not be a sufficient retrieval target).
 
+- Course ("รายวิชา X ถูกกล่าวถึงในการประชุมสภาสถาบันครั้งใดบ้าง"):
+  relevant_resolution_ids = every resolution tagged with that course's code
+  in courses_by_file.json. Deliberately neutral phrasing ("mentioned in
+  which meetings"), not "history of changes to the course" (program's
+  framing) -- most course mentions in this corpus are prerequisite lists,
+  "courses offered this semester" tables, or registration-exception
+  filings, not resolutions *about* curriculum changes to that course, so a
+  "history of changes" question would misrepresent what's actually being
+  graded. Candidate entities come from data/entity_dictionaries/courses.json
+  (tools/corpus_prep/build_course_dictionary.py) -- names already gated to
+  ones unique to exactly one course code, since a name shared across
+  multiple codes has no single defensible relevant set. Course relevant
+  sets run much smaller than program/person (a code's own docstring notes
+  most course-code occurrences are incidental mentions, not the resolution's
+  subject) -- most candidates have hit_count 1-3; don't expect person/
+  program-sized sets here.
+
 Output is a CANDIDATE pool, not a finished gold set: it still needs human
 review before use (person hits may include incidental mentions -- e.g. an
 attendee list -- not just committee-membership; program windows are not
@@ -273,14 +290,50 @@ def faculty_adjunct_candidates(min_hits: int) -> list[dict]:
     return candidates
 
 
-def render_report(program_hits: list[dict], person_hits: list[dict], faculty_adjunct_hits: list[dict]) -> str:
+def course_candidates(min_hits: int) -> list[dict]:
+    courses = _load_json(DICT_DIR / "courses.json")  # already unique-name-gated
+    by_file = _load_json(TAGS_DIR / "courses_by_file.json")
+
+    code_to_rids: dict[str, set[str]] = {}
+    for relpath, codes in by_file.items():
+        rid = _resolution_id_for(relpath)
+        for code in codes:
+            code_to_rids.setdefault(code, set()).add(rid)
+
+    candidates = []
+    for course in courses:
+        code = course["code"]
+        canonical = course["canonical"]
+        rids = code_to_rids.get(code, set())
+        if len(rids) < min_hits:
+            continue
+        candidates.append(
+            {
+                "entity_type": "course",
+                "entity": canonical,
+                "code": code,
+                "query": f"รายวิชา {canonical} ถูกกล่าวถึงในการประชุมสภาสถาบันครั้งใดบ้าง ให้แสดงรายละเอียดทั้งหมด",
+                "relevant_resolution_ids": sorted(rids, key=_sort_key),
+                "hit_count": len(rids),
+            }
+        )
+    return candidates
+
+
+def render_report(
+    program_hits: list[dict],
+    person_hits: list[dict],
+    faculty_adjunct_hits: list[dict],
+    course_hits: list[dict],
+) -> str:
     lines = [
         "# Gold query-set candidates",
         "",
         f"- Program-anchored candidates: {len(program_hits)}",
         f"- Person-anchored candidates: {len(person_hits)}",
         f"- Faculty adjunct-instructor aggregate candidates: {len(faculty_adjunct_hits)}",
-        f"- Total: {len(program_hits) + len(person_hits) + len(faculty_adjunct_hits)}",
+        f"- Course-anchored candidates: {len(course_hits)}",
+        f"- Total: {len(program_hits) + len(person_hits) + len(faculty_adjunct_hits) + len(course_hits)}",
         "",
         "These are CANDIDATES, not a finished gold set -- pick a ~30-50 entry",
         "subset (mixing program and person entries, varied hit_count) into",
@@ -305,6 +358,9 @@ def render_report(program_hits: list[dict], person_hits: list[dict], faculty_adj
     lines += ["", "## Faculty adjunct-instructor aggregate candidates (all, by hit_count)", ""]
     for c in sorted(faculty_adjunct_hits, key=lambda c: -c["hit_count"]):
         lines.append(f"- (hit_count={c['hit_count']}) {c['entity']}")
+    lines += ["", "## Top course candidates by hit_count", ""]
+    for c in sorted(course_hits, key=lambda c: -c["hit_count"])[:20]:
+        lines.append(f"- (hit_count={c['hit_count']}) {c['code']} {c['entity']}")
     return "\n".join(lines) + "\n"
 
 
@@ -313,6 +369,7 @@ def main() -> None:
     parser.add_argument("--min-program-hits", type=int, default=2)
     parser.add_argument("--min-person-hits", type=int, default=2)
     parser.add_argument("--min-faculty-adjunct-hits", type=int, default=2)
+    parser.add_argument("--min-course-hits", type=int, default=2)
     parser.add_argument(
         "--output-dir",
         type=str,
@@ -327,21 +384,23 @@ def main() -> None:
     programs = program_candidates(args.min_program_hits)
     people = person_candidates(args.min_person_hits)
     faculty_adjunct = faculty_adjunct_candidates(args.min_faculty_adjunct_hits)
+    courses = course_candidates(args.min_course_hits)
 
     (out_dir / "gold_candidates.json").write_text(
         json.dumps(
-            {"programs": programs, "people": people, "faculty_adjunct": faculty_adjunct},
+            {"programs": programs, "people": people, "faculty_adjunct": faculty_adjunct, "courses": courses},
             ensure_ascii=False,
             indent=1,
         ),
         encoding="utf-8",
     )
     (out_dir / "gold_candidates_report.md").write_text(
-        render_report(programs, people, faculty_adjunct), encoding="utf-8"
+        render_report(programs, people, faculty_adjunct, courses), encoding="utf-8"
     )
     print(f"program candidates: {len(programs)}")
     print(f"person candidates: {len(people)}")
     print(f"faculty adjunct-aggregate candidates: {len(faculty_adjunct)}")
+    print(f"course candidates: {len(courses)}")
     print(f"written to {out_dir}")
 
 

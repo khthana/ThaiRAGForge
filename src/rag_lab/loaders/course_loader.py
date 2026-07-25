@@ -33,10 +33,35 @@ programs.json) to check false positives against. Run
 tools/corpus_prep/tag_courses.py's coverage report -- which samples matched
 codes with context, not just unmatched files -- before trusting this as a
 retrieval filter.
+
+`match_courses_by_name` is a separate, query-side-only matcher (mirrors
+person_loader's no-title dictionary fallback): a real user names a course
+by its title, not its 8-digit code, so detect_entities needs a name->code
+path too. Built from data/entity_dictionaries/courses.json
+(tools/corpus_prep/build_course_dictionary.py), which extracts the English
+title that structurally follows every validated course-code occurrence
+(Thai titles are extracted far less reliably -- confirmed by direct visual
+review -- and are excluded entirely, Latin/English only). Course names
+collide far more than program names (generic titles like "GENERAL PHYSICS
+1" and sequential-section electives like "TECHNOLOGY MANAGEMENT IN DAILY
+LIFE" x57 are genuinely reused across many different codes in this corpus),
+so the dictionary only contains names that are unique to exactly one code --
+gated on actual uniqueness, not name length or word count, since short
+names like "BIG DATA" or "ROUTE SURVEY" are perfectly good anchors once
+confirmed unique. Matching is near-exact substring (not program_loader's
+SequenceMatcher fuzzy ratio): query text is human-typed, not OCR'd, so
+exact containment is both sufficient and safer against false positives on
+short queries. Word-boundary checks only look at immediate neighbor
+characters (not regex `\b`), because `\b` never fires between a Thai
+character and a Latin one (Thai is `\w` under Unicode) when a query has no
+space at that seam, e.g. "...วิชาBIG DATAเปิด...".
 """
 from __future__ import annotations
 
+import json
 import re
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from pythainlp.util import thai_digit_to_arabic_digit
@@ -56,6 +81,32 @@ _COURSE_CODE = re.compile(r"\d{8}")
 _STUDENT_ID_LABEL = re.compile(r"รหัสนักศึกษา")
 _LOOKBACK = 20  # chars before a match to check for the student-ID label
 _FOLLOWED_BY_NAME = re.compile(r"\s*[A-Z]")  # plausibility check: an English course title follows
+
+_NAME_DICT_PATH = Path(__file__).resolve().parents[3] / "data" / "entity_dictionaries" / "courses.json"
+_ALNUM = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+
+@lru_cache(maxsize=1)
+def load_name_dictionary() -> list[dict[str, str]]:
+    return json.loads(_NAME_DICT_PATH.read_text(encoding="utf-8"))
+
+
+def match_courses_by_name(query: str, dictionary: list[dict[str, str]] | None = None) -> list[str]:
+    """Every course code whose unique canonical name is found in `query` as
+    a near-exact, case-insensitive substring. Query-side only -- corpus
+    tagging (CourseLoader) stays on match_courses/code matching, unchanged."""
+    dictionary = dictionary if dictionary is not None else load_name_dictionary()
+    found: set[str] = set()
+    for entry in dictionary:
+        name = entry["canonical"]
+        for m in re.finditer(re.escape(name), query, re.IGNORECASE):
+            before = query[m.start() - 1] if m.start() > 0 else ""
+            after = query[m.end()] if m.end() < len(query) else ""
+            if before in _ALNUM or after in _ALNUM:
+                continue  # e.g. "BIG DATABASE" must not match "BIG DATA"
+            found.add(entry["code"])
+            break
+    return sorted(found)
 
 
 def match_courses(text: str) -> list[str]:
