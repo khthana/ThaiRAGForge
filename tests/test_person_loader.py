@@ -100,12 +100,54 @@ class TestMatchPeople:
     def test_no_title_at_all_returns_empty_list(self):
         assert match_people("ไม่มีคำนำหน้าตรงนี้เลย") == []
 
+    def test_bare_อ_title_matches_a_plain_instructor(self):
+        # a real corpus gap: special/part-time instructors are routinely
+        # cited with the bare "อ." rank (below ผศ./รศ./ศ.), not a doctorate
+        # or professorship -- e.g. an "อาจารย์พิเศษ" (special instructor)
+        # table listing "อ.อภิชา เชื้อประศิลป์" was previously invisible to
+        # tagging entirely
+        text = "อ.อภิชา เชื้อประศิลป์ คุณวุฒิ M.A. (Hotel and Tourism Management)"
+        assert match_people(text) == [
+            {
+                "title": "อ.",
+                "given_name": "อภิชา",
+                "surname": "เชื้อประศิลป์",
+                "full_name": "อ.อภิชา เชื้อประศิลป์",
+            }
+        ]
+
+    def test_spelled_out_อาจารย์_is_not_a_title_trigger(self):
+        # unlike the bare "อ." abbreviation, the spelled-out word is a
+        # generic category noun throughout this corpus's own procedural
+        # prose ("อาจารย์พิเศษ", "อาจารย์ผู้สอนในรายวิชา", "อาจารย์ประจำ
+        # หลักสูตร") -- every one of those reads as a syntactically valid
+        # "title + 2-token name" and would false-positive if included
+        assert match_people("อาจารย์พิเศษ เพื่อบรรยายในรายวิชา") == []
+        assert match_people("อาจารย์ผู้สอนในรายวิชาต่อไป") == []
+
+    def test_อ_ดร_combo_still_matches_via_the_existing_ดร_alternative(self):
+        # "อ." isn't combined with "ดร." in _TITLE (unlike ผศ./รศ./ศ.), but
+        # this doesn't regress the ดร.-alone case: the match just starts at
+        # "ดร." instead, same as any other leading non-title text
+        result = match_people("อ.ดร.กฤช จรินโท")
+        assert len(result) == 1
+        assert result[0]["title"] == "ดร."
+        assert result[0]["given_name"] == "กฤช"
+
     def test_rejects_a_generic_rank_mention_followed_by_a_pronoun(self):
         # "ศ. นั้น จะได้..." talks about the professorship rank generically
         # (an appointment procedure), not a specific named person -- a real
         # false positive found via a corpus spot-check
         text = "ตำแหน่งศ.นั้นจะได้ทรงพระกรุณาโปรดเกล้าฯ แต่งตั้ง"
         assert match_people(text) == []
+
+    def test_rejects_อ_followed_by_a_generic_role_noun(self):
+        # real false positives found in the corpus-wide check that preceded
+        # adding "อ." as a title: a role-noun run right after the bare rank
+        # ("the instructor who teaches...", "the instructor who receives...")
+        # reads as a plausible given name without this exclusion
+        assert match_people("อ.ผู้สอนตรวจสอบความถูกต้องของสื่อการสอน") == []
+        assert match_people("อ.ผู้รับ เหตุผลของการเปลี่ยนแปลง") == []
 
     def test_caps_a_run_on_surname_from_a_dropped_ocr_space(self):
         # a real corpus case: no space between the surname and the next

@@ -3,7 +3,9 @@ stored in metadata['people'] -- same convention as FacultyLoader's
 metadata['faculties'] and ProgramLoader's metadata['programs'].
 
 Rule-based, not model-based: an academic rank (ผศ./รศ./ศ./ดร., abbreviated
-or spelled out in full) directly precedes a person's name with no space in
+or spelled out in full; also the bare "อ." abbreviation for "อาจารย์" --
+spelled out in full it is far too generic a word to use as an anchor, see
+_TITLE) directly precedes a person's name with no space in
 this corpus's convention -- a strong, cheap, deterministic anchor. This is
 the same reasoning that moved faculties/programs off generic NER (see
 faculty_loader.py's docstring: it fragments this corpus's own institution
@@ -59,11 +61,21 @@ _RANK_NORMALIZE = {
 # likewise for the spelled-out + ดร. combination) so a title with ดร.
 # attached doesn't get matched as the shorter rank alone, leaving "ดร."
 # dangling to be misparsed as the start of the name.
+#
+# "อ." (bare, abbreviated "อาจารย์"/Instructor -- the base rank below
+# ผศ./รศ./ศ., what most part-time/special instructors are cited with) is
+# included; the spelled-out "อาจารย์" is deliberately NOT -- it's
+# overwhelmingly used as a generic category noun in this corpus's own
+# procedural prose ("อาจารย์พิเศษ", "อาจารย์ผู้สอนในรายวิชา", "อาจารย์ประจำ
+# หลักสูตร"), and every one of those reads as a syntactically valid "title +
+# 2-token name" to this regex -- confirmed empirically (corpus-wide sample)
+# before adding "อ." alone: 1,415 raw matches, essentially all genuine names,
+# no observed collision with "อ." as an abbreviation for "อำเภอ" (district).
 _TITLE = (
     r"(?:ผู้ช่วยศาสตราจารย์|รองศาสตราจารย์|ศาสตราจารย์)\s*ดร\.|"
     r"(?:ผศ\.|รศ\.|ศ\.)ดร\.|"
     r"ผู้ช่วยศาสตราจารย์|รองศาสตราจารย์|ศาสตราจารย์|"
-    r"ผศ\.|รศ\.|ศ\.|ดร\."
+    r"ผศ\.|รศ\.|ศ\.|ดร\.|อ\."
 )
 
 # Thai consonants/vowels/tone-marks, deliberately excluding U+0E3F (the Baht
@@ -90,8 +102,14 @@ _TITLED_NAME = re.compile(rf"({_TITLE})({_NAME_TOKEN}){_SEP}({_NAME_TOKEN})")
 # would otherwise pass as a plausible given name -- seen in practice from
 # procedural text that mentions a rank generically rather than naming
 # someone (e.g. "...ตำแหน่ง ศ. นั้น จะได้ทรงพระกรุณาโปรดเกล้าฯ แต่งตั้ง...",
-# about the appointment process itself, not a specific ศาสตราจารย์).
-_NOT_A_NAME = {"นั้น", "นี้", "ที่", "จะ", "ได้", "เป็น", "ว่า", "ซึ่ง", "อัน", "ให้", "แต่"}
+# about the appointment process itself, not a specific ศาสตราจารย์). Also
+# covers "อ." false positives found in the same corpus-wide check ("อ.ผู้สอน
+# ตรวจสอบ...", "อ.ผู้รับ เหตุ...") -- generic role nouns following the bare
+# instructor title, not a name.
+_NOT_A_NAME = {
+    "นั้น", "นี้", "ที่", "จะ", "ได้", "เป็น", "ว่า", "ซึ่ง", "อัน", "ให้", "แต่",
+    "ผู้สอน", "ผู้รับ",
+}
 
 
 def _normalize_title(raw: str) -> str:
