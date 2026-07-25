@@ -15,15 +15,17 @@ see `docs/adr/`.
   config/experiments/dev_smoke.yaml` (batch build), or the low-level `build` /
   `retrieve` commands.
 - **UI**: `.venv/Scripts/streamlit.exe run app/streamlit_app.py --server.fileWatcherType
-  none` — Mode B (Query & Compare, the main script) plus Mode A (Build/Run,
-  `app/pages/1_build_run.py`) in the sidebar nav. The `--server.fileWatcherType none`
-  flag suppresses a harmless but noisy `ModuleNotFoundError: torchvision` warning:
-  Streamlit's auto-reload watcher walks every loaded module's `__path__`, which
-  triggers `transformers`' lazy-import machinery on unrelated submodules (e.g.
-  `zoedepth`) that need optional deps we don't install. Both modes are thin shells
-  over `rag_lab.query_service` / `rag_lab.runner` + `rag_lab.config`
-  (the tested core); the widgets themselves are smoke-tested via
-  `streamlit.testing.v1.AppTest`, not unit-tested individually.
+  none` — Mode B (Query & Compare, the main script), Mode A (Build/Run,
+  `app/pages/1_build_run.py`), and the Chunk Inspector (`app/pages/2_chunk_inspector.py`
+  — visually compare how each chunker splits a document, and triage abnormally large
+  chunks; reads `chunks.parquet` only, never `embeddings.npy`) in the sidebar nav. The
+  `--server.fileWatcherType none` flag suppresses a harmless but noisy
+  `ModuleNotFoundError: torchvision` warning: Streamlit's auto-reload watcher walks
+  every loaded module's `__path__`, which triggers `transformers`' lazy-import
+  machinery on unrelated submodules (e.g. `zoedepth`) that need optional deps we don't
+  install. All three pages are thin shells over `rag_lab.query_service` /
+  `rag_lab.runner` + `rag_lab.config` (the tested core); the widgets themselves are
+  smoke-tested via `streamlit.testing.v1.AppTest`, not unit-tested individually.
 
 ## Conventions
 
