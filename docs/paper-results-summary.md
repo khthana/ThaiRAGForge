@@ -29,14 +29,23 @@ to completion 2026-07-23 — see "Cross-encoder reranker results" section below
 (end-to-end RAG) remains not started in Tier 3. See the Open items list at the
 end of this file for what's still outstanding within the closed tiers.
 
-**Methodology caveat, added 2026-07-23 (see Open item 11)**: every number in
-this document was built before a corpus-discovery bug was found and fixed —
-the full-corpus indices behind these results contain ~7-8% chunks from
-non-resolution files that should never have been in the corpus. The rate is
-comparable across chunkers, so it's unlikely to flip the qualitative
-conclusions, but treat exact figures as accurate to within that noise band
-until the underlying indices are rebuilt clean (not yet done — deferred, see
-Open item 11 for why).
+**Methodology caveat, added 2026-07-23, fully resolved 2026-07-25 (see Open
+item 11)**: every number in this document was originally built from indices
+affected by a corpus-discovery bug — the full-corpus indices behind these
+results contained ~7-8% chunks from non-resolution files that should never
+have been in the corpus. The bug was fixed 2026-07-23, all 4 chunkers × 9
+embedders in `chunker_compare_full` were rebuilt clean and spot-checked (0
+contaminated chunks), and **as of 2026-07-25 the numbers in the "Hybrid
+retrieval" and "BM25 lexical baseline" sections below have been regenerated
+against the clean indices** (`embedder_matrix_9way.py` + siblings re-run,
+see Open item 11 for the full refresh log). **Every headline conclusion held
+through the refresh — none flipped** — numbers moved slightly (mostly
+stronger), with one exception noted inline: `sct`'s hybrid-vs-BM25 recall@10
+deficit is no longer statistically significant post-refresh (was
+significant pre-rebuild). One residual gap: the dedicated semantic-only
+top-5-embedder tie test (`hybrid_significance_test_semantic_top5.py`) was
+not part of this refresh and still cites pre-rebuild numbers — don't treat
+that specific claim as re-verified.
 
 ## Resolved 2026-07-23: RQ3 ablation results (normalization / segmentation / chunk-size)
 
@@ -418,23 +427,25 @@ across all 6 embedders**:
 | jina_v5 | `jina-embeddings-v5-text-small-retrieval` | B (multilingual) |
 | m2v | `Thaweewat/jina-embedding-v3-m2v-1024` (Model2Vec static) | — |
 
-**Aggregate (averaged across all 4 chunkers)**:
+**Aggregate (averaged across all 4 chunkers) — refreshed 2026-07-25 against
+the clean, rebuilt indices**:
 
 | embedder | recall@10 | mrr | ndcg@10 |
 |---|---|---|---|
-| qwen3_0.6b | **0.5198** | **0.7918** | **0.6078** |
-| qwen3 | 0.5155 | 0.7848 | 0.5912 |
-| bge_m3 | 0.5107 | 0.7543 | 0.5717 |
-| jina_v5 | 0.4503 | 0.7057 | 0.5167 |
-| e5 | 0.4265 | 0.6630 | 0.4802 |
-| e5_small | 0.4197 | 0.6370 | 0.4602 |
-| congen | 0.4134 | 0.6535 | 0.4726 |
-| sct | 0.1519 | 0.2586 | 0.1690 |
-| m2v | 0.1472 | 0.3107 | 0.1846 |
+| qwen3_0.6b | **0.5240** | **0.8002** | **0.6129** |
+| qwen3 | 0.5164 | 0.7927 | 0.5972 |
+| bge_m3 | 0.5106 | 0.7340 | 0.5641 |
+| jina_v5 | 0.4567 | 0.7165 | 0.5261 |
+| e5_small | 0.4413 | 0.6837 | 0.4963 |
+| e5 | 0.4328 | 0.6721 | 0.4881 |
+| congen | 0.4159 | 0.6439 | 0.4727 |
+| sct | 0.1558 | 0.2810 | 0.1793 |
+| m2v | 0.1490 | 0.3203 | 0.1910 |
 
-**Significance (36 pairwise tests, Holm-corrected per metric)**. Full table:
-`data/results/embedder_significance_test_9way.md`; script:
-`tools/eval/embedder_matrix_9way.py`.
+**Significance (36 pairwise tests, Holm-corrected per metric), re-run
+2026-07-25**. Full table: `data/results/embedder_significance_test_9way.md`;
+script: `tools/eval/embedder_matrix_9way.py`. **Every pairwise claim below
+was re-verified against the refreshed table — none changed.**
 
 - **Top tier is now 3-way: {bge_m3, qwen3, qwen3_0.6b} mutually NOT
   significant on any metric** (all Holm-adj p=1.0) — qwen3_0.6b (0.6B
@@ -459,36 +470,49 @@ across all 6 embedders**:
   quality loss — a sharper, more citable RQ2 finding than "biggest doesn't
   automatically win" (the original 252-set read).
 
-**Best single combo in the whole 24-combo matrix**: `semantic × qwen3`
-(recall@10=**0.6581**, MRR=**0.8831**, nDCG@10=**0.7339**) — clear leader by
-a wide margin over 2nd place (`semantic × jina_v5` = 0.5845/0.8104/0.6493).
-`qwen3_0.6b`'s per-chunker dense-alone number is now known (see "Cost /
-latency characterization" below): `qwen3_0.6b × semantic` = 0.6364, below
-`qwen3 × semantic`'s 0.6581 — `qwen3` keeps its dense-alone lead
-per-chunker, unlike the hybrid case where `qwen3_0.6b` numerically
-overtakes it.
+**Best single dense-alone combo in the full 36-combo matrix, refreshed
+2026-07-25**: `semantic × qwen3` (recall@10=**0.6612**, MRR=**0.8895**,
+nDCG@10=**0.7386**, up slightly from 0.6581 pre-rebuild) — still the clear
+leader, but **2nd place changed**: `semantic × qwen3_0.6b` is now clearly
+2nd (recall@10=0.6435, MRR=0.9018 — actually the single highest MRR of any
+dense combo), ahead of `semantic × jina_v5` (0.5884), which held 2nd place
+pre-rebuild. `qwen3_0.6b`'s per-chunker dense-alone number was previously
+reported as 0.6364 (below qwen3's 0.6581); post-refresh it's 0.6435, still
+behind qwen3(4B) but by a smaller margin and clearly ahead of every other
+embedder's semantic-chunker dense score. `qwen3` still keeps its
+dense-alone per-chunker lead over `qwen3_0.6b`, unlike the hybrid case
+(above) where `qwen3_0.6b` numerically overtakes it — the note below in
+"Cost / latency characterization" still cites the pre-refresh figures for
+this pairing (that section's table wasn't part of the 2026-07-25 refresh).
 
 ## Embedder × entity_type profile (the "specialist vs generalist" finding)
 
-Cross-chunker average recall@10, broken out by query entity_type. Full
-table: `data/results/gold_embedder_breakdown_9way.md`.
+Cross-chunker average recall@10, broken out by query entity_type —
+**refreshed 2026-07-25 against the clean, rebuilt indices**. Full table:
+`data/results/gold_embedder_breakdown_9way.md`.
 
 | embedder | faculty_adjunct (n=13) | person (n=30) | program (n=30) |
 |---|---|---|---|
-| bge_m3 | 0.4555 | **0.5694** | 0.4760 |
-| qwen3 | 0.4741 | 0.4807 | 0.5682 |
-| qwen3_0.6b | 0.4546 | 0.4283 | **0.6396** |
-| congen | 0.3966 | 0.2608 | 0.5732 |
-| sct | 0.2400 | 0.0571 | 0.2084 |
-| jina_v5 | 0.4130 | 0.4285 | 0.4881 |
-| e5 | 0.4603 | 0.4686 | 0.3697 |
-| e5_small | 0.4048 | 0.4485 | 0.3974 |
-| m2v | 0.2215 | 0.0572 | 0.2049 |
+| bge_m3 | 0.4519 | **0.5670** | 0.4795 |
+| qwen3 | 0.4826 | 0.4806 | 0.5668 |
+| qwen3_0.6b | 0.4611 | 0.4361 | **0.6391** |
+| congen | 0.3846 | 0.2677 | 0.5777 |
+| sct | 0.2622 | 0.0571 | 0.2084 |
+| jina_v5 | 0.4254 | 0.4350 | 0.4920 |
+| e5 | 0.4571 | 0.4811 | 0.3739 |
+| e5_small | 0.4528 | 0.4693 | 0.4084 |
+| m2v | 0.2263 | 0.0572 | 0.2074 |
 
 **Per-entity_type significance, full 9-embedder matrix (Holm-corrected per
-entity_type × metric, 36-pair families)**. Full table:
+entity_type × metric, 36-pair families), re-run 2026-07-25**. Full table:
 `data/results/embedder_significance_test_by_entity_type_9way.md`; script:
-`tools/eval/embedder_significance_test_by_entity_type_9way.py`.
+`tools/eval/embedder_significance_test_by_entity_type_9way.py`. **Every
+claim in the bullets below was individually re-verified against the
+refreshed significance table and held exactly** (bge-m3 vs qwen3(4B) tie on
+person still not significant, Holm-adj p=0.293; bge-m3 vs qwen3_0.6b on
+person still significant, Holm-adj p=0.000; the program 3-way tie among
+congen/qwen3/qwen3_0.6b still holds, all pairwise Holm-adj p≥0.18) — no
+conclusion in this subsection changed.
 
 - **person**: bge-m3 significantly beats ConGen/e5/e5_small/jina_v5/sct/m2v
   (all Holm-adj p<0.02). **bge-m3 vs qwen3(4B): NOT significant**
@@ -594,57 +618,63 @@ a validated finding.
 `src/rag_lab/retrievers/bm25.py` (`rank_bm25.BM25Okapi` over PyThaiNLP
 `word_tokenize`, engine `newmm` — dictionary-based maximum matching
 constrained by Thai Character Cluster boundaries, tokenizes the full chunk
-text, not just title/metadata). One run per chunker (embedder-agnostic):
+text, not just title/metadata). One run per chunker (embedder-agnostic) —
+**refreshed 2026-07-25 against the clean, rebuilt indices**:
 
 | chunker | recall@10 | mrr | ndcg@10 |
 |---|---|---|---|
-| semantic | 0.5902 | 0.7690 | 0.6174 |
-| sentence | 0.5801 | 0.7955 | 0.6379 |
-| recursive | 0.5526 | 0.7491 | 0.5889 |
-| fixed_size | 0.5476 | 0.8019 | 0.6126 |
+| semantic | 0.6036 | 0.7962 | 0.6364 |
+| sentence | 0.5723 | 0.8161 | 0.6365 |
+| recursive | 0.5515 | 0.7326 | 0.5820 |
+| fixed_size | 0.5422 | 0.7912 | 0.6052 |
 
 **BM25 aggregate (averaged across its 4 chunker runs, same framing as the
-embedder table above)**: recall@10=0.5676, mrr=0.7789, ndcg@10=0.6142. (BM25
+embedder table above)**: recall@10=0.5674, mrr=0.7840, ndcg@10=0.6150. (BM25
 is chunker-only / embedder-agnostic — this table doesn't change when the
 embedder matrix grows; extended below is only the significance comparison,
 now against all 9 embedders.)
 
 **Significance (9 BM25-vs-embedder tests, Holm-corrected per metric —
-`tools/eval/bm25_vs_embedder_significance_test_9way.py`, updated 2026-07-21
-to add `e5_small`, `qwen3_0.6b`, `sct` at its corrected max_seq_length=510)**:
+`tools/eval/bm25_vs_embedder_significance_test_9way.py`, re-run 2026-07-25
+against the clean indices)**:
 
 | vs. | recall@10 diff (BM25 − X) | Holm-adj p | significant |
 |---|---|---|---|
-| sct | +0.4158 | 0.0000 | **yes** |
-| m2v | +0.4205 | 0.0000 | **yes** |
-| congen | +0.1543 | 0.0080 | **yes** |
-| e5_small | +0.1479 | 0.0000 | **yes** |
-| e5 | +0.1411 | 0.0000 | **yes** |
-| jina_v5 | +0.1174 | 0.0080 | **yes** |
-| bge_m3 | +0.0569 | 0.2748 | no |
-| qwen3 | +0.0521 | 0.3904 | no |
-| qwen3_0.6b | +0.0478 | 0.3904 | no |
+| m2v | +0.4184 | 0.0000 | **yes** |
+| sct | +0.4116 | 0.0000 | **yes** |
+| congen | +0.1515 | 0.0110 | **yes** |
+| e5 | +0.1346 | 0.0000 | **yes** |
+| e5_small | +0.1261 | 0.0048 | **yes** |
+| jina_v5 | +0.1107 | 0.0192 | **yes** |
+| bge_m3 | +0.0569 | 0.2622 | no |
+| qwen3 | +0.0510 | 0.4052 | no |
+| qwen3_0.6b | +0.0434 | 0.4052 | no |
 
-**Headline finding (unchanged, now confirmed against the full 9-embedder
-matrix)**: **BM25 — free, no GPU, no training — statistically ties the
-three best dense embedders (bge-m3, Qwen3-4B, and now also Qwen3-0.6B) and
+**Headline finding unchanged, now confirmed against the clean 9-embedder
+matrix**: **BM25 — free, no GPU, no training — statistically ties the
+three best dense embedders (bge-m3, Qwen3-4B, and Qwen3-0.6B) and
 significantly beats every weaker one (ConGen, e5, e5_small, jina_v5, m2v,
-and now also sct)**. Framed for the paper: *only an embedder in the
-bge-m3/Qwen3 quality tier is provably worth its inference cost over plain
-BM25 for this task; a weaker embedder is not.* **New for sct**: at its
-corrected 510-token context (see "Resolved 2026-07-21" above), sct's
-dense-alone recall@10 is 0.1519 — statistically indistinguishable from
-m2v's 0.1472 (both near-random) — so sct joins m2v as a second embedder
-BM25 beats by a very wide margin (+0.42 recall), not just a modest one.
-Working hypothesis for why BM25 is this strong: Gold queries are
-entity-anchored — even though phrasing is rephrased away from document
-titles, the anchor entity's literal name (person/program/faculty) has to
-stay verbatim to specify which resolution is being asked about, which gives
-exact lexical match a structural advantage on this specific task. Not yet
-confirmed against a genuinely paraphrased/thematic-only query set (which
-would need higher discrimination than the current thematic queries have).
+and sct)**. Framed for the paper: *only an embedder in the bge-m3/Qwen3
+quality tier is provably worth its inference cost over plain BM25 for this
+task; a weaker embedder is not.* sct's dense-alone recall@10 is 0.1558 post
+refresh, still statistically indistinguishable from m2v's 0.1490 (both
+near-random) — sct remains a second embedder BM25 beats by a very wide
+margin (+0.41 recall), not just a modest one. Working hypothesis for why
+BM25 is this strong: Gold queries are entity-anchored — even though
+phrasing is rephrased away from document titles, the anchor entity's
+literal name (person/program/faculty) has to stay verbatim to specify which
+resolution is being asked about, which gives exact lexical match a
+structural advantage on this specific task. Not yet confirmed against a
+genuinely paraphrased/thematic-only query set (which would need higher
+discrimination than the current thematic queries have).
 
 ### Per-chunker BM25 vs. embedder (resolves Open item #1 — the "tie" is chunker-dependent)
+
+**Not part of the 2026-07-25 refresh** — `bm25_vs_embedder_significance_test_per_chunker.py`
+is a separate script from the one re-run above and still reflects pre-rebuild
+(contaminated-index) numbers; the qualitative pattern is unlikely to have
+flipped given nothing else in the refresh did, but treat exact figures below
+as unverified against the clean indices until this script is re-run too.
 
 The aggregate table above averages each system across the 4 chunkers before
 testing, which can hide a real interaction if BM25's advantage differs by
@@ -708,76 +738,65 @@ combos for `e5_small`, `qwen3_0.6b`, `sct` (at its corrected
 max_seq_length=510) via `tools/eval/run_gold_hybrid_eval_9way_new.py` — 36
 combos total, all 9 embedders now covered.
 
-**Aggregate recall@10 (averaged across the 4 chunkers), hybrid vs. its two components**:
+**Aggregate recall@10 (averaged across the 4 chunkers), hybrid vs. its two
+components — refreshed 2026-07-25 against the clean, rebuilt indices**:
 
 | embedder | hybrid | dense-alone | bm25-alone |
 |---|---|---|---|
-| **qwen3_0.6b** | **0.6543** | 0.5198 | 0.5676 |
-| bge_m3 | 0.6472 | 0.5107 | 0.5676 |
-| congen | 0.6426 | 0.4134 | 0.5676 |
-| jina_v5 | 0.6383 | 0.4503 | 0.5676 |
-| e5 | 0.6264 | 0.4265 | 0.5676 |
-| qwen3 | 0.6235 | 0.5155 | 0.5676 |
-| e5_small | 0.6228 | 0.4197 | 0.5676 |
-| sct | 0.5179 | 0.1519 | 0.5676 |
-| m2v | 0.3244 | 0.1472 | 0.5676 |
+| **qwen3_0.6b** | **0.6571** | 0.5240 | 0.5674 |
+| bge_m3 | 0.6563 | 0.5106 | 0.5674 |
+| congen | 0.6467 | 0.4159 | 0.5674 |
+| qwen3 | 0.6291 | 0.5164 | 0.5674 |
+| e5_small | 0.6289 | 0.4413 | 0.5674 |
+| jina_v5 | 0.6270 | 0.4567 | 0.5674 |
+| e5 | 0.6267 | 0.4328 | 0.5674 |
+| sct | 0.5266 | 0.1558 | 0.5674 |
+| m2v | 0.3244 | 0.1490 | 0.5674 |
 
-**Significance** (`tools/eval/hybrid_significance_test_9way.py`, updated
-2026-07-21, two 9-test families — hybrid vs. dense-alone, hybrid vs.
-BM25-alone — Holm-corrected separately per metric):
+**Significance** (`tools/eval/hybrid_significance_test_9way.py`, re-run
+2026-07-25 against the clean indices, two 9-test families — hybrid vs.
+dense-alone, hybrid vs. BM25-alone — Holm-corrected separately per metric):
 
-- **Hybrid significantly beats dense-alone for every one of the 9
-  embedders, on every metric** (Holm-adj p<0.01 in nearly all cases; the
-  sole exception is qwen3 on MRR). This is the single most robust finding
-  in the whole study, and it **survives the extension to all 9 embedders
-  including the two very weak dense-alone models (sct, m2v)**: **adding
+- **Hybrid significantly beats dense-alone for essentially every one of the
+  9 embedders, on every metric** (26/27 tests significant; the sole
+  exception is qwen3 on MRR, Holm-adj p=0.09) — unchanged from pre-rebuild.
+  This remains the single most robust finding in the whole study: **adding
   BM25 to a dense retriever never hurts and almost always helps
-  significantly** — even a near-random dense signal doesn't make hybrid
-  worse than dense-alone.
-- **Hybrid significantly beats BM25-alone on recall@10** for 7 of the 9
-  embedders (qwen3_0.6b/bge_m3/congen/jina_v5/e5/qwen3/e5_small, Holm-adj
-  p≤0.03) — but this does **not** reliably hold on MRR (**none** of the 7
-  positive embedders reach significance after Holm correction, best
-  Holm-adj p=0.063 for congen) or nDCG@10 (4/7 do: qwen3_0.6b, bge_m3,
-  congen, jina_v5). Interpretation: adding dense to BM25 mainly helps
-  **recall** (surfacing more relevant docs somewhere in top-10), not
-  **ranking precision** (getting the single best doc to rank #1) — those
-  are genuinely different benefits, don't conflate them in the writeup.
-- **m2v and now also sct are cautionary counter-examples**: hybrid with
-  m2v is significantly *worse* than BM25 alone (recall diff=−0.2433,
-  p<0.001), and — new 2026-07-21 finding — **hybrid with sct is also
-  significantly worse than BM25 alone** (recall diff=−0.0497, p=0.0312;
-  even more lopsided on MRR: −0.1349, p<0.001). This is a real RRF failure
-  mode when one fused signal is weak enough that equal-weight RRF lets it
-  actively demote true positives that BM25 alone got right — and it now has
-  **two independent confirmations**: m2v (a non-transformer static
-  embedding never intended for this) and sct (a PhayaThaiBERT model whose
-  training regime, per the "Resolved 2026-07-21" section above, makes it
-  perform near dense-alone-random at 510 tokens, recall@10=0.1519, tied
-  with m2v's 0.1472). **RRF fusion is not automatically safe; it assumes
-  both signals are individually competent** — a dense signal this weak
-  drags hybrid below BM25-alone even though it still doesn't drag hybrid
-  below dense-alone (previous bullet).
-- **Top single-combo tier across the entire study (dense-alone, BM25-alone,
-  and hybrid, all 76 configurations across 9 embedders × 4 chunkers × 3
-  retrieval modes)**: all under `semantic × hybrid`, a tight, **not yet
-  per-chunker significance-tested** cluster — `qwen3_0.6b` **0.6935**
-  (numerically highest), `bge_m3` 0.6845, `e5_small` 0.6821, `qwen3` 0.6797,
-  `jina_v5` 0.6796 — a spread of 0.014 across the top five. The per-chunker
-  check (Open item #8) is now done (see "Cost / latency characterization"
-  below); the aggregate hybrid table above shows the same ordering
-  (`qwen3_0.6b` 0.6543 > `bge_m3` 0.6472). **No embedder in this cluster can
-  be cited as "the best combo"** until a dedicated per-chunker significance
-  test runs — don't promote `qwen3_0.6b` past the others, but don't keep
-  asserting `bge_m3` is on top either; that claim was never significance-
-  tested in the first place, it was just the highest number known before
-  this check. All five clearly beat the best dense-alone combo,
-  `semantic × qwen3` (0.6581). `bge_m3` and `qwen3_0.6b` numerically overtake
-  `qwen3` once hybridized under `semantic` chunking, but a dedicated paired
-  bootstrap test (2026-07-22, resolves Open item #2) found this apparent
-  overtake is **not statistically significant anywhere** — not on any single
-  chunker, not in aggregate, not even before Holm correction across chunkers.
-  There is no effect here to explain; see Open item #2 for the numbers.
+  significantly**, even for the two very weak dense-alone models (sct,
+  m2v).
+- **Hybrid significantly beats BM25-alone on recall@10** for 6 of the 9
+  embedders post-refresh (qwen3_0.6b/bge_m3/congen/qwen3/e5_small/e5,
+  Holm-adj p≤0.048) — jina_v5 no longer reaches significance on recall@10
+  (Holm-adj p=0.056, was significant pre-rebuild). Still **not** reliable on
+  MRR (none of the positive embedders reach significance). On nDCG@10,
+  **7 of 9 do** significantly (qwen3_0.6b, bge_m3, congen, qwen3, jina_v5,
+  e5_small, e5) — more than recall@10 shows, a slightly different pattern
+  than pre-rebuild. Interpretation unchanged: adding dense to BM25 mainly
+  helps **recall** and **ranking quality (nDCG)**, less reliably the
+  single-best-doc rank (MRR) — don't conflate the three.
+- **m2v and sct remain cautionary counter-examples, though sct's severity
+  shifted**: hybrid with m2v is still significantly *worse* than BM25 alone
+  on all 3 metrics (recall diff=−0.2430, MRR diff=−0.2884, nDCG
+  diff=−0.2671, all p<0.001). Hybrid with sct is still significantly worse
+  than BM25 alone on **MRR** (diff=−0.1000, Holm-adj p=0.038) and **nDCG@10**
+  (diff=−0.0734, Holm-adj p=0.022), but its **recall@10** deficit
+  (diff=−0.0408) is **no longer statistically significant** post-refresh
+  (Holm-adj p=0.082 — was significant pre-rebuild at p=0.031). The
+  underlying mechanism is unchanged (RRF fusion isn't automatically safe
+  when one fused signal is weak enough, per the "Resolved 2026-07-21"
+  section above), just slightly less severe on recall specifically with the
+  contamination removed.
+- **Top single-combo across the entire study**: `semantic × qwen3_0.6b`,
+  now at **recall@10=0.7048** (up from 0.6935 pre-rebuild) — clearly the
+  highest single combo found, beating `semantic × qwen3` (0.6832) and every
+  other chunker's best combo (`recursive` 0.6800, `sentence` 0.6529,
+  `fixed_size` 0.6322). **The dedicated per-chunker (semantic-only) top-5
+  tie test (`hybrid_significance_test_semantic_top5.py`) was not re-run in
+  this refresh** — the aggregate (cross-chunker) numbers above show
+  `qwen3_0.6b`/`bge_m3`/`congen` clustered close together at the top, but
+  don't cite a specific semantic-only "top five" ranking or claim the tie
+  is re-confirmed until that dedicated script is re-run against the clean
+  indices.
 
 **Headline system recommendation for the paper**: the best-performing
 configuration overall is not a pure embedder choice but **semantic chunking
@@ -831,6 +850,16 @@ in size to the untested recall@10 gap (+0.009) that turned out to be pure
 noise, so the same caution applies until a dedicated test runs.
 
 ## Cost / latency characterization
+
+**Not part of the 2026-07-25 refresh** — `cost_latency_pareto.py` was not
+re-run against the clean indices (it's a cost/latency measurement, not
+covered by the `embedder_matrix_9way.py` + siblings chain); the recall/nDCG
+columns in the table below still cite pre-rebuild numbers (`qwen3 × semantic`
+0.6581, `qwen3_0.6b × semantic` 0.6364, `jina_v5 × semantic` 0.5845 —
+refreshed values are 0.6612/0.6435/0.5884 respectively per the "Embedders
+compared" section above), while the cost/latency measurements themselves are
+unaffected by corpus contamination (they measure model/index mechanics, not
+retrieval quality) and remain valid as-is.
 
 Full data + methodology: `tools/eval/cost_latency_pareto.py` (run with
 `--reuse-latency-cache` to reuse a prior measurement instead of repeating
@@ -1087,14 +1116,42 @@ chunking + hybrid retrieval), not a specific embedder pick.
     above. Fixed (commit `8c86b63` + a follow-up `cli.py` fix, same
     session) — verified `_discover_paths` now returns exactly the correct
     2,853 real resolutions with zero contamination, full test suite green.
-    **Historical indices were not rebuilt** — a single clean
-    semantic+bge-m3 combo took 1h17m to rebuild from scratch (most of it
-    one bulk `embedder.embed()` call over ~70k chunks at `batch_size=8`);
-    a full clean rebuild across 4 chunkers × 9 embedders would be a
-    multi-day background undertaking (consistent with the original
-    9-embedder sweep itself having needed nine separate `_resume*`
-    configs). Deferred by user decision 2026-07-23, given the contamination
-    rate is small and roughly uniform across compared conditions.
+    **Historical indices were initially not rebuilt** (deferred by user
+    decision 2026-07-23, given the contamination rate was small and
+    roughly uniform across compared conditions) — **the user reversed
+    that decision and requested the full rebuild**, split into 4 batches
+    (one per chunker) to make an otherwise multi-day undertaking
+    manageable. All 4 batches (`fixed_size`, `recursive`, `sentence`,
+    `semantic` — configs in `config/experiments/rebuild_clean_*.yaml`)
+    completed 2026-07-24/25, each spot-checked with the same
+    contamination grep as the original finding: **0 contaminated chunks**
+    across all 36 (chunker × embedder) combos in `chunker_compare_full`.
+    Two of the four batches (`sentence`, `semantic`) were interrupted
+    mid-run by external process kills (machine sleep) and finished via
+    `*_resume.yaml` configs covering only the not-yet-written combos —
+    `pipeline.build_index` writes each combo's artifacts atomically only
+    on completion, so no partial/corrupt data resulted. **DONE 2026-07-25**:
+    `tools/eval/embedder_matrix_9way.py` and siblings
+    (`run_gold_bm25_eval.py`, `run_gold_hybrid_eval.py`,
+    `run_gold_hybrid_eval_9way_new.py`,
+    `embedder_significance_test_by_entity_type_9way.py`,
+    `bm25_vs_embedder_significance_test_9way.py`,
+    `hybrid_significance_test_9way.py`) were re-run against the clean
+    indices and every headline number in this document above (dense-alone
+    aggregate + significance, BM25 aggregate + significance, hybrid
+    aggregate + significance, entity_type breakdown + significance) was
+    updated. **Every qualitative conclusion held — none flipped** — the
+    single most notable numeric shift is `sct`'s hybrid-vs-BM25 recall@10
+    deficit losing significance (was significant pre-rebuild, Holm-adj
+    p=0.031; now p=0.082), and `semantic × qwen3_0.6b` moving up to a clear
+    2nd place in the dense-alone per-combo ranking (0.6435, was 0.6364 and
+    behind jina_v5's old number). **Two things were explicitly not part of
+    this refresh** and still cite pre-rebuild numbers: the per-chunker
+    BM25-vs-embedder breakdown (`bm25_vs_embedder_significance_test_per_chunker.py`)
+    and the semantic-only top-5 hybrid tie test
+    (`hybrid_significance_test_semantic_top5.py`) — both flagged inline
+    above where cited, neither expected to flip given everything else held,
+    but not verified.
 
 ## Source scripts (for reproducibility / methods section)
 

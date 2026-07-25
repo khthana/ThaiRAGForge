@@ -59,28 +59,38 @@ see `docs/adr/`.
   252-entry `gold_query_set.yaml`, which dilutes results with low-discrimination thematic
   queries). Full process narrative: `docs/chunker-embedder-comparison-log.md`; clean
   citation-ready numbers for paper-writing: `docs/paper-results-summary.md` (update this one
-  whenever a headline number changes — the log stays append-only). Current bottom line
-  (2026-07-21, bootstrap + Holm-corrected, all 9 embedders): the best system overall is
-  **`semantic` chunking + `hybrid` retrieval (BM25 + dense via RRF)** — which embedder to pair
-  it with is a confirmed statistical tie among the top five hybrid combos (`qwen3_0.6b`
-  0.6935, `bge-m3` 0.6845, `e5_small` 0.6821, `qwen3` 0.6797, `jina_v5` 0.6796): a dedicated
-  per-chunker (semantic-only) pairwise bootstrap test (2026-07-22,
-  `tools/eval/hybrid_significance_test_semantic_top5.py`) found none of the 10 pairwise
-  comparisons significant on recall@10/MRR/nDCG@10 after Holm correction, so don't cite any
-  single one (bge-m3 or qwen3_0.6b included) as "the best combo" — the system-level claim
-  (semantic + hybrid) is the robust part.
-  Hybrid significantly beats dense-alone for every one of the 9 embedders on every metric
-  (most robust finding of the comparison), and beats BM25-alone on recall for 7/9 embedders
-  (not reliably on MRR/nDCG). Dense-alone, `bge-m3`, `Qwen3-Embedding-4B`, and
-  `Qwen3-Embedding-0.6B` are a 3-way statistical tie at the top — pick by profile if not
-  hybridizing (`bge-m3` = person-query specialist, `Qwen3-4B` = strongest generalist with no
-  provable weak spot, `Qwen3-0.6B` = ties `Qwen3-4B` in aggregate but has a real person-query
-  weak spot `Qwen3-4B` doesn't, `ConGen-PhayaThaiBERT` = program-query specialist). BM25 alone
-  (`retrievers/bm25.py`) statistically **ties** that 3-way top tier and significantly beats
-  every weaker embedder — but don't naively RRF a weak embedder with BM25: **both `m2v` and
-  `sct`** (the latter even at its corrected 510-token context, ties m2v's near-random
-  dense-alone performance) significantly *hurt* vs. BM25 alone — a real RRF failure mode
-  whenever the fused dense signal is weak enough, regardless of why it's weak. Cost/latency:
+  whenever a headline number changes — the log stays append-only). **Refreshed 2026-07-25**:
+  the bottom line below was recomputed against the clean, rebuilt `chunker_compare_full`
+  indices (0% corpus-discovery contamination, see
+  [[project_corpus_discovery_contamination_bug]] / `docs/chunker-embedder-comparison-log.md`,
+  fix `8c86b63`/`b36f96f`/`dd0c0ae`, rebuild commit `2d36663`) — every conclusion below held
+  through the refresh (none flipped), with numbers now slightly stronger in most cases. Current
+  bottom line (2026-07-25, bootstrap + Holm-corrected, all 9 embedders — clean-index numbers):
+  the best system overall is
+  **`semantic` chunking + `hybrid` retrieval (BM25 + dense via RRF)** — the single best combo is
+  now `semantic × qwen3_0.6b` at recall@10=0.7048 (up from 0.6935 pre-rebuild), beating every
+  other chunker's best combo (`recursive` 0.6800, `sentence` 0.6529, `fixed_size` 0.6322).
+  Cross-chunker-averaged, the top hybrid embedders (`qwen3_0.6b` 0.6571, `bge-m3` 0.6563,
+  `congen` 0.6467, `qwen3` 0.6291, `e5_small` 0.6289, `jina_v5` 0.6270) are close together, but
+  **the dedicated semantic-only top-5 pairwise tie test
+  (`tools/eval/hybrid_significance_test_semantic_top5.py`, 2026-07-22) was not part of this
+  refresh** — it still cites pre-rebuild numbers technically, though nothing else in the refresh
+  suggests it would flip. Don't cite a single "best combo" without re-running that script.
+  Hybrid significantly beats dense-alone for essentially every one of the 9 embedders on every
+  metric (26/27 tests significant; the one exception is `qwen3` on MRR, Holm-adj p=0.09) — still
+  the most robust finding of the comparison — and beats BM25-alone on recall for 7/9 embedders
+  (`bge-m3`/`qwen3`/`qwen3_0.6b` tie BM25 instead of beating it; not reliably ahead on MRR/nDCG
+  either). Dense-alone, `bge-m3`, `Qwen3-Embedding-4B`, and `Qwen3-Embedding-0.6B` are still a
+  3-way statistical tie at the top — pick by profile if not hybridizing (`bge-m3` = person-query
+  specialist, `Qwen3-4B` = strongest generalist with no provable weak spot, `Qwen3-0.6B` = ties
+  `Qwen3-4B` in aggregate but has a real person-query weak spot `Qwen3-4B` doesn't,
+  `ConGen-PhayaThaiBERT` = program-query specialist). BM25 alone (`retrievers/bm25.py`)
+  statistically **ties** that 3-way top tier and significantly beats every weaker embedder — but
+  don't naively RRF a weak embedder with BM25: `m2v` significantly *hurts* vs. BM25 alone on all
+  3 metrics; `sct` (at its corrected 510-token context) now hurts significantly on MRR/nDCG@10
+  but recall@10 is no longer significant post-refresh (Holm-adj p=0.08, was significant
+  pre-rebuild) — a real RRF failure mode whenever the fused dense signal is weak enough, though
+  `sct`'s exact severity shifted slightly with the clean indices. Cost/latency:
   `tools/eval/cost_latency_pareto.py` (vector dim, index size, query latency p50/p95) found
   `HybridRetriever.retrieve()` and `BM25Retriever.retrieve()`'s current implementation
   (full-corpus `k=n` fetch before fusing, `BM25Okapi` rebuilt from scratch every query) adds a

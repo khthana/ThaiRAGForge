@@ -57,8 +57,16 @@ params fp16)
 > `docs/chunker-embedder-comparison-log.md` § "บั๊ก corpus discovery ปนเปื้อน
 > ทุก full-corpus index ที่เคยสร้างมา") อัตราใกล้เคียงกันในทุก chunker เลยไม่
 > น่าพลิกผลสรุปเชิงคุณภาพ แต่ตัวเลขที่แม่นยำควรถือว่ามี noise แฝงอยู่ในระดับนี้
-> จนกว่าจะ rebuild index ให้สะอาด (ยังไม่ได้ทำ — ผู้ใช้ตัดสินใจเลื่อนไปก่อน
-> เพราะเป็นงานหลายวัน)
+> จนกว่าจะ rebuild index ให้สะอาด
+>
+> **อัปเดต 2026-07-25**: ผู้ใช้เปลี่ยนใจจากการเลื่อนด้านบน — สั่ง rebuild
+> `chunker_compare_full` ทั้งชุด (4 chunker × 9 embedder) แบ่งเป็น 4 batch
+> ตาม chunker รันเสร็จสมบูรณ์และตรวจสอบไม่มีการปนเปื้อนแล้ว (0 chunk ปลอมใน
+> ทุก 36 combo) รายละเอียดเต็ม:
+> `docs/chunker-embedder-comparison-log.md` § "Rebuild index ประวัติศาสตร์
+> ทั้งชุดเสร็จสมบูรณ์ (24-25 ก.ค. 2569)" — **แต่ตัวเลขในเอกสารนี้และใน
+> `docs/paper-results-summary.md` ยังไม่ได้ regenerate จาก index ใหม่**
+> ยังเป็นงานค้างแยกต่างหาก
 
 **แกนหลักของเปเปอร์ (ข้อเสนอ)**: RQ1/RQ2 (embedder comparison) — ตรงกับสิ่งที่
 build ไว้แล้วมากที่สุด; RQ4 (end-to-end RAG) โน้ตเองจัดเป็น "เสริม" และเป็น subsystem

@@ -1386,3 +1386,95 @@ gate ตรงๆ เพราะ `dev_smoke.yaml` ชี้ `input_dir` เข�
 ผู้ใช้ตัดสินใจ **เลื่อนการ rebuild ไปก่อน** (23 ก.ค. 2569) เนื่องจากอัตรา
 ปนเปื้อนต่ำและใกล้เคียงกันในทุกเงื่อนไขที่เปรียบเทียบ ไม่น่าจะพลิกผลสรุปเชิง
 คุณภาพของงานวิจัย
+
+---
+
+## Rebuild index ประวัติศาสตร์ทั้งชุดเสร็จสมบูรณ์ (24-25 ก.ค. 2569)
+
+ผู้ใช้เปลี่ยนใจจากการตัดสินใจ "เลื่อนไปก่อน" ด้านบน — ขอให้ rebuild
+`data/index/chunker_compare_full/` ทั้งชุด (4 chunker × 9 embedder = 36
+combo) แบ่งเป็น 4 batch ตาม chunker (`fixed_size`, `recursive`, `sentence`,
+`semantic` — เรียงจากเร็วไปช้า) เพื่อให้งานหลายวันที่ประเมินไว้ก่อนหน้า
+จัดการได้จริง configs อยู่ที่ `config/experiments/rebuild_clean_*.yaml`
+(commit `2d36663`)
+
+**ผลลัพธ์**: ทั้ง 4 batch เสร็จสมบูรณ์และตรวจสอบแล้วว่าไม่มีการปนเปื้อน
+(0 chunk จากไฟล์ปลอมในทุก 36 combo) — batch 1-2 (`fixed_size`, `recursive`)
+รันจบในรอบเดียวไม่มีปัญหา batch 3-4 (`sentence`, `semantic`) โดนขัดจังหวะ
+กลางคันจากเครื่องเข้าโหมด sleep ภายนอก (ไม่ใช่ crash หรือบั๊กของโค้ด) —
+กู้คืนได้โดยไม่เสียงานที่ทำไปแล้ว เพราะ `pipeline.build_index` เขียนไฟล์
+ผลลัพธ์ของแต่ละ combo แบบ atomic ทีเดียวตอนเสร็จเท่านั้น (ไม่มีไฟล์ค้างครึ่งๆ
+กลางๆ) จึงสร้าง config `_resume.yaml` ที่ครอบคลุมเฉพาะ combo ที่ยังไม่เสร็จ
+แล้ว rerun ต่อโดยไม่ต้อง chunk/embed ซ้ำ
+
+**สิ่งที่ค้นพบระหว่างทาง (ไม่ใช่บั๊ก)**: combo ที่ใช้ Qwen3-4B บน chunker ที่มี
+long-tail ยาว (`sentence`, `semantic` — chunk ยาวสุดถึง ~17,000-18,000
+ตัวอักษร) จะช้าผิดปกติช่วงเริ่มต้น (~15-125 วินาที/batch แทนที่จะเป็น ~1
+it/s) เพราะ `sentence_transformers.encode()` เรียง input จากยาวไปสั้นก่อน
+batch (`length_sorted_idx`) รวมกับ Qwen3 มี attention cost O(seq_len²) แบบ
+ไม่มี flash attention — เลยประมวลผล chunk ที่ยาวที่สุดของทั้ง corpus ก่อน
+เป็นกลุ่มแรก แล้วค่อยเร่งขึ้นเรื่อยๆ เป็น 3-4 it/s ตอนท้าย พฤติกรรมนี้ถูก
+เข้าใจผิดว่าเป็น GPU/VRAM contention หลายรอบก่อนจะยืนยันจาก source code ของ
+`sentence_transformers` โดยตรง — ไม่ใช่ปัญหาจริง เป็น cost ที่คาดหมายได้และ
+front-load ไว้ตอนต้นเท่านั้น
+
+**สถานะ**: `docs/paper-results-summary.md`'s Open item 11 และ caveat ด้านบน
+ของไฟล์นั้นอัปเดตแล้วว่า index สะอาดแล้ว แต่ **ตัวเลขในเอกสารนั้นยังไม่ได้
+regenerate จาก index ใหม่** — เป็นงานต่อยอดแยกต่างหาก (rerun
+`tools/eval/embedder_matrix_9way.py` และสคริปต์พี่น้อง) ที่ยังไม่ได้ทำ ณ
+25 ก.ค. 2569 (ผู้ใช้ยังไม่ได้ขอให้ทำ ต้องถามก่อน)
+
+## Eval refresh จาก index สะอาดเสร็จสมบูรณ์ (25 ก.ค. 2569)
+
+ผู้ใช้ขอให้ update เอกสารทั้งหมด (รวม `CLAUDE.md`) แล้วรัน eval script ต่อ
+เลย — รัน 7 สคริปต์เรียงกันเป็น chain เดียวใน background
+(`embedder_matrix_9way.py` → `run_gold_bm25_eval.py` →
+`run_gold_hybrid_eval.py` → `run_gold_hybrid_eval_9way_new.py` →
+`embedder_significance_test_by_entity_type_9way.py` →
+`bm25_vs_embedder_significance_test_9way.py` →
+`hybrid_significance_test_9way.py`) จบทั้งหมด exit code 0 ไม่มี error
+
+**พบระหว่างทาง (ไม่ใช่บั๊ก แต่กระทบเวลาที่ใช้)**: `run_gold_hybrid_eval.py`
+ไม่ได้จำกัดแค่ 6 embedder เดิมตามที่คาดไว้ก่อนรัน — `--embedder-filter`
+default เป็น string ว่างซึ่ง match ทุก combo และมันสแกน
+`data/index/chunker_compare_full` ทั้งโฟลเดอร์ ซึ่งตอนนี้มีครบ 9 embedder
+แล้วหลังขยายจาก 6 — เลยกวาดครบทั้ง 36 combo เองในตัว (ไม่ใช่แค่ 24)
+ทำให้ `run_gold_hybrid_eval_9way_new.py` (script ที่ตามมา ซึ่ง hardcode
+รายชื่อ 12 combo ของ 3 embedder ใหม่ไว้) มาประมวลผลซ้ำ 12 combo ที่ script
+ก่อนหน้าทำไปแล้ว — ไม่มีอันตราย (idempotent, เขียนทับไฟล์เดิมด้วยค่าเดิม)
+แค่เสียเวลาเพิ่ม ~35-40 นาทีโดยไม่จำเป็น ไม่ได้แก้ไขอะไรเพราะไม่ใช่บั๊ก
+
+**ผลลัพธ์: ทุก conclusion หลักที่เคยสรุปไว้ (pre-rebuild) ยังคงอยู่ ไม่มี
+อันไหนพลิกกลับ** ตรวจสอบทีละข้อจริงจากรายงานใหม่:
+
+1. **semantic + hybrid ยังคงเป็นระบบที่ดีที่สุดโดยรวม** — และแข็งแกร่งขึ้น
+   ด้วยซ้ำ: combo ที่ดีที่สุดตอนนี้คือ `semantic × qwen3_0.6b` ที่
+   recall@10=0.7048 (เดิม 0.6935) นำห่างจาก chunker อื่นชัดเจน
+   (`recursive` ดีสุด 0.6800, `sentence` 0.6529, `fixed_size` 0.6322)
+2. **hybrid ชนะ dense-alone แทบทุก embedder ทุก metric** — 26/27 test
+   มีนัยสำคัญ (ข้อยกเว้นเดียวคือ qwen3 บน MRR, Holm-adj p=0.09) เหมือนเดิม
+3. **BM25 tie กับ embedder tier บนสุด (bge_m3/qwen3/qwen3_0.6b) และชนะตัว
+   ที่อ่อนกว่า** — เหมือนเดิม แต่ "hybrid ชนะ BM25 บน recall@10" ลดจาก
+   7/9 เหลือ 6/9 embedder (jina_v5 หลุดจากนัยสำคัญ Holm-adj p=0.056)
+4. **m2v/sct ยังคงทำให้ hybrid แย่ลงเมื่อ RRF กับ BM25** — m2v มีนัยสำคัญ
+   ทั้ง 3 metric เหมือนเดิม แต่ **sct อ่อนลงเล็กน้อย**: ยังมีนัยสำคัญบน
+   MRR/nDCG@10 แต่ recall@10 ไม่ถึงนัยสำคัญแล้ว (Holm-adj p=0.082 เดิม
+   p=0.031 ที่มีนัยสำคัญ) — ทิศทางเดิม แค่ความรุนแรงลดลงเล็กน้อยหลังล้าง
+   ข้อมูลปนเปื้อนออก
+5. **3-way tie ของ dense-alone (bge_m3/qwen3/qwen3_0.6b)** และ **program
+   3-way tie (congen/qwen3/qwen3_0.6b)** — ตรวจสอบทีละคู่จริงจากตาราง
+   ใหม่แล้ว ยังคง tie เหมือนเดิมทุกคู่ ไม่มีอันไหนพลิก
+
+**สิ่งที่ยังไม่ได้ verify** (ไม่ได้อยู่ใน 7 script ที่รันรอบนี้): การ
+เทียบ top-5 hybrid combo เฉพาะ semantic chunker
+(`hybrid_significance_test_semantic_top5.py`) และ per-chunker BM25 breakdown
+(`bm25_vs_embedder_significance_test_per_chunker.py`) — สองอันนี้ยังอ้างอิง
+ตัวเลข pre-rebuild อยู่ ไม่คาดว่าจะพลิก (เพราะทุกอย่างอื่นที่ตรวจแล้วไม่พลิก)
+แต่ยังไม่ได้ยืนยันจริง
+
+**อัปเดตเอกสารครบแล้ว**: `docs/paper-results-summary.md` (ตัวเลข headline
+ทุกส่วน + caveat แก้เป็น "resolved"), `CLAUDE.md` (bottom-line ย่อหน้า +
+ลบ caveat ออก), memory `project_corpus_discovery_contamination_bug`
+("Still outstanding" ปิดแล้ว) — บั๊ก corpus-discovery contamination ที่พบ
+23 ก.ค. ถือว่าปิดสมบูรณ์ 100% ตั้งแต่ต้นทาง (พบ+แก้โค้ด) ถึงปลายทาง
+(rebuild index สะอาด + regenerate ตัวเลขที่อ้างอิงในเอกสาร) ณ วันนี้
