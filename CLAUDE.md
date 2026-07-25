@@ -48,7 +48,38 @@ see `docs/adr/`.
   (`streamlit run tools/corpus_prep/consensus_review/review_app.py`).
   Status/handoff: `docs/llm-ocr-scan-log.md`. Complete and written back into
   the real corpus (commit `b692480`, 2026-07-16): 753/768 consensus-flagged
-  pages live, 18 kept old on human review, no outstanding blockers.
+  pages live, 18 kept old on human review. **2026-07-25**: found one file the
+  original scan appears to have missed entirely (not present in
+  `reocr_adjudication.jsonl` at all, unlike every other file sharing its
+  exact title, which were all caught and fixed) — a possible scan-coverage
+  gap, not yet sized; see `docs/llm-ocr-scan-log.md` §6.
+- Entity tagging (person/program/course/faculty, all rule-based — regex
+  anchored on a Thai academic rank or a curated dictionary, not NER; see
+  `src/rag_lab/loaders/{person,program,course,faculty}_loader.py`) writes
+  `metadata['people'|'programs'|'courses'|'faculties']`, consumed by the
+  `entity_tags` loader + `entity_lookup`/`entity_boost` retrieval modes.
+  Full narrative: `docs/entity-extraction-and-gold-eval-log.md`.
+  **2026-07-25**: fixed a real gap in `match_people` — the bare "อ."
+  academic rank (below ผศ./รศ./ศ., what most special/part-time instructors
+  are cited with) had no title pattern at all, so plain-Thai instructor
+  names in several common table types were invisible to tagging regardless
+  of language (commit `a4e250e`; +10% people-tags corpus-wide, +37% in the
+  document type that surfaced it). English-titled foreign-faculty names
+  (Mr./Assoc.Prof.Dr.) and a name split across adjacent `<td>` cells are
+  still unmatched — both deferred, user judged low priority/rare. The one
+  index built with the `entity_tags` loader
+  (`data/index/entity_tags_full`) needs rebuilding after any
+  `person`/`program`/`course` loader change for the fix to reach
+  `entity_lookup`/`entity_boost` in the UI.
+- `strip_course_comparison_tables` (`src/rag_lab/loaders/common.py`, commit
+  `71764a8`) compacts old/new course-comparison tables (code + credit-tuple
+  + English description, the corpus's single largest chunks — 17,077 chars
+  in one document) to `CODE Title` lines, dropping the description. **Not
+  yet wired into any loader/config** — needs a thematic-inclusive eval
+  before integration (course-name gold queries can't detect a
+  description-stripping regression, since they never touch description
+  text). Narrative: `docs/chunker-embedder-comparison-log.md` (course-table
+  compaction section).
 - Chunker/embedder/BM25/hybrid comparison eval lives in `tools/eval/`. Current (9-embedder)
   scripts: `run_gold_chunker_eval.py`, `run_gold_bm25_eval.py`, `run_gold_hybrid_eval.py` +
   `run_gold_hybrid_eval_9way_new.py`, `embedder_matrix_9way.py` (retrieval + breakdown +
