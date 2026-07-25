@@ -42,10 +42,14 @@ see Open item 11 for the full refresh log). **Every headline conclusion held
 through the refresh — none flipped** — numbers moved slightly (mostly
 stronger), with one exception noted inline: `sct`'s hybrid-vs-BM25 recall@10
 deficit is no longer statistically significant post-refresh (was
-significant pre-rebuild). One residual gap: the dedicated semantic-only
-top-5-embedder tie test (`hybrid_significance_test_semantic_top5.py`) was
-not part of this refresh and still cites pre-rebuild numbers — don't treat
-that specific claim as re-verified.
+significant pre-rebuild). **Both remaining sub-analyses were re-run
+2026-07-25 too** (`hybrid_significance_test_semantic_top5.py`,
+`bm25_vs_embedder_significance_test_per_chunker.py`) — see their sections
+below for details. Every conclusion in both held except one: `congen`'s
+BM25-significantly-beats-it result under `recursive` chunking lost
+significance post-refresh (Holm-adj p=0.0620 now, was significant
+pre-rebuild — see "Per-chunker BM25 vs. embedder" below). Nothing in this
+document still cites pre-rebuild numbers.
 
 ## Resolved 2026-07-23: RQ3 ablation results (normalization / segmentation / chunk-size)
 
@@ -670,11 +674,14 @@ discrimination than the current thematic queries have).
 
 ### Per-chunker BM25 vs. embedder (resolves Open item #1 — the "tie" is chunker-dependent)
 
-**Not part of the 2026-07-25 refresh** — `bm25_vs_embedder_significance_test_per_chunker.py`
-is a separate script from the one re-run above and still reflects pre-rebuild
-(contaminated-index) numbers; the qualitative pattern is unlikely to have
-flipped given nothing else in the refresh did, but treat exact figures below
-as unverified against the clean indices until this script is re-run too.
+**Refreshed 2026-07-25** against the clean, rebuilt indices — re-ran
+`tools/eval/bm25_vs_embedder_significance_test_per_chunker.py`, pure
+recompute from the already-refreshed persisted results (`gold_bm25_73det`,
+dense results dir). **Every qualitative conclusion held, one significance
+flip**: `congen` under `recursive` chunking was significant pre-rebuild and
+is now Holm-adj p=0.0620 (no longer significant) — direction unchanged
+(BM25 still numerically ahead, +0.1490), just short of the 0.05 bar with
+contamination removed.
 
 The aggregate table above averages each system across the 4 chunkers before
 testing, which can hide a real interaction if BM25's advantage differs by
@@ -687,23 +694,23 @@ table: `data/results/bm25_vs_embedder_significance_test_per_chunker.md`.
 
 | embedder | fixed_size | recursive | semantic | sentence |
 |---|---|---|---|---|
-| e5 | +0.1203 (ns) | +0.1599 (**sig**) | +0.1227 (**sig**) | +0.1616 (**sig**) |
-| e5_small | +0.1677 (**sig**) | +0.1536 (**sig**) | +0.1080 (**sig**) | +0.1623 (**sig**) |
-| bge_m3 | +0.0680 (ns) | +0.0363 (ns) | +0.0080 (ns) | **+0.1152 (sig)** |
-| congen | +0.1439 (ns) | +0.1559 (**sig**) | +0.1176 (**sig**) | +0.1996 (**sig**) |
-| jina_v5 | +0.1612 (**sig**) | +0.1021 (ns) | +0.0057 (ns) | +0.2005 (**sig**) |
-| qwen3 | +0.1038 (ns) | +0.0816 (ns) | −0.0679 (ns) | +0.0908 (ns) |
-| qwen3_0.6b | +0.0786 (ns) | +0.0470 (ns) | −0.0462 (ns) | +0.1117 (ns) |
-| sct | +0.3971 (**sig**) | +0.4273 (**sig**) | +0.3813 (**sig**) | +0.4574 (**sig**) |
-| m2v | +0.4166 (**sig**) | +0.4261 (**sig**) | +0.3919 (**sig**) | +0.4472 (**sig**) |
+| e5 | +0.0996 (ns) | +0.1517 (**sig**) | +0.1373 (**sig**) | +0.1500 (**sig**) |
+| e5_small | +0.1471 (**sig**) | +0.1192 (**sig**) | +0.1093 (**sig**) | +0.1288 (**sig**) |
+| bge_m3 | +0.0733 (ns) | +0.0351 (ns) | +0.0214 (ns) | **+0.0976 (sig)** |
+| congen | +0.1398 (ns) | +0.1490 (ns) | +0.1267 (**sig**) | +0.1906 (**sig**) |
+| jina_v5 | +0.1496 (**sig**) | +0.0955 (ns) | +0.0152 (ns) | +0.1826 (**sig**) |
+| qwen3 | +0.1050 (ns) | +0.0710 (ns) | −0.0576 (ns) | +0.0857 (ns) |
+| qwen3_0.6b | +0.0675 (ns) | +0.0477 (ns) | −0.0399 (ns) | +0.0985 (ns) |
+| sct | +0.3917 (**sig**) | +0.4231 (**sig**) | +0.3882 (**sig**) | +0.4435 (**sig**) |
+| m2v | +0.4110 (**sig**) | +0.4256 (**sig**) | +0.4053 (**sig**) | +0.4317 (**sig**) |
 
 **Confirmed: the "raw numbers look more favorable to BM25 than the
 aggregate view" suspicion was real.** Two findings the aggregate table
-couldn't show:
+couldn't show (both survived the 2026-07-25 refresh):
 
 1. **`bge_m3` — the one embedder that's supposed to statistically tie
    BM25 everywhere — actually loses to BM25 significantly under the
-   `sentence` chunker** (Holm-adj p=0.0108, diff +0.1152). It only ties
+   `sentence` chunker** (Holm-adj p=0.0354, diff +0.0976). It only ties
    BM25 in `fixed_size`/`recursive`/`semantic`. The aggregate table's "tie"
    claim for bge_m3 is real only once semantic chunking (where dense
    embedders are strongest) is mixed in with three chunkers where BM25's
@@ -711,7 +718,7 @@ couldn't show:
 2. **`qwen3` and `qwen3_0.6b` are the only embedders where BM25's margin
    goes *negative* in any chunker** — under `semantic` specifically, BM25
    is numerically (not significantly) *behind* both Qwen3 variants
-   (−0.0679, −0.0462). Every other chunker still favors BM25 numerically
+   (−0.0576, −0.0399). Every other chunker still favors BM25 numerically
    for these two. This is consistent with `semantic` being the strongest
    chunker for dense embedders generally (see "Chunkers compared" above) —
    the one chunker where the qwen3 family's dense signal is strong enough
@@ -791,12 +798,16 @@ dense-alone, hybrid vs. BM25-alone — Holm-corrected separately per metric):
   highest single combo found, beating `semantic × qwen3` (0.6832) and every
   other chunker's best combo (`recursive` 0.6800, `sentence` 0.6529,
   `fixed_size` 0.6322). **The dedicated per-chunker (semantic-only) top-5
-  tie test (`hybrid_significance_test_semantic_top5.py`) was not re-run in
-  this refresh** — the aggregate (cross-chunker) numbers above show
-  `qwen3_0.6b`/`bge_m3`/`congen` clustered close together at the top, but
-  don't cite a specific semantic-only "top five" ranking or claim the tie
-  is re-confirmed until that dedicated script is re-run against the clean
-  indices.
+  tie test was re-run 2026-07-25** against the clean indices
+  (`hybrid_significance_test_semantic_top5.py`,
+  `data/results/hybrid_significance_test_semantic_top5.md`) — still a
+  genuine statistically-tied cluster, no pair significant on any of
+  recall@10/MRR/nDCG@10 after Holm correction (lowest raw p=0.034, on
+  `qwen3_0.6b` vs `jina_v5`). Updated top-5 means: `qwen3_0.6b` 0.7048,
+  `bge_m3` 0.6893, `e5_small` 0.6871, `qwen3` 0.6832, `jina_v5` 0.6703
+  recall@10. Don't crown a single embedder as "the best hybrid combo" —
+  the paper's headline stays the system-level recommendation (semantic
+  chunking + hybrid retrieval).
 
 **Headline system recommendation for the paper**: the best-performing
 configuration overall is not a pure embedder choice but **semantic chunking
@@ -975,18 +986,28 @@ cluster. Crown neither `qwen3_0.6b` nor `bge-m3` as "the best hybrid
 combo" — the paper's headline is the system-level recommendation (semantic
 chunking + hybrid retrieval), not a specific embedder pick.
 
+**Re-confirmed 2026-07-25** against the clean, rebuilt indices — same
+conclusion holds (genuine tied cluster, no pair significant), numbers
+strengthened across the board (`qwen3_0.6b` now 0.7048, up from 0.6935);
+see the "Top single-combo across the entire study" bullet in the "Hybrid
+retrieval" section above for the current per-embedder means.
+
 ## Open items (not yet done, needed before the numbers above are "final")
 
 1. ~~Per-chunker point comparison of BM25 vs. embedder (not averaged across
-   chunkers) not yet significance-tested~~ — DONE 2026-07-22
+   chunkers) not yet significance-tested~~ — DONE 2026-07-22, **re-run
+   2026-07-25 against the clean indices**
    (`tools/eval/bm25_vs_embedder_significance_test_per_chunker.py`, see
    "Per-chunker BM25 vs. embedder" section above). **Confirmed real, not an
-   artifact**: `bge_m3` loses to BM25 significantly under `sentence`
-   chunking specifically (Holm-adj p=0.0108) despite tying it in the
-   aggregate and in the other 3 chunkers; `qwen3`/`qwen3_0.6b` are the only
-   embedders where BM25's margin goes numerically negative, and only under
-   `semantic` chunking. The aggregate "BM25 ties top tier" claim is most
-   true for `semantic` chunking specifically.
+   artifact, and held through the refresh**: `bge_m3` loses to BM25
+   significantly under `sentence` chunking specifically (Holm-adj p=0.0354)
+   despite tying it in the aggregate and in the other 3 chunkers;
+   `qwen3`/`qwen3_0.6b` are the only embedders where BM25's margin goes
+   numerically negative, and only under `semantic` chunking. The aggregate
+   "BM25 ties top tier" claim is most true for `semantic` chunking
+   specifically. One flip from the refresh: `congen` under `recursive`
+   chunking lost significance (Holm-adj p=0.0620, was significant
+   pre-rebuild) — direction unchanged, just short of the 0.05 bar.
 2. ~~Why bge-m3 overtakes qwen3 specifically under hybrid despite tying it
    as dense-alone~~ — CLOSED 2026-07-22, **premise was false, no GPU
    investigation needed**. First pass
@@ -1071,12 +1092,15 @@ chunking + hybrid retrieval), not a specific embedder pick.
    of `bge-m3 × semantic × hybrid` (0.6845, the number previously cited as
    "best") and `e5_small × semantic × hybrid` (0.6821), also close.
    ~~New Open item: a per-chunker (semantic-only) pairwise significance test
-   across the top hybrid combos~~ — DONE 2026-07-22
+   across the top hybrid combos~~ — DONE 2026-07-22, **re-run 2026-07-25
+   against the clean indices**
    (`tools/eval/hybrid_significance_test_semantic_top5.py`): **no pair among
    the top five is significant on any of recall@10/MRR/nDCG@10** after Holm
-   correction. Confirmed genuine tied cluster — see "Top single-combo tier"
-   section above for the full writeup. Don't cite any one embedder, `bge-m3`
-   or `qwen3_0.6b` included, as the confirmed best hybrid combo.
+   correction, before or after the refresh. Confirmed genuine tied cluster —
+   see "Top single-combo across the entire study" bullet in the "Hybrid
+   retrieval" section above for the current writeup. Don't cite any one
+   embedder, `bge-m3` or `qwen3_0.6b` included, as the confirmed best hybrid
+   combo.
 9. New 2026-07-22 (from "Multi-k metrics" section): `bge_m3` leads
    `qwen3_0.6b` on MAP (0.5224 vs 0.5090) and precision@1 goes the other way
    (`qwen3_0.6b` 0.7671 vs `bge_m3` 0.7500) under hybrid — opposite
@@ -1145,13 +1169,15 @@ chunking + hybrid retrieval), not a specific embedder pick.
     deficit losing significance (was significant pre-rebuild, Holm-adj
     p=0.031; now p=0.082), and `semantic × qwen3_0.6b` moving up to a clear
     2nd place in the dense-alone per-combo ranking (0.6435, was 0.6364 and
-    behind jina_v5's old number). **Two things were explicitly not part of
-    this refresh** and still cite pre-rebuild numbers: the per-chunker
-    BM25-vs-embedder breakdown (`bm25_vs_embedder_significance_test_per_chunker.py`)
-    and the semantic-only top-5 hybrid tie test
+    behind jina_v5's old number). **Two sub-analyses were re-run separately,
+    also 2026-07-25**: the per-chunker BM25-vs-embedder breakdown
+    (`bm25_vs_embedder_significance_test_per_chunker.py`) and the
+    semantic-only top-5 hybrid tie test
     (`hybrid_significance_test_semantic_top5.py`) — both flagged inline
-    above where cited, neither expected to flip given everything else held,
-    but not verified.
+    above where cited. Every conclusion in both held except one: `congen`
+    under `recursive` chunking lost significance in the per-chunker
+    breakdown (Holm-adj p=0.0620, was significant pre-rebuild). Nothing in
+    this document still cites pre-rebuild numbers.
 
 ## Source scripts (for reproducibility / methods section)
 

@@ -1478,3 +1478,43 @@ default เป็น string ว่างซึ่ง match ทุก combo แ�
 ("Still outstanding" ปิดแล้ว) — บั๊ก corpus-discovery contamination ที่พบ
 23 ก.ค. ถือว่าปิดสมบูรณ์ 100% ตั้งแต่ต้นทาง (พบ+แก้โค้ด) ถึงปลายทาง
 (rebuild index สะอาด + regenerate ตัวเลขที่อ้างอิงในเอกสาร) ณ วันนี้
+
+## Sub-analysis 2 ตัวสุดท้ายรันเสร็จเช่นกัน (25 ก.ค. 2569, บ่ายวันเดียวกัน)
+
+ผู้ใช้ขอให้ทำ sub-analysis 2 ตัวที่เหลือค้างจากรอบเช้า
+(`hybrid_significance_test_semantic_top5.py`,
+`bm25_vs_embedder_significance_test_per_chunker.py`) ทั้งสองสคริปต์อ่านจาก
+persisted results (`gold_hybrid_73det`, `gold_bm25_73det`, dense results) ที่
+ถูก refresh ไปแล้วในรอบเช้า — ไม่ต้อง rebuild อะไรเพิ่ม แค่รันสคริปต์ใหม่
+(pure recompute, วินาทีเดียวเสร็จ)
+
+**ผลลัพธ์ — ทั้งคู่ยืนยันข้อสรุปเดิม เกือบทั้งหมด**:
+
+1. **semantic-only top-5 tie test**: ยัง tie กันจริง ไม่มีคู่ไหนมีนัยสำคัญ
+   บน metric ไหนเลย หลังแก้ Holm (raw p ต่ำสุด=0.034, qwen3_0.6b vs
+   jina_v5) ค่าเฉลี่ยใหม่: qwen3_0.6b 0.7048, bge_m3 0.6893, e5_small
+   0.6871, qwen3 0.6832, jina_v5 0.6703 (recall@10) — เข้มแข็งขึ้นกว่าเดิม
+   ทุกตัว แต่โครงสร้าง "tie cluster" เหมือนเดิม
+2. **per-chunker BM25 breakdown**: ข้อสรุปทั้ง 2 ข้อเดิมยังจริง — bge_m3
+   แพ้ BM25 อย่างมีนัยสำคัญเฉพาะภายใต้ sentence chunking (Holm-adj
+   p=0.0354, เดิม p=0.0108); qwen3/qwen3_0.6b เป็น embedder เดียวที่ BM25
+   ตกเป็นรองในเชิงตัวเลข และเกิดเฉพาะใน semantic chunking เท่านั้น
+   **มีจุดพลิกจุดเดียว**: `congen` ภายใต้ recursive chunking เดิมมี
+   นัยสำคัญ (BM25 ชนะ) แต่หลัง refresh กลายเป็นไม่มีนัยสำคัญแล้ว (Holm-adj
+   p=0.0620) — ทิศทางเหมือนเดิม (BM25 ยังนำอยู่ในเชิงตัวเลข +0.1490)
+   แค่ไม่ผ่านเกณฑ์ 0.05 หลังล้างข้อมูลปนเปื้อนออก
+
+**สรุป**: จากทั้งหมด 7+2 = 9 สคริปต์ eval ที่มีอยู่ในโปรเจกต์นี้ ตอนนี้รัน
+ครบทุกตัวกับ index สะอาดแล้ว ไม่มีตัวเลขไหนในเอกสารที่ยังอ้างอิง
+pre-rebuild index อีกต่อไป (ยกเว้น `cost_latency_pareto.py` ซึ่งเป็นสคริปต์
+วัด cost/latency ไม่ใช่ recall — ยังไม่ได้รันใหม่ แต่ flag ไว้ชัดเจนใน
+เอกสารแล้วว่าเป็นคนละกลุ่มกับ eval chain นี้)
+
+**อัปเดตเอกสารเพิ่มเติม**: `docs/paper-results-summary.md` (แก้ caveat
+ทั้ง 2 จุดที่เคยบอกว่า "not part of refresh" เป็นผลลัพธ์จริง, อัปเดตตาราง
+per-chunker BM25, อัปเดต Open item #1/#8), `CLAUDE.md` (แก้ semantic-top5
+caveat, แก้ตัวเลข "beats BM25 for 7/9" ที่ผิดเป็น "6/9" ให้ตรงกับข้อมูลจริง
+พร้อมเพิ่มย่อหน้า per-chunker nuance), memory
+`project_corpus_discovery_contamination_bug` (ปิดสมบูรณ์รวม sub-analysis
+ทั้ง 2) — รอบเช้า commit ไปแล้วที่ `8ac948e`, การแก้ไขรอบนี้ (sub-analysis
+2 ตัว) commit แยกเป็นก้อนใหม่.

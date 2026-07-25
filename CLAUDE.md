@@ -71,22 +71,28 @@ see `docs/adr/`.
   now `semantic × qwen3_0.6b` at recall@10=0.7048 (up from 0.6935 pre-rebuild), beating every
   other chunker's best combo (`recursive` 0.6800, `sentence` 0.6529, `fixed_size` 0.6322).
   Cross-chunker-averaged, the top hybrid embedders (`qwen3_0.6b` 0.6571, `bge-m3` 0.6563,
-  `congen` 0.6467, `qwen3` 0.6291, `e5_small` 0.6289, `jina_v5` 0.6270) are close together, but
+  `congen` 0.6467, `qwen3` 0.6291, `e5_small` 0.6289, `jina_v5` 0.6270) are close together, and
   **the dedicated semantic-only top-5 pairwise tie test
-  (`tools/eval/hybrid_significance_test_semantic_top5.py`, 2026-07-22) was not part of this
-  refresh** — it still cites pre-rebuild numbers technically, though nothing else in the refresh
-  suggests it would flip. Don't cite a single "best combo" without re-running that script.
-  Hybrid significantly beats dense-alone for essentially every one of the 9 embedders on every
-  metric (26/27 tests significant; the one exception is `qwen3` on MRR, Holm-adj p=0.09) — still
-  the most robust finding of the comparison — and beats BM25-alone on recall for 7/9 embedders
-  (`bge-m3`/`qwen3`/`qwen3_0.6b` tie BM25 instead of beating it; not reliably ahead on MRR/nDCG
-  either). Dense-alone, `bge-m3`, `Qwen3-Embedding-4B`, and `Qwen3-Embedding-0.6B` are still a
+  (`tools/eval/hybrid_significance_test_semantic_top5.py`) was re-run 2026-07-25 against the
+  clean indices** — still no pair significant on any metric, confirmed genuine tied cluster
+  (`qwen3_0.6b` 0.7048, `bge-m3` 0.6893, `e5_small` 0.6871, `qwen3` 0.6832, `jina_v5` 0.6703
+  recall@10 semantic-only). Don't cite a single "best combo" — the tie is confirmed, not
+  provisional. Hybrid significantly beats dense-alone for essentially every one of the 9
+  embedders on every metric (26/27 tests significant; the one exception is `qwen3` on MRR,
+  Holm-adj p=0.09) — still the most robust finding of the comparison — and beats BM25-alone on
+  recall for 6/9 embedders (`jina_v5`/`sct` tie BM25 instead of beating it, `m2v` significantly
+  loses to it; not reliably ahead on MRR/nDCG either). Dense-alone, `bge-m3`, `Qwen3-Embedding-4B`, and `Qwen3-Embedding-0.6B` are still a
   3-way statistical tie at the top — pick by profile if not hybridizing (`bge-m3` = person-query
   specialist, `Qwen3-4B` = strongest generalist with no provable weak spot, `Qwen3-0.6B` = ties
   `Qwen3-4B` in aggregate but has a real person-query weak spot `Qwen3-4B` doesn't,
   `ConGen-PhayaThaiBERT` = program-query specialist). BM25 alone (`retrievers/bm25.py`)
   statistically **ties** that 3-way top tier and significantly beats every weaker embedder — but
-  don't naively RRF a weak embedder with BM25: `m2v` significantly *hurts* vs. BM25 alone on all
+  the per-chunker breakdown (`tools/eval/bm25_vs_embedder_significance_test_per_chunker.py`,
+  re-run 2026-07-25) shows this "tie" is chunker-dependent: `bge-m3` actually loses to BM25
+  significantly under `sentence` chunking specifically, and `qwen3`/`qwen3_0.6b` are the only
+  embedders where BM25's margin goes numerically negative anywhere (`semantic` only) — the
+  aggregate "ties" framing is most true for `semantic` chunking, the one this project already
+  recommends. Don't naively RRF a weak embedder with BM25: `m2v` significantly *hurts* vs. BM25 alone on all
   3 metrics; `sct` (at its corrected 510-token context) now hurts significantly on MRR/nDCG@10
   but recall@10 is no longer significant post-refresh (Holm-adj p=0.08, was significant
   pre-rebuild) — a real RRF failure mode whenever the fused dense signal is weak enough, though
