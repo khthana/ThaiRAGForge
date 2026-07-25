@@ -1,16 +1,25 @@
 """Composite loader for the entity-lookup retrieval mode
 (docs/research-framework-gap-analysis.md, entity-lookup next plan): tags
-each Resolution with people, programs, AND courses in one pass, plus the
-full structural field set MetadataLoader already provides (year, session,
-title, source_url).
+each Resolution with people, programs, courses, AND faculties in one pass,
+plus the full structural field set MetadataLoader already provides (year,
+session, title, source_url).
 
-PersonLoader/ProgramLoader/CourseLoader stay independently useful and
-unchanged -- this is a new, parallel loader, not a replacement. An index
-meant to back entity_lookup / query_indices(entity_boost=True) must be
-built with this loader specifically: those two features check
-metadata['people']/['programs']/['courses'] on every chunk, and a missing
-key is indistinguishable from a genuine empty match (see
+PersonLoader/ProgramLoader/CourseLoader/FacultyLoader stay independently
+useful and unchanged -- this is a new, parallel loader, not a replacement.
+An index meant to back entity_lookup / query_indices(entity_boost=True)
+must be built with this loader specifically: those features check
+metadata['people']/['programs']/['courses']/['faculties'] on every chunk,
+and a missing key is indistinguishable from a genuine empty match (see
 retrievers/entity_lookup.py and retrievers/filters.py's EntityFilter).
+
+Faculties added 2026-07-25: FacultyLoader/match_faculties already existed
+(committed 7b78177, 86% corpus coverage) but was never wired into this
+composite loader or detect_entities -- the entity_lookup mechanism only
+ever knew 3 of the 4 entity types it had matchers for. Added after the
+Gold-eval faculty_adjunct_aggregate breakdown (recall 0.0000) traced to
+exactly this gap, not a matcher defect: every one of those 13 gold
+queries names a faculty/college explicitly and match_faculties already
+detects all of them unmodified.
 """
 from __future__ import annotations
 
@@ -26,6 +35,7 @@ from rag_lab.loaders.common import (
     strip_mapping_tables,
 )
 from rag_lab.loaders.course_loader import match_courses
+from rag_lab.loaders.faculty_loader import match_faculties
 from rag_lab.loaders.person_loader import match_people
 from rag_lab.loaders.program_loader import match_programs
 from rag_lab.registries import loader_registry
@@ -34,10 +44,10 @@ from rag_lab.schema import Resolution
 
 @loader_registry.register("entity_tags")
 class EntityTagLoader(BaseLoader):
-    """Tags each Resolution with metadata['people']/['programs']/['courses']
-    in one pass, plus year/session/title/source_url (MetadataLoader's field
-    set) so an entity-tagged index isn't metadata-poorer than any other
-    built index."""
+    """Tags each Resolution with metadata['people']/['programs']/['courses']/
+    ['faculties'] in one pass, plus year/session/title/source_url
+    (MetadataLoader's field set) so an entity-tagged index isn't
+    metadata-poorer than any other built index."""
 
     def load(self, path: str) -> Resolution:
         text = strip_mapping_tables(strip_document_header(read_text(path)))
@@ -51,6 +61,7 @@ class EntityTagLoader(BaseLoader):
             "people": match_people(text),
             "programs": match_programs(text),
             "courses": match_courses(text),
+            "faculties": match_faculties(text),
         }
         return Resolution(
             resolution_id=make_resolution_id(path, year, session, title),

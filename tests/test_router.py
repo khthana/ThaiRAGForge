@@ -111,8 +111,16 @@ def test_detect_entities_no_match_returns_empty_dict():
         people_dict_matcher=lambda q: [],
         program_matcher=lambda q: [],
         course_matcher=lambda q: [],
+        faculty_matcher=lambda q: [],
     )
     assert detected == {}
+
+
+def test_detect_entities_faculty_via_injected_fake_matcher():
+    detected = detect_entities(
+        "คณะนี้มีหลักสูตรอะไรบ้าง", faculty_matcher=lambda q: ["คณะวิศวกรรมศาสตร์"]
+    )
+    assert detected == {"faculties": ["คณะวิศวกรรมศาสตร์"]}
 
 
 def test_rrf_merge_promotes_resolution_ranked_well_in_multiple_lists():

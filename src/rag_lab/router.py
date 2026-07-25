@@ -32,6 +32,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 from rag_lab.loaders.course_loader import match_courses
+from rag_lab.loaders.faculty_loader import match_faculties
 from rag_lab.loaders.person_loader import match_people, match_people_by_dictionary
 from rag_lab.loaders.program_loader import load_dictionary, match_programs
 from rag_lab.schema import RankedChunk, RetrievalResult
@@ -112,6 +113,7 @@ def detect_entities(
     people_dict_matcher=match_people_by_dictionary,
     program_matcher=_default_program_matcher,
     course_matcher=match_courses,
+    faculty_matcher=match_faculties,
 ) -> dict[str, list[str]]:
     """kind -> canonical values actually found in `query` (empty kinds
     omitted). Used by the entity-lookup retrieval mode and the keyword/
@@ -126,11 +128,18 @@ def detect_entities(
     usually won't include an academic rank. People are keyed on
     'given_name surname' (title stripped) to match EntityFilter's key, so a
     no-title query match still matches a title-anchored corpus tag.
+
+    Faculty: `match_faculties` is dictionary-based like match_programs, no
+    query-side fallback needed -- Gold-eval spot check (2026-07-25, the
+    faculty_adjunct_aggregate entity_type) found every real query names a
+    faculty/college by its exact canonical text, 13/13 detected unmodified.
+
     Matchers are injectable so tests can substitute fakes (e.g. for courses)
     without depending on the real regex/dictionary."""
     people = people_matcher(_collapse_title_spacing(query)) or people_dict_matcher(query)
     programs = program_matcher(query)
     courses = course_matcher(query)
+    faculties = faculty_matcher(query)
 
     detected: dict[str, list[str]] = {}
     if people:
@@ -139,6 +148,8 @@ def detect_entities(
         detected["programs"] = list(programs)
     if courses:
         detected["courses"] = list(courses)
+    if faculties:
+        detected["faculties"] = list(faculties)
     return detected
 
 
