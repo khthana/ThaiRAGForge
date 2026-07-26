@@ -146,3 +146,43 @@ def test_leaves_a_marker_matching_table_untouched_when_no_course_code_present():
     )
 
     assert strip_course_comparison_tables(text) == text
+
+
+def test_leaves_an_instructor_change_table_untouched_despite_doi_digits():
+    # regression: found via full-corpus exposure inspection before wiring
+    # this in (2567/8 คณะวิศวกรรมศาสตร์). An instructor-in-charge-change
+    # table's "ผลงานวิชาการ" (publication) cells cite DOIs whose suffix is
+    # an 8-digit run (e.g. .../10153322) -- indistinguishable from a course
+    # code by _TABLE_CODE alone. Real content (instructor names, revision
+    # rationale) was silently destroyed and replaced by 4 garbage
+    # "DOI-digits + stray text" lines before the credit-tuple AND-gate fix.
+    text = (
+        "<table><tr><td>อาจารย์ผู้รับผิดชอบหลักสูตร (เดิม)</td>"
+        "<td>อาจารย์ผู้รับผิดชอบหลักสูตร (แก้ไขใหม่)</td><td>ผลงานวิชาการ</td></tr>"
+        "<tr><td>1. Assoc.Prof.Dr. Sakchai Thipchaksurat</td>"
+        "<td>1. Asst.Prof.Dr. Napat Sra-ium</td>"
+        "<td>...โดยขอเปลี่ยนเป็น ผศ.ดร.นภัทร สระเอี่ยม... "
+        "https://doi.org/10.1109/ECTI-CON58255.2023.10153322</td></tr>"
+        "</table>"
+    )
+
+    assert strip_course_comparison_tables(text) == text
+
+
+def test_leaves_a_course_schedule_swap_table_untouched():
+    # regression: found via full-corpus exposure inspection (2566/9
+    # วิทยาเขตชุมพร). Real course codes appear inline in prose cells (not a
+    # clean code-cell -> title-cell pair), so the "next cell" heuristic
+    # produced garbage (a semester descriptor as the "title", two codes with
+    # no title at all) instead of the real course titles before the fix.
+    text = (
+        "<table><tr><td>รายวิชา</td><td>แผนการศึกษา (เดิม)</td>"
+        "<td>แผนการศึกษา (แก้ไขใหม่)</td></tr>"
+        "<tr><td>๑๑๒๐๖๓๐๓ การออกแบบระบบไฟฟ้า<br/>ELECTRICAL SYSTEM DESIGN</td>"
+        "<td>ปีที่ ๓ ภาคการศึกษาที่ ๑</td><td>ปีที่ ๓ ภาคการศึกษาที่ ๒</td></tr>"
+        "<tr><td>เปลี่ยนเป็นวิชา<br/>๑๑๒๐๖๓๐๕ วิศวกรรมไฟฟ้าแรงสูง</td>"
+        "<td></td><td></td></tr>"
+        "</table>"
+    )
+
+    assert strip_course_comparison_tables(text) == text

@@ -223,14 +223,23 @@ def strip_course_comparison_tables(text: str) -> str:
     Detected by header markers unique to this table type ("รหัส/หน่วยกิต",
     "Title and Course description", "เปลี่ยนเป็น") -- but the loosest of
     those three ("เปลี่ยนเป็น", "changed to") is ordinary Thai prose, not
-    table-specific, and produced one confirmed false positive: an MoA/joint-
-    degree fee table with no course codes at all matched on that phrase
-    alone. A second, structural gate fixes it -- also require the table to
-    contain at least one course-code-shaped or credit-tuple-shaped run
-    (`\\d{8}` / `N (x-y-z)`), which every real course-comparison table has
-    and the MoA table didn't -- without narrowing to the single strictest
-    header marker, which would also drop real course tables that only use
-    the other two headers. Every detected code is preserved verbatim, only
+    table-specific, and produced two confirmed false positives on real
+    corpus files: an MoA/joint-degree fee table with no course codes at all,
+    and (found later, via full-corpus exposure inspection before wiring this
+    in) instructor-in-charge-change tables whose "ผลงานวิชาการ" publication
+    citations contain 8-digit DOI suffixes / OCR zero-runs that satisfy a
+    bare code-shaped check, plus a course-schedule/semester-swap table whose
+    codes sit inline in prose cells rather than a code-cell -> title-cell
+    pair. A structural gate fixes both: require the table to contain BOTH a
+    course-code-shaped run AND a credit-tuple-shaped run (`\\d{8}` AND
+    `N (x-y-z)`), not either alone -- every real course-comparison table has
+    both (verified: 13/13 genuine matches across the full corpus), and both
+    known false-positive shapes are missing the credit-tuple half (DOI/OCR
+    digits and inline schedule codes never sit next to a `N (x-y-z)` credit
+    tuple). Narrowing to the single strictest header marker was considered
+    and rejected -- it would also drop real course tables that only use the
+    other two headers; the credit-tuple requirement is the more targeted fix.
+    Every detected code is preserved verbatim, only
     the text following it is shortened -- but the ORDER matters for
     CourseLoader.match_courses: running this BEFORE match_courses actively
     *improves* tagging coverage (compacted `CODE title` text satisfies
@@ -244,7 +253,7 @@ def strip_course_comparison_tables(text: str) -> str:
         table = m.group(0)
         if not _COURSE_TABLE_MARKER.search(table):
             continue
-        if not (_TABLE_CODE.search(table) or _CREDIT_TUPLE.search(table)):
+        if not (_TABLE_CODE.search(table) and _CREDIT_TUPLE.search(table)):
             continue
         touched = True
         out.append(text[cursor : m.start()])
