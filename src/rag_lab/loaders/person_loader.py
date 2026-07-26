@@ -98,6 +98,38 @@ _SEP = r"(?:\s+|<br\s*/?>\s*)"
 
 _TITLED_NAME = re.compile(rf"({_TITLE})({_NAME_TOKEN}){_SEP}({_NAME_TOKEN})")
 
+# A second, narrower shape: title+given in one <td> cell, surname alone in
+# the immediately following <td> cell -- joined by literal `</td><td>`
+# markup, no whitespace/<br/> between them, so _TITLED_NAME/_SEP above never
+# bridges it (confirmed 0/4 people matched on a real corpus table before
+# this was added: academic_resolutions/2564/ครั้งที่ 1/
+# รับรองรายงานการประชุม.md, concentrated in this "รับรองรายงานการประชุม"
+# meeting-minutes rank-correction document type -- 8 genuine matches across
+# 4 files/4 distinct people in a full-corpus scan).
+#
+# Deliberately NOT a blanket "any adjacent cell" bridge: a naive version of
+# that produced a confirmed false positive in a different, OCR-corrupted
+# document type ("อาจารย์พิเศษสอนเกินร้อยละ 50" teaching-load reports) --
+# `ผศ.ดร.อำภาพรรณ` followed by a garbled cell reading
+# "อาจารย์ผู้สอน ภายในไม่เพียงพอ" (extra corrupted prose, not a clean
+# label or a surname) would otherwise be tagged as a fake person. Two
+# guards fix it, both grounded in the real corpus scan, not assumed:
+# (1) the following cell's content must be the surname candidate AND
+# NOTHING ELSE (anchored start/end within the cell) -- the false-positive
+# cell always had trailing text after the token, every genuine surname
+# cell had none; (2) the candidate must be >=6 Thai chars -- the shortest
+# genuine surname found is 6 chars ("มิตะถา"), and a known OCR-garbage
+# fragment from the same corrupted document type ("มเชี่", 5 chars) sits
+# right below that line. This is a damage-limiting heuristic, not a
+# guarantee: a same-length OCR fragment could still slip through, which is
+# why every match this pattern contributes should be spot-checked, not
+# just the ones it changes vs. the old behavior.
+_MIN_CROSS_CELL_SURNAME = 6
+_TITLED_NAME_CROSS_CELL = re.compile(
+    rf"<td[^>]*>({_TITLE})({_NAME_TOKEN})</td>\s*<td[^>]*>\s*"
+    rf"({_THAI_CHAR}{{{_MIN_CROSS_CELL_SURNAME},18}})\s*</td>"
+)
+
 # Common function/pronoun words that are valid "Thai character runs" and so
 # would otherwise pass as a plausible given name -- seen in practice from
 # procedural text that mentions a rank generically rather than naming
@@ -125,11 +157,12 @@ def match_people(text: str) -> list[dict[str, str]]:
     person is routinely mentioned more than once: a committee list, then
     again in prose) and sorted for determinism."""
     found: set[tuple[str, str, str]] = set()
-    for m in _TITLED_NAME.finditer(text):
-        given = m.group(2)
-        if given in _NOT_A_NAME:
-            continue
-        found.add((_normalize_title(m.group(1)), given, m.group(3)))
+    for pattern in (_TITLED_NAME, _TITLED_NAME_CROSS_CELL):
+        for m in pattern.finditer(text):
+            given = m.group(2)
+            if given in _NOT_A_NAME:
+                continue
+            found.add((_normalize_title(m.group(1)), given, m.group(3)))
     return [
         {
             "title": title,

@@ -178,6 +178,57 @@ class TestMatchPeople:
         abbreviated = match_people("รศ.ดร.คมสัน มาลีสี")[0]
         assert spelled["title"] == abbreviated["title"] == "รศ.ดร."
 
+    def test_bridges_a_name_split_across_adjacent_table_cells(self):
+        # a real corpus gap, confirmed 0/4 matched before this was added:
+        # academic_resolutions/2564/ครั้งที่ 1/รับรองรายงานการประชุม.md --
+        # title+given in one <td>, surname alone in the next, joined by
+        # literal </td><td> markup with no whitespace/<br/> between (unlike
+        # test_br_tag_separates_given_name_and_surname_in_table_cells above,
+        # which _SEP already handles within one cell)
+        text = (
+            "<table><tr><td>ลำดับที่ ๗</td><td>เดิม</td>"
+            "<td>รศ.สุขสันต์</td><td>พาณิชพาพิบูล</td></tr>"
+            "<tr><td></td><td>แก้ไขเป็น</td>"
+            "<td>รศ.ดร.สุขสันต์</td><td>พาณิชพาพิบูล</td></tr></table>"
+        )
+        result = match_people(text)
+        assert {p["full_name"] for p in result} == {
+            "รศ.สุขสันต์ พาณิชพาพิบูล",
+            "รศ.ดร.สุขสันต์ พาณิชพาพิบูล",
+        }
+
+    def test_does_not_bridge_when_the_next_cell_has_more_than_the_surname(self):
+        # regression: a naive "bridge any adjacent cell" version false-
+        # positived on a real OCR-corrupted table (an "อาจารย์พิเศษสอนเกิน
+        # ร้อยละ 50" teaching-load report) -- the cell after the name held
+        # garbled trailing prose, not a clean surname, and would otherwise
+        # have been tagged as the fake surname "อาจารย์ผู้สอน"
+        text = "<td>ผศ.ดร.อำภาพรรณ</td><td>อาจารย์ผู้สอน ภายในไม่เพียงพอ</td>"
+        assert match_people(text) == []
+
+    def test_does_not_bridge_a_short_ocr_fragment_as_a_surname(self):
+        # regression: a different OCR-corrupted table from the same
+        # "อาจารย์พิเศษสอนเกินร้อยละ 50" document family left a bare 5-char
+        # garbage fragment ("มเชี่") alone in the next cell -- below the
+        # 6-char minimum (the shortest genuine surname found in a
+        # full-corpus scan, "มิตะถา", is exactly 6), so it's rejected even
+        # though it satisfies the "nothing else in the cell" guard alone
+        text = "<td>ดร.วราสินกิจสุนทร</td><td>มเชี่</td>"
+        assert match_people(text) == []
+
+    def test_bridges_the_shortest_known_genuine_cross_cell_surname(self):
+        # the boundary case the 6-char minimum is tuned against: the
+        # shortest real surname found via a full-corpus scan
+        text = "<td>รศ.ดร.สมศักดิ์</td><td>มิตะถา</td>"
+        assert match_people(text) == [
+            {
+                "title": "รศ.ดร.",
+                "given_name": "สมศักดิ์",
+                "surname": "มิตะถา",
+                "full_name": "รศ.ดร.สมศักดิ์ มิตะถา",
+            }
+        ]
+
 
 class TestMatchPeopleByDictionary:
     def test_matches_canonical_name_with_no_title(self):
