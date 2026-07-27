@@ -238,17 +238,17 @@ def append_result(staging_file: Path, result: PageResult) -> None:
         f.write(json.dumps(asdict(result), ensure_ascii=False) + "\n")
 
 
-def ocr_page(pdf_path: Path, page_num: int, tmp_dir: Path) -> str:
+def ocr_page(pdf_path: Path, page_num: int, tmp_dir: Path, temperature: float = 0.0, dpi: int = PDF_DPI) -> str:
     from pdf2image import convert_from_path
 
     images = convert_from_path(
-        str(pdf_path), poppler_path=POPPLER_PATH, dpi=PDF_DPI,
+        str(pdf_path), poppler_path=POPPLER_PATH, dpi=dpi,
         first_page=page_num, last_page=page_num,
     )
     tmp_img = tmp_dir / f"_tmp_reocr_page_{page_num}.png"
     images[0].save(tmp_img, "PNG")
     try:
-        return ocr_image(str(tmp_img))
+        return ocr_image(str(tmp_img), temperature=temperature)
     finally:
         tmp_img.unlink(missing_ok=True)
 

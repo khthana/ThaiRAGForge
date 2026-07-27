@@ -81,7 +81,7 @@ def preprocess_image(image_path: str) -> str:
 # OCR CORE
 # =================================================================
 
-def ocr_image(image_path: str) -> str:
+def ocr_image(image_path: str, temperature: float = 0.0) -> str:
     processed_path = preprocess_image(image_path)
     try:
         for attempt in range(1, MAX_RETRIES + 1):
@@ -94,7 +94,7 @@ def ocr_image(image_path: str) -> str:
                         'images': [processed_path]
                     }],
                     options={
-                        'temperature': 0.0,
+                        'temperature': temperature,
                         'num_predict': 4096,
                         'num_ctx': 8192
                     }

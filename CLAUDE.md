@@ -46,13 +46,29 @@ see `docs/adr/`.
   (`llm_ocr_scan.py`, `reocr_consensus_pages.py`, `reocr_adjudicate.py`,
   `reocr_apply.py`), with a review UI at `tools/corpus_prep/consensus_review/`
   (`streamlit run tools/corpus_prep/consensus_review/review_app.py`).
-  Status/handoff: `docs/llm-ocr-scan-log.md`. Complete and written back into
-  the real corpus (commit `b692480`, 2026-07-16): 753/768 consensus-flagged
-  pages live, 18 kept old on human review. **2026-07-25**: found one file the
-  original scan appears to have missed entirely (not present in
-  `reocr_adjudication.jsonl` at all, unlike every other file sharing its
-  exact title, which were all caught and fixed) — a possible scan-coverage
-  gap, not yet sized; see `docs/llm-ocr-scan-log.md` §6.
+  Status/handoff: `docs/llm-ocr-scan-log.md`. Original 872-page
+  consensus-AND-gate batch complete and written back (commit `b692480`,
+  2026-07-16): 753/768 pages live, 18 kept old. **2026-07-25**: found one
+  file the original scan had missed entirely (a coverage gap) — sized and
+  found to actually be 2 separate mechanisms, not a simple gap: Mechanism A
+  (consensus-threshold exclusion, 1,329 files/~47% of the corpus never
+  touched by the AND-gate) and Mechanism B (a detection blind spot for
+  massive single-character repetition, 2 severe files). A 100-page sample
+  found only ~56% of phi4-only flags are real span-confirmed defects (not
+  the ~83% raw new/new verdict rate — see `docs/llm-ocr-scan-log.md` §8 for
+  why whole-page comparison overstates it). **2026-07-27**: user approved
+  and ran the full Mechanism-A (kernel-A) remediation anyway, with explicit
+  disclosure that the pipeline has no ground-truth-vs-source-image check —
+  **complete**: 1,982 pages written across 393 files. The combined human-
+  review queue (both batches) was then reduced 308→203→137→99→88 over 4
+  rounds of evidence-based bulk decisions (length-delta, span-confirmation,
+  independent-reOCR-agreement, table-repetition-signature) — see
+  `docs/llm-ocr-scan-log.md` §9-§10 for the full methodology, including a
+  key finding that re-OCR at temperature=0.0 is fully deterministic in this
+  pipeline (a literal-repeat tie-break round reproduced its input
+  byte-for-byte, so a later tie-break round was redesigned to genuinely
+  perturb temperature/DPI instead). Remaining 88 pages need real human
+  review; Mechanism B's 2 severe files are still untouched, not requested.
 - Entity tagging (person/program/course/faculty, all rule-based — regex
   anchored on a Thai academic rank or a curated dictionary, not NER; see
   `src/rag_lab/loaders/{person,program,course,faculty}_loader.py`) writes
