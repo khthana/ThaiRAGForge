@@ -68,7 +68,10 @@ see `docs/adr/`.
   pipeline (a literal-repeat tie-break round reproduced its input
   byte-for-byte, so a later tie-break round was redesigned to genuinely
   perturb temperature/DPI instead). Remaining 88 pages need real human
-  review; Mechanism B's 2 severe files are still untouched, not requested.
+  review. Mechanism B's 2 severe files (the LLM-detection blind spot —
+  massive single-character repetition that neither model's garbled-prose
+  check catches) are now **also fixed** (2026-07-27): re-OCR'd, adjudicated
+  (unanimous new/new), applied, and verified clean by direct read.
 - Entity tagging (person/program/course/faculty, all rule-based — regex
   anchored on a Thai academic rank or a curated dictionary, not NER; see
   `src/rag_lab/loaders/{person,program,course,faculty}_loader.py`) writes
