@@ -1748,3 +1748,102 @@ claim ว่า optimal
 this table" + overhead ratio ~4.0x-17.9x) และ `CLAUDE.md` (bottom-line cost/
 latency paragraph) ให้ตรงกันแล้ว — ปิดช่องโหว่สุดท้ายที่ค้างจากรอบ eval
 refresh เช้านี้
+
+## `multi_k_report.md` ก็ค้าง — บั๊กเดิมเป็นครั้งที่ 3, เจอตอนตอบคำถามผู้ใช้ (29 ก.ค. 2569, ค่ำ)
+
+ผู้ใช้ถามว่า open item "MAP/precision@1 ที่ top cluster ยังไม่ผ่าน
+significance test" คืออะไร — ระหว่างเช็กที่มา พบว่า `multi_k_report.md`
+(`tools/eval/multi_k_report.py`) มี mtime ค้างที่ **22 ก.ค.** ในขณะที่
+`gold_hybrid_73det` ถูกเขียนใหม่ 29 ก.ค. — เป็นบั๊ก "ไม่อยู่ใน 5-script
+refresh chain" ตัวที่ 3 ต่อจาก BM25/hybrid กับ `cost_latency_pareto.py`
+
+**รันใหม่** (pure recompute จาก retrieval results ที่ persist ไว้แล้ว
+ไม่ต้อง retrieve ใหม่ ไม่ต้องใช้ GPU): เรื่องราวที่เอกสารเคยเล่าไว้
+("MAP/precision@1 ขัดแย้งกันที่ top 3" — `bge_m3` นำ MAP, `qwen3_0.6b` นำ
+precision@1) **หายไปแล้ว** พอเป็นข้อมูลสด `qwen3_0.6b` นำทุก metric พร้อมกัน
+(MAP, precision@1/ndcg@1, recall@10) ทั้ง dense-alone และ hybrid — สอดคล้อง
+กับที่ `qwen3_0.6b` ทำลาย dense-alone 3-way tie เดิมไปแล้วข้างบน
+
+**ยังไม่ปิด item นี้จริง**: ยังไม่มี significance test สำหรับ MAP/precision@1
+เลย (มีแค่ recall@10/MRR/nDCG@10 ที่ทดสอบใน semantic-top5 script) และ scope
+ของตารางนี้ (เฉลี่ยข้าม 4 chunker) กับ scope ของ tied-cluster ที่ทดสอบแล้ว
+(`semantic` chunker เดี่ยว) ก็คนละ population กัน — แค่ไม่มีข้อขัดแย้งที่ต้อง
+อธิบายอีกต่อไปเท่านั้น อัปเดต `docs/paper-results-summary.md` (Multi-k
+metrics section ทั้งหมด + Open item #9) แล้ว
+
+## `reranker_significance_test.py` ก็ค้าง — nDCG@10 headline เดิมไม่ผ่านซ้ำ (29 ก.ค. 2569, ค่ำวันเดียวกัน)
+
+ต่อจากการกวาดเช็ก `data/results/*` ทั้งหมด (ผู้ใช้ขอ "เช็คให้หมดครับ แล้วทำ
+ให้หมด") พบว่า `reranker_significance_test.py` **retrieve สดทุกครั้ง** จาก
+`data/index/chunker_compare_full/plain__fixed_size__local__ceea7536`
+โดยตรง ไม่ได้อ่านจาก persisted results — combo นี้ถูก rebuild ไปแล้ว 29 ก.ค.
+11:13 แต่รายงาน (`reranker_significance_test.md`) ยังค้างที่ 23 ก.ค. รันใหม่
+(ไม่ต้อง build index ใหม่ ใช้ index ที่ rebuild ไว้แล้วโดยตรง):
+
+| metric (hybrid) | เดิม (23 ก.ค.) | สด (29 ก.ค.) |
+|---|---|---|
+| MRR | 0.848→0.760, Holm-adj p=0.006 **(นัยสำคัญ)** | 0.7775→0.6775, Holm-adj p=0.0048 **(นัยสำคัญ)** |
+| nDCG@10 | 0.675→0.617, Holm-adj p=0.030 **(นัยสำคัญ)** | 0.6193→0.5908, Holm-adj p=**0.5676 (ไม่นัยสำคัญ)** |
+| recall@10 | 0.607→0.584, ไม่นัยสำคัญ | 0.5570→0.5683 (สลับเครื่องหมาย!), ไม่นัยสำคัญ |
+| dense-alone (ทุก metric) | ไม่มีผล | ไม่มีผลเหมือนเดิม |
+
+**นี่คือการเปลี่ยนแปลงระดับข้อสรุปจริง ไม่ใช่แค่ตัวเลขขยับ**: MRR ยังพังอย่างมี
+นัยสำคัญเหมือนเดิม แต่ nDCG@10 ที่เคยอ้างว่า "reranker ทำร้ายทั้ง MRR และ
+nDCG@10" **ไม่ผ่านซ้ำ** — สรุปใหม่: reranker ทำร้าย **MRR เท่านั้น** อาจจะยิ่ง
+เข้ากับกลไก "phantom hits" ในงานวิจัยที่อ้างไว้มากขึ้นด้วยซ้ำ (MRR วัดแค่อันดับ
+คำตอบแรก ส่วน nDCG@10 ถ่วงน้ำหนักทั้ง top-10 — ถ้า reranker แค่กวนอันดับต้นๆ
+โดยไม่ได้ไล่คำตอบที่ถูกออกจาก top-10 จริง ก็สมเหตุสมผลที่จะเห็นผลใน MRR
+ชัดกว่า nDCG@10) latency แทบไม่เปลี่ยน (p50 1191→1170ms) ยืนยันว่าวัด
+mechanics ของโมเดล ไม่ใช่เนื้อหา corpus อัปเดต `docs/paper-results-summary.md`
+("Cross-encoder reranker results" + headline + Open item #5b),
+`docs/reranker-hybrid-interaction-research.md`, และ
+`docs/research-framework-gap-analysis.md` แล้ว
+
+## RQ3 ablation rebuild — ล้าง confound clean-vs-dirty, ข้อสรุป chunk_size แคบลงจริง (29 ก.ค. 2569, ค่ำวันเดียวกัน)
+
+รายการสุดท้ายของการกวาดเช็ก `data/results/*` ทั้งหมด และเป็นรายการเดียวที่
+**แก้ด้วยการ rerun eval ไม่ได้** — ต้อง build index ใหม่บน GPU จริง
+
+**ปัญหาไม่ใช่แค่ stale แต่เป็น confound**: index ฝั่ง treatment ของ RQ3 ทั้ง 3 ตัว
+(`rq3_segmentation_ablation`, `rq3_chunksize_sweep`, `rq3_normalize_ablation`)
+build ไว้ 23 ก.ค. ก่อน kernel-A OCR remediation (เสร็จ 27 ก.ค.) และก่อน rebuild
+`chunker_compare_full` (28 ก.ค.) แต่ฝั่ง baseline ของทั้ง 3 การทดลอง **reuse combo
+จาก `chunker_compare_full` โดยตรง** (`plain__fixed_size__local__ceea7536`,
+`plain__semantic__local__8aae9bcd`) ซึ่งถูก rebuild บนข้อความสะอาดไปแล้ว → ทุก
+comparison กำลังเทียบ **baseline สะอาดกับ treatment สกปรก** ซึ่งเป็นความผิดพลาด
+เชิงระเบียบวิธี ไม่ใช่แค่ตัวเลขเก่า rebuild ครบทั้ง 3 + rerun sig-test ทั้ง 3
+(chained job เดียว 6 ขั้น, exit code 0)
+
+**normalization — ข้อสรุปเดิมยืน**: ไม่มีนัยสำคัญบน metric ใดเลย (Holm-adj p≥0.42,
+ใกล้สุดคือ dense nDCG@10 raw p=0.0700) ฝั่ง dense เอนลบเล็กน้อยทุกช่อง (−0.012 ถึง
+−0.026) ฝั่ง hybrid แทบเป็นศูนย์ — ภาพเดิมเป๊ะ
+
+**segmentation — ข้อสรุปเดิมยืน แต่ไม่ใช่ p=1.0 ทั้งกระดานอีกแล้ว**: ยังไม่มี
+นัยสำคัญ (Holm-adj p≥0.4524) แต่ 2 ช่องขยับออกจากพื้น — dense MRR +0.0398
+(raw p=0.0754) และ hybrid recall@10 +0.0183 (raw p=0.1054) ทั้งคู่เข้าข้าง
+word-aware อ้างเป็น effect ไม่ได้ แต่ถ้อยคำที่ซื่อสัตย์ตอนนี้คือ "ตรวจไม่พบผล"
+ไม่ใช่ "เหมือนกันถึงทศนิยมตำแหน่งที่สาม" อย่างที่ตาราง p=1.0 ชุดเก่าสื่อ
+chunk stats ยังใกล้เคียงกันมาก (58,655 raw-char vs 58,198 word-aware;
+mean len 437.0 vs 444.0) ยืนยันว่าการเปลี่ยนขอบเขตไม่ได้แอบเป็นการเปลี่ยนขนาด
+
+**chunk_size — ข้อสรุปเปลี่ยนจริง (รายการเดียวของ RQ3 ที่เปลี่ยน)**:
+สิ่งที่ replicate แข็งแรงคือ **โทษของ 1024** — แพ้ทั้ง 256 และ 512 อย่างมีนัยสำคัญบน
+dense recall@10 (Holm-adj p=0.0020/0.0000), hybrid recall@10 (0.0000/0.0028),
+hybrid nDCG@10 (0.0072 ทั้งคู่) สิ่งที่ **ไม่ replicate** คือลำดับ 256-vs-512:
+ฝั่ง **dense** ตอนนี้ 512 **นำ** 256 เชิงตัวเลข (recall@10 0.4146 vs 0.4103,
+diff −0.0043, p=0.8802 = เสมอราบ) กลับทิศจากเดิมที่เป็น 0.510 > 0.480
+256 ชนะ 512 อย่างมีนัยสำคัญเฉพาะ **hybrid recall@10** (+0.0509, Holm-adj p=0.0112)
+เท่านั้น ไม่ชนะบน hybrid nDCG@10 (p=0.4094) และไม่มีช่อง MRR ไหนมีนัยสำคัญเลย
+(เหมือนเดิม)
+
+**headline ใหม่**: chunk_size ยังเป็นตัวแปร RQ3 ตัวเดียวที่มีผลจริง แต่ข้อความที่
+อ้างอิงได้แคบลงกว่าเวอร์ชัน 23 ก.ค. — **อ้างได้: "chunk 1024 ตัวอักษรแย่กว่าทั้ง 512
+และ 256 อย่างมีนัยสำคัญบน recall@10 และ nDCG@10" อ้างไม่ได้: "recall ลดลงตามขนาด
+แบบ monotonic" หรือ "256 คือค่าที่ดีที่สุด"** — 256 กับ 512 เสมอกันทางสถิติบน dense
+(512 นำเชิงตัวเลขด้วยซ้ำ) และ 256 ได้เปรียบเฉพาะใต้ hybrid recall@10
+**ค่า default 512 ของโปรเจกต์จึงไม่ได้ถูกพิสูจน์ว่าด้อยกว่า มีแค่ 1024 ที่พิสูจน์ว่าผิด**
+
+อัปเดต `docs/paper-results-summary.md` (§ RQ3 + หัวข้อย่อย refresh ใหม่),
+`docs/research-framework-gap-analysis.md` (ข้อ 7), memory
+`[[project_research_framework_gap_analysis]]` แล้ว ปิดการกวาด `data/results/*`
+ทั้งหมดครบทุกรายการ

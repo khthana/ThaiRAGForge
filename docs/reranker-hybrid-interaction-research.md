@@ -21,6 +21,21 @@ variable.
 | Hybrid (BM25+dense, RRF) | recall@10 | 0.607 → 0.584 | 1.0 | worse, not significant |
 | Dense-alone (bge-m3) | recall@10 / MRR / nDCG@10 | — | n.s. both directions | no effect |
 
+**Refreshed 2026-07-29** against the OCR-remediation-rebuilt index (same
+protocol, same 106-query Gold set — 33 more queries than the original
+73-query run since the set grew mid-project): hybrid MRR still
+significantly worse (0.7775→0.6775, Holm-adj p=0.0048), but hybrid
+**nDCG@10 no longer replicates as significant** (0.6193→0.5908, Holm-adj
+p=0.5676, up from 0.030) — recall@10 stays non-significant and even flips
+sign (+0.011 vs the original −0.023). Full numbers:
+`docs/paper-results-summary.md` § "Cross-encoder reranker results". This
+narrows the empirical finding to **MRR only**, which if anything sharpens
+the "phantom hits" mechanism below rather than undermining it — nDCG@10
+weights the whole top-10 list, MRR weights only the rank of the first hit,
+so a reranker that disrupts early-rank order without reliably evicting
+relevant docs from the top-10 would be expected to show up on MRR more
+reliably than on nDCG@10.
+
 Confirmed not an implementation bug (reranker smoke-tested in isolation, scores semantically
 sensibly). The question: is "reranking hurts an already-fused hybrid ranking, but not a
 dense-alone ranking" a known phenomenon, and what does the literature say about *why*?

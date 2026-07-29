@@ -260,6 +260,24 @@ methodological upgrade ที่ reviewer มองหา — effort ปาน�
    p≤0.0132) ส่วน normalization และ word-aware segmentation **ไม่มีผลนัยสำคัญ
    เลยสักตัว** (Holm-adj p≥0.414 และ =1.0 ตามลำดับ) รายละเอียดเต็มที่
    `docs/paper-results-summary.md` § "RQ3 ablation results (2026-07-23)"
+
+   > **แก้ไข 2026-07-29 — rebuild treatment index ทั้ง 3 ตัวเพื่อล้าง confound
+   > clean-vs-dirty**: index ฝั่ง treatment build ไว้ 23 ก.ค. (ก่อน kernel-A OCR
+   > remediation และก่อน rebuild `chunker_compare_full`) ขณะที่ฝั่ง baseline
+   > reuse combo จาก `chunker_compare_full` ที่ถูก rebuild บนข้อความสะอาดไปแล้ว
+   > → เป็น confound เชิงระเบียบวิธีจริง ไม่ใช่แค่ตัวเลขเก่า และแก้ด้วยการ rerun
+   > eval เฉยๆ ไม่ได้ ต้อง build index ใหม่บน GPU ทั้ง 3 ตัว **ทำเสร็จ 29 ก.ค.**
+   > ผลหลัง refresh: **normalization/segmentation ข้อสรุปเดิมยืนทั้งคู่** (ยังไม่มี
+   > นัยสำคัญ, Holm-adj p≥0.42 / ≥0.4524 — แต่ segmentation ไม่ได้ p=1.0 ทั้งกระดาน
+   > อีกแล้ว dense MRR ขยับเป็น +0.0398 raw p=0.0754) ส่วน **chunk_size มีข้อสรุป
+   > เปลี่ยนจริง**: สิ่งที่ replicate คือ **โทษของ 1024** (แพ้ทั้ง 256 และ 512
+   > อย่างมีนัยสำคัญบน recall@10 ทั้ง dense/hybrid + hybrid nDCG@10) แต่
+   > **"เล็กกว่าดีกว่าแบบ monotonic" ไม่ replicate** — dense recall@10 ตอนนี้
+   > 512 (0.4146) **นำ** 256 (0.4103) แบบเสมอทางสถิติ (p=0.8802) กลับทิศจากเดิม
+   > 256 ชนะ 512 เฉพาะ hybrid recall@10 เท่านั้น (Holm-adj p=0.0112)
+   > **ให้อ้างอิงว่า "1024 แย่กว่า 512/256 อย่างมีนัยสำคัญ" ห้ามอ้างว่า "256 ดีที่สุด"
+   > หรือ "recall ลดลงตามขนาดแบบ monotonic"** — ค่า default 512 ของโปรเจกต์ไม่ได้ถูก
+   > พิสูจน์ว่าด้อยกว่า มีแค่ 1024 ที่พิสูจน์ว่าเป็นทางเลือกที่ผิด
 8. ~~Cross-encoder reranker (optional, scope ชัด)~~ ✅ **ปิด 2026-07-23**: สร้าง
    `CrossEncoderReranker` (`BAAI/bge-reranker-v2-m3`) เป็น query-time stage เต็มรูปแบบ
    (registry pattern เดิม, ต่อจาก `pipeline.retrieve()`, ไม่แตะ runner/combos) + unit
@@ -274,6 +292,14 @@ methodological upgrade ที่ reviewer มองหา — effort ปาน�
    เต็มที่ `docs/reranker-hybrid-interaction-research.md` และ
    `docs/paper-results-summary.md` § "Cross-encoder reranker results" — สรุป: **ไม่
    ควร rerank เส้นทาง hybrid ด้วยการต่อสายแบบปัจจุบัน**
+
+   **แก้ไข 2026-07-29 (พบระหว่างกวาดเช็ก `data/results/*` ทั้งหมดหลัง
+   OCR-remediation rebuild)**: สคริปต์นี้ retrieve สดทุกครั้ง ไม่ใช้ persisted
+   results จึงค้างอยู่กับ index ก่อน rebuild — รันใหม่แล้ว ผลลบของ **MRR ยัง
+   มีนัยสำคัญเหมือนเดิม** (0.7775→0.6775, Holm-adj p=0.0048) แต่ **nDCG@10
+   ไม่ผ่านนัยสำคัญอีกต่อไป** (0.6193→0.5908, Holm-adj p=0.5676, จากเดิม 0.030)
+   — เป็นการเปลี่ยนแปลงระดับข้อสรุปจริง ไม่ใช่แค่ตัวเลขขยับ กรอบที่ถูกต้องตอนนี้:
+   reranker ทำร้าย **MRR เท่านั้น** ไม่ใช่ MRR+nDCG@10 เหมือนที่เคยสรุปไว้
 9. **RQ4 / End-to-end RAG**: generation stage + RAGAS/LLM-judge — subsystem ใหม่ทั้งก้อน
 
 **นอกขอบเขตฮาร์ดแวร์นี้:**

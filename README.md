@@ -125,6 +125,10 @@ PYTHONPATH=src python -m rag_lab.cli run --config config/experiments/dev_smoke.y
 
 ## เอกสารประกอบ
 
+- **[`docs/project-journey.html`](docs/project-journey.html)** — **เริ่มอ่านที่นี่ถ้าอยากเข้าใจ
+  ภาพรวมทั้งโปรเจกต์**: สรุปเชิงเล่าเรื่อง 13 บทว่าทำอะไรไปบ้างตามลำดับเวลา แต่ละขั้นได้ผล
+  อย่างไร ข้อสรุปไหนถูกถอนไปแล้วและเพราะอะไร บทเรียนเชิงกระบวนการ และภาคผนวกอธิบาย
+  metric/วิธีการทางสถิติ — render เป็น PDF ได้ (คำสั่งอยู่ใน `docs/project-journey.md`)
 - **[`CONTEXT.md`](CONTEXT.md)** — อภิธานศัพท์ร่วม (Resolution, Chunk, Index artifact,
   Retriever, Dense/BM25/Hybrid, Silver/Gold query set, …)
 - **[`docs/PRD-indexing-retrieval-framework.md`](docs/PRD-indexing-retrieval-framework.md)**

@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThaiRAGForge — เส้นทางโปรเจกต์ทั้งหมด</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap');
+  html { font-size: 16px; }
+  :root {
+    --bg: #fbfaf7;
+    --panel: #ffffff;
+    --ink: #15130e;
+    --muted: #4a4438;
+    --accent: #8a4b2f;
+    --accent-soft: #f1e3d8;
+    --code-bg: #2b2925;
+    --code-ink: #f1ede4;
+    --theory-bg: #eef4f2;
+    --theory-border: #5c8a7c;
+    --note-bg: #fdf0e2;
+    --note-border: #c9822f;
+    --dead-bg: #fbecec;
+    --dead-border: #b4423c;
+    --win-bg: #eef3ea;
+    --win-border: #5b7d3e;
+    --border: #e4ddd0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Sarabun", "Noto Sans Thai", "Leelawadee UI", "Segoe UI", sans-serif;
+    line-height: 1.72;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 36px 44px 90px; }
+  h1 { font-size: 1.95rem; margin-bottom: 4px; color: var(--accent); line-height: 1.35; }
+  .subtitle { color: var(--muted); margin-top: 0; margin-bottom: 30px; font-size: 0.95rem; }
+  h2 {
+    font-size: 1.36rem; margin-top: 52px; padding-bottom: 7px;
+    border-bottom: 3px solid var(--accent-soft); color: var(--ink); line-height: 1.4;
+  }
+  h2 .stage-no {
+    display: inline-block; background: var(--accent); color: white; border-radius: 50%;
+    width: 27px; height: 27px; line-height: 27px; text-align: center;
+    font-size: 0.85rem; margin-right: 9px;
+  }
+  h3 { font-size: 1.08rem; margin-top: 30px; color: var(--accent); line-height: 1.45; }
+  h4 { font-size: 0.97rem; margin-top: 20px; margin-bottom: 6px; }
+  p { margin: 11px 0; }
+  code {
+    font-family: "Cascadia Code", "Consolas", monospace;
+    background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; font-size: 0.88em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink); padding: 14px 18px;
+    border-radius: 8px; overflow-x: auto; font-size: 0.8rem; line-height: 1.5; margin: 14px 0;
+  }
+  pre code { background: none; padding: 0; color: inherit; font-size: 1em; }
+  .theory, .note, .dead, .win {
+    padding: 12px 18px; border-radius: 0 8px 8px 0; margin: 18px 0; font-size: 0.95rem;
+  }
+  .theory { background: var(--theory-bg); border-left: 4px solid var(--theory-border); }
+  .note   { background: var(--note-bg);   border-left: 4px solid var(--note-border); }
+  .dead   { background: var(--dead-bg);   border-left: 4px solid var(--dead-border); }
+  .win    { background: var(--win-bg);    border-left: 4px solid var(--win-border); }
+  .theory .label, .note .label, .dead .label, .win .label {
+    font-weight: 700; display: block; margin-bottom: 5px;
+    font-size: 0.8rem; letter-spacing: 0.03em;
+  }
+  .theory .label { color: var(--theory-border); }
+  .note .label   { color: var(--note-border); }
+  .dead .label   { color: var(--dead-border); }
+  .win .label    { color: var(--win-border); }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.86rem; }
+  th, td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); font-weight: 600; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 5px 0; }
+  .diagram {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; font-family: "Cascadia Code", "Consolas", monospace; white-space: pre;
+    overflow-x: auto; font-size: 0.72rem; line-height: 1.45; margin: 14px 0;
+  }
+  hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+  nav#toc {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 18px 24px; margin: 24px 0 36px; font-size: 0.9rem;
+  }
+  nav#toc .toc-title { font-weight: 700; color: var(--accent); display: block; margin-bottom: 8px; font-size: 1rem; }
+  nav#toc ol { padding-left: 20px; margin: 0; }
+  nav#toc li { margin: 3px 0; }
+  nav#toc a { color: var(--muted); text-decoration: none; }
+  .kicker {
+    display: inline-block; background: var(--accent); color: #fff; font-size: 0.68rem;
+    padding: 2px 9px; border-radius: 10px; margin-left: 7px; font-weight: 600;
+    vertical-align: middle;
+  }
+  footer { max-width: 900px; margin: 0 auto 50px; padding: 0 44px; color: var(--muted); font-size: 0.82rem; }
+  .lead { font-size: 1.02rem; }
+
+  @page { size: A4; margin: 16mm 14mm 18mm; }
+  @media print {
+    body { background: #fff; }
+    main { max-width: none; padding: 0; }
+    footer { padding: 0; }
+    h2 { break-before: page; break-after: avoid; }
+    h2#s-intro, h2#s-toc { break-before: auto; }
+    h3, h4 { break-after: avoid; }
+    table, pre, .diagram, .theory, .note, .dead, .win { break-inside: avoid; }
+    tr { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>ThaiRAGForge — เส้นทางโปรเจกต์ทั้งหมด</h1>
+<p class="subtitle">
+เราทำอะไรไปบ้าง แต่ละขั้นได้ผลอย่างไร และเมื่อปรับข้อมูลแล้วเกิดอะไรขึ้น<br>
+ปรับปรุงล่าสุด 29 กรกฎาคม 2569 · ครอบคลุมงานตั้งแต่ 1–29 ก.ค. 2569 (100 commit)
+</p>
+
+<div class="note">
+<span class="label">เอกสารนี้คืออะไร / ไม่ใช่อะไร</span>
+เอกสารนี้เป็น <b>สรุปเชิงเล่าเรื่อง</b> สำหรับทำความเข้าใจภาพรวมทั้งโปรเจกต์
+ไม่ใช่แหล่งอ้างอิงตัวเลขที่เป็นทางการ ถ้าต้องการอย่างหลังให้ดูที่
+<code>docs/paper-results-summary.md</code> (ตัวเลขพร้อมอ้างอิงในเปเปอร์),
+<code>docs/chunker-embedder-comparison-log.md</code> (บันทึกกระบวนการแบบ append-only
+รวมทางตันและบั๊กทั้งหมด), <code>docs/llm-ocr-scan-log.md</code> (งานล้าง OCR),
+<code>docs/entity-extraction-and-gold-eval-log.md</code> (งาน entity + gold set)
+</div>
+
+<nav id="toc">
+<span class="toc-title">สารบัญ</span>
+<ol>
+<li><a href="#s-intro">โปรเจกต์นี้คืออะไร และทำไมมันยาก</a></li>
+<li><a href="#s-overview">ภาพรวม — งาน 3 ก้อนและเส้นเวลา</a></li>
+<li><a href="#s-p1">เฟส 1 — สร้างเฟรมเวิร์ก (1–2 ก.ค.)</a></li>
+<li><a href="#s-p2">เฟส 2 — จัดระเบียบคอร์ปัส (3–7 ก.ค.)</a></li>
+<li><a href="#s-p3">เฟส 3 — ทำความสะอาด OCR (6–29 ก.ค.)</a></li>
+<li><a href="#s-p4">เฟส 4 — Entity tagging + Gold query set</a></li>
+<li><a href="#s-p5">เฟส 5 — การทดลองเปรียบเทียบหลัก</a></li>
+<li><a href="#s-p6">เฟส 6 — สามรอบที่ข้อมูลเปลี่ยนแล้วข้อสรุปพัง</a></li>
+<li><a href="#s-now">ผลลัพธ์ปัจจุบัน — ตอบทีละคำถามวิจัย</a></li>
+<li><a href="#s-dead">ข้อสรุปที่ตายไปแล้ว</a></li>
+<li><a href="#s-lesson">บทเรียนเชิงกระบวนการ</a></li>
+<li><a href="#s-todo">สิ่งที่ยังค้างอยู่</a></li>
+<li><a href="#s-appendix">ภาคผนวก — อภิธานศัพท์และวิธีการทางสถิติ</a></li>
+</ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s-intro"><span class="stage-no">1</span>โปรเจกต์นี้คืออะไร และทำไมมันยาก</h2>
+
+<p class="lead">
+โปรเจกต์นี้สร้างเฟรมเวิร์กทดลองเพื่อตอบคำถามว่า <b>ในระบบ RAG บนเอกสารมติสภาวิชาการ
+ภาษาไทย การเลือกองค์ประกอบแต่ละส่วนแบบไหน ทำให้ค้นหาเอกสารที่เกี่ยวข้องได้แม่นที่สุด</b>
+— และคำถามเชิงวิจัยที่ลึกกว่านั้นคือ embedding model ที่เทรนมาเพื่อภาษาไทยโดยเฉพาะ
+สู้โมเดล multilingual หรือโมเดลที่สร้างจาก LLM ได้หรือไม่ เมื่อคิดทั้งคุณภาพและต้นทุน
+</p>
+
+<div class="theory">
+<span class="label">ทฤษฎี — RAG และขอบเขตของโปรเจกต์นี้</span>
+RAG (Retrieval-Augmented Generation) คือการให้ LLM ตอบคำถามโดยอ้างอิงเอกสารจริง
+แทนที่จะตอบจากความจำในตัวโมเดล มี 3 ขั้น: (1) <b>Index</b> — ตัดเอกสารเป็นชิ้นเล็ก
+แล้วแปลงเป็นเวกเตอร์เก็บไว้ล่วงหน้า (2) <b>Retrieve</b> — แปลงคำถามเป็นเวกเตอร์
+แล้วดึงชิ้นเอกสารที่ใกล้เคียงที่สุด (3) <b>Generate</b> — ป้อนชิ้นที่ได้ให้ LLM เขียนคำตอบ<br><br>
+<b>โปรเจกต์นี้ทำเฉพาะขั้น (1) และ (2)</b> ไม่รวมขั้นที่ 3 เพราะถ้า retrieval ดึงเอกสาร
+ผิดตั้งแต่ต้น ไม่ว่า LLM จะเก่งแค่ไหนก็ตอบถูกไม่ได้ — จึงต้องหาให้ได้ก่อนว่า
+"องค์ประกอบไหนทำให้ retrieval แม่นที่สุด"
+</div>
+
+<h3>คลังข้อมูลที่ใช้</h3>
+<p>
+เอกสารมติสภาวิชาการ สจล. จำนวน <b>2,853 ไฟล์</b> จัดเรียงเป็น
+<code>ปี(พ.ศ.)/ครั้งที่ N/&lt;เรื่อง&gt;.md</code> ทุกไฟล์ผ่านการ OCR มาจาก PDF สแกน
+ซึ่งเป็นที่มาของปัญหาใหญ่ที่สุดของโปรเจกต์นี้ (ดูเฟส 3)
+</p>
+
+<h3>ทำไมงานนี้ยากกว่าที่คิด — 4 เหตุผล</h3>
+<ol>
+<li><b>ข้อความมาจาก OCR ที่ไม่สมบูรณ์</b> — ไม่ใช่แค่พิมพ์ผิดประปราย แต่มีทั้งการวนลูปซ้ำ
+ข้อความมั่วที่อ่านดูเหมือนภาษาไทยแต่ไม่มีความหมาย และหน้าที่หายไปทั้งหน้า
+ซึ่งสิ่งเหล่านี้ <b>ทำลายการค้นแบบจับคู่คำ (lexical) มากกว่าการค้นแบบเวกเตอร์</b>
+จึงบิดผลการเปรียบเทียบอย่างไม่สมมาตร</li>
+<li><b>ภาษาไทยไม่มีช่องว่างระหว่างคำ</b> — การตัดคำต้องใช้ dictionary หรือโมเดล
+และ tokenizer ที่ต่างกันให้ผลต่างกัน ส่งผลถึงทั้ง BM25 และการตัด chunk</li>
+<li><b>1 คำถามมีคำตอบถูกได้หลายข้อ</b> — เฉลี่ย 8.8 มติต่อคำถาม สูงสุด 43 ซึ่งทำให้
+metric มาตรฐานอย่าง recall@10 มี <b>เพดานเชิงโครงสร้าง</b> ที่ต่ำกว่า 1.0 มาก
+(ดู §7.5)</li>
+<li><b>ทุกครั้งที่ข้อมูลเปลี่ยน ตัวเลขทั้งหมดต้องสร้างใหม่</b> — index หนึ่งชุดคือ
+4 chunker × 9 embedder = 36 combo ใช้เวลา GPU หลายชั่วโมงถึงหลายวัน
+และมันเกิดขึ้น <b>3 รอบ</b> (ดูเฟส 6)</li>
+</ol>
+
+<!-- ============================================================ -->
+<h2 id="s-overview"><span class="stage-no">2</span>ภาพรวม — งาน 3 ก้อนและเส้นเวลา</h2>
+
+<p>งานทั้งหมดแบ่งได้เป็น 3 ก้อนที่พันกันอยู่ตลอด ไม่ได้ทำจบเป็นลำดับ:</p>
+
+<table>
+<thead><tr><th style="width:16%">ก้อน</th><th>คืออะไร</th><th style="width:20%">เวลาจริง</th></tr></thead>
+<tbody>
+<tr><td><b>A. เฟรมเวิร์ก</b></td><td>โค้ด 4 แกนที่สลับได้ + Streamlit UI + CLI + ชั้นวัดผล</td><td>~2 วัน (จบเร็วผิดคาด)</td></tr>
+<tr><td><b>B. คุณภาพข้อมูล</b></td><td>กระทบยอดคอร์ปัส, แยกไฟล์รวมหลักสูตร, ล้าง OCR เสีย, tag entity</td><td><b>~15 วัน</b> (ก้อนใหญ่ที่สุด)</td></tr>
+<tr><td><b>C. การทดลอง + สถิติ</b></td><td>36 combo, BM25, hybrid, ablation, reranker, significance test</td><td>~10 วัน</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<span class="label">ข้อสังเกตสำคัญที่สุดของโปรเจกต์</span>
+ก้อน B <b>ไม่ใช่ "งานเตรียมข้อมูล" ที่ทำครั้งเดียวจบ</b> — มันกลับมาทำลายตัวเลขของก้อน C
+ถึง <b>3 รอบ</b> และทุกรอบต้อง rebuild index ทั้งหมด แล้วรัน eval ใหม่หมด
+ถ้าจะสรุปโปรเจกต์นี้เป็นประโยคเดียว: <b>"เวลาส่วนใหญ่ไม่ได้หมดไปกับการทดลอง
+แต่หมดไปกับการทำให้แน่ใจว่าสิ่งที่ทดลองอยู่คือข้อมูลจริง"</b>
+</div>
+
+<h3>เส้นเวลาโดยสังเขป</h3>
+<div class="diagram">
+1–2 ก.ค.   ██ เฟรมเวิร์กเสร็จ (issue #1–#11)
+3–7 ก.ค.   ████ กระทบยอดคอร์ปัส · แยกไฟล์รวมหลักสูตร · เจอ OCR เสียครั้งแรก
+11–16 ก.ค. ████████ LLM OCR scan · remediation pipeline 3 เฟส · เขียนกลับ 753 หน้า
+16–17 ก.ค. ██████ entity tagger 4 ชนิด · Gold query set · routing
+18–21 ก.ค. ████████ ขยาย embedder 2→9 ตัว · BM25 · hybrid · significance test
+22–23 ก.ค. ██████ RQ3 ablation · reranker · ⚠ เจอบั๊ก corpus discovery
+24–25 ก.ค. ████████ rebuild ทั้ง 36 combo (รอบที่ 1) · refresh eval ทั้งหมด
+25–27 ก.ค. ██████████ พบ OCR gap 2 กลไก · kernel-A remediation 1,982 หน้า
+28–29 ก.ค. ██████████ rebuild (รอบที่ 2) · ⚠ เจอ cache ค้าง 3 วัน · ข้อสรุปพลิกจริง
+</div>
+
+<h3>ข้อสรุปที่แข็งที่สุด ณ ปัจจุบัน</h3>
+<div class="win">
+<span class="label">ผ่าน bootstrap + Holm correction ทั้งหมด</span>
+<ol style="margin:0">
+<li><b>Hybrid (BM25 + dense ด้วย RRF) ชนะ dense อย่างเดียว</b> — มีนัยสำคัญ 26 จาก 27 การทดสอบ
+เป็นผลที่แข็งที่สุดในโปรเจกต์</li>
+<li><b>BM25 เปล่าๆ แข็งกว่าที่คาดมาก</b> — หลังล้าง OCR แล้วมันชนะ <code>bge-m3</code> อย่างมีนัยสำคัญ</li>
+<li><b>โมเดลเล็กเสมอโมเดลใหญ่ในตระกูลเดียวกัน</b> — ยืนยัน 2 ตระกูลอิสระ (Qwen3, e5)</li>
+<li><b>"semantic chunking ชนะ" — ตกรอบ</b> ไม่เคยชนะใครอย่างมีนัยสำคัญเลยแม้แต่ครั้งเดียว</li>
+</ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s-p1"><span class="stage-no">3</span>เฟส 1 — สร้างเฟรมเวิร์ก (1–2 ก.ค.)</h2>
+
+<p>
+ปิด issue #1–#11 ครบภายใน 2 วัน สิ่งที่ได้คือเฟรมเวิร์กที่แยกเป็น <b>2 เฟส</b>
+และมี <b>4 แกนที่สลับได้อิสระ</b>
+</p>
+
+<div class="diagram">
+┌────────── Index-build phase (ออฟไลน์ · แพง · มี cache) ──────────┐
+│  เอกสาร .md → Loader → Chunker → Embedder → Index artifact       │
+│                                              (chunks + vectors    │
+│                                               + BM25 tokens)      │
+└────────────────────────┬─────────────────────────────────────────┘
+                         │ เก็บลงดิสก์
+┌────────────────────────▼──── Retrieval phase (query-time · ถูก) ──┐
+│  คำค้น → embed_query + tokenize → Retriever → RankedChunk[]       │
+│                                    (Dense / BM25 / Hybrid)        │
+└───────────────────────────────────────────────────────────────────┘
+</div>
+
+<p>
+<b>เหตุผลที่ต้องแยก 2 เฟส</b>: การ embed เอกสารทั้งคลังแพงมาก (ต้องรันโมเดลผ่านทุก chunk)
+จึงทำครั้งเดียวแล้ว cache ไว้ ส่วนการค้นหาถูกกว่ามาก — แค่เทียบเวกเตอร์
+ผลคือ <b>สลับ Retriever ได้อิสระบน Index เดียวกันโดยไม่ต้องสร้างใหม่</b>
+ซึ่งกลายเป็นสิ่งที่ประหยัดเวลามหาศาลตอนทำ hybrid (ไม่ต้อง build ใหม่เลยแม้แต่ combo เดียว)
+</p>
+
+<h3>4 แกนที่สลับได้</h3>
+<table>
+<thead><tr><th style="width:14%">แกน</th><th>ตัวเลือกที่มี</th></tr></thead>
+<tbody>
+<tr><td><b>Loader</b></td><td><code>Plain</code> (baseline) · <code>Metadata</code> (สกัดปี/ครั้งที่/เรื่อง/URL) · <code>NER</code> · <code>entity_tags</code> · <code>normalized</code></td></tr>
+<tr><td><b>Chunker</b></td><td><code>FixedSize</code> (512 ตัวอักษร, overlap 50) · <code>Recursive</code> (แยกตามลำดับชั้น separator) · <code>Sentence</code> (ตัดประโยคไทยด้วย crfcut) · <code>Semantic</code> (หา breakpoint จากความคล้ายของ embedding)</td></tr>
+<tr><td><b>Embedder</b></td><td><code>Hashing</code> (baseline ไม่ใช้โมเดล) · <code>Local</code> (โมเดล HF ใดก็ได้บน GPU) · <code>E5</code> (มี prefix query:/passage:) · <code>API</code> (interface พร้อม ยังไม่ต่อจริง)</td></tr>
+<tr><td><b>Retriever</b></td><td><code>Dense</code> (cosine) · <code>BM25</code> · <code>Hybrid</code> (RRF) · <code>Qdrant</code> · + <code>MetadataFilter</code> / <code>EntityFilter</code> ที่ประกอบร่วมกับตัวไหนก็ได้</td></tr>
+</tbody>
+</table>
+
+<h3>การตัดสินใจเชิงสถาปัตยกรรมที่ยังมีผลจนวันนี้</h3>
+<table>
+<thead><tr><th style="width:15%">ADR</th><th style="width:38%">ตัดสินใจอะไร</th><th>ทำไมสำคัญ</th></tr></thead>
+<tbody>
+<tr><td><b>ADR-0001</b></td><td>แยก index-build ออกจาก retrieval; core package <b>ห้าม import Streamlit</b></td><td>ทำให้ unit-test ได้ และเปลี่ยน UI ไม่กระทบผลวิจัย</td></tr>
+<tr><td><b>ADR-0002</b></td><td><b>ตัดสินความเกี่ยวข้องที่ระดับ Resolution (มติ) ไม่ใช่ระดับ chunk</b></td><td>ขอบเขต chunk เปลี่ยนไปตาม chunker ที่เลือก แต่ <code>resolution_id</code> คงที่เสมอ → <b>เทียบ chunker ข้ามกันได้อย่างยุติธรรม</b> ถ้าวัดที่ระดับ chunk การเปรียบเทียบจะไร้ความหมายทันที</td></tr>
+<tr><td><b>ADR-0003</b></td><td>ห้ามฝัง metadata ในชื่อไฟล์ — ใช้ <code>meeting_manifest.json</code> เป็นแหล่งเดียว</td><td>ชื่อไฟล์ถูก truncate/แก้ได้ง่าย ต่อมาพิสูจน์ว่าถูกต้อง เพราะบั๊ก "9 ไฟล์หาไม่เจอ" มีต้นตอจากชื่อไฟล์ถูกตัดจริงๆ</td></tr>
+<tr><td><b>Open/Closed</b></td><td>เพิ่ม strategy = สร้างไฟล์ + register — <b>ห้ามแก้ <code>runner.py</code></b></td><td>ตลอดโปรเจกต์เพิ่ม embedder ไป 9 ตัว เพิ่ม chunker/retriever/loader อีกหลายตัว <b>โดยไม่เคยแตะ runner เลย</b></td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<span class="label">สถานะเมื่อจบเฟส 1</span>
+เฟรมเวิร์กเสร็จสมบูรณ์ <b>แต่ยังไม่มีตัวเลขอะไรเลย</b> — ชั้นวัดผลมีโค้ดและ unit test
+ครบ แต่ไม่เคยรันกับคอร์ปัสจริง งานวิจัยจริงยังไม่เริ่ม
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s-p2"><span class="stage-no">4</span>เฟส 2 — จัดระเบียบคอร์ปัส (3–7 ก.ค.)</h2>
+
+<h3>4.1 กระทบยอดคอร์ปัส</h3>
+<p>
+เทียบรายการมติที่ควรมีตามเอกสารต้นทาง กับไฟล์ที่มีอยู่จริงในดิสก์ สร้าง
+<code>master_list.csv</code> เป็นแหล่งความจริงเดียว
+</p>
+<div class="win"><span class="label">ผลลัพธ์</span>
+<b>ปิดสมบูรณ์ 2,853 / 2,853 รายการ ครบทุกไฟล์</b> ไม่มีอะไรค้างและไม่มีใครติดค้างงานใคร
+</div>
+
+<h3>4.2 แยกไฟล์รวมหลักสูตร (ADR-0004)</h3>
+<p>
+พบว่าบางไฟล์บรรจุมติของหลายหลักสูตรรวมกันอยู่ในไฟล์เดียว ซึ่งขัดกับ ADR-0002
+ที่ถือว่า 1 ไฟล์ = 1 Resolution โดยตรง — ถ้าไม่แยก การวัด recall จะผิดตั้งแต่ต้น
+เพราะระบบจะนับว่า "ตอบถูก" ทั้งที่ดึงมติคนละหลักสูตรมา
+</p>
+<div class="win"><span class="label">ผลลัพธ์</span>
+<b>แยก 178 ไฟล์ ออกเป็น 528 ชิ้น</b> — และระหว่างทางเจอ defect แรกของ OCR:
+<b>การซ้ำวนลูป (repetition loop) ใน 112 ไฟล์</b> → re-OCR + merge + ตรวจสอบจนสะอาด
+</div>
+
+<div class="note">
+<span class="label">จุดที่โปรเจกต์รู้ตัวครั้งแรก</span>
+นี่คือจุดที่รู้ว่า <b>"คุณภาพ OCR เป็นปัญหาจริง ไม่ใช่ noise เล็กน้อยที่มองข้ามได้"</b>
+— และนำไปสู่งานทั้งเฟส 3 ซึ่งกลายเป็นก้อนงานที่ใหญ่ที่สุดของโปรเจกต์<br><br>
+บทเรียนย่อยที่ได้: นามสกุล <code>.dup</code> ถูกใช้เป็น <b>สัญญาณควบคุมของ pipeline</b>
+อยู่แล้ว — เคยเผลอใช้ซ้ำเป็นนามสกุลไฟล์สำรอง ทำให้ pipeline สับสน
+<b>อย่านำสัญญาณควบคุมที่มีความหมายอยู่แล้วไปใช้ซ้ำเพื่อจุดประสงค์อื่น</b>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s-p3"><span class="stage-no">5</span>เฟส 3 — ทำความสะอาด OCR (6–29 ก.ค.)</h2>
+
+<p class="lead">
+ก้อนงานที่ใหญ่ที่สุดและกินเวลามากที่สุด แบ่งเป็น 6 ชั้นตามลำดับที่ค่อยๆ ค้นพบ
+— แต่ละชั้นเกิดขึ้นเพราะชั้นก่อนหน้ามีจุดบอดที่มองไม่เห็นตอนสร้าง
+</p>
+
+<h3>5.1 ชั้นที่ 1 — scanner แบบ regex (6–7 ก.ค.)</h3>
+<p>
+<code>scan_ocr_repetition.py</code> ตรวจจับการซ้ำระดับ token ได้ดี
+แต่ต่อมาพบว่ามี <b>ช่องโหว่เรื่อง intra-token repetition</b> — การซ้ำที่เกิด
+<i>ภายใน</i> คำเดียว ซึ่ง regex ที่มองขอบเขตคำจับไม่ได้
+</p>
+
+<h3>5.2 ชั้นที่ 2 — LLM consensus scan (11–13 ก.ค.)</h3>
+<p>
+ปัญหาที่แท้จริงคือ OCR เสียแบบ <b>"ไม่ซ้ำ แต่มั่ว"</b> — ข้อความที่อ่านผ่านๆ
+ดูเหมือนภาษาไทยปกติแต่ไม่มีความหมาย ซึ่ง regex จับไม่ได้เลยไม่ว่าจะเขียนดีแค่ไหน
+จึงต้องใช้ LLM อ่านและตัดสิน
+</p>
+
+<div class="note">
+<span class="label">การทดลองที่ล้มแผนเดิมทั้งหมด</span>
+แผนเดิมคือทำ <b>cascade architecture</b> — ให้โมเดลถูก/เร็ว (gemma) กรองชั้นแรก
+แล้วส่งเฉพาะที่ผ่านไปให้โมเดลแพง/แม่น (phi4) ยืนยัน ซึ่งเป็นสถาปัตยกรรมมาตรฐาน
+ที่ประหยัดต้นทุนที่สุด<br><br>
+<b>แต่การทำ diff test ที่ระดับไฟล์ล้มมันทิ้ง</b> — พบว่าโมเดลทั้งสอง flag
+คนละหน้ากันมากเกินกว่าที่จะเรียงชั้นได้ ถ้าใช้ cascade จริง สิ่งที่ gemma
+พลาดจะไม่มีวันถูก phi4 เห็นเลย จึงเปลี่ยนเป็น <b>union scan</b>
+(สแกนด้วยทั้งสองโมเดลเต็มรูปแบบ) แล้วใช้ <b>AND gate</b>
+(เอาเฉพาะหน้าที่ทั้งคู่เห็นตรงกัน) เพื่อคุมอัตราผลบวกลวง<br><br>
+<b>บทเรียน</b>: สถาปัตยกรรมที่ "ถูกต้องตามตำรา" อาจผิดกับข้อมูลจริง — และการทดสอบ
+ที่ระดับหน่วยงานจริง (ไฟล์) เผยสิ่งที่การทดสอบระดับย่อย (หน้า) มองไม่เห็น
+</div>
+
+<div class="win"><span class="label">ผลการสแกน</span>
+สแกนครบ <b>2,853 ไฟล์</b> → flag <b>569 ไฟล์</b> ว่าน่าสงสัย
+</div>
+
+<h3>5.3 ชั้นที่ 3 — Remediation pipeline 3 เฟส (14–16 ก.ค.)</h3>
+<div class="diagram">
+Phase 1  re-OCR หน้าที่ถูก flag ใหม่สดๆ           reocr_consensus_pages.py
+   ↓
+Phase 2  ให้ 2 โมเดลตัดสิน "เก่า vs ใหม่" อันไหนดีกว่า  reocr_adjudicate.py
+   ↓     ├─ ตรงกันว่า "ใหม่ดีกว่า"  → เข้า Phase 3 อัตโนมัติ
+   ↓     └─ ไม่ตรงกัน               → เข้าคิวให้คนตัดสินใน UI
+   ↓
+Phase 3  เขียนกลับเข้าคอร์ปัสจริง                  reocr_apply.py
+         + UI รีวิว                              consensus_review/
+</div>
+<div class="win"><span class="label">ผลลัพธ์รอบแรก</span>
+<b>872 หน้า</b> → เขียนกลับจริง <b>753 หน้า</b> · เก็บของเก่าไว้ <b>18 หน้า</b> ·
+ที่เหลือเข้าคิวรีวิว
+</div>
+
+<h3>5.4 ชั้นที่ 4 — พบว่ารอบแรกครอบคลุมไม่ทั่ว (25–27 ก.ค.)</h3>
+<p>
+วันที่ 25 ก.ค. เจอไฟล์หนึ่งที่การสแกนรอบแรก <b>ไม่เคยแตะเลย</b> พอสอบสวนต่อ
+พบว่าไม่ใช่ช่องโหว่เดียว แต่เป็น <b>2 กลไกที่คนละแบบกันสิ้นเชิง</b>:
+</p>
+<table>
+<thead><tr><th style="width:12%">กลไก</th><th>คืออะไร</th><th style="width:26%">ขนาด</th></tr></thead>
+<tbody>
+<tr><td><b>A</b></td><td>AND gate ตัดทิ้งเพราะสองโมเดลไม่เห็นตรงกัน → ไฟล์เหล่านี้<b>ไม่เคยถูกแตะเลย</b> เป็นผลข้างเคียงโดยตรงของการเลือกคุมผลบวกลวง</td><td><b>1,329 ไฟล์ (~47% ของคอร์ปัส)</b></td></tr>
+<tr><td><b>B</b></td><td><b>จุดบอดของการตรวจจับ</b> — การซ้ำตัวอักษรเดียวจำนวนมหาศาล ซึ่งการถาม LLM ว่า "ข้อความนี้มั่วไหม" จับไม่ได้ เพราะทั้งสองโมเดลมองว่ามันไม่ใช่ "ข้อความมั่ว"</td><td>2 ไฟล์ (แต่รุนแรงมาก)</td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<span class="label">สุ่มตัวอย่างก่อนลงทุน — และพบว่าตัวเลขเดิมวัดผิด</span>
+ก่อนตัดสินใจรัน remediation กับ 1,329 ไฟล์ ทำการสุ่ม 100 หน้าผ่าน pipeline จริงก่อน
+พบว่า flag ที่มาจาก phi4 อย่างเดียวเป็น <b>defect จริงเพียง ~56%</b>
+— ไม่ใช่ ~83% ตามอัตรา verdict ดิบ เพราะ <b>การให้โมเดลเทียบทั้งหน้าทำให้ตัวเลขเฟ้อ</b>
+(โมเดลเห็นความต่างเล็กน้อยที่ไหนก็ได้ในหน้าแล้วตัดสินว่า "ใหม่ดีกว่า")
+วิธีวัดที่ถูกต้องกว่าคือดูว่า <b>span ที่ถูก flag ไว้ตอนแรก</b> ถูกแก้จริงหรือไม่<br><br>
+ผู้ใช้อนุมัติให้รันทั้งหมดโดยรับทราบข้อจำกัดชัดเจนว่า
+<b>pipeline นี้ไม่มีการตรวจเทียบกับภาพ PDF ต้นฉบับ</b> — คือเชื่อว่า re-OCR ใหม่ดีกว่า
+โดยไม่มี ground truth ยืนยัน
+</div>
+
+<div class="win"><span class="label">ผลลัพธ์ kernel-A</span>
+เขียนกลับ <b>1,982 หน้า ใน 393 ไฟล์</b>
+</div>
+
+<h3>5.5 ชั้นที่ 5 — ลดคิว human review จาก 308 เหลือ 88</h3>
+<p>
+คิวหน้าที่โมเดลตัดสินไม่ได้บวมเป็น 308 หน้า ซึ่งมากเกินกว่าจะให้คนอ่านทีละหน้า
+จึงลดด้วยการตัดสินใจแบบกลุ่มบนหลักฐาน 4 รอบ แต่ละรอบใช้สัญญาณคนละอย่าง:
+</p>
+<table>
+<thead><tr><th style="width:8%">รอบ</th><th style="width:34%">ใช้หลักฐานอะไร</th><th>เหลือ</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>ส่วนต่างความยาว (length-delta) — ถ้าใหม่สั้นกว่าเก่ามาก แปลว่าเนื้อหาหาย</td><td>308 → 203</td></tr>
+<tr><td>2</td><td>span-confirmation — จุดที่ถูก flag ไว้ถูกแก้จริงหรือไม่</td><td>203 → 137</td></tr>
+<tr><td>3</td><td>ความเห็นตรงกันของการ re-OCR อิสระ</td><td>137 → 99</td></tr>
+<tr><td>4</td><td>ลายเซ็นการซ้ำแบบตาราง (table-repetition-signature)</td><td>99 → <b>88</b></td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<span class="label">การค้นพบเชิงเทคนิคที่บังคับให้ต้องออกแบบรอบใหม่</span>
+รอบ tie-break รอบหนึ่งออกแบบไว้ว่า "ให้ re-OCR ซ้ำแล้วดูว่าได้ผลเหมือนเดิมไหม"
+แต่ผลที่ได้ <b>ซ้ำ input ตัวเองแบบ byte-for-byte</b> — ซึ่งพิสูจน์ว่า
+<b>re-OCR ที่ temperature=0.0 เป็น deterministic สมบูรณ์ในไปป์ไลน์นี้</b>
+การรันซ้ำจึงไม่ให้ข้อมูลใหม่แม้แต่บิตเดียว<br><br>
+ต้องออกแบบรอบถัดไปใหม่ให้ <b>perturb ตัวแปรจริง</b> (เปลี่ยน temperature และ DPI
+ของการ render ภาพ) ไม่ใช่แค่เรียกซ้ำ — <b>บทเรียน: "รันซ้ำแล้วดูว่าตรงกันไหม"
+ไม่ใช่หลักฐานอิสระ ถ้ากระบวนการนั้นเป็น deterministic</b>
+</div>
+
+<h3>5.6 ชั้นที่ 6 — บั๊ก header ซ้ำ และผลกระทบที่บังคับให้ rebuild ทุกอย่าง</h3>
+<p>
+<code>reocr_apply.py</code> ทิ้ง <code>## Page N</code> ซ้ำไว้ในไฟล์ 94 + 10 + 5 ไฟล์
+ตรวจแล้วพบว่าเป็นการซ้ำแบบติดกันทั้ง 84/84 กรณี (ไม่มีที่ซ้ำแบบห่างกัน)
+จึงยุบรวมได้อย่างปลอดภัย
+</p>
+<div class="dead">
+<span class="label">การค้นพบที่บังคับให้ต้อง rebuild ทั้งหมด</span>
+Intersect รายชื่อไฟล์ที่แก้กับ <code>relevant_resolution_ids</code> ใน Gold query set
+(จับคู่ที่ระดับ resolution ตาม ADR-0002 ไม่ใช่ระดับหน้า) แล้วพบว่า:<br><br>
+<b>41 จาก 111 ไฟล์ที่แก้ (37%) และ 43 จาก 106 query ทั้งชุด (41%)
+เกี่ยวข้องกับ resolution ที่แก้วันนี้โดยตรง</b><br><br>
+ไม่ใช่ edge case เล็กน้อย — และการยุบ header ทำให้ <b>ขอบเขต chunk เปลี่ยน</b>
+ไม่ใช่แค่เนื้อหาเปลี่ยนผิวเผิน → <b>index ทุกตัวที่ build ก่อนวันนี้ต้องสร้างใหม่ทั้งหมด</b>
+</div>
+
+<div class="win"><span class="label">สถานะสุดท้ายของเฟส 3</span>
+ปิดสมบูรณ์ทั้ง Mechanism A และ Mechanism B · คิว human review เหลือ <b>0</b> ·
+ทั้ง 2 ไฟล์ที่รุนแรงของ Mechanism B ผ่านการ re-OCR, adjudicate (โมเดลเห็นตรงกันเป็นเอกฉันท์),
+apply และตรวจอ่านด้วยตายืนยันว่าสะอาด
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s-p4"><span class="stage-no">6</span>เฟส 4 — Entity tagging + Gold query set</h2>
+
+<h3>6.1 ทำไมต้อง tag entity</h3>
+<p>
+คำถามจริงที่ผู้ใช้ระบบนี้จะถามคือแบบ <i>"อาจารย์ X ได้รับแต่งตั้งเมื่อไหร่"</i> หรือ
+<i>"หลักสูตร Y ผ่านมติครั้งไหนบ้าง"</i> — ซึ่งต้องรู้ว่าเอกสารไหนพูดถึง entity ไหน
+ทั้งเพื่อทำ retrieval ที่ดีขึ้น และ (สำคัญกว่า) เพื่อ <b>สร้างชุดคำถามทดสอบที่มีคำตอบถูกต้องแน่นอน</b>
+</p>
+
+<h3>6.2 ทำไมไม่ใช้ NER</h3>
+<p>
+สร้าง NER GPU loader (wangchanberta / phayathaibert) ขึ้นมาจริงและ commit ไว้แล้ว
+<b>แต่ไม่ได้ใช้ในงานจริง</b> เพราะปัญหา <b>ORG-fragmentation</b> — ชื่อหน่วยงานถูกตัดเป็นชิ้นๆ
+ไม่ครบวลี ทำให้ tag ที่ได้ใช้อ้างอิงไม่ได้ จึงเปลี่ยนไปใช้ <b>rule-based ทั้งหมด</b>:
+regex ที่ยึด (anchor) กับยศทางวิชาการ หรือ dictionary ที่คัดมาแล้ว
+</p>
+
+<h3>6.3 tagger ทั้ง 4 ชนิดและผลจริง</h3>
+<table>
+<thead><tr><th style="width:14%">tagger</th><th style="width:40%">วิธี</th><th>ผลลัพธ์</th></tr></thead>
+<tbody>
+<tr><td><b>faculty</b></td><td>dictionary 20 คณะ</td><td>ครอบคลุม <b>86%</b> ของคอร์ปัส · จับได้ 20/20</td></tr>
+<tr><td><b>program</b></td><td>dictionary 253 หลักสูตร สร้างจาก <b>ชื่อเรื่องใน manifest</b> ไม่ใช่การสแกนเนื้อความ</td><td>ครอบคลุม <b>58%</b> · จับได้ 250/253</td></tr>
+<tr><td><b>person</b></td><td>regex ยึดยศทางวิชาการ + canonicalize รวมสะกดที่เพี้ยนจาก OCR ให้เป็นคนเดียวกัน</td><td><b>2,158 entity</b></td></tr>
+<tr><td><b>course</b></td><td>mapping ชื่อ↔รหัสวิชา 1,547 รายการ</td><td>เฉพาะชื่อ Latin/English — <b>การสกัดชื่อไทยถูกตัดทิ้งเพราะไม่น่าเชื่อถือ</b></td></tr>
+</tbody>
+</table>
+
+<div class="note">
+<span class="label">บั๊กที่เจอทีหลัง — บทเรียนว่า rule-based พลาดตรงไหน</span>
+<b>1. ยศ "อ." เปล่าๆ ไม่มี pattern รองรับเลย</b> — ยศนี้ต่ำกว่า ผศ./รศ./ศ.
+และเป็นยศที่<b>อาจารย์พิเศษหรืออาจารย์ประจำส่วนใหญ่ถูกอ้างถึง</b>
+ผลคือชื่ออาจารย์ในตารางหลายรูปแบบมองไม่เห็นเลย ไม่ว่าจะเขียนด้วยภาษาอะไร<br>
+→ <b>แก้แล้ว: tag เพิ่มขึ้น +10% ทั้งคอร์ปัส และ +37% ในเอกสารประเภทที่ทำให้เจอบั๊กนี้</b><br><br>
+<b>2. ชื่อคนถูกตัดคร่อม <code>&lt;td&gt;</code> สองช่อง</b> (ชื่ออยู่ช่องหนึ่ง นามสกุลอยู่อีกช่อง)
+→ แก้แล้ว (7 tag ใน 4 ไฟล์)<br><br>
+<b>3. ยังไม่แก้</b>: ชื่อที่ใช้ยศภาษาอังกฤษ (Mr./Assoc.Prof.Dr.) — ผู้ใช้ตัดสินว่าพบน้อย
+ไม่คุ้มกับความเสี่ยงที่จะเกิดผลบวกลวงเพิ่ม
+</div>
+
+<h3>6.4 Gold query set — insight ที่เปลี่ยนแผนทั้งหมด</h3>
+<p>
+แผนเดิมคือ <b>ต้องใช้ LLM ตัดสินว่า query ไหนตรงกับเอกสารไหน</b> ซึ่งจะแพงมาก
+ทั้งค่า token และเวลาที่ต้องรีวิว แต่พบว่า:
+</p>
+<div class="win">
+<span class="label">insight</span>
+<b>ไม่ต้องใช้ LLM เลย</b> — ถ้า query ยึดกับ entity ที่ tag ไว้แล้ว
+คำตอบที่ถูกต้องจะ <b>คำนวณได้แบบ deterministic</b> จากตาราง entity → resolution
+คือ "มติทุกฉบับที่มี entity นี้อยู่" คือคำตอบที่ถูก โดยนิยาม ไม่ต้องมีใครมาตัดสิน
+</div>
+
+<p>
+<b>ผลลัพธ์: <code>gold_query_set_73det.yaml</code> — 106 query</b>
+(30 program + 30 person + 13 faculty_adjunct + 33 course)
+ทั้งหมดเป็น entity-anchored และถูก <b>เขียนใหม่ให้ห่างจากถ้อยคำในชื่อเอกสาร</b>
+เพื่อไม่ให้กลายเป็นการค้นแบบ keyword ตรงตัว<br>
+Human review สุ่มตรวจ 42 รายการด้วยมือ → <b>ไม่พบผลบวกลวงเลย</b>
+</p>
+
+<div class="note">
+<span class="label">บทเรียนราคา $26.74 — thematic query ที่ต้องทิ้ง</span>
+สร้าง thematic query (คำถามเชิงหัวข้อ ไม่ยึด entity) 179 ข้อด้วย LLM
+มีค่าใช้จ่ายจริง $26.74 แล้วพบว่า <b>มันแทบไม่มีอำนาจจำแนก chunker เลย</b>
+(t=0.02 · ผลเสมอกัน 67% ของกรณี) เพราะคำถามเชิงหัวข้อกว้างเกินไป
+เอกสารเกือบทุกฉบับ "เกี่ยวข้อง" ได้หมด<br><br>
+→ <b>ตัดออกจากทุกการเฉลี่ย</b> และไฟล์ <code>gold_query_set.yaml</code> (252 รายการ)
+ถูกประกาศเป็น <b>"ห้ามใช้อ้างอิง"</b> เพราะมันเจือจางผลลัพธ์และ<b>เปลี่ยนลำดับผู้ชนะ</b>
+เมื่อนำไปเฉลี่ยรวม
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s-p5"><span class="stage-no">7</span>เฟส 5 — การทดลองเปรียบเทียบหลัก</h2>
+
+<h3>7.1 ขยาย embedder จาก 2 เป็น 9 ตัว</h3>
+<p>
+เลือกตามกรอบ 4 กลุ่มของโน้ตวิจัย โดย <b>แต่ละตัวมีเหตุผลเชิงการทดลอง</b>
+ไม่ใช่แค่เพิ่มจำนวนให้ดูเยอะ:
+</p>
+<table>
+<thead><tr><th style="width:13%">กลุ่ม</th><th style="width:24%">โมเดล</th><th>เหตุผลที่เลือก</th></tr></thead>
+<tbody>
+<tr><td><b>A</b><br>ไทยเฉพาะ</td><td><code>congen</code><br><code>sct</code></td><td><b>backbone เดียวกัน (PhayaThaiBERT) + teacher เดียวกัน (BGE-M3) ต่างกันแค่วิธีเทรน</b> → แยกตัวแปร "วิธีเทรน" ได้สะอาด เป็น ablation ที่ดีกว่าการหยิบโมเดลใหม่มาสุ่มๆ</td></tr>
+<tr><td><b>B</b><br>multilingual</td><td><code>bge_m3</code>, <code>e5</code>, <code>e5_small</code>, <code>jina_v5</code></td><td>bge-m3 = ตัวเรือธงที่โน้ตระบุชื่อ · e5 มี query/passage prefix แบบไม่สมมาตร (ต่างจาก bge-m3 เชิงสถาปัตยกรรมจริง ไม่ใช่แค่ checkpoint ต่าง) · <b>e5 vs e5_small = ablation ขนาด</b></td></tr>
+<tr><td><b>C</b><br>LLM-based</td><td><code>qwen3</code> (4B)<br><code>qwen3_0.6b</code></td><td><b>ablation ขนาดภายในตระกูลเดียวกัน</b> — ต่างกันแค่จำนวนพารามิเตอร์ ต่างจากการเทียบ bge-m3 กับ Qwen3 ที่ต่างทั้งขนาด สถาปัตยกรรม และวิธีเทรนพร้อมกัน</td></tr>
+<tr><td>—</td><td><code>m2v</code></td><td>Model2Vec static — ขั้วล่างสุด ไม่ใช่ transformer เลย เป็นตารางค้นหาเวกเตอร์</td></tr>
+<tr><td><b>D</b><br>commercial API</td><td colspan="2"><b>ตัดออกทั้งกลุ่ม</b> — เหตุผลหลักไม่ใช่ราคา แต่คือ <b>ต้องส่งเอกสารมติของสถาบันออกไปให้บริการภายนอก</b> ซึ่งผู้ใช้เลือกไม่แลก (โน้ตวิจัยเองก็ระบุว่ากลุ่มนี้เป็นตัวอ้างอิงเสริม ไม่ใช่แขนบังคับ)</td></tr>
+</tbody>
+</table>
+
+<p><b>ที่พิจารณาแล้วปฏิเสธ พร้อมเหตุผล</b>:</p>
+<ul>
+<li><b>Qwen3-Embedding-8B</b> — ต้องการ ~16GB สำหรับ weight อย่างเดียว แต่ RTX 3060 มี 12GB
+การ quantize จะเพิ่มตัวแปร confound ด้านความแม่นยำเข้ามาซ้อนกับตัวแปรขนาดที่ต้องการวัด</li>
+<li><b>SimCSE-WangchanBERTa</b> — จะเปลี่ยน <b>2 ตัวแปรพร้อมกัน</b> เทียบกับ ConGen-PhayaThaiBERT
+ที่มีอยู่ (ทั้ง backbone และวิธีเทรน) = การเปรียบเทียบที่ confound ซึ่งเป็นปัญหาเดียวกับที่
+flag ไว้แล้วในกรณี bge-m3 vs Qwen3-4B</li>
+<li><b>ConGen-WangchanBERTa</b> — <b>ใช้การอ้างอิงงานตีพิมพ์แทนการ build เอง</b>
+เพราะมี ablation ที่ตรงกันเป๊ะเผยแพร่อยู่แล้ว (TyDiQA retrieval) และส่วนต่างภายใต้วิธี ConGen
+ซึ่งเป็นวิธีที่โมเดลเราใช้ มีเพียง <b>+0.13 R@1</b> — เล็กเกินกว่าที่การ build เอง
+(ต้อง rebuild ครบ 4 chunker) จะเปลี่ยนข้อสรุปได้</li>
+<li><b>"SEA-Embedding-ModernBERT-300M"</b> — <b>ลบทิ้งถาวร</b> ตรวจสอบแล้วไม่มีอยู่จริง
+ทั้งในโน้ตวิจัยและบน Hugging Face สรุปว่าเป็นรายการที่หลอนมาจากบทสนทนาเก่า</li>
+</ul>
+
+<h3>7.2 บั๊ก ConGen/SCT ถูก truncate เงียบๆ — และคำตอบที่ไม่เหมือนกัน</h3>
+<p>
+ทั้ง <code>congen</code> และ <code>sct</code> ตั้ง <code>max_seq_length=128</code>
+มาจากผู้สร้างโมเดลเอง (ไม่ใช่โปรเจกต์นี้ตั้ง) ซึ่งต่ำกว่าเพดานจริงของ backbone ที่ 510 token มาก
+ตรวจกับ chunk จริงพบว่ามีสัดส่วนที่ยาวเกิน 128 อยู่จริง (fixed_size เฉลี่ย 172 สูงสุด 515;
+semantic ยาวได้ถึง 3,116) จึงตั้งคำถามว่ากำลังทิ้งเนื้อหาที่มีประโยชน์อยู่หรือไม่
+</p>
+<table>
+<thead><tr><th style="width:18%">โมเดล</th><th class="num">recall@10 ที่ 128</th><th class="num">recall@10 ที่ 510</th><th>สรุป</th></tr></thead>
+<tbody>
+<tr><td><code>sct</code></td><td class="num">0.1374</td><td class="num"><b>0.1519</b></td><td>510 ดีกว่าจริง (p&lt;0.0001) → <b>ใช้ 510</b></td></tr>
+<tr><td><code>congen</code></td><td class="num"><b>0.4134</b></td><td class="num">0.3836</td><td>510 <b>แย่ลง</b>อย่างมีนัยสำคัญ (p=0.0016) → <b>คง 128</b></td></tr>
+</tbody>
+</table>
+<div class="theory">
+<span class="label">ตีความ — ไม่ใช่บั๊กแบบเดียวกัน</span>
+สำหรับ <code>sct</code> การจำกัดที่ 128 <b>ทิ้งเนื้อหาที่มีประโยชน์จริง</b> และ 510 แก้ได้<br>
+สำหรับ <code>congen</code> การป้อน context ยาวขึ้น <b>ทำให้แย่ลง</b> —
+เพราะ ConGen เป็น knowledge distillation แท้ๆ จาก teacher ที่ใช้กับคู่ประโยคสั้น
+การยืด input ไป 510 token จึงผลัก input ออกนอกการกระจายที่มันถูก distill มา
+= <b>train/test mismatch ไม่ใช่ปัญหา truncation</b><br><br>
+<b>สรุปเชิงปฏิบัติ: ใช้ 510 กับ sct, คง 128 กับ congen</b> — และตัวเลข congen
+ทุกตัวในเอกสารเปรียบเทียบ (รวมถึงข้อสรุป "ผู้เชี่ยวชาญด้าน program")
+วัดที่ 128 ซึ่งการสอบสวนนี้ยืนยันว่า<b>ถูกต้องแล้ว ไม่ต้องแก้</b>
+</div>
+
+<div class="note">
+<span class="label">ข้อสังเกตเชิงโครงสร้างสำหรับส่วน discussion ของเปเปอร์</span>
+embedder ไทยเฉพาะ <b>ทุกตัวที่สำรวจมา</b> (congen, sct, SimCSE-WangchanBERTa,
+ConGen-XLMR-Thai) สร้างบน RoBERTa/XLM-R <b>base</b> ซึ่งสืบทอดเพดาน
+position-embedding 512 token มาจากสถาปัตยกรรม BERT ดั้งเดิม —
+ไม่ใช่ความบังเอิญรายโมเดล แต่เป็นจุดตั้งต้นมาตรฐานของทุกทีมที่เทรน sentence embedder ไทย<br><br>
+ในทางกลับกัน <code>bge-m3</code> (8,192 token) และ <code>qwen3</code> (32k+)
+ที่ครองอันดับต้นในการเปรียบเทียบนี้ <b>ไม่ได้มีภูมิคุ้มกันโดยธรรมชาติ</b> —
+bge-m3 เองก็ใช้ XLM-R เป็นฐาน (ตระกูลเดียวกับโมเดลไทย) แต่ BAAI
+<b>ลงทุนขยาย position embedding และ continued-pretrain สำหรับ long context โดยเฉพาะ</b><br><br>
+<b>นัยต่อ RQ2</b>: ช่องว่างคุณภาพส่วนหนึ่งที่วัดได้ อาจสะท้อน
+<b>ช่องว่างด้านทรัพยากร/ความสุกงอมทางวิศวกรรมของระบบนิเวศ embedding ไทย</b>
+ไม่ใช่ช่องว่างด้าน "ความเข้าใจภาษาไทย" — ซึ่งเป็นสองคำอธิบายที่มีนัยต่างกันมาก
+(อันหนึ่งบอกว่า "multilingual ดีกว่าสำหรับไทยโดยเนื้อแท้" อีกอันบอกว่า
+"โมเดลไทยยังไม่ได้รับการลงทุนรอบ long-context และอาจไล่ทันถ้ามีคนทำ")<br><br>
+<b>แต่ผลของ congen ทำให้ต้องระวังไม่สรุปง่ายเกินไป</b> — แม้จะมี context ให้ใช้มากขึ้น
+ระบอบการเทรนของโมเดลอาจทำให้การใช้มันกลับให้ผลเสีย
+กรอบที่ซื่อสัตย์คือ <b>ข้อจำกัด 2 ชั้นที่ซ้อนกัน</b>: (1) เพดานสถาปัตยกรรม 510 token
+ที่ไม่มีโมเดลไทยตัวไหนข้ามได้ และ (2) ภายในเพดานนั้น ความยาวที่<i>ใช้ได้จริง</i>
+ถูกกำหนดโดยระบอบการเทรน ไม่ใช่แค่สถาปัตยกรรม
+</div>
+
+<h3>7.3 วิธีทดสอบนัยสำคัญที่ใช้ตลอดโปรเจกต์</h3>
+<div class="theory">
+<span class="label">วิธีการ</span>
+<b>paired bootstrap</b> — หน่วยที่สุ่มซ้ำคือ <b>query</b> (ไม่ใช่ chunk หรือเอกสาร)
+n_boot = 10,000 · seed = 42 · p-value แบบ two-sided percentile<br>
+เมื่อเทียบข้ามแกน embedder จะ <b>เฉลี่ยคะแนนข้าม 4 chunker ก่อน</b> แล้วค่อยทดสอบ<br><br>
+<b>Holm-Bonferroni correction</b> ใช้ <b>แยกตามครอบครัวของการเปรียบเทียบที่เกิดพร้อมกัน
+ไม่รวมกันทั้งหมดเป็นก้อนเดียว</b> — เช่น 36 คู่ของ embedder-vs-embedder เป็นหนึ่งครอบครัว
+ส่วน 9 คู่ของ BM25-vs-embedder เป็นอีกครอบครัวหนึ่ง
+เพราะการรวมทุกอย่างเป็นครอบครัวเดียวจะลงโทษหนักเกินจริงจนไม่พบผลอะไรเลย
+</div>
+
+<h3>7.4 ผลชุดแรก — "โมเดลเล็กเสมอโมเดลใหญ่"</h3>
+<div class="win">
+<span class="label">ผลที่ยังยืนมาจนถึงวันนี้</span>
+<b>โมเดลเล็กเสมอโมเดลใหญ่ ยืนยันใน 2 ตระกูลอิสระ</b>:
+<code>qwen3_0.6b</code> เสมอ <code>qwen3</code> (เล็กกว่า ~7 เท่า) และ
+<code>e5_small</code> เสมอ <code>e5</code> (เล็กกว่า ~4.7 เท่า) — ทั้งคู่ Holm-adj p=1.0<br>
+<b>สองตระกูลที่ไม่เกี่ยวกันให้ผลเดียวกัน = เป็น pattern จริง ไม่ใช่ฟลุ๊คของตระกูลเดียว</b><br><br>
+<b>นัยเชิงต้นทุนสำหรับ RQ2</b>: สมาชิกที่<i>ถูกที่สุด</i>ของแต่ละตระกูลที่แข็งแรง
+เป็นตัวเลือกที่ดีกว่าพี่ใหญ่ของตัวเองเมื่อคิดต้นทุน โดยไม่มีการสูญเสียคุณภาพที่พิสูจน์ได้
+— เป็นข้อสรุป RQ2 ที่คมและอ้างอิงได้มากกว่า "ใหญ่ที่สุดไม่ได้ชนะเสมอ"
+</div>
+<div class="note">
+<span class="label">อีกด้านหนึ่ง — โมเดลที่ควรเลิกใช้</span>
+<b><code>sct</code> เสมอ <code>m2v</code> ในทุก entity_type</b> (Holm-adj p=1.0 ทุกช่อง)
+แม้จะแก้ max_seq_length แล้ว — <code>sct</code> ยังแยกไม่ออกทางสถิติจาก
+ตารางค้นหาเวกเตอร์แบบ static ที่ไม่ใช่ transformer เลย<br>
+recall ของ person: sct = 0.0571 · m2v = 0.0572 — <b>ทั้งคู่ทำ named-entity retrieval ไม่ได้เลย</b>
+</div>
+
+<h3>7.5 การค้นพบ "ผู้เชี่ยวชาญเฉพาะทาง vs ผู้เล่นรอบด้าน"</h3>
+<p>
+เมื่อแยกผลตาม entity_type แทนที่จะดูค่าเฉลี่ยรวม พบ pattern ที่การเฉลี่ยกลบไว้:
+</p>
+<table>
+<thead><tr><th style="width:20%">embedder</th><th style="width:26%">จุดเด่นที่พิสูจน์ได้</th><th>จุดอ่อนที่พิสูจน์ได้</th></tr></thead>
+<tbody>
+<tr><td><code>bge-m3</code></td><td><b>person</b> (ดีที่สุด)</td><td>program</td></tr>
+<tr><td><code>congen</code></td><td><b>program</b></td><td>person</td></tr>
+<tr><td><code>qwen3</code> (4B)</td><td>เสมอ bge-m3 บน person <b>และ</b> เสมอ congen บน program พร้อมกัน</td><td><b>ไม่มีจุดอ่อนที่พิสูจน์ได้เลย</b></td></tr>
+<tr><td><code>qwen3_0.6b</code></td><td>program (อยู่ในกลุ่มเสมอ 3 ทาง)</td><td><b>person</b> — มีจุดอ่อน ต่างจากพี่ 4B</td></tr>
+</tbody>
+</table>
+<div class="note">
+<span class="label">นัยสำคัญที่สุดของหัวข้อนี้</span>
+คะแนน<b>เฉลี่ย</b>ของ <code>qwen3</code> กับ <code>qwen3_0.6b</code> เสมอกัน
+แต่นั่นเป็น <b>ความบังเอิญของการเฉลี่ย</b> — 0.6B ได้เปรียบด้าน program
+มาชดเชยที่เสียเปรียบด้าน person พอดี<br>
+<b>ไม่ใช่หลักฐานว่าโมเดลเล็กเป็นของฟรี</b> ถ้างานเน้น person หรือไม่แน่ใจว่าจะเจอคำถามแบบไหน
+ควรใช้ 4B — เพราะมันเป็นตัวเดียวที่ไม่มีจุดอ่อนพิสูจน์ได้ในทั้งสองหมวดหลัก
+</div>
+
+<h3>7.6 เพดานเชิงโครงสร้างของ recall@10</h3>
+<p>
+คำถามของผู้ใช้ว่า <i>"recall@10 ราว 0.6–0.7 ต่ำไปไหม"</i> นำไปสู่การคำนวณที่
+<b>เปลี่ยนวิธีอ่านตัวเลขทุกตัวในโปรเจกต์</b>
+</p>
+<div class="theory">
+<span class="label">ทฤษฎี — ทำไม recall@10 ถึงมีเพดานต่ำกว่า 1.0</span>
+<code>recall@k</code> = (จำนวนเอกสารถูกที่ดึงได้ใน k อันดับแรก) ÷ (จำนวนเอกสารถูกทั้งหมด)<br><br>
+Gold set นี้ <b>ไม่ใช่ 1 คำถาม = 1 คำตอบ</b> — เฉลี่ย <b>8.8 มติต่อคำถาม สูงสุด 43</b>
+เพราะคำถามหลายข้อ (โดยเฉพาะกลุ่ม faculty_adjunct ที่ถามว่า "มติทุกฉบับที่แต่งตั้ง
+อาจารย์พิเศษของคณะ X") เป็นคำถามแบบ "list all" ที่มีคำตอบถูกหลายสิบข้อโดยธรรมชาติ<br><br>
+<b>คำถามที่มีคำตอบถูก 43 ข้อ ทำ recall@10 ได้สูงสุดแค่ 10/43 ≈ 0.23</b>
+แม้จะมี retriever ที่สมบูรณ์แบบ เพราะมีที่ว่างแค่ 10 ช่อง
+</div>
+<table>
+<thead><tr><th>entity_type</th><th class="num">จำนวน query</th><th class="num">คำตอบถูกเฉลี่ย</th><th class="num">สูงสุด</th><th class="num">เพดาน recall@10</th></tr></thead>
+<tbody>
+<tr><td>person</td><td class="num">30</td><td class="num">6.0</td><td class="num">13</td><td class="num"><b>0.976</b></td></tr>
+<tr><td>program</td><td class="num">30</td><td class="num">8.2</td><td class="num">24</td><td class="num"><b>0.900</b></td></tr>
+<tr><td>faculty_adjunct_aggregate</td><td class="num">13</td><td class="num">16.8</td><td class="num">43</td><td class="num"><b>0.681</b></td></tr>
+<tr><td><b>ทั้งชุด</b></td><td class="num">73</td><td class="num">8.8</td><td class="num">43</td><td class="num"><b>0.892</b></td></tr>
+</tbody>
+</table>
+<div class="win">
+<span class="label">อ่านตัวเลขใหม่</span>
+ตัวเลข faculty ที่ดูต่ำ (~0.45) จริงๆ อยู่ที่ <b>~66% ของเพดานตัวเอง</b>
+ขณะที่ person (~0.57) อยู่ที่ <b>~58% ของเพดาน</b><br>
+→ <b>person มีช่องว่างให้ปรับปรุงจริงมากกว่าที่ตัวเลขดิบทำให้เข้าใจ</b>
+ระยะห่างจาก 1.0 ของสองหมวดนี้เทียบกันตรงๆ ไม่ได้ถ้าไม่รู้เพดาน<br><br>
+<b>นัยต่ออนาคต</b>: คำถามแบบ "list all X" <b>ผิดกระบวนทัศน์ top-k similarity ตั้งแต่ต้น</b>
+— ไม่ว่า embedding หรือ chunking จะดีแค่ไหนก็ดันเพดาน 0.68 ไม่ขึ้น
+entity tagger ที่สร้างไว้แล้วทั้ง 4 ชนิดคือโครงสร้างพื้นฐานที่จะยกเพดานนี้ไป 1.0 ได้
+(กรองด้วย entity tag ตรงๆ แทนการหาความคล้าย) แต่ยังไม่เคยสร้าง/ทดสอบ
+</div>
+
+<h3>7.7 BM25 — ผลที่พลิกกรอบคำถามวิจัยทั้งหมด</h3>
+<p>
+เพิ่ม BM25 เป็น lexical baseline เพราะโน้ตวิจัยกำหนดว่าต้องมีอย่างน้อย 1 ตัว
+"เพื่อทดสอบว่า dense embedding คุ้มหรือไม่" — แล้วพบว่า
+<b>มันไม่ใช่ baseline อ่อนๆ อย่างที่ทุกคนคาด</b> มันเสมอกับ dense tier บนสุด
+</p>
+<div class="theory">
+<span class="label">สมมติฐานว่าทำไม BM25 ถึงแข็งขนาดนี้บนงานนี้</span>
+Gold query เป็น <b>entity-anchored</b> — ต่อให้เขียนถ้อยคำใหม่ให้ห่างจากชื่อเอกสารแค่ไหน
+<b>ชื่อของ entity เองต้องคงอยู่ตรงตัว</b> ไม่งั้นคำถามจะไม่ระบุว่าถามถึงมติไหน
+→ ให้ความได้เปรียบเชิงโครงสร้างแก่การจับคู่คำตรงตัวบนงานนี้โดยเฉพาะ<br><br>
+นี่ไม่ใช่จุดอ่อนของการออกแบบ gold set แต่เป็น<b>คุณสมบัติของโดเมน</b> —
+คนถามเรื่องมติจริงๆ ก็จะระบุชื่อคน/หลักสูตรตรงตัวเช่นกัน
+</div>
+
+<h3>7.8 Hybrid (RRF) — ผลที่แข็งที่สุดในโปรเจกต์</h3>
+<div class="theory">
+<span class="label">ทฤษฎี — RRF (Reciprocal Rank Fusion)</span>
+วิธีรวมผลลัพธ์จาก retriever หลายตัวโดย <b>ใช้เฉพาะ "อันดับ" ไม่ใช้ "คะแนน"</b>
+เอกสารหนึ่งได้คะแนนรวม = ผลรวมของ 1/(k + อันดับที่ได้จากแต่ละ retriever)
+โดย k=60 เป็นค่ามาตรฐาน<br><br>
+ข้อดีคือไม่ต้องปรับสเกลคะแนนจาก retriever ที่คิดคะแนนคนละแบบ (cosine กับ BM25 score
+เทียบกันตรงๆ ไม่ได้) และ <b>เอกสารที่ BM25 จัดอันดับ 1 จะถูกคุ้มครองในผลรวมโดยโครงสร้าง</b>
+— ข้อเท็จจริงนี้กลายเป็นกุญแจอธิบายผลของ reranker ในภายหลัง
+</div>
+<div class="win">
+<span class="label">ผลลัพธ์</span>
+<b>Hybrid ชนะ dense อย่างเดียว 26 จาก 27 การทดสอบ</b> (9 embedder × 3 metric)
+รวมถึงชนะแม้ในโมเดลที่ dense อ่อนมาก — <b>เป็นผลที่แข็งที่สุดในการศึกษาทั้งหมด</b>
+ตีความได้ว่าสัญญาณ lexical กับ dense <b>เสริมกันจริง</b> ไม่ใช่ซ้ำซ้อนกัน
+</div>
+<div class="dead">
+<span class="label">แต่มี failure mode จริงที่ต้องระวัง</span>
+<code>m2v</code> และ <code>sct</code> — hybrid <b>แย่กว่า BM25 เปล่าๆ อย่างมีนัยสำคัญ</b><br>
+<b>อย่า RRF กับ embedder ที่อ่อนโดยไม่คิด</b> — สัญญาณ dense ที่อ่อนพอ
+จะลากผลรวมลง ไม่ใช่ทุกการ fuse จะปลอดภัย
+</div>
+
+<h3>7.9 ต้นทุนและความหน่วง — พบ overhead ที่ซ่อนอยู่</h3>
+<p>
+วัด latency แล้วพบว่า implementation ปัจจุบันของ <code>HybridRetriever</code> และ
+<code>BM25Retriever</code> (ดึงทั้งคอร์ปัส <code>k=n</code> ก่อน fuse และสร้าง
+<code>BM25Okapi</code> ขึ้นใหม่ทุก query) เพิ่ม
+<b>overhead คงที่ ~1.9–2.0 วินาทีต่อ query แทบไม่ขึ้นกับ embedder ที่ใช้เลย</b>
+เพราะมันสเกลตาม<b>ขนาดคอร์ปัส</b> ไม่ใช่มิติของ embedding
+</p>
+<div class="note">
+<span class="label">รายงานตามจริง ไม่แอบแก้</span>
+ตัวเลข ~2.1–2.7 วินาทีที่วัดได้ <b>ส่วนใหญ่คือ overhead ที่หลีกเลี่ยงได้</b>
+ไม่ใช่ต้นทุนของ RRF เอง (ต้นทุนแท้จริงอยู่ที่ ~116–668 มิลลิวินาที)<br>
+เมื่อแสดงเป็นอัตราส่วนจะดูน่าตกใจ (~4 เท่าสำหรับ embedder ที่แพงที่สุด ถึง ~18 เท่า
+สำหรับตัวที่ถูกที่สุด) แต่นั่นเป็นเพราะ<b>เอา overhead คงที่ตัวเดียวกันไปหาร
+ด้วยฐานที่ต่างกันมาก</b> — <b>ตัวเลขแบบบวก (~2 วินาที) คือเรื่องจริง</b><br><br>
+รายงานไว้เป็น <b>คุณลักษณะของ implementation</b> ไม่ได้แอบแก้ระหว่างวัด
+เพราะการแก้ระหว่างทางจะทำให้ตัวเลขก่อน/หลังเทียบกันไม่ได้
+</div>
+
+<h3>7.10 RQ3 ablation — ทดสอบตัวแปร preprocessing 3 ตัว</h3>
+<div class="note">
+<span class="label">ตัวเลขชุด 23 ก.ค. มี confound ที่ต้อง rebuild เพื่อแก้</span>
+index ฝั่ง treatment ทั้ง 3 ตัว build ไว้ 23 ก.ค. — <b>ก่อน</b> การล้าง OCR รอบ kernel-A
+(เสร็จ 27 ก.ค.) แต่ฝั่ง baseline <b>reuse combo จาก <code>chunker_compare_full</code></b>
+ซึ่งถูก rebuild บนข้อความสะอาดไปแล้ว 28 ก.ค.<br>
+→ ทุกการเปรียบเทียบกำลังเทียบ <b>baseline สะอาด กับ treatment สกปรก</b>
+ซึ่งเป็นความผิดพลาดเชิงระเบียบวิธี ไม่ใช่แค่ตัวเลขเก่า และ<b>แก้ด้วยการ rerun eval ไม่ได้</b>
+ต้อง build index ใหม่บน GPU ทั้ง 3 ตัว — <b>ทำเสร็จ 29 ก.ค.</b> ตัวเลขด้านล่างคือหลัง rebuild
+</div>
+<table>
+<thead><tr><th style="width:26%">ตัวแปร</th><th style="width:34%">ผลหลัง rebuild</th><th>เทียบกับก่อน rebuild</th></tr></thead>
+<tbody>
+<tr><td><b>Normalization</b><br><span style="font-size:0.9em">เลขไทย + <code>pythainlp.normalize</code></span></td><td>ไม่มีนัยสำคัญเลย (Holm-adj p ≥ 0.42)</td><td>✅ ยืนเหมือนเดิม</td></tr>
+<tr><td><b>Segmentation</b><br><span style="font-size:0.9em">ตัดตามขอบคำ newmm vs ตัดดิบตามตัวอักษร</span></td><td>ไม่มีนัยสำคัญเลย (Holm-adj p ≥ 0.4524)</td><td>✅ ยืน แต่<b>ไม่ใช่ p=1.0 ทั้งกระดานแล้ว</b> — dense MRR ขยับเป็น +0.0398 (raw p=0.075)</td></tr>
+<tr><td><b>Chunk size</b><br><span style="font-size:0.9em">256 / 512 / 1024</span></td><td><b>ยังเป็นตัวเดียวที่มีผลจริง แต่ข้อสรุปแคบลง</b></td><td>⚠️ <b>เปลี่ยนจริง</b></td></tr>
+</tbody>
+</table>
+<p><b>chunk size — อะไรยืน อะไรล้ม</b>:</p>
+<ul>
+<li><b>✅ replicate แข็งแรง — โทษของ 1024</b>: แพ้ทั้ง 256 และ 512 อย่างมีนัยสำคัญ
+บน dense recall@10 (Holm-adj p=0.002/0.000), hybrid recall@10 (0.000/0.003)
+และ hybrid nDCG@10 (0.007 ทั้งคู่)</li>
+<li><b>❌ ไม่ replicate — "เล็กกว่าดีกว่าแบบ monotonic"</b>: ฝั่ง dense ตอนนี้
+<b>512 (0.4146) นำ 256 (0.4103)</b> เชิงตัวเลข และเสมอกันทางสถิติ (p=0.8802)
+<b>กลับทิศจากเดิม</b>ที่เป็น 0.510 &gt; 0.480 — ส่วน 256 ชนะ 512 อย่างมีนัยสำคัญ
+เฉพาะ hybrid recall@10 เท่านั้น (p=0.0112) ไม่ชนะบน nDCG@10 หรือ MRR ช่องไหนเลย</li>
+</ul>
+<div class="win">
+<span class="label">สิ่งที่อ้างอิงได้ / อ้างอิงไม่ได้</span>
+<b>อ้างได้</b>: "chunk ขนาด 1024 ตัวอักษร แย่กว่าทั้ง 512 และ 256 อย่างมีนัยสำคัญ
+บน recall@10 และ nDCG@10"<br>
+<b>อ้างไม่ได้</b>: "256 คือค่าที่ดีที่สุด" หรือ "recall ลดลงตามขนาด chunk แบบ monotonic"<br>
+→ <b>ค่า default 512 ของโปรเจกต์ไม่ได้ถูกพิสูจน์ว่าด้อยกว่า มีแค่ 1024 ที่พิสูจน์ว่าเป็นทางเลือกที่ผิด</b>
+</div>
+
+<h3>7.11 Cross-encoder reranker — ผลลบที่มีนัยสำคัญ</h3>
+<p>
+สร้าง <code>CrossEncoderReranker</code> (<code>BAAI/bge-reranker-v2-m3</code>)
+ให้ re-score candidate pool ที่ขยายเป็น 50 แล้วตัดเหลือ 10
+</p>
+<div class="theory">
+<span class="label">การออกแบบที่ทำให้ผลเชื่อถือได้</span>
+เพราะ retrieval เป็น <b>deterministic</b> baseline "ไม่ rerank" จึง
+<b>เท่ากับ slice 10 อันดับแรกของ pool 50 ตัวเดียวกันเป๊ะ</b>
+→ ตัวแปรเดียวที่ต่างกันคือ<b>การจัดอันดับใหม่ของ reranker ล้วนๆ</b>
+ไม่มี confound จากขนาด pool
+</div>
+<table>
+<thead><tr><th style="width:22%">retriever</th><th style="width:14%">metric</th><th style="width:26%">ก่อน → หลัง rerank</th><th class="num">Holm-adj p</th><th>ทิศทาง</th></tr></thead>
+<tbody>
+<tr><td>Hybrid (RRF)</td><td>MRR</td><td>0.7775 → 0.6775</td><td class="num">0.0048</td><td><b>แย่ลงอย่างมีนัยสำคัญ</b></td></tr>
+<tr><td>Hybrid (RRF)</td><td>nDCG@10</td><td>0.6193 → 0.5908</td><td class="num">0.5676</td><td>แย่ลง แต่<b>ไม่มีนัยสำคัญ</b></td></tr>
+<tr><td>Hybrid (RRF)</td><td>recall@10</td><td>0.5570 → 0.5683</td><td class="num">0.6456</td><td><i>ดีขึ้น</i> แต่ไม่มีนัยสำคัญ</td></tr>
+<tr><td>Dense เปล่าๆ</td><td>ทั้ง 3</td><td>—</td><td class="num">0.32–0.57</td><td>ไม่มีผลทั้งสองทิศทาง</td></tr>
+</tbody>
+</table>
+<p>ต้นทุน: <b>p50 ~1,170 มิลลิวินาทีต่อ query</b> (ไม่รวมเวลาโหลดโมเดล)</p>
+
+<h4>คำอธิบายจากวรรณกรรมจริง</h4>
+<p>
+สิ่งนี้ไม่ได้เดาจากข้อมูลของเราเอง — มีการค้นวรรณกรรม IR ปฐมภูมิเป็นงานแยกต่างหาก:
+</p>
+<ol>
+<li><b>ประโยชน์ของ reranking ลดลงเมื่อ retriever ชั้นแรกแข็งขึ้น และพลิกเป็นโทษได้</b> —
+Rosa et al. (arXiv:2212.06121) แสดงว่า monoT5 ยก BM25 (+0.055 nDCG@10)
+และ dense ที่แข็งกว่า (+0.045) ขึ้นสู่<i>เพดานเดียวกัน</i> คือได้กำไรน้อยลงเมื่อฐานแข็งขึ้น
+ส่วน Jacob et al. (ReNeuIR 2025 @ SIGIR, arXiv:2411.11767) ให้ตัวอย่างที่พลิกเป็นลบ
+โดยระบุ <b><code>bge-reranker-v2-m3</code> ตรงรุ่นที่เราใช้</b> ว่า "มักทำได้แย่กว่า retriever"
+และตั้งชื่อ failure mode ว่า <b>"phantom hits"</b> — ให้คะแนนสูงอย่างมั่นใจ
+กับเอกสารที่ไม่มีความเกี่ยวข้องทั้งเชิงคำและเชิงความหมายกับ query เลย</li>
+<li><b>RRF ปกป้องสัญญาณ exact-lexical-match เชิงโครงสร้าง</b> — Cormack et al. (SIGIR 2009)
+นิยาม RRF ว่ารวม "อันดับโดยไม่สนใจคะแนนที่ตามอำเภอใจของแต่ละวิธี"
+เอกสารที่ BM25 จัดอันดับ 1 จากการจับคู่คำตรงตัวจึงถูกคุ้มครองโดยการออกแบบ
+ส่วน cross-encoder ที่เห็นแค่คู่ <code>(query, chunk)</code> <b>มองไม่เห็นเลยว่า
+candidate นี้มาจากขาไหนหรือเพราะอะไร</b><br>
+<span style="font-size:0.9em">(หมายเหตุ: เปเปอร์ปี 2009 เกิดก่อน dense retrieval
+และไม่เคยพูดถึงการ fuse lexical+dense หรือ reranker — การเชื่อมโยงนี้เป็นการอนุมาน
+เชิงสถาปัตยกรรมของโปรเจกต์นี้เอง ไม่ใช่ข้อกล่าวอ้างของเปเปอร์)</span></li>
+<li><b>reranker สำเร็จรูปอาจไม่ transfer ไปยัง candidate distribution แบบ hybrid</b> —
+HYRR (Google Research, arXiv:2212.10528) ให้เหตุผลว่าทำไมต้องเทรน reranker
+บน candidate ของ hybrid โดยเฉพาะ และ training mixture สาธารณะของ
+<code>bge-reranker-v2-m3</code> ไม่มีองค์ประกอบที่มาจาก hybrid เลย</li>
+<li><b>ไม่มีเปเปอร์ไหนทดสอบไปป์ไลน์ตรงกับของเรา</b> (RRF hybrid → bge-reranker-v2-m3)
+— <b>นี่เป็น data point ใหม่จริง ไม่ใช่การทำซ้ำผลที่มีคนรายงานแล้ว</b></li>
+</ol>
+
+<!-- ============================================================ -->
+<h2 id="s-p6"><span class="stage-no">8</span>เฟส 6 — สามรอบที่ข้อมูลเปลี่ยนแล้วข้อสรุปพัง</h2>
+
+<p class="lead">
+ส่วนนี้ตอบคำถาม <b>"เมื่อปรับข้อมูลแล้วเกิดอะไรขึ้น"</b> โดยตรงที่สุด
+</p>
+
+<h3>8.1 รอบที่ 1 — บั๊ก corpus discovery (23 ก.ค.)</h3>
+<p>
+<code>runner.py::_discover_paths</code> ใช้ <code>rglob("*.md")</code> เปล่าๆ
+ไม่กรองอะไรเลย ขณะที่ <code>loaders/common.py::iter_corpus_files</code>
+มีการกันไว้อยู่แล้ว — แต่ <code>academic_resolutions/</code> ก็เก็บ
+<b>ไฟล์รายงานของเครื่องมือเอง ~19 ไฟล์</b> ไว้ด้วย และ <code>make_resolution_id</code>
+มี fallback เงียบๆ สำหรับ path ที่ผิดรูป (ไม่ crash) → ไฟล์เหล่านี้
+<b>ถูกดูดเข้าไปเป็น "มติปลอม" ในทุก index ที่เคย build มา</b>
+</p>
+<table>
+<thead><tr><th>chunker</th><th class="num">สัดส่วน chunk ที่ปนเปื้อน</th></tr></thead>
+<tbody>
+<tr><td>fixed_size</td><td class="num">6.87%</td></tr>
+<tr><td>recursive</td><td class="num">7.03%</td></tr>
+<tr><td>semantic</td><td class="num">8.25%</td></tr>
+</tbody>
+</table>
+<p>
+ไฟล์เดียว (<code>consensus_priority.md</code> รายงานสแกน OCR ขนาด 637KB)
+ให้ chunk ถึง <b>1,517 ก้อน</b> ในดัชนี semantic ซึ่งมากกว่ามติจริงทั่วไปราว <b>50 เท่า</b>
+</p>
+<div class="win">
+<span class="label">ผลหลัง rebuild ทั้ง 36 combo (24–25 ก.ค.)</span>
+ยืนยันด้วยการ grep แบบเดียวกับที่พบปัญหา: <b>0 chunk ที่ปนเปื้อน</b> ในทั้ง 36 combo<br>
+และ <b>ทุกข้อสรุปเชิงคุณภาพยืนหมด ไม่มีอันไหนพลิก</b> — มีเพียง <code>congen</code>
+ใต้ <code>recursive</code> ที่หลุดนัยสำคัญไป<br><br>
+<span style="font-size:0.92em">หมายเหตุกระบวนการ: 2 ใน 4 batch ถูก process kill ระหว่างทาง
+(เครื่อง sleep) แต่ไม่เกิดข้อมูลเสียหาย เพราะ <code>pipeline.build_index</code>
+เขียน artifact ของแต่ละ combo แบบ atomic เฉพาะเมื่อทำเสร็จเท่านั้น
+→ resume ด้วย config ที่ครอบเฉพาะ combo ที่ยังไม่เขียนได้เลย</span>
+</div>
+
+<h3>8.2 รอบที่ 2 — rebuild จาก OCR remediation + บั๊ก cache ค้าง (28–29 ก.ค.)</h3>
+<p>
+rebuild เพราะ OCR ถูกล้าง (เนื้อความ chunk เปลี่ยน ไม่ใช่สมาชิกคอร์ปัสเปลี่ยน)
+แต่เกิดบั๊กใหม่ที่ร้ายกว่า:
+</p>
+<div class="dead">
+<span class="label">บั๊ก — สคริปต์บางตัว refresh อัตโนมัติ บางตัวไม่</span>
+<code>embedder_matrix_9way.py</code> <b>คำนวณ dense retrieval ใหม่เองทุกครั้งที่รัน</b>
+ขณะที่ <code>run_gold_bm25_eval.py</code> และ <code>run_gold_hybrid_eval.py</code>
+<b>อ่านจากผลที่ persist ไว้</b> และไม่ถูกเรียกซ้ำ<br><br>
+ผลคือ BM25/hybrid <b>ค้างอยู่ 3 วันโดยไม่มีอะไรเตือน</b> และทุก significance test
+ที่ตามมาก็เอา <b>dense ตัวเลขสด ไปเทียบกับ BM25/hybrid ตัวเลขเก่า</b> เงียบๆ<br><br>
+<b>จับได้อย่างไร</b>: ผลออกมาเหมือน "ข้อสรุปพลิกพร้อมกันหลายอันเกินกว่าจะสมเหตุสมผล"
+จึงไปเช็ค mtime ของไฟล์ผลลัพธ์ก่อนเขียนสรุป
+</div>
+<p><b>รอบนี้ข้อสรุปพลิกจริง ไม่ใช่แค่ตัวเลขขยับ:</b></p>
+<table>
+<thead><tr><th style="width:44%">สิ่งที่เคยเชื่อ</th><th>หลัง refresh</th></tr></thead>
+<tbody>
+<tr><td>BM25 <b>เสมอ</b> tier บนสุดรวม <code>bge_m3</code></td><td>BM25 <b>ชนะ <code>bge_m3</code> อย่างมีนัยสำคัญ</b> (recall@10 ของ BM25 เอง 0.3908 → <b>0.4930</b>)</td></tr>
+<tr><td>dense tier บนเป็น <b>เสมอ 3 ทาง</b> (bge_m3 / qwen3 / qwen3_0.6b)</td><td><b>การเสมอแตก</b> — <code>qwen3_0.6b</code> ชนะทั้งสองตัวอย่างมีนัยสำคัญ</td></tr>
+<tr><td><code>sct</code> hybrid-vs-BM25 <b>ไม่มีนัยสำคัญแล้ว</b> (ผล 25 ก.ค.)</td><td><b>กลับมามีนัยสำคัญ</b> — ผลของ 25 ก.ค. วัดบน index ที่ถูกแทนที่ไปแล้ว</td></tr>
+<tr><td>top-5 hybrid <b>เสมอกันหมด 5 ตัว</b></td><td><b>เหลือ 4</b> — <code>bge_m3</code> หลุดออก (แพ้ recall@10 และ nDCG@10 แต่ยังเสมอบน MRR)</td></tr>
+<tr><td><b>combo ดีที่สุดทั้งโปรเจกต์</b> = <code>semantic × qwen3_0.6b</code> recall@10 <b>0.7048</b></td><td><b>0.6152</b> — และ<b>ไม่ใช่แม้แต่ chunker ที่ดีที่สุดของ embedder ตัวเอง</b> (<code>sentence</code> อ่านได้ 0.6265)</td></tr>
+</tbody>
+</table>
+<div class="theory">
+<span class="label">ทำไม BM25 ได้ประโยชน์จากการล้าง OCR มากกว่าใคร</span>
+การจับคู่คำตรงตัว <b>อ่อนไหวต่อ token ที่เพี้ยนจาก OCR มากกว่า dense embedding มาก</b>
+— คำที่สะกดผิดหนึ่งตัวทำให้ BM25 หาไม่เจอเลย ขณะที่ dense embedding ยังจับความหมาย
+โดยรวมได้บ้าง ผลคือคะแนน BM25 ขึ้นหลังล้าง OCR <b>มากกว่าที่ embedder ตัวไหนขึ้นได้</b>
+และนั่นคือกลไกที่ทำให้มันแซง bge-m3 ขึ้นมา
+</div>
+
+<h3>8.3 รอบที่ 3 — ข้อสรุป "semantic ชนะ" ล้ม (29 ก.ค.)</h3>
+<p>
+การที่ combo อันดับ 1 ตกลงมา ทำให้เกิดคำถามว่า "แล้ว chunker ไหนชนะกันแน่"
+แล้วพบว่า <b>ไม่เคยมีใครทดสอบเลย</b> — ตัวเลข "semantic ชนะทุก metric"
+ที่โปรเจกต์นี้พูดซ้ำมาตั้งแต่รอบเปรียบเทียบแรก เป็นแค่
+<b>ค่าเฉลี่ยดิบของ 6 embedder ที่ไม่เคยผ่าน significance test</b>
+</p>
+<p>
+จึงสร้าง <code>hybrid_chunker_significance_test.py</code> ขึ้นมาใหม่
+(เทียบ chunker กับ chunker โดยตรึง embedder + retriever, ครอบครัวละ 6 คู่ ต่อ 1 embedder
+บวกครอบครัวรวมข้าม 9 embedder)
+</p>
+<div class="dead">
+<span class="label">ผล</span>
+<b><code>semantic</code> ไม่เคยชนะ chunker ตัวไหนอย่างมีนัยสำคัญ ที่ไหนเลย</b>
+— ทั้งในการทดสอบรวม และทั้ง 9 embedder รายตัว
+สำหรับ <code>qwen3_0.6b</code> ซึ่งเป็นตัวที่ข้อกล่าวอ้างเดิมพูดถึงโดยเฉพาะ
+ทั้ง 4 chunker <b>เสมอกันหมดทุก metric</b> (Holm-adj p ≥ 0.44 ตลอด)<br><br>
+ผลที่มีนัยสำคัญ <b>เพียงอันเดียว</b> ในการทดสอบทั้งหมด (9 embedder × 3 metric × 6 คู่
++ 1 ครอบครัวรวม) คือ <b><code>fixed_size</code> แพ้ <code>recursive</code></b><br><br>
+ค่าเฉลี่ยรวม (hybrid, ข้าม 9 embedder): recursive 0.5291 · semantic 0.5206 ·
+sentence 0.5205 · fixed_size 0.5073 — <b><code>recursive</code> เป็นตัวที่สูงที่สุด
+เชิงตัวเลขแล้ว ไม่ใช่ <code>semantic</code></b> (แต่ส่วนต่างก็ไม่มีนัยสำคัญเช่นกัน)
+</div>
+<div class="win">
+<span class="label">กรอบใหม่ที่ซื่อสัตย์</span>
+<b><code>recursive</code> / <code>semantic</code> / <code>sentence</code> =
+กลุ่มบนที่เสมอกันทางสถิติ ไม่มีผู้ชนะที่พิสูจน์ได้ · <code>fixed_size</code> =
+ตัวเดียวที่มีข้อเสียเปรียบที่พิสูจน์ได้</b><br><br>
+<code>semantic</code> ยังเป็นค่าเริ่มต้นที่สมเหตุสมผลอยู่ (ไม่เคยถูกพิสูจน์ว่าแย่กว่าใคร
+และยังเป็น chunker เดียวที่ dense embedder แข็งๆ ชนะ BM25 ได้จริง)
+— แต่ <b>"semantic เป็น chunker ที่ดีที่สุด" ห้ามอ้างอิงเป็นผลการทดลองอีกต่อไป</b>
+</div>
+
+<h3>8.4 รอบเก็บกวาด — บั๊กเดิมซ้ำอีก 4 จุด (29 ก.ค.)</h3>
+<p>
+หลังเจอบั๊ก cache ค้างครั้งแรก จึงกวาดเช็ก <code>data/results/*</code> ทั้งหมด
+พบว่าเป็นบั๊กรูปแบบเดียวกันอีก 4 จุดที่ไม่ได้อยู่ในสายการ refresh:
+</p>
+<table>
+<thead><tr><th style="width:26%">ไฟล์ผลลัพธ์</th><th style="width:11%">ค้างตั้งแต่</th><th>ผลหลังรันใหม่</th></tr></thead>
+<tbody>
+<tr><td><code>cost_latency_pareto.md</code></td><td>22 ก.ค.</td><td>latency <b>แทบไม่เปลี่ยน</b> (ยืนยันว่ามันวัดกลไกของโมเดล/ดัชนี ไม่ใช่เนื้อหาคอร์ปัส) แต่คอลัมน์คุณภาพตกทั้งแถบ</td></tr>
+<tr><td><code>multi_k_report.md</code></td><td>22 ก.ค.</td><td><b>"เรื่องราวขัดแย้ง" หายไป</b> — เดิม bge_m3 นำ MAP แต่ qwen3_0.6b นำ precision@1; ตอนนี้ qwen3_0.6b นำ<b>ทุก metric</b> ทั้ง dense และ hybrid</td></tr>
+<tr><td><code>reranker_significance_test.md</code></td><td>23 ก.ค.</td><td><b>ผลพลิกระดับข้อสรุป</b> — nDCG@10 <b>ไม่มีนัยสำคัญอีกต่อไป</b> (p 0.030 → 0.568) เหลือแค่ MRR</td></tr>
+<tr><td><code>gold_entity_boost/lookup</code></td><td>25 ก.ค.</td><td>entity_boost ตกทุกประเภท (−0.017 ถึง −0.042) แต่ entity_lookup <b>ขึ้น</b> 0.9291 → 0.9422</td></tr>
+<tr><td>RQ3 ablation × 3</td><td>23 ก.ค.</td><td>ต้อง <b>rebuild index จริง</b> ไม่ใช่แค่ rerun — เสร็จแล้ว ดู §7.10</td></tr>
+</tbody>
+</table>
+<div class="theory">
+<span class="label">เรื่อง reranker น่าสนใจเป็นพิเศษ — ผลลบที่หดตัวกลับทำให้คำอธิบายคมขึ้น</span>
+การที่ nDCG@10 หลุดนัยสำคัญแต่ MRR ยังอยู่ <b>ทำให้คำอธิบาย "phantom hits" แข็งขึ้น
+ไม่ใช่อ่อนลง</b> — เพราะ MRR วัด<b>อันดับของผลลัพธ์ถูกอันแรก</b>ล้วนๆ
+ส่วน nDCG@10 ให้น้ำหนักทั้ง 10 อันดับ<br><br>
+ผลที่เหลือจึงมีรูปแบบว่า <b>"รบกวนอันดับต้นๆ แต่ไม่ได้เตะเอกสารที่ถูกต้องหลุดออกจาก
+top-10"</b> ซึ่งตรงกับกลไก phantom hits ที่วรรณกรรมอธิบายไว้พอดี<br><br>
+และ entity_boost/entity_lookup ที่<b>เคลื่อนไปคนละทิศ</b>ก็ไม่ใช่ความขัดแย้ง —
+เพราะเป็นคนละกลไกกัน (exhaustive metadata match กับ ranked retrieval)
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s-now"><span class="stage-no">9</span>ผลลัพธ์ปัจจุบัน — ตอบทีละคำถามวิจัย</h2>
+<p style="font-size:0.9em;color:var(--muted)">
+ทุกตัวเลขด้านล่างมาจาก Gold 106 query · paired bootstrap + Holm ·
+index หลัง OCR remediation (29 ก.ค. 2569)
+</p>
+
+<h3>Q1. chunker ไหนดีที่สุด?</h3>
+<p>
+<b>ไม่มีผู้ชนะที่พิสูจน์ได้</b> — <code>recursive</code> (0.5291) /
+<code>semantic</code> (0.5206) / <code>sentence</code> (0.5205) เสมอกันทางสถิติ;
+<code>fixed_size</code> (0.5073) เป็นตัวเดียวที่แพ้จริง (แพ้ <code>recursive</code> บน nDCG@10)<br>
+<b>แต่</b> <code>semantic</code> ยังเป็นค่าเริ่มต้นที่ดี — ไม่เคยถูกพิสูจน์ว่าแย่กว่าใคร
+และเป็น chunker เดียวที่ dense embedder แข็งๆ ชนะ BM25 ได้จริง
+</p>
+
+<h3>Q2. embedder ไหนดีที่สุด?</h3>
+<p><b>ขึ้นกับสถานการณ์ ไม่มีคำตอบเดียว:</b></p>
+<table>
+<thead><tr><th style="width:32%">สถานการณ์</th><th>คำแนะนำ</th></tr></thead>
+<tbody>
+<tr><td>มี routing ตาม entity_type ที่เชื่อถือได้</td><td>ใช้ผู้เชี่ยวชาญรายเส้นทาง: <code>bge-m3</code> สำหรับ person, <code>congen</code> หรือ <code>qwen3_0.6b</code> สำหรับ program — <b>ถูกกว่ามาก คุณภาพเท่าหรือดีกว่า</b></td></tr>
+<tr><td>ไม่มี routing</td><td><b><code>qwen3</code> (4B)</b> — ตัวเดียวที่ไม่มีจุดอ่อนพิสูจน์ได้ในทั้งสองหมวดหลัก</td></tr>
+<tr><td>จำกัดต้นทุน</td><td><code>qwen3_0.6b</code> หรือ <code>e5_small</code> — เสมอพี่ใหญ่ในตระกูลตัวเอง แต่ต้องรู้ว่ามีจุดอ่อนด้าน person</td></tr>
+<tr><td>ทำ hybrid</td><td>4 ตัวบน (<code>qwen3_0.6b</code> / <code>qwen3</code> / <code>jina_v5</code> / <code>e5_small</code>) <b>เสมอกันหมด — อย่าเลือกใครเป็นที่ 1</b></td></tr>
+<tr><td><b>อย่าใช้</b></td><td><code>sct</code>, <code>m2v</code> — แยกไม่ออกจากการสุ่ม และทำให้ hybrid <b>แย่ลง</b></td></tr>
+</tbody>
+</table>
+
+<h3>Q3. dense embedding คุ้มกับ BM25 เปล่าๆ ไหม? (RQ2 ตัวจริง)</h3>
+<p><b>เฉพาะ tier Qwen3 เท่านั้นที่ยังพิสูจน์ได้ว่าคุ้ม</b></p>
+<table>
+<thead><tr><th style="width:34%">BM25 เทียบกับ</th><th class="num">ส่วนต่าง recall@10</th><th>มีนัยสำคัญ?</th></tr></thead>
+<tbody>
+<tr><td><code>sct</code> / <code>m2v</code> / <code>congen</code> / <code>e5_small</code> / <code>e5</code></td><td class="num">+0.10 ถึง +0.39</td><td><b>BM25 ชนะ</b></td></tr>
+<tr><td><code>bge_m3</code></td><td class="num">+0.0840</td><td><b>BM25 ชนะ</b> (เพิ่งพลิกในรอบล่าสุด)</td></tr>
+<tr><td><code>jina_v5</code></td><td class="num">+0.0796</td><td>เสมอ (p=0.053 เฉียดมาก)</td></tr>
+<tr><td><code>qwen3</code> / <code>qwen3_0.6b</code></td><td class="num">+0.015 / −0.033</td><td>เสมอ</td></tr>
+</tbody>
+</table>
+<div class="win">
+<span class="label">เซลล์เดียวในทั้งการเปรียบเทียบที่ embedder ชนะ BM25 ขาด</span>
+<b><code>qwen3_0.6b</code> ใต้ <code>semantic</code> chunking</b> (−0.1067, Holm-adj p=0.006)
+— นี่คือหลักฐานเดียวที่หนักแน่นที่สุดที่บอกว่า dense embedding "คุ้มค่าเงิน"
+เมื่อเทียบกับ BM25 ที่ใช้ฟรีบนคอร์ปัสนี้ และเป็นเหตุผลที่ยังแนะนำ semantic chunking อยู่
+</div>
+<p style="font-size:0.92em">
+<b>กรอบสำหรับเปเปอร์</b>: <i>บนคอร์ปัสนี้ มีเพียง embedder ระดับ Qwen3 เท่านั้น
+ที่ยังพิสูจน์ได้ว่าคุ้มกับต้นทุน inference เมื่อเทียบกับ BM25 ธรรมดา —
+bge-m3 เสียสถานะนั้นไปแล้ว และตัวที่อ่อนกว่านั้นแพ้อยู่ก่อนแล้ว</i>
+</p>
+
+<h3>Q4. hybrid คุ้มไหม?</h3>
+<p>
+<b>คุ้มที่สุดในบรรดาทุกอย่างที่ทดสอบมา</b> — ชนะ dense อย่างเดียว 26/27 การทดสอบ<br>
+<b>ยกเว้น</b>: อย่าผสมกับ embedder ที่อ่อนเกินไป (<code>sct</code>, <code>m2v</code>
+ทำให้ผลแย่ลงอย่างมีนัยสำคัญเมื่อเทียบกับ BM25 เปล่าๆ)
+</p>
+<div class="win">
+<span class="label">คำแนะนำระดับระบบสำหรับเปเปอร์</span>
+<b>semantic chunking + hybrid retrieval (BM25 + dense ด้วย RRF)</b><br>
+ข้อความที่ยังยืนได้คือ <b>ระดับระบบ</b> — สัญญาณ lexical กับ dense เสริมกันจริง<br>
+ส่วนการชี้ว่า <b>chunker หรือ embedder ตัวไหนชนะ</b> — <b>ยืนไม่ได้</b>
+</div>
+
+<h3>Q5. reranker ช่วยไหม?</h3>
+<p>
+<b>ไม่ช่วย</b> — ทำให้ hybrid MRR แย่ลงอย่างมีนัยสำคัญ (0.7775 → 0.6775)
+และมีต้นทุน ~1.17 วินาทีต่อ query; กับ dense เปล่าๆ ไม่มีผลทั้งสองทิศทาง
+มีวรรณกรรมรองรับ (โมเดลรุ่นเดียวกันเป๊ะ)<br>
+<b>ยังไม่ได้ทดสอบ</b>: reranker ที่เทรนบน candidate แบบ hybrid โดยเฉพาะ
+หรือการผสมคะแนน reranker เข้าไปใน RRF เป็นสัญญาณที่ 4 แทนการตัดทิ้งแล้วแทนที่
+— เป็นสมมติฐาน ไม่ใช่ผลการทดลอง
+</p>
+
+<h3>Q6. preprocessing แบบไทยๆ ช่วยไหม? (RQ3)</h3>
+<p>
+normalization ไม่ช่วย · การตัดตามขอบคำไม่ช่วย ·
+<b>ขนาด chunk เป็นตัวเดียวที่มีผลจริง แต่เฉพาะโทษของ 1024</b>
+(1024 แย่กว่าทั้ง 512 และ 256 อย่างมีนัยสำคัญ ส่วน 256 vs 512 เสมอกันบน dense)
+</p>
+
+<h3>Q7. entity tagging ช่วยไหม?</h3>
+<table>
+<thead><tr><th style="width:34%">โหมด</th><th>recall@10</th></tr></thead>
+<tbody>
+<tr><td><code>entity_boost</code><br><span style="font-size:0.9em">เส้นทางที่ผู้ใช้ใช้จริงใน UI</span></td><td>person 0.818 · course 0.716 · program 0.578 · faculty 0.509</td></tr>
+<tr><td><code>entity_lookup</code><br><span style="font-size:0.9em">exhaustive, k=1000</span></td><td>รวม <b>0.942</b> — <b>แต่นี่ไม่ใช่ตัวเลขที่ผู้ใช้เห็นจริง</b> เพราะเป็นการดึงแบบไม่จัดอันดับที่ k สูงมาก</td></tr>
+</tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s-dead"><span class="stage-no">10</span>ข้อสรุปที่ตายไปแล้ว</h2>
+<p>
+ตารางนี้มีไว้กันไม่ให้ตัวเลขเก่าหลุดเข้าไปในเปเปอร์ — ทุกข้อเคยถูกเขียนไว้ในเอกสาร
+ของโปรเจกต์นี้จริงและถูกพูดซ้ำหลายรอบ ก่อนจะถูกทดสอบหรือวัดใหม่แล้วล้ม
+</p>
+<table>
+<thead><tr><th style="width:38%">ข้อสรุปเดิม</th><th style="width:14%">สถานะ</th><th>ทำไม</th></tr></thead>
+<tbody>
+<tr><td>"semantic chunking ชนะทุก metric"</td><td><b>ถอน</b></td><td>ไม่เคยผ่าน significance test เลย; พอทดสอบจริงแล้วไม่ชนะใครสักครั้ง</td></tr>
+<tr><td>"<code>semantic × qwen3_0.6b</code> recall@10 = 0.7048 ดีที่สุดในโปรเจกต์"</td><td><b>ถอน</b></td><td>ค่าจริง 0.6152 และไม่ใช่ chunker ที่ดีที่สุดของ embedder ตัวเองด้วยซ้ำ</td></tr>
+<tr><td>"BM25 เสมอ dense tier บนสุดรวม bge-m3"</td><td><b>แก้ไข</b></td><td>BM25 ชนะ bge-m3 แล้ว เหลือเสมอแค่คู่ Qwen3</td></tr>
+<tr><td>"dense tier บนเป็นเสมอ 3 ทาง"</td><td><b>แก้ไข</b></td><td>การเสมอแตก, qwen3_0.6b ชนะ</td></tr>
+<tr><td>"reranker ทำร้ายทั้ง MRR และ nDCG@10"</td><td><b>หดขอบเขต</b></td><td>nDCG@10 ทำซ้ำไม่ได้ เหลือแค่ MRR</td></tr>
+<tr><td>"chunk เล็กกว่าดีกว่าแบบ monotonic (RQ3)"</td><td><b>หดขอบเขต</b></td><td>256 vs 512 เสมอกันบน dense (512 นำเชิงตัวเลขด้วยซ้ำ) เหลือแค่ "1024 แย่กว่า"</td></tr>
+<tr><td>"<code>sct</code> hybrid deficit ไม่มีนัยสำคัญแล้ว"</td><td><b>ถอน</b></td><td>ผลนั้นวัดบน index ที่ถูกแทนที่ไปแล้ว</td></tr>
+<tr><td>"bge-m3 แซง qwen3 ตอน hybrid"</td><td><b>ถอน</b></td><td><b>ตัวสมมติฐานเองไม่เคยมีนัยสำคัญ</b> — เป็นตัวเลขดิบ ไม่ใช่ effect (ปิดโดยไม่ต้องแตะ GPU เลย)</td></tr>
+<tr><td>"top-5 hybrid เสมอกันหมด"</td><td><b>หดขอบเขต</b></td><td>เหลือ 4 (bge_m3 หลุด)</td></tr>
+<tr><td>"SEA-Embedding-ModernBERT-300M"</td><td><b>ลบทิ้ง</b></td><td>ตรวจสอบแล้วไม่มีอยู่จริง — เป็นรายการที่หลอนมาจาก session เก่า</td></tr>
+<tr><td>"ต้องใช้ LLM ตัดสิน relevance ของ gold set"</td><td><b>ไม่จำเป็น</b></td><td>คำนวณ deterministic จาก entity tag ได้เลย</td></tr>
+<tr><td>"cascade architecture สำหรับสแกน OCR"</td><td><b>ทิ้ง</b></td><td>file-level diff ล้มมันตั้งแต่ก่อน implement</td></tr>
+</tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s-lesson"><span class="stage-no">11</span>บทเรียนเชิงกระบวนการ</h2>
+
+<h3>1. หลัง rebuild index ต้อง refresh <i>ทุก</i> เส้นทาง retrieval ที่มีผล persist ไว้</h3>
+<p>
+ไม่ใช่แค่ตัวที่ eval script บังเอิญคำนวณใหม่ให้เอง — บั๊กนี้เกิดซ้ำ <b>5 ครั้ง</b>
+ในไฟล์ต่างกัน (BM25, hybrid, cost_latency, multi_k, reranker, entity_boost/lookup)<br>
+<b>วิธีตรวจ</b>: เทียบ mtime ของ <code>data/results/*</code> กับเวลา rebuild
+<b>ก่อน</b>เชื่อ significance test ใดๆ
+</p>
+
+<h3>2. ตัวเลขดิบไม่ใช่ finding จนกว่าจะถูกทดสอบ</h3>
+<p>
+"semantic ชนะ", "bge-m3 แซง qwen3", "top combo 0.7048" — ทั้งสามตายเมื่อถูกทดสอบ
+หรือถูกวัดใหม่ ทุกอันเคยถูกเขียนซ้ำในเอกสารหลายรอบ
+<b>เพราะไม่มีใครถามว่า "ทดสอบหรือยัง"</b> — คำถามนี้ควรถามทุกครั้งที่จะเขียน
+ตัวเลขเปรียบเทียบลงเอกสาร
+</p>
+
+<h3>3. สแกนถูกๆ ทั้งคอร์ปัสก่อน แล้วค่อยลงทุน GPU</h3>
+<p>
+ก่อนแก้ regex กว้างๆ หรือรัน pilot บน GPU ให้รันสแกนถูกๆ เพื่อ<b>วัดขนาดปัญหาจริง</b>
+และลองแก้แบบไร้เดียงสากับข้อมูลจริงดูก่อน — ยืนยันคุณค่าไปแล้ว 2 ครั้งภายในวันเดียว
+</p>
+
+<h3>4. เมื่อ heuristic พลาดเคสที่รู้ว่าจริง ให้เช็คก่อนว่าข้อมูลมี field ระบุตำแหน่งอยู่แล้วหรือยัง</h3>
+<p>
+(เช่น <code>span</code>) แทนที่จะประดิษฐ์ heuristic ตัวใหม่ขึ้นมาอีก —
+และให้ลอง reframe ด้วยว่า <b>ขั้นตอนก่อนหน้าอาจเป็นตัวกรอง "ต้นทุน"
+ไม่ใช่ตัวกรอง "คุณภาพ"</b> ซึ่งเปลี่ยนวิธีคิดเรื่องสิ่งที่มันคัดทิ้งไปโดยสิ้นเชิง
+</p>
+
+<h3>5. อย่าประมาณเวลาที่เหลือของงาน GPU จาก batch แรกๆ</h3>
+<p>
+<code>sentence-transformers</code> เรียง batch ที่ยาวที่สุดขึ้นก่อน และจ่ายค่า
+CUDA warm-up ครั้งเดียวตอนเริ่ม → batch แรกๆ ช้าผิดปกติเสมอ
+<b>เคยฆ่า job ที่กำลังทำงานปกติดีทิ้งเพราะตกใจกับ ETA ที่คำนวณจากตรงนั้น</b>
+</p>
+
+<h3>6. ออกแบบการทดลองให้ isolate ตัวแปรจริงๆ</h3>
+<p>
+reranker baseline = slice ของ pool ตัวเอง · ConGen/SCT = backbone + teacher เดียวกัน
+ต่างแค่วิธีเทรน · ปฏิเสธ SimCSE-WangchanBERTa เพราะจะเปลี่ยน <b>2 ตัวแปรพร้อมกัน</b>
+· ปฏิเสธ Qwen3-8B เพราะ quantization จะเพิ่มตัวแปรใหม่ซ้อนตัวแปรที่ต้องการวัด
+</p>
+
+<h3>7. รายงานผลลบและข้อบกพร่องของ implementation ตามจริง</h3>
+<p>
+reranker ให้ผลลบ → รายงาน + ไปหาวรรณกรรมรองรับ ·
+hybrid มี overhead 2 วินาที → รายงานไว้ตรงๆ ไม่แอบแก้ระหว่างวัด ·
+pipeline OCR ไม่มี ground truth → บอกให้ผู้ใช้รู้ก่อนอนุมัติ
+</p>
+
+<!-- ============================================================ -->
+<h2 id="s-todo"><span class="stage-no">12</span>สิ่งที่ยังค้างอยู่</h2>
+
+<h3>ยังไม่ได้ทำ (เรียงตามคุณค่า)</h3>
+<ol>
+<li><b>significance test สำหรับ MAP และ precision@1</b> — สอง metric นี้ไม่เคยถูกทดสอบเลย
+(ทดสอบแค่ recall@10 / MRR / nDCG@10) และมีปัญหา<b>ขอบเขตไม่ตรงกัน</b>ด้วย:
+การทดสอบ "กลุ่มเสมอ" ที่มีอยู่ครอบคลุมเฉพาะ semantic chunker
+ขณะที่ตาราง multi-k เฉลี่ยข้าม 4 chunker</li>
+<li><b>BM25 และ hybrid ยังไม่เคยแยกผลตาม entity_type</b> — จึงยังไม่รู้ว่า hybrid
+เข้าใกล้เพดาน person 0.976 แค่ไหน หรือปิดช่องว่างของ faculty ได้หรือไม่</li>
+<li><b><code>strip_course_comparison_tables</code> สร้างแล้วแต่ยังไม่ต่อเข้า loader ใดๆ</b>
+— ต้องมี eval ที่ครอบคลุมเชิงหัวข้อก่อน เพราะ gold query แบบชื่อวิชา
+<b>ตรวจจับการถดถอยจากการตัดคำบรรยายทิ้งไม่ได้</b> (มันไม่เคยแตะข้อความส่วนคำบรรยายเลย)</li>
+<li><b>index <code>entity_tags_full</code> ต้อง rebuild</b> หลังการแก้ person/program loader
+เพื่อให้การแก้ไปถึง <code>entity_lookup</code>/<code>entity_boost</code> ใน UI จริง</li>
+<li><b>RQ4 (คุณภาพคำตอบ end-to-end)</b> — อยู่นอกขอบเขตของเปเปอร์แรกโดยตั้งใจ</li>
+<li><b>entity-indexed retrieval path สำหรับคำถามแบบ "list all X"</b> —
+มีโครงสร้างพื้นฐานพร้อมแล้ว (tagger ทั้ง 4) แต่ยังไม่เคยสร้าง/ทดสอบ
+เป็นทางที่มีเหตุผลรองรับดี เพราะ top-k similarity ติดเพดาน ~0.68 โดยโครงสร้าง</li>
+<li><b>Qdrant</b> — vertical slice พิสูจน์แล้วว่า filter ระดับ resolution ทำงาน end-to-end
+แต่คำเตือน 20k-point ของ embedded mode ยังไม่ได้แก้</li>
+</ol>
+
+<h3>ปิดสมบูรณ์แล้ว</h3>
+<ul>
+<li>กระทบยอดคอร์ปัส (2,853/2,853)</li>
+<li>OCR remediation ทั้ง 2 กลไก + คิว human review = 0</li>
+<li>Entity tagger ทั้ง 4 ชนิด + Gold query set 106 ข้อ</li>
+<li>gap-analysis Tier 1 + Tier 2 ทั้งหมด (metrics, BM25, significance testing, cost/latency, การเพิ่ม embedder)</li>
+<li>บั๊ก corpus discovery (ยืนยัน 0% contamination)</li>
+<li>RQ3 ablation ทั้ง 3 ตัว (rebuild ล้าง confound เสร็จ 29 ก.ค.)</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s-appendix"><span class="stage-no">13</span>ภาคผนวก — อภิธานศัพท์และวิธีการทางสถิติ</h2>
+
+<h3>อภิธานศัพท์</h3>
+<table>
+<thead><tr><th style="width:24%">คำ</th><th>ความหมายในโปรเจกต์นี้</th></tr></thead>
+<tbody>
+<tr><td><b>Resolution (มติ)</b></td><td>1 ไฟล์ <code>.md</code> = 1 มติ — เป็น<b>หน่วยที่ใช้ตัดสินความถูกต้อง</b>ของการค้น (ADR-0002)</td></tr>
+<tr><td><b>Chunk</b></td><td>ชิ้นข้อความที่ตัดจาก Resolution เพื่อนำไป embed แต่ละ chunk พก <code>resolution_id</code> ติดไปด้วยเสมอ</td></tr>
+<tr><td><b>Index artifact</b></td><td>ผลผลิตของเฟส build: chunks + เวกเตอร์ + token สำหรับ BM25 + metadata เก็บลงดิสก์แบบ atomic</td></tr>
+<tr><td><b>Combo</b></td><td>1 ชุดของ (loader × chunker × embedder) ที่ build เป็น index หนึ่งตัว — โปรเจกต์นี้มี 36 combo หลัก</td></tr>
+<tr><td><b>Gold query set</b></td><td>ชุดคำถามทดสอบที่รู้คำตอบถูกแน่นอน สร้างจาก entity tag แบบ deterministic (106 ข้อ)</td></tr>
+<tr><td><b>entity_boost</b></td><td>ใช้ entity tag <b>กรอง</b> candidate ก่อน แล้วจัดอันดับด้วย retriever ปกติ — เส้นทางที่ผู้ใช้ใช้จริง</td></tr>
+<tr><td><b>entity_lookup</b></td><td>ดึงทุกเอกสารที่ตรง entity แบบไม่จัดอันดับ — ใช้เป็นเพดานอ้างอิง ไม่ใช่ตัวเลขที่ผู้ใช้เห็น</td></tr>
+</tbody>
+</table>
+
+<h3>metric ที่ใช้ (ทั้งหมดวัดที่ระดับ Resolution)</h3>
+<table>
+<thead><tr><th style="width:20%">metric</th><th>วัดอะไร / ตีความอย่างไร</th></tr></thead>
+<tbody>
+<tr><td><b>recall@k</b></td><td>สัดส่วนของเอกสารถูกทั้งหมดที่ดึงได้ใน k อันดับแรก — <b>metric หลักของโปรเจกต์นี้</b> แต่มีเพดานเชิงโครงสร้าง (ดู §7.6)</td></tr>
+<tr><td><b>precision@k</b></td><td>ในของ k ชิ้นที่ดึงมา ถูกกี่ชิ้น</td></tr>
+<tr><td><b>MRR</b></td><td>1 ÷ อันดับของผลลัพธ์ถูก<b>อันแรก</b> — ไวต่อการรบกวนอันดับต้นๆ มาก จึงเป็น metric ที่จับผลเสียของ reranker ได้</td></tr>
+<tr><td><b>nDCG@k</b></td><td>ให้น้ำหนักตามอันดับทั้ง k ตำแหน่ง — อยู่กึ่งกลางระหว่าง recall กับ MRR</td></tr>
+<tr><td><b>MAP</b></td><td>ค่าเฉลี่ยของ precision ที่ทุกตำแหน่งที่เจอของถูก — คิดครั้งเดียวต่อ combo ที่ max(k)</td></tr>
+</tbody>
+</table>
+
+<h3>ทำไมต้อง paired bootstrap และ Holm</h3>
+<div class="theory">
+<span class="label">เหตุผลของแต่ละองค์ประกอบ</span>
+<b>ทำไม paired</b> — เพราะทุกระบบถูกวัดด้วย<b>คำถามชุดเดียวกัน</b>
+การจับคู่รายคำถามกำจัดความแปรปรวนที่มาจาก "คำถามข้อนี้ยากกว่าข้ออื่น"
+ทำให้ตรวจจับความต่างจริงระหว่างระบบได้ไวขึ้นมาก<br><br>
+<b>ทำไม bootstrap ไม่ใช่ t-test</b> — คะแนน recall ต่อคำถามไม่ได้แจกแจงแบบปกติเลย
+(มีค่ากระจุกที่ 0 และมีเพดานที่ต่างกันรายข้อ) การสุ่มซ้ำไม่ต้องสมมติรูปการแจกแจง<br><br>
+<b>ทำไม Holm ไม่ใช่ Bonferroni</b> — Holm มีอำนาจการทดสอบสูงกว่าที่ระดับการควบคุม
+ความผิดพลาดแบบครอบครัวเดียวกัน (uniformly more powerful)<br><br>
+<b>ทำไมต้องแยกครอบครัว</b> — ถ้ารวมการทดสอบทั้งโปรเจกต์เป็นครอบครัวเดียว
+การลงโทษจะหนักจนไม่พบผลอะไรเลยแม้แต่ผลที่จริง การแบ่งตามคำถามวิจัยที่ถามพร้อมกัน
+เป็นวิธีที่ถูกต้องตามหลักการ
+</div>
+
+<h3>แผนที่เอกสารของโปรเจกต์</h3>
+<table>
+<thead><tr><th style="width:36%">ไฟล์</th><th>ใช้เมื่อไหร่</th></tr></thead>
+<tbody>
+<tr><td><code>docs/project-journey.md</code> (ไฟล์นี้)</td><td>อยากเข้าใจภาพรวมทั้งหมด</td></tr>
+<tr><td><code>docs/paper-results-summary.md</code></td><td>ต้องการตัวเลขพร้อมอ้างอิงในเปเปอร์ — <b>อัปเดตทุกครั้งที่ headline เปลี่ยน</b></td></tr>
+<tr><td><code>docs/chunker-embedder-comparison-log.md</code></td><td>อยากรู้ว่าผลแต่ละอันได้มาอย่างไร รวมทางตันและบั๊ก — <b>append-only ไม่แก้ย้อนหลัง</b></td></tr>
+<tr><td><code>docs/llm-ocr-scan-log.md</code></td><td>รายละเอียดงานล้าง OCR ทั้งหมด</td></tr>
+<tr><td><code>docs/entity-extraction-and-gold-eval-log.md</code></td><td>รายละเอียด entity tagging + การสร้าง gold set</td></tr>
+<tr><td><code>docs/research-framework-gap-analysis.md</code></td><td>เทียบสิ่งที่ทำแล้วกับกรอบงานวิจัยในโน้ตต้นฉบับ</td></tr>
+<tr><td><code>docs/reranker-hybrid-interaction-research.md</code></td><td>การค้นวรรณกรรม IR เรื่องทำไม reranker ถึงทำร้าย hybrid</td></tr>
+<tr><td><code>docs/adr/</code></td><td>ทำไมถึงตัดสินใจเชิงสถาปัตยกรรมแบบนั้น</td></tr>
+<tr><td><code>CONTEXT.md</code></td><td>อภิธานศัพท์โดเมนฉบับเต็ม</td></tr>
+</tbody>
+</table>
+
+</main>
+<footer>
+<hr>
+ThaiRAGForge — เครื่องมือวิจัย indexing/retrieval สำหรับ RAG ภาษาไทย ·
+คอร์ปัส: มติสภาวิชาการ สจล. 2,853 ฉบับ ·
+เอกสารนี้สร้างจาก <code>docs/project-journey.html</code>
+</footer>
+</body>
+</html>

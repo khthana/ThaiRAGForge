@@ -106,6 +106,57 @@ only **chunk size** has a demonstrated, significant effect on this corpus
 segmentation do not move retrieval quality significantly at the 512-token
 scale already used throughout the rest of the study.
 
+### Refreshed 2026-07-29 — treatment indices rebuilt to remove a clean-vs-dirty confound
+
+The three RQ3 treatment-side indices were built 2026-07-23, **before** the
+kernel-A OCR remediation (completed 2026-07-27) and the `chunker_compare_full`
+rebuild (2026-07-28). Their baseline arm reuses combos *from*
+`chunker_compare_full` (`plain__fixed_size__local__ceea7536`,
+`plain__semantic__local__8aae9bcd`), which had since been rebuilt on cleaned
+text — so every RQ3 comparison was silently pitting a **clean baseline against
+a dirty treatment**. That is a genuine methodological confound, not mere
+staleness, and unlike the other 2026-07-29 refreshes it could not be fixed by
+re-running an eval script: all three treatment indices had to be rebuilt on
+GPU. Done 2026-07-29 (`rq3_segmentation_ablation`, `rq3_chunksize_sweep`,
+`rq3_normalize_ablation`), then all three significance scripts re-run.
+
+- **Normalization — conclusion unchanged.** Still no significant effect on any
+  metric (Holm-adj p ≥ 0.42; closest is dense nDCG@10, raw p=0.0700 →
+  Holm-adj 0.4200). Every diff is negative-leaning on the dense side
+  (−0.012 to −0.026) and essentially zero under hybrid — same "small and
+  inconsistent" picture as before.
+- **Segmentation — conclusion unchanged, but no longer p=1.0 across the
+  board.** Still nothing significant (Holm-adj p ≥ 0.4524), but two cells
+  moved off the floor: dense MRR now +0.0398 (raw p=0.0754) and hybrid
+  recall@10 +0.0183 (raw p=0.1054), both in favour of word-aware boundaries.
+  Not citable as an effect — but the honest 2026-07-29 framing is "no
+  detectable effect", not the stronger "identical to the third decimal" the
+  old all-p=1.0 table implied. Chunk stats stay near-identical between arms
+  (58,655 raw-char vs 58,198 word-aware; mean length 437.0 vs 444.0 chars),
+  confirming the boundary change isn't secretly a size change.
+- **Chunk size — the significant effect survives, but "smaller is
+  monotonically better" does NOT.** What replicates robustly is the **1024
+  penalty**: 1024 loses significantly to both 256 and 512 on dense recall@10
+  (Holm-adj p=0.0020 / 0.0000), hybrid recall@10 (p=0.0000 / 0.0028), and
+  hybrid nDCG@10 (p=0.0072 both). What does **not** replicate is the 256-vs-512
+  ordering: on **dense** retrieval 512 is now *numerically ahead* of 256
+  (recall@10 0.4146 vs 0.4103, diff −0.0043, p=0.8802 — a flat tie), reversing
+  the old 0.510 > 0.480 gap. 256 only beats 512 significantly on **hybrid
+  recall@10** (+0.0509, Holm-adj p=0.0112), and not on hybrid nDCG@10
+  (p=0.4094) or any MRR cell (nothing significant anywhere on MRR, same as
+  before).
+
+**Revised RQ3 headline (2026-07-29)**: chunk size remains the only RQ3
+variable with a demonstrated effect, but the citable claim is narrower than
+the 2026-07-23 version. **Cite: "1024-char chunks are significantly worse than
+both 512 and 256 on recall@10 and nDCG@10." Do not cite: "recall declines
+monotonically with chunk size" or "256 is the best setting"** — 256 and 512
+are statistically tied on dense retrieval (with 512 numerically ahead), and
+256's advantage exists only under hybrid recall@10. The project's default of
+512 is therefore *not* shown to be suboptimal by this refresh; only 1024 is
+shown to be a mistake. Normalization and segmentation conclusions are
+unchanged.
+
 ## Resolved 2026-07-23: Cross-encoder reranker results — a significant negative result for hybrid
 
 Gap-analysis Tier 3, item 8. Built a `CrossEncoderReranker` stage
@@ -130,6 +181,37 @@ bootstrap (n_boot=10,000) + Holm-Bonferroni correction. Script:
 Reranker latency (call alone, model load excluded, `rerank_pool_size=50`,
 73 queries): **p50 1191ms, p95 1522ms, mean 1259ms per query** — not cheap,
 on top of the finding being negative for hybrid.
+
+**Refreshed 2026-07-29** against the OCR-remediation-rebuilt index (found
+during a full `data/results/*` staleness sweep — this script re-retrieves
+live against `plain__fixed_size__local__ceea7536` rather than reading
+cached results, so it was one rebuild behind like several other scripts
+that day). New numbers, same 106-query Gold set, same methodology:
+
+| Retriever reranked | Metric | No-rerank → Reranked | Holm-adj. p | Direction |
+|---|---|---|---|---|
+| Hybrid (BM25+dense, RRF) | MRR | 0.7775 → 0.6775 | 0.0048 | **significantly worse** |
+| Hybrid (BM25+dense, RRF) | nDCG@10 | 0.6193 → 0.5908 | **0.5676** | worse, **no longer significant** |
+| Hybrid (BM25+dense, RRF) | recall@10 | 0.5570 → 0.5683 | 0.6456 | *better*, not significant |
+| Dense-alone (bge-m3) | recall@10 / MRR / nDCG@10 | — | n.s. both directions (0.315–0.568) | no effect |
+
+Reranker latency, refreshed: p50 1170ms, p95 1425ms, mean 1227ms — essentially
+unchanged (latency measures the reranker model's own compute, not corpus
+content).
+
+**One real finding-level change, not just numbers moving**: the hybrid
+**nDCG@10** loss is **no longer statistically significant** (Holm-adj
+p=0.030 → 0.5676) — only hybrid **MRR** still is. Hybrid recall@10 even
+flips sign (was −0.023, now +0.011), still nowhere near significant either
+way. **Revised headline: cross-encoder reranking significantly hurts
+hybrid MRR; the nDCG@10 harm reported on 2026-07-23 did not replicate
+against the OCR-remediation-rebuilt index and should be retired as a
+separate claim.** The MRR-only framing is still consistent with the
+"phantom hits" literature mechanism cited below (early-rank disruption
+without necessarily evicting relevant docs from the top-10) — if anything
+it sharpens that story, since nDCG@10 (which weights the whole top-10, not
+just rank-of-first-hit) no longer moves significantly while MRR (purely
+rank-of-first-hit) still does.
 
 **Confirmed not an implementation bug**: the reranker was smoke-tested in
 isolation and scores semantically sensibly (a tuition-fee chunk correctly
@@ -183,11 +265,13 @@ research pass against primary IR sources, not inferred from our data alone):
    literature search and is not part of the explanation until tested directly
    on this corpus.
 
-**Headline for the paper**: cross-encoder reranking should **not** be applied
-to this project's hybrid (RRF) retrieval path as currently wired — it
-significantly hurts MRR and nDCG@10, with literature support (same reranker
-model, independently observed "phantom hits" against strong baselines) rather
-than being a one-off artifact. Reranking remains untested-but-not-contra-
+**Headline for the paper (updated 2026-07-29)**: cross-encoder reranking
+should **not** be applied to this project's hybrid (RRF) retrieval path as
+currently wired — it significantly hurts **MRR** (the nDCG@10 harm
+originally reported did not replicate on refresh and is retired as a
+separate claim, see above), with literature support (same reranker model,
+independently observed "phantom hits" against strong baselines) rather than
+being a one-off artifact. Reranking remains untested-but-not-contra-
 indicated for weaker single-retriever paths (its dense-alone effect here was
 null, not harmful). Two literature-suggested follow-up interventions — a
 reranker trained/validated on hybrid-fused candidates specifically, or
@@ -912,40 +996,56 @@ multi-k view (`tools/eval/multi_k_report.py`, full report at
 `data/results/multi_k_report.md`) — a pure recompute over already-persisted
 retrieval results (every combo was retrieved at `top_k=10`, so k≤10 needs no
 new retrieval), closing gap-analysis Tier 1 item #1's last open tail.
+**Refreshed 2026-07-29 (evening)**: this report had fallen through the same
+crack as the BM25/hybrid caches did earlier that day — `multi_k_report.md`
+still carried a **2026-07-22** mtime while `gold_hybrid_73det` had been
+rewritten 2026-07-29, so every number below was one rebuild behind (a third
+instance of the "not in the 5-script refresh chain" staleness pattern, after
+BM25/hybrid and `cost_latency_pareto.py`). Re-ran it (no new retrieval
+needed) — the numbers below are current.
 
-**Dense-alone, top 3 embedders (aggregated across 4 chunkers)**:
+**Dense-alone, top 3 embedders by recall@10 (aggregated across 4 chunkers)**:
 
 | embedder | MAP | recall@1 | recall@3 | recall@5 | recall@10 | precision@1 | precision@5 | ndcg@1 | ndcg@5 |
 |---|---|---|---|---|---|---|---|---|---|
-| qwen3_0.6b | 0.4327 | 0.1390 | 0.3178 | 0.3951 | 0.5198 | 0.7192 | 0.5068 | 0.7192 | 0.6207 |
-| qwen3 | 0.4145 | 0.1374 | 0.3017 | 0.3904 | 0.5155 | 0.7055 | 0.4884 | 0.7055 | 0.6014 |
-| bge_m3 | 0.3978 | 0.1360 | 0.2908 | 0.3736 | 0.5107 | 0.6712 | 0.4582 | 0.6712 | 0.5688 |
+| qwen3_0.6b | **0.4447** | 0.1225 | 0.2784 | 0.3741 | 0.5263 | **0.7429** | 0.5462 | **0.7429** | 0.6299 |
+| qwen3 | 0.3862 | 0.1085 | 0.2547 | 0.3398 | 0.4777 | 0.6368 | 0.4726 | 0.6368 | 0.5505 |
+| jina_v5 | 0.3149 | 0.0912 | 0.2041 | 0.2788 | 0.4135 | 0.5165 | 0.3939 | 0.5165 | 0.4563 |
 
-**Hybrid (RRF), top 3 embedders (aggregated across 4 chunkers)**:
+**Hybrid (RRF), top 3 embedders by recall@10 (aggregated across 4 chunkers)**:
 
 | embedder | MAP | recall@1 | recall@3 | recall@5 | recall@10 | precision@1 | precision@5 | ndcg@1 | ndcg@5 |
 |---|---|---|---|---|---|---|---|---|---|
-| bge_m3 | **0.5224** | 0.1482 | 0.3642 | 0.4826 | 0.6472 | 0.7500 | 0.5726 | 0.7500 | 0.6954 |
-| qwen3_0.6b | 0.5090 | 0.1493 | 0.3461 | 0.4656 | 0.6543 | **0.7671** | 0.5753 | **0.7671** | 0.6928 |
-| congen | 0.4863 | 0.1394 | 0.3428 | 0.4546 | 0.6426 | 0.7568 | 0.5562 | 0.7568 | 0.6741 |
+| qwen3_0.6b | **0.4922** | 0.1231 | 0.3019 | 0.4224 | 0.6167 | **0.7382** | 0.5868 | **0.7382** | 0.6681 |
+| qwen3 | 0.4757 | 0.1176 | 0.2886 | 0.4128 | 0.5945 | 0.7099 | 0.5684 | 0.7099 | 0.6457 |
+| jina_v5 | 0.4560 | 0.1131 | 0.2838 | 0.3938 | 0.5831 | 0.6745 | 0.5382 | 0.6745 | 0.6163 |
 
-**BM25, aggregated across 4 chunkers**: MAP=0.4542, recall@1=0.1347,
-recall@5=0.4280, precision@1=0.6918, ndcg@1=0.6918.
+**BM25, aggregated across 4 chunkers**: MAP=0.3845, recall@1=0.1016,
+recall@5=0.3392, precision@1=0.5849, ndcg@1=0.5849.
 
-**Reading this**: MAP and precision@1 tell a mixed story at the very top of
-the hybrid ranking compared to recall@10. `bge_m3` has the **highest MAP**
-of the three (0.5224 vs `qwen3_0.6b`'s 0.5090, a +0.013 gap), but
-`qwen3_0.6b` has the **highest precision@1/ndcg@1** (0.7671 vs `bge_m3`'s
-0.7500, a −0.017 gap the other way). Since MAP and early-precision weight
-*where in the ranking* the first relevant hit lands much more heavily than
-recall@10 does, this is a hint that the "confirmed tied cluster" finding
-(see "Top single-combo tier" below) is specifically a **recall@10 tie** —
-whether it also holds for MAP/precision@1 has **not been
-significance-tested** (only recall@10/MRR/nDCG@10 were tested in the
-semantic-top-5 pairwise test). Flagged as a new open item, not yet claimed
-as a finding — both gaps here (+0.013 MAP, −0.017 precision@1) are similar
-in size to the untested recall@10 gap (+0.009) that turned out to be pure
-noise, so the same caution applies until a dedicated test runs.
+**Reading this**: the "mixed story" this section used to report is **gone**
+in the refreshed data. Previously (stale, 2026-07-22 numbers, since
+retracted): `bge_m3` had the highest MAP while `qwen3_0.6b` had the highest
+precision@1 — a genuine cross-metric disagreement among the top 3. With
+the current data, `qwen3_0.6b` now leads **every** metric in both tables
+(MAP, precision@1/ndcg@1, and recall@10) among the top-3-by-recall@10
+embedders, dense-alone and hybrid alike — the ranking is monotonic across
+metrics now, not contradictory. This is consistent with `qwen3_0.6b`
+breaking the old dense-alone 3-way tie (see "Embedders compared" above) and
+`bge_m3` falling out of the top tier generally after the OCR-remediation
+rebuild.
+
+**This does not mean MAP/precision@1 are now "confirmed"**, though — no
+significance test has ever been run on these two metrics; only
+recall@10/MRR/nDCG@10 were tested (`hybrid_significance_test_semantic_top5.py`).
+There's also a **scope mismatch** worth flagging: that test's "tied cluster"
+finding is scoped to the `semantic` chunker only (a 4-way tie among
+`qwen3_0.6b`/`qwen3`/`jina_v5`/`e5_small`), while the table above is
+aggregated *across all 4 chunkers* — so even now that the numbers agree
+directionally, this table doesn't directly confirm or refute that specific
+tie. Building a MAP/precision@1 significance test (either aggregate or
+semantic-only, to actually match the existing tie's scope) remains an open
+item — not yet built.
 
 ## Cost / latency characterization
 
@@ -1187,11 +1287,13 @@ holds as stated.
    segmentation do not. RQ4 (end-to-end RAG answer quality) remains
    explicitly out of scope for this first paper per the gap analysis — later
    phase.
-5b. ~~Cross-encoder reranker (Tier 3 item 8)~~ — DONE 2026-07-23, see
-    "Cross-encoder reranker results" section above: significantly hurts
-    hybrid MRR/nDCG@10, no significant effect on dense-alone, literature-
-    grounded explanation in `docs/reranker-hybrid-interaction-research.md`.
-    Only RQ4 remains unstarted in Tier 3.
+5b. ~~Cross-encoder reranker (Tier 3 item 8)~~ — DONE 2026-07-23, **refreshed
+    2026-07-29**, see "Cross-encoder reranker results" section above:
+    significantly hurts hybrid MRR only (nDCG@10 no longer significant post-
+    refresh, a real finding-level change), no significant effect on
+    dense-alone, literature-grounded explanation in
+    `docs/reranker-hybrid-interaction-research.md`. Only RQ4 remains
+    unstarted in Tier 3.
 6. ~~Per-entity_type significance test for the 9-embedder matrix~~ — DONE
    2026-07-21 (`tools/eval/embedder_significance_test_by_entity_type_9way.py`).
    `qwen3_0.6b`'s program-query lead is NOT significant vs congen/qwen3-4B
@@ -1224,13 +1326,21 @@ holds as stated.
    single-combo across the entire study" in the "Hybrid retrieval" section
    above for the current writeup. Don't cite any one embedder as the
    confirmed best hybrid combo among those four.
-9. New 2026-07-22 (from "Multi-k metrics" section): `bge_m3` leads
-   `qwen3_0.6b` on MAP (0.5224 vs 0.5090) and precision@1 goes the other way
-   (`qwen3_0.6b` 0.7671 vs `bge_m3` 0.7500) under hybrid — opposite
-   directions on metrics that weight early-rank position more than
-   recall@10. Not significance-tested (only recall@10/MRR/nDCG@10 were
-   covered by the semantic-top5 script) — could easily be noise like the
-   recall@10 gap turned out to be, but not yet checked either way.
+9. **Updated 2026-07-29**: the original 2026-07-22 version of this item
+   (`bge_m3` leading MAP while `qwen3_0.6b` led precision@1 under hybrid —
+   opposite directions) was itself computed from a stale
+   `multi_k_report.md` (2026-07-22 mtime, one rebuild behind
+   `gold_hybrid_73det`) — a third instance of the "not in the 5-script
+   refresh chain" staleness bug, after BM25/hybrid and
+   `cost_latency_pareto.py`. Re-ran it: the contradiction is **gone** —
+   `qwen3_0.6b` now leads MAP, precision@1/ndcg@1, and recall@10 all
+   together among the top-3-by-recall@10 embedders (dense and hybrid
+   alike). Still **not significance-tested** (only recall@10/MRR/nDCG@10
+   were covered by the semantic-top5 script, and that test's scope —
+   `semantic` chunker only — doesn't match this table's
+   aggregated-across-chunkers scope anyway). Building a MAP/precision@1
+   significance test remains open, just no longer motivated by a
+   contradiction that needed explaining.
 10. New 2026-07-22 (from "Structural recall@10 ceiling by entity_type"
     section above): BM25 and hybrid have never been broken down by
     entity_type (only dense-alone has, via `embedder_matrix_9way.py`) — so

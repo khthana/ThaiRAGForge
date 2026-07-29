@@ -347,3 +347,35 @@ loader, เป็นฐานให้ entity_boost/entity_lookup ใน UI) bui
 (14:33) ต้อง rebuild ใหม่เพื่อให้ metadata['people'] มีชื่อ "อ." ที่กู้กลับมาได้ —
 สั่ง rebuild แล้ว (`PYTHONPATH=src python -m rag_lab.cli run --config
 config/experiments/entity_tags_full.yaml`, semantic+bge-m3, คาด~60 นาที)
+
+## 7. Refresh entity_boost/entity_lookup หลัง OCR-remediation rebuild (29 ก.ค. 2569)
+
+ระหว่างกวาดเช็ก `data/results/*` ทั้งหมดเทียบกับ OCR-remediation rebuild
+(chunker_compare_full + entity_tags_full ที่ rebuild ไป 28 ก.ค.) พบว่า
+`gold_entity_boost_73det_report.md`/`gold_entity_lookup_73det_report.md`
+(25 ก.ค.) เก่ากว่า `entity_tags_full` index ตัวจริง
+(`chunks.parquet`/`embeddings.npy` มี mtime 28 ก.ค. 11:52) — ค้างมาแล้วรอบ
+rebuild หนึ่งรอบ เป็นบั๊กเดียวกับที่เจอกับ BM25/hybrid/cost_latency/multi_k
+แค่คนละไฟล์ รันทั้งสองสคริปต์ใหม่:
+
+**entity_boost (Gold 106, k=10)**:
+
+| entity_type | เดิม (25 ก.ค.) | สด (29 ก.ค.) | delta |
+|---|---|---|---|
+| course | 0.7332 | 0.7164 | −0.017 |
+| faculty_adjunct_aggregate | 0.5485 | 0.5089 | −0.040 |
+| person | 0.8552 | 0.8182 | −0.037 |
+| program | 0.6196 | 0.5781 | −0.042 |
+
+**entity_lookup (exhaustive, k=1000)**: overall recall 0.9291 → **0.9422**
+(+0.013; course 0.9804, faculty_adjunct_aggregate 1.0000, person 0.9255,
+program 0.8918).
+
+**อ่านผล**: entity_boost ตกทุกประเภท (ทิศทางเดียวกับตัวเลข dense/hybrid อื่นๆ
+ในเอกสารนี้หลัง 2 rebuild ติดกัน) แต่ entity_lookup กลับขึ้นเล็กน้อย — สอง
+mechanism คนละแบบกัน (exhaustive metadata match ไม่ใช่ ranked retrieval)
+จึงไม่แปลกที่ทิศทางต่างกัน ไม่ใช่ความขัดแย้งที่ต้องสงสัย ตัวเลขทั้งหมดยังไม่เคย
+significance-test เทียบก่อน/หลัง (ไม่มี test ไหนรองรับ metric แบบนี้อยู่แล้ว)
+รายงานเต็ม: `data/results/gold_entity_boost_73det_report.md`,
+`data/results/gold_entity_lookup_73det_report.md` อัปเดต memory
+`[[project_entity_lookup_next_plan]]` แล้ว
