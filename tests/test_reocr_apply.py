@@ -93,8 +93,27 @@ class TestReplacePageText:
         text = "## Page 1\n\nonly page\n"
         assert apply_mod.replace_page_text(text, 5, "new") is None
 
-    def test_ambiguous_duplicate_header_returns_none(self):
-        text = "## Page 1\n\nfirst copy\n\n## Page 1\n\nsecond copy\n"
+    def test_contiguous_duplicate_headers_are_merged_and_replaced(self):
+        text = "## Page 1\n\nfirst copy\n\n## Page 1\n\nsecond copy\n\n## Page 2\n\nunrelated\n"
+        result = apply_mod.replace_page_text(text, 1, "merged fresh text")
+        assert "first copy" not in result
+        assert "second copy" not in result
+        assert "merged fresh text" in result
+        assert "unrelated" in result
+        assert result.count("## Page 1") == 1
+
+    def test_three_contiguous_duplicate_headers_are_all_merged(self):
+        text = "## Page 1\n\nfirst\n\n## Page 1\n\nsecond\n\n## Page 1\n\nthird\n\n## Page 2\n\nunrelated\n"
+        result = apply_mod.replace_page_text(text, 1, "merged")
+        assert result.count("## Page 1") == 1
+        assert "merged" in result
+        assert "first" not in result
+        assert "second" not in result
+        assert "third" not in result
+        assert "unrelated" in result
+
+    def test_non_contiguous_duplicate_headers_return_none(self):
+        text = "## Page 1\n\na\n\n## Page 2\n\nb\n\n## Page 1\n\nc\n"
         assert apply_mod.replace_page_text(text, 1, "new") is None
 
     def test_reapplying_the_same_text_is_idempotent(self):
@@ -102,32 +121,6 @@ class TestReplacePageText:
         once = apply_mod.replace_page_text(text, 1, "new text")
         twice = apply_mod.replace_page_text(once, 1, "new text")
         assert once == twice
-
-    def test_occurrence_selects_the_requested_duplicate(self):
-        text = "## Page 1\n\nfirst copy\n\n## Page 1\n\nsecond copy\n\n## Page 2\n\nunrelated\n"
-        result = apply_mod.replace_page_text(text, 1, "fixed", occurrence=2)
-        assert "first copy" in result
-        assert "second copy" not in result
-        assert "fixed" in result
-        assert "unrelated" in result
-
-    def test_occurrence_out_of_range_returns_none(self):
-        text = "## Page 1\n\nfirst copy\n\n## Page 1\n\nsecond copy\n"
-        assert apply_mod.replace_page_text(text, 1, "fixed", occurrence=3) is None
-
-    def test_occurrence_none_still_requires_exactly_one_match(self):
-        text = "## Page 1\n\nfirst copy\n\n## Page 1\n\nsecond copy\n"
-        assert apply_mod.replace_page_text(text, 1, "fixed") is None
-
-
-class TestLoadPageOccurrenceOverrides:
-    def test_missing_file_returns_empty_dict(self, tmp_path):
-        assert apply_mod.load_page_occurrence_overrides(tmp_path / "missing.json") == {}
-
-    def test_parses_existing_file(self, tmp_path):
-        path = tmp_path / "overrides.json"
-        path.write_text('{"a.md": {"4": 2}}', encoding="utf-8")
-        assert apply_mod.load_page_occurrence_overrides(path) == {"a.md": {"4": 2}}
 
 
 class TestApplyToFile:
@@ -176,12 +169,13 @@ class TestApplyToFile:
         assert result.status == "missing_header"
         assert not (tmp_path / "doc.md.pre_reocr.bak").exists()
 
-    def test_occurrence_resolves_a_duplicate_header_that_would_otherwise_be_ambiguous(self, tmp_path):
+    def test_contiguous_duplicate_headers_are_merged_on_write(self, tmp_path):
         f = tmp_path / "doc.md"
-        f.write_text("## Page 1\n\nboilerplate\n\n## Page 1\n\nreal content\n", encoding="utf-8")
-        result = apply_mod.apply_to_file(f, 1, "fixed content", apply=True, occurrence=2)
+        f.write_text("## Page 1\n\nfirst half\n\n## Page 1\n\nsecond half\n", encoding="utf-8")
+        result = apply_mod.apply_to_file(f, 1, "fixed content", apply=True)
         assert result.status == "written"
         text = f.read_text(encoding="utf-8")
-        assert "boilerplate" in text
+        assert text.count("## Page 1") == 1
         assert "fixed content" in text
-        assert "real content" not in text
+        assert "first half" not in text
+        assert "second half" not in text

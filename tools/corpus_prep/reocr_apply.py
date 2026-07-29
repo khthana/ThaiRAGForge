@@ -31,7 +31,6 @@ Run with:
 """
 from __future__ import annotations
 
-import json
 import re
 import shutil
 import sys
@@ -47,7 +46,6 @@ STAGING_FILE = CORPUS_ROOT / "llm_ocr_scan" / "reocr_pages_staging.jsonl"
 ADJUDICATION_FILE = CORPUS_ROOT / "llm_ocr_scan" / "reocr_adjudication.jsonl"
 DECISIONS_FILE = CORPUS_ROOT / "llm_ocr_scan" / "reocr_review_decisions.jsonl"
 REPORT_FILE = CORPUS_ROOT / "llm_ocr_scan" / "reocr_apply_report.md"
-PAGE_OCCURRENCE_OVERRIDES_FILE = CORPUS_ROOT / "llm_ocr_scan" / "reocr_page_occurrence_overrides.json"
 
 PAGE_HEADER = re.compile(r"^## Page (\d+)\s*$", re.M)
 
@@ -81,44 +79,31 @@ def decide_action(record: dict, decisions: dict) -> ApplyDecision:
     return ApplyDecision(ACTION_SKIP, "human decision: defer")
 
 
-def load_page_occurrence_overrides(path: Path = PAGE_OCCURRENCE_OVERRIDES_FILE) -> dict[str, dict[str, int]]:
-    """Corpus files where a page number is genuinely ambiguous -- more than
-    one real `## Page N` header for the same N -- because the original OCR
-    ingestion duplicated a page number instead of incrementing it (confirmed
-    2026-07-16 across all 10 header-ambiguity files: the first occurrence is
-    always generic meeting-item boilerplate that recurs verbatim across every
-    curriculum item, the second is the actual page-specific content; verified
-    by confirming each flagged page's own quoted model `span` text appears
-    only in the second occurrence, never the first). Maps corpus-relative
-    path -> {str(page number): 1-based occurrence to replace}. Empty dict if
-    the file doesn't exist yet (no file has an override)."""
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def replace_page_text(text: str, page_num: int, new_body: str, occurrence: int | None = None) -> str | None:
-    """Substitute the body of a '## Page N' section with `new_body`. Real
-    corpus files normally carry exactly one physical header per page
-    (`llm_ocr_scan.split_pages`'s "N.1"/"N.2" sub-chunking is an in-memory
-    LLM-budget device, never a real file header) -- so by default this
-    refuses to guess when that invariant doesn't hold: None if the header is
-    missing, or if it's ambiguous (more than one). Pass `occurrence` (1-based)
-    to pick a specific one among several matches instead -- for the small,
-    hand-verified set of files where duplication is a known, confirmed defect
-    (see `load_page_occurrence_overrides`), not a guess made here."""
+def replace_page_text(text: str, page_num: int, new_body: str) -> str | None:
+    """Substitute the body of a '## Page N' section with `new_body`. A file
+    can carry more than one physical '## Page N' header for the same N -- a
+    confirmed OCR-ingestion defect where one physical page's content got
+    split across two consecutive headers instead of staying under one
+    (`llm_ocr_scan.split_pages`'s "N.1"/"N.2" sub-chunking is a different,
+    in-memory-only LLM-budget device, never a real file header). `new_body`
+    is always a fresh re-OCR of the *whole* physical page, and Phase 2's own
+    adjudication text (`reocr_adjudicate.load_full_page_text`) already
+    concatenated every same-numbered chunk into one blob before judging it --
+    so when N repeats, every matching header from the first through the last
+    is collapsed into a single one, replaced by `new_body` whole; never
+    picked apart into "correct" vs. "boilerplate" halves, since both halves
+    are real content that belongs together. None if the header is missing
+    entirely, or if the repeats aren't contiguous (some other issue is going
+    on -- don't guess)."""
     headers = list(PAGE_HEADER.finditer(text))
     matches = [i for i, m in enumerate(headers) if int(m.group(1)) == page_num]
-    if occurrence is not None:
-        if not (1 <= occurrence <= len(matches)):
-            return None
-        i = matches[occurrence - 1]
-    elif len(matches) == 1:
-        i = matches[0]
-    else:
+    if not matches:
         return None
-    start = headers[i].end()
-    end = headers[i + 1].start() if i + 1 < len(headers) else len(text)
+    if matches != list(range(matches[0], matches[0] + len(matches))):
+        return None
+    start = headers[matches[0]].end()
+    last = matches[-1]
+    end = headers[last + 1].start() if last + 1 < len(headers) else len(text)
     # `PAGE_HEADER`'s `\s*$` always backtracks to consume exactly the header
     # line's own trailing newline (never further -- `$` needs to land right
     # before the *next* "\n" to match), so text[:start] already ends in one
@@ -132,7 +117,7 @@ class FileWriteResult:
 
 
 def apply_to_file(
-    path: Path, page_num: int, new_body: str, apply: bool, occurrence: int | None = None,
+    path: Path, page_num: int, new_body: str, apply: bool,
 ) -> FileWriteResult:
     """Replace one page's text in one corpus file. `apply=False` computes and
     reports the outcome without touching disk (dry run). Backing up happens
@@ -143,7 +128,7 @@ def apply_to_file(
     except UnicodeDecodeError:
         text = path.read_text(encoding="utf-8-sig")
 
-    replaced = replace_page_text(text, page_num, new_body, occurrence=occurrence)
+    replaced = replace_page_text(text, page_num, new_body)
     if replaced is None:
         return FileWriteResult("missing_header")
     if replaced == text:
@@ -165,7 +150,6 @@ def main() -> None:
     decisions = review_logic.resolve_reocr_review_decisions(
         review_logic.load_reocr_review_decisions(DECISIONS_FILE)
     )
-    occurrence_overrides = load_page_occurrence_overrides()
 
     skip_reasons: dict[str, int] = {}
     file_results: dict[str, int] = {}
@@ -186,10 +170,7 @@ def main() -> None:
 
         applied_pages += 1
         for relpath in record["files"]:
-            occurrence = occurrence_overrides.get(relpath, {}).get(str(record["page"]))
-            result = apply_to_file(
-                CORPUS_ROOT / relpath, record["page"], new_text, apply, occurrence=occurrence,
-            )
+            result = apply_to_file(CORPUS_ROOT / relpath, record["page"], new_text, apply)
             file_results[result.status] = file_results.get(result.status, 0) + 1
             if result.status == "missing_header":
                 problems.append(f"{relpath}: no '## Page {record['page']}' header found")
