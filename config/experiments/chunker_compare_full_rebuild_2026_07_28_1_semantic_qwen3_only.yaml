@@ -1,0 +1,29 @@
+# Resume of chunker_compare_full_rebuild_2026_07_28_1_semantic.yaml: 7 of its 9
+# embedders already completed successfully this afternoon (2026-07-28, 15:05-17:32,
+# confirmed via file mtimes: e5-large, e5-small, jina_v5, bge-m3, congen, sct-510,
+# m2v all rebuilt and current). Only Qwen3-Embedding-4B and Qwen3-Embedding-0.6B
+# remain (their on-disk combo dirs still date from 2026-07-20/21, pre-corpus-fix).
+# Scoped to just these 2 so we don't redo the 7 already-done embedders from scratch.
+# Run with:
+#   PYTHONPATH=src .venv/Scripts/python.exe -m rag_lab.cli run --config config/experiments/chunker_compare_full_rebuild_2026_07_28_1_semantic_qwen3_only.yaml
+experiment_name: chunker_compare_full
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+output_dir: data/index/chunker_compare_full
+loaders:
+- type: plain
+  params: {}
+chunkers:
+- type: semantic
+  params:
+    breakpoint_threshold: 0.5
+embedders:
+- type: qwen3
+  params:
+    model_name: Qwen/Qwen3-Embedding-4B
+- type: qwen3
+  params:
+    model_name: Qwen/Qwen3-Embedding-0.6B
+run_mode: cartesian
+seed: 42

@@ -1,0 +1,65 @@
+# Consolidated rebuild config: exactly the 9 CURRENT/correct embedders x 4
+# chunkers (36 combos), reconstructed from the manifest.json params of the
+# existing non-excluded chunker_compare_full combo dirs (see
+# tools/eval/embedder_matrix_9way.py _EXCLUDED_COMBO_DIRS for what's excluded
+# and why: old 128-cap sct, rejected 510-cap congen). Verified by this file's
+# generator script to reproduce the exact same 36 combo-id hashes already on
+# disk, so re-running this config overwrites those 36 dirs in place with fresh
+# builds from the corrected corpus (2026-07-28 header-dup fix), and leaves the
+# 8 excluded/superseded dirs untouched.
+# Run with:
+#   PYTHONPATH=src .venv/Scripts/python.exe -m rag_lab.cli run --config config/experiments/chunker_compare_full_rebuild_2026_07_28.yaml
+experiment_name: chunker_compare_full
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+output_dir: data/index/chunker_compare_full
+loaders:
+- type: plain
+  params: {}
+chunkers:
+- type: fixed_size
+  params:
+    chunk_size: 512
+    chunk_overlap: 50
+- type: recursive
+  params:
+    chunk_size: 512
+    chunk_overlap: 50
+- type: semantic
+  params:
+    breakpoint_threshold: 0.5
+- type: sentence
+  params:
+    chunk_size: 512
+embedders:
+- type: e5
+  params:
+    model_name: intfloat/multilingual-e5-large
+- type: e5
+  params:
+    model_name: intfloat/multilingual-e5-small
+- type: jina_v5
+  params:
+    model_name: jinaai/jina-embeddings-v5-text-small-retrieval
+- type: local
+  params:
+    model_name: kornwtp/SCT-KD-BGE-M3-model-phayathaibert
+    max_seq_length: 510
+- type: local
+  params:
+    model_name: kornwtp/ConGen-BGE_M3-model-phayathaibert
+- type: local
+  params:
+    model_name: BAAI/bge-m3
+- type: local
+  params:
+    model_name: Thaweewat/jina-embedding-v3-m2v-1024
+- type: qwen3
+  params:
+    model_name: Qwen/Qwen3-Embedding-4B
+- type: qwen3
+  params:
+    model_name: Qwen/Qwen3-Embedding-0.6B
+run_mode: cartesian
+seed: 42

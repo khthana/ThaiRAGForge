@@ -1,0 +1,49 @@
+# Rebuild step 4/4: fixed_size chunker x all 9 current embedders (9 combos).
+# Split from chunker_compare_full_rebuild_2026_07_28.yaml so each chunker's
+# completion is a durable checkpoint (runner.py has no resume logic).
+# Run with:
+#   PYTHONPATH=src .venv/Scripts/python.exe -m rag_lab.cli run --config config/experiments/chunker_compare_full_rebuild_2026_07_28_4_fixed_size.yaml
+experiment_name: chunker_compare_full
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+output_dir: data/index/chunker_compare_full
+loaders:
+- type: plain
+  params: {}
+chunkers:
+- type: fixed_size
+  params:
+    chunk_size: 512
+    chunk_overlap: 50
+embedders:
+- type: e5
+  params:
+    model_name: intfloat/multilingual-e5-large
+- type: e5
+  params:
+    model_name: intfloat/multilingual-e5-small
+- type: jina_v5
+  params:
+    model_name: jinaai/jina-embeddings-v5-text-small-retrieval
+- type: local
+  params:
+    model_name: kornwtp/SCT-KD-BGE-M3-model-phayathaibert
+    max_seq_length: 510
+- type: local
+  params:
+    model_name: kornwtp/ConGen-BGE_M3-model-phayathaibert
+- type: local
+  params:
+    model_name: BAAI/bge-m3
+- type: local
+  params:
+    model_name: Thaweewat/jina-embedding-v3-m2v-1024
+- type: qwen3
+  params:
+    model_name: Qwen/Qwen3-Embedding-4B
+- type: qwen3
+  params:
+    model_name: Qwen/Qwen3-Embedding-0.6B
+run_mode: cartesian
+seed: 42

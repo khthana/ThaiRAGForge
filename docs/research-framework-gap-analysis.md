@@ -33,6 +33,18 @@ params fp16)
 > ระบบ (semantic chunking + hybrid retrieval) ไม่ใช่ embedder ตัวเดียว รายละเอียด
 > เต็ม: `docs/paper-results-summary.md`, narrative: `docs/chunker-embedder-comparison-log.md`.
 >
+> **แก้ไข 2026-07-29 — ตัวเลขข้างบน 2 จุดใน blockquote นี้เลิกใช้ได้แล้ว, อย่าอ้างอิงต่อ**:
+> (1) "0.6935" (และเลขที่พัฒนาต่อมาเป็น 0.7048 ในรอบ refresh 2026-07-25) ค้างมาจาก
+> ก่อน OCR-remediation rebuild (28 ก.ค.) — ค่าสดตอนนี้คือ 0.6152 และไม่ใช่เลขสูงสุด
+> ของ `qwen3_0.6b` เองด้วยซ้ำ (`sentence`/`fixed_size` สูงกว่า) claim "สูงสุดในทั้ง
+> study" **ถูกถอนแล้ว**; (2) "BM25 ผูกสถิติเสมอกับ top tier (bge-m3/Qwen3-4B/
+> Qwen3-0.6B)" ก็ไม่จริงอีกต่อไป — BM25 ตอนนี้**ชนะ bge-m3 อย่างมีนัยสำคัญ** ผูกแค่
+> qwen3/qwen3_0.6b เท่านั้น ทั้งคู่เป็นผลจาก retrieval cache ของ BM25/hybrid ที่ค้าง
+> 3 วันหลัง rebuild แล้วเพิ่งแก้ ดูตัวเลข/บทสรุปปัจจุบันที่
+> `docs/paper-results-summary.md`, narrative เต็มที่
+> `docs/chunker-embedder-comparison-log.md` ("Re-eval หลัง OCR-remediation rebuild"),
+> memory `[[project_eval_refresh_2026_07_29]]`.
+>
 > **Tier 2 (§8) ก็ปิดครบทั้ง 2 ข้อแล้ว** ระหว่างขยายเป็น 9 embedders: ข้อ 5
 > (โมเดลไทยกลุ่ม A เพิ่ม) คือ `sct` (SCT-KD-BGE-M3-model-phayathaibert — training
 > method อื่นบน backbone เดียวกับ ConGen ที่มีอยู่แล้ว) และข้อ 6 (Qwen3 scaling)

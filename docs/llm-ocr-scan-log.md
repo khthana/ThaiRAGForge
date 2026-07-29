@@ -414,15 +414,24 @@ auto-apply ทันที → ผู้ใช้ review อีก 4 หน้�
 ไฟล์นี้เป็นสถานะปัจจุบัน** ให้เชื่อ `reocr_manual_pdf_overrides.json` (3
 entries) + memory `[[project_reocr_remediation_pipeline]]` แทน
 
-### 4. 10 ไฟล์ header ซ้ำ (`## Page N` ปรากฏ >1 ครั้งในไฟล์เดียว) — ปิดแล้วเช่นกัน
+### 4. ไฟล์ header ซ้ำ (`## Page N` ปรากฏ >1 ครั้งในไฟล์เดียว) — เดิมเข้าใจผิด, แก้ถูกแล้ว (28 ก.ค. 2569)
 
 Root cause: bug จริงตอน ingest (page-counter off-by-one) ไม่ใช่ corruption
-สุ่ม — ทุก 10 ไฟล์ occurrence แรกคือ boilerplate ทั่วไปที่ซ้ำทุกวาระในชุดเดียวกัน
-occurrence ที่สองคือเนื้อหาจริงของหน้านั้น ยืนยันด้วย hard evidence (จับคู่
-`span` ที่โมเดล quote มากับเนื้อความจริงของแต่ละ occurrence) — ตรง occurrence
-ที่ 2 ทั้ง 10/10 ไฟล์ เพิ่ม `replace_page_text(..., occurrence=N)` +
-`reocr_page_occurrence_overrides.json` (10 entries, ทุกตัว occurrence=2) แล้ว
-apply — **0 ปัญหาเหลือ, idempotent ยืนยันแล้ว**
+สุ่ม — ตรงนี้ถูกต้อง แต่ทฤษฎีเดิมที่ว่า "occurrence แรกคือ boilerplate
+ทั่วไปที่ทิ้งได้, occurrence ที่สองคือเนื้อหาจริง" **ผิด** พบตอนแก้ปัญหา
+header ซ้ำรอบใหญ่ (94 ไฟล์ที่มาจาก kernel-A batch, 27-28 ก.ค. 2569) ว่า
+ทั้งสอง occurrence เป็นเนื้อหาจริงคนละส่วนกัน (เช่น occurrence แรก = ย่อหน้า
+เกริ่นของวาระ, occurrence สอง = รายละเอียดหลักสูตรจริง) ที่ถูก ingest แยกเป็น
+2 ส่วนโดยผิดพลาด ไม่ใช่ boilerplate ซ้ำกับเนื้อหาจริง — แก้ที่ถูกต้องคือ
+**union-merge** (ต่อเนื้อหาทั้งสอง occurrence เข้าด้วยกัน) ไม่ใช่เลือกทิ้ง
+occurrence หนึ่งแล้วแทนที่ด้วย occurrence อื่น
+`reocr_page_occurrence_overrides.json` (10 entries เดิม, ทุกตัว
+occurrence=2) ถูกลบทิ้งแล้ว เพราะ mechanism นี้ทำให้ 10 ไฟล์เหล่านั้นมี
+boilerplate เนื้อหาซ้ำติดอยู่จริง (ไม่ใช่ 0 ปัญหาเหลือตามที่บันทึกไว้เดิม)
+— แก้ไขใหม่ทั้งหมดผ่าน `replace_page_text` เวอร์ชันใหม่ใน
+`reocr_apply.py` ที่ยุบ header ซ้ำที่ติดกัน (contiguous) เป็น header เดียว
+โดยรวมเนื้อหาทุก occurrence เข้าด้วยกัน ดูรายละเอียดที่
+`[[project_reocr_remediation_pipeline]]`
 
 ### 5. สถานะสุดท้ายของ pipeline นี้
 
@@ -771,6 +780,14 @@ JSON, joint-distribution JSON, ตัวอย่าง text ที่ดึง�
 scratchpad ของ session นี้เท่านั้น ไม่ได้ commit เข้า repo (เป็นไฟล์
 วิเคราะห์ระหว่างทาง ไม่ใช่ pipeline artifact ถาวร)
 
+**อัปเดต 28 ก.ค. 2569 — queue นี้ตอนนี้คือ 0, ไม่ใช่ 88.** ผู้ใช้ review
+จนครบเองในเซสชันหลังจากนี้ (แจ้ง "ผมทำเสร็จแล้ว" ใน UI) ยืนยันด้วยการนับ
+ตรงจาก `reocr_review_decisions.jsonl` สองครั้งคนละวัน: 343/343 คู่
+(pdf,page) ที่ต้องการ human review มี decision ครบทุกอัน (276 keep-old +
+67 apply-new) และแยกยืนยันอีกทีด้วย `decide_action` จริงจาก
+`reocr_apply.py` -- ไม่มี record ไหนเหลือ reason "awaiting human review"
+เลยสักอัน ตัวเลข 88 ด้านบนเป็น snapshot ตอนที่เขียน ไม่ใช่สถานะปัจจุบัน
+
 ### 11. Mechanism B -- แก้ 2 ไฟล์ severe เสร็จแล้ว (27 ก.ค. 2569)
 
 ผู้ใช้ขอให้ทำ 2 ไฟล์ severe จาก §7 ตอนนี้เลย (ยืนยันแล้วว่าไม่เกี่ยวกับคิว
@@ -807,3 +824,45 @@ adjudication ก่อน apply เสมอ ไม่ข้ามขั้น�
 อยู่แล้วจากหลักฐาน regex) ส่วน 44 ไฟล์ที่ threshold ต่ำกว่า (30-49 ตัวซ้ำ)
 ยังไม่แตะ -- ยังเชื่อว่าเป็น dot-leader/placeholder ที่ถูกต้อง ไม่ใช่
 corruption ตามที่ประเมินไว้ใน §7
+
+### 12. Header ซ้ำ -- แก้จริงทั้งหมด (94+5 ไฟล์) + พบว่ากระทบ gold eval (28 ก.ค. 2569)
+
+Dry run ของ `reocr_apply.py --apply` รอบใหม่ (หลัง kernel-A batch) เจอ 84
+หน้า/94 ไฟล์ ที่มี `## Page N` ซ้ำ -- ตรวจแล้วซ้ำติดกันทั้งหมด (84/84
+adjacent, 0 non-adjacent) จึงปลอดภัยที่จะยุบรวมเป็น header เดียว เขียน
+`replace_page_text` ใหม่ใน `reocr_apply.py` ให้ยุบทุก occurrence ที่ติดกัน
+เป็นก้อนเดียว แทนที่ด้วยเนื้อหา re-OCR เต็มหน้า (ดู §4 ที่แก้ทฤษฎีเดิม) --
+apply แล้ว ยืนยันด้วยการอ่านไฟล์ตัวอย่างตรงว่า header เหลือตัวเดียว
+เนื้อหาไม่ซ้ำ ลบ `reocr_page_occurrence_overrides.json` (mechanism เดิมที่
+lossy) ทิ้ง
+
+**พบเพิ่มเติม**: 5 หน้าที่ human verdict เป็น "keep-old" (ไม่ใช่ apply-new)
+ก็มี header ซ้ำแบบเดียวกันติดอยู่ -- `reocr_apply.py` ข้ามหน้าเหล่านี้ถูกต้อง
+ตาม logic (เพราะ verdict ไม่ใช่ apply-new) แต่ header-duplication เป็นคนละ
+ปัญหากับ verdict คุณภาพข้อความ ตรวจเนื้อหาจริงแล้วพบรูปแบบเดียวกัน (2
+occurrence คนละเนื้อหาจริง ไม่ใช่ boilerplate ซ้ำ) แก้ด้วยสคริปต์แยก
+(one-off, ไม่ผ่าน `reocr_apply.py` เพราะไม่เกี่ยวกับ new/old replacement) ที่
+ยุบ header ซ้ำโดย**ต่อเนื้อหาเดิมทั้งสอง occurrence เข้าด้วยกัน** (ไม่แทนที่
+ด้วยข้อความใหม่ -- verdict keep-old ยังคงเดิม) ยืนยันหลัง apply: 0 หน้าที่มี
+verdict skip เหลือ header ซ้ำ
+
+**ผลกระทบต่อ gold eval**: intersect รายชื่อไฟล์ที่แก้วันนี้ (111 ไฟล์ที่มี
+mtime วันนี้) กับ `relevant_resolution_ids` ใน
+`config/eval/gold_query_set_73det.yaml` (จับคู่ที่ granularity resolution
+ตาม ADR-0002 ไม่ใช่ page) พบว่า **41/111 ไฟล์ที่แก้ (37%) และ 43/106 query
+ทั้งชุด (41%) เกี่ยวข้องกับ resolution ที่แก้วันนี้จริง** -- ไม่ใช่ edge
+case เล็กน้อย ดังนั้น index ที่ build จากคอร์ปัสก่อนวันนี้ (เช่น
+`chunker_compare_full`, 9-embedder matrix) **ควร rebuild ใหม่** เพื่อความ
+ถูกต้องเชิงงานวิจัย -- ตัวเลข recall/MRR ที่รายงานไว้ในเอกสารเปรียบเทียบ
+อาจขยับได้จริงสำหรับ query กลุ่มนี้ (การ merge header ทำให้ chunk boundary
+เปลี่ยนสำหรับไฟล์ที่กระทบ ไม่ใช่แค่เนื้อหาเปลี่ยนผิวเผิน)
+
+**Rebuild + eval refresh เสร็จแล้ว (28-29 ก.ค. 2569)**: rebuild ครบทั้ง 36
+combo (`chunker_compare_full`) 28 ก.ค. ตามคำแนะนำข้างบน แล้วรัน eval suite
+ใหม่ 29 ก.ค. — ระหว่างทางเจอบั๊กแยกต่างหาก (BM25/hybrid persisted results
+ค้าง 3 วัน ไม่ถูก refresh อัตโนมัติเหมือน dense-alone) แก้แล้วเช่นกัน
+ตัวเลข recall/MRR ที่คาดว่าจะขยับข้างบนนี้ขยับจริง รวมถึงมีข้อสรุปเดิม
+บางจุดพลิกจริง (ไม่ใช่แค่ตัวเลขเปลี่ยนผิวเผิน) — ดูรายละเอียดที่
+`docs/chunker-embedder-comparison-log.md` ("Re-eval หลัง OCR-remediation
+rebuild"), ตัวเลขล่าสุดที่ `docs/paper-results-summary.md`, memory
+`[[project_eval_refresh_2026_07_29]]`. หัวข้อนี้ปิดสมบูรณ์แล้ว

@@ -1573,3 +1573,93 @@ description เลยจึงตรวจจับ regression จากกา�
 เปลี่ยนอาจารย์ผู้รับผิดชอบหลักสูตร) กลับไปเจอบั๊กจริงใน `match_people` แทน
 (title "อ." ไม่รองรับเลย) ดูรายละเอียดที่
 `docs/entity-extraction-and-gold-eval-log.md` § 6 (commit `a4e250e`)
+
+## Re-eval หลัง OCR-remediation rebuild 28-29 ก.ค.: เจอ BM25/hybrid ค้าง 3 วัน แก้แล้ว ตัวเลข hybrid/BM25 พลิกจริง (29 ก.ค. 2569)
+
+ต่อจาก kernel-A OCR remediation rebuild (36 combo เต็ม, ดู
+`docs/llm-ocr-scan-log.md`) ที่เพิ่งเสร็จ 28 ก.ค. รัน eval suite 5 สคริปต์
+ตามแผนเดิม (`embedder_matrix_9way.py` + 4 สคริปต์ significance test) —
+ผลลัพธ์แรกดูเหมือนมี conclusion พลิกหลายจุด (qwen3_0.6b แซง bge_m3/qwen3
+แบบ cross-chunker, hybrid แพ้ dense-alone เองสำหรับ qwen3_0.6b) ซึ่งแปลกพอที่
+จะหยุดเช็คก่อนเขียนเอกสารต่อ — ปรึกษา advisor แล้วชี้จุดที่ต้องเช็คตรง:
+**เทียบ mtime ของ `data/results/gold_hybrid_73det` / `gold_bm25_73det` กับ
+`gold_73det_full_embedder_matrix`**
+
+**พบว่าเป็นข้อมูลค้างจริง**: `gold_hybrid_73det` และ `gold_bm25_73det` มี
+mtime ล่าสุด **25 ก.ค.** (ก่อน rebuild 3 วัน) ในขณะที่ `embedder_matrix_9way.py`
+รี trieval ใหม่ทุกครั้ง (verified จากโค้ด, ไม่มี `--skip-retrieval` flag) จึง
+ได้ dense-alone ที่สดจริง — เท่ากับว่า eval รอบแรกเอา dense สด (หลัง
+OCR-fix) ไปเทียบกับ hybrid/BM25 เก่า (ก่อน OCR-fix) เป็นการเทียบคนละชุดข้อมูล
+โดยไม่รู้ตัว conclusion ที่ดู "พลิก" ทั้งหมดจึงเป็น artifact ไม่ใช่ของจริง
+
+**แก้โดยรัน retrieval ใหม่ทั้งคู่** ต่อ index ที่ rebuild แล้ว:
+- `run_gold_bm25_eval.py` (default filter `e5`, 8 combo — e5+e5_small ต่อ
+  chunker เพราะ BM25 ไม่ขึ้นกับ embedder อยู่แล้ว): 1128s
+- `run_gold_hybrid_eval.py` (ไม่ filter, ครบทุก combo ที่มีบน disk รวม 8
+  combo เก่าที่ superseded ด้วย): 11573s (~3.2 ชม.)
+
+แล้วรัน 3 สคริปต์ significance test ที่พึ่งข้อมูลนี้ใหม่ทั้งหมด
+(`bm25_vs_embedder_significance_test_9way.py`,
+`hybrid_significance_test_9way.py`,
+`hybrid_significance_test_semantic_top5.py`)
+
+**สิ่งที่พบหลัง refresh จริง (verified fresh ทั้งคู่แล้ว, ปรึกษา advisor
+รอบสองยืนยัน methodology):**
+
+1. **BM25 aggregate ขยับขึ้นชัดเจน**: 0.3908 (ค้าง) → **0.4930** (สด) —
+   สมเหตุสมผลตามกลไก: lexical matching ไวต่อ OCR corruption ที่ระดับ token
+   มากกว่า dense embedding มาก ดังนั้น BM25 ได้ประโยชน์จากการแก้ OCR
+   มากกว่า embedder ตัวไหนๆ เป็นทิศทางที่คาดได้ ไม่ใช่เรื่องแปลก — **ตอนนี้
+   BM25 ชนะ bge_m3 อย่างมีนัยสำคัญ** (recall@10 diff +0.0840, Holm-adj
+   p=0.0216) ซึ่งก่อนหน้านี้เป็นแค่ tie เท่านั้น BM25 ยังคง tie กับ
+   qwen3/qwen3_0.6b/jina_v5
+2. **Cross-chunker dense-alone**: qwen3_0.6b (0.5263) ชนะ bge_m3 (0.4090,
+   diff +0.1173) และ qwen3/4B (0.4777, diff +0.0486) อย่างมีนัยสำคัญ — เป็น
+   ผลจาก dense-alone ที่สดจริงตั้งแต่รอบแรก (ไม่ใช่ปัญหาข้อมูลค้าง) 3-way
+   tie เดิม (bge_m3/qwen3/qwen3_0.6b) จึง **แตกจริง** ที่ระดับ
+   cross-chunker-average
+3. **Hybrid vs dense-alone ยังคง 26/27 significant เหมือนเดิม** แต่ตัว
+   exception ย้ายที่: เดิมเป็น qwen3 บน MRR (p=0.09) ตอนนี้เป็น qwen3_0.6b
+   บน MRR แทน (Holm-adj p=0.3040) — headline เดิมยังถูกต้อง แค่ embedder
+   ที่เป็นข้อยกเว้นเปลี่ยนตัว
+4. **Hybrid vs BM25-alone มีจุดพลิกจริง 3 จุด**: jina_v5 ตอนนี้ชนะ BM25
+   อย่างมีนัยสำคัญบน recall@10 (+0.0901, Holm-adj p=0.0000 — เดิมแค่ tie);
+   congen กลายเป็น tie แทน (เดิมชนะ); `sct` recall@10 กลับมามีนัยสำคัญอีก
+   ครั้ง (Holm-adj p=0.0000 — เอกสารเดิมบอกว่า "ไม่มีนัยสำคัญแล้ว post-refresh
+   ที่ p=0.08" ซึ่งตอนนี้ผิดแล้ว ต้องแก้)
+5. **Semantic-only top-5 tie test แตกบางส่วน**: `bge_m3` หลุดจาก tied
+   cluster บน **recall@10 และ nDCG@10** (แพ้ qwen3_0.6b/qwen3/jina_v5 อย่าง
+   มีนัยสำคัญ) แต่**ยังคง tie บน MRR** (bge_m3 vs qwen3 Holm-adj p=0.058,
+   bge_m3 vs qwen3_0.6b p=0.126 — ไม่ถึงเกณฑ์) ที่เหลืออีก 4 ตัว
+   (qwen3_0.6b/qwen3/jina_v5/e5_small) ยัง tie กันเองครบทุก pair ทุก metric
+   — คำแนะนำเดิม "อย่าฟันธง embedder เดียว" ยังใช้ได้ แค่ cluster เหลือ 4
+   ตัวแทน 5
+
+**จุดที่ต้องระวังเป็นพิเศษ — ตัวเลข "top single combo" 0.7048 พังจริง**:
+เลข 0.7048 เดิมที่อ้างว่าเป็น `semantic × qwen3_0.6b` hybrid recall@10 ที่ดี
+ที่สุดในทั้งโครงการ มาจากตาราง "Per-embedder mean (semantic + hybrid only)"
+ใน `hybrid_significance_test_semantic_top5.py` โดยตรง (ยืนยันแล้วว่าคนละ
+column กับ dense-alone) — ค่าสดตอนนี้คือ **0.6152** (ลดลง ~0.09) และเมื่อดู
+ทุก chunker ของ qwen3_0.6b hybrid พบว่า `sentence` (0.6265) และ `fixed_size`
+(0.6154) สูงกว่า `semantic` (0.6152) เล็กน้อยด้วยซ้ำ — **claim เดิมที่ว่า
+"semantic ชนะทุก chunker อื่นชัดเจน" ไม่ปรากฏในตัวเลขสดอีกต่อไป** ส่วนต่าง
+ระหว่าง sentence/fixed_size/semantic เล็กมาก (~0.01) และไม่มี significance
+test ระดับนี้อยู่ (test ที่มีคือ cross-chunker-aggregate กับ
+semantic-only-top5 เท่านั้น ไม่มี test เทียบ chunker ต่อ chunker ที่ combo
+เดียวกัน) — **ห้ามฟันธงว่า sentence ชนะแทน** แค่บันทึกว่า claim เดิมไม่มี
+หลักฐานรองรับแล้ว เป็น open item ใหม่ถ้าจะ pin chunker headline นี้ในเปเปอร์
+ต้องทำ significance test เฉพาะจุดนี้เพิ่ม
+
+**สรุป**: ตัวเลขทั้งหมดในเอกสาร (`docs/paper-results-summary.md`,
+`CLAUDE.md`) ที่มาจาก section "Hybrid retrieval" และ "BM25 lexical baseline"
+(รวมทั้ง 2 sub-analysis ก่อนหน้าที่อ้างอิงข้อมูลเดียวกัน) เป็นค่าที่ผ่านการ
+refresh 25 ก.ค. (หลัง contamination-fix) แต่ **ค้างต่อ OCR-remediation
+rebuild 28 ก.ค.** ต้องแทนที่ด้วยตัวเลขสดชุดนี้ทั้งหมด — อัปเดตแล้วทั้ง 2
+ไฟล์ (ดู commit ถัดไป) ส่วน `cost_latency_pareto.py` ยังไม่แตะ (เป็นคนละ
+กลุ่ม เป็น cost/latency ไม่ใช่ recall เหมือนที่ flag ไว้ก่อนหน้า)
+
+**บทเรียนกระบวนการ**: ทุกครั้งที่ rebuild index ใหม่ ต้อง refresh
+**ทุก retrieval path ที่มี persisted results** (dense, BM25, hybrid) ไม่ใช่
+แค่ตัวที่ eval script เรียก retrieval สดให้อัตโนมัติ — เช็ค mtime ของ
+`data/results/*` เทียบกับ index rebuild timestamp ก่อนเชื่อ significance
+test ผลลัพธ์ใดๆ เสมอ
