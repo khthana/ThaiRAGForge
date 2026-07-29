@@ -45,6 +45,25 @@ params fp16)
 > `docs/chunker-embedder-comparison-log.md` ("Re-eval หลัง OCR-remediation rebuild"),
 > memory `[[project_eval_refresh_2026_07_29]]`.
 >
+> **แก้ไขเพิ่ม 2026-07-29 (บ่ายวันเดียวกัน) — "headline ของเปเปอร์อยู่ที่ระดับระบบ
+> (semantic chunking + hybrid retrieval)" ในบรรทัดข้างบนก็ต้องแก้ด้วย**: สร้าง
+> chunker-vs-chunker significance test ตัวแรกของโปรเจกต์
+> (`tools/eval/hybrid_chunker_significance_test.py`) แล้วพบว่า **`semantic`
+> ไม่เคยชนะ chunker ตัวไหนอย่างมีนัยสำคัญเลย ทั้งต่อ embedder เดียวและรวมทุก
+> embedder** — claim "semantic ชนะ" เป็นแค่ค่าเฉลี่ยดิบที่ไม่เคยผ่าน
+> significance test มาก่อน กรอบใหม่: `recursive`/`semantic`/`sentence` ผูกกัน
+> เป็นกลุ่มบน ไม่มีตัวชนะที่พิสูจน์ได้ มีแค่ `fixed_size` ที่พิสูจน์แล้วว่าด้อย
+> กว่า `recursive` รายละเอียดที่ `docs/paper-results-summary.md` § "Chunkers
+> compared"
+>
+> **แก้ไขเพิ่ม 2026-07-29 (เย็นวันเดียวกัน) — จุด #4 (cost/latency Pareto) ข้าง
+> บนก็ต้อง refresh**: `cost_latency_pareto.py` รันสด (background task
+> `bd9g6naw7`) ยืนยัน mechanics แทบไม่เปลี่ยน — overhead ปรับจาก ~2.1-2.3s เหลือ
+> ~1.9-2.0s (การขยับเล็กน้อยจากขนาด corpus 74,819 chunks ไม่ใช่ effect ใหม่) แต่
+> quality column ที่รายงานคู่กันตกลงทุกตัวเหมือนตารางอื่น (`qwen3 × semantic`
+> dense 0.6581→0.5382 เป็นต้น) — เลข `qwen3_0.6b` ที่สูงสุดในตารางนั้น**ไม่ใช่
+> claim optimal-chunker** ตามข้อแก้ไขข้างบน รายละเอียดที่
+> `docs/paper-results-summary.md` § "Cost / latency characterization"
 > **Tier 2 (§8) ก็ปิดครบทั้ง 2 ข้อแล้ว** ระหว่างขยายเป็น 9 embedders: ข้อ 5
 > (โมเดลไทยกลุ่ม A เพิ่ม) คือ `sct` (SCT-KD-BGE-M3-model-phayathaibert — training
 > method อื่นบน backbone เดียวกับ ConGen ที่มีอยู่แล้ว) และข้อ 6 (Qwen3 scaling)

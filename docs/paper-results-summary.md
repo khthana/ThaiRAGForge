@@ -438,6 +438,44 @@ across all 6 embedders**:
 | fixed_size | 0.3786 | 0.6251 | 0.4417 |
 | sentence | 0.3776 | 0.6243 | 0.4393 |
 
+**Important caveat added 2026-07-29 — this table was never significance-tested
+and predates the 9-embedder expansion (6-embedder dense-alone raw means
+only).** After the "top single combo" retraction above raised the question
+of whether any chunker is actually provably best, built the first-ever
+chunker-vs-chunker significance test
+(`tools/eval/hybrid_chunker_significance_test.py`, pure recompute from
+persisted `gold_hybrid_73det` results, no new retrieval) — one 6-pair family
+(fixed_size/recursive/semantic/sentence) per embedder, Holm-corrected per
+metric, plus an aggregate family (each chunker's per-query hybrid score
+averaged across all 9 embedders first, mirroring the embedder-matrix
+convention). Full table: `data/results/hybrid_chunker_significance_test.md`.
+
+**Result: `semantic` does not significantly beat any other chunker,
+anywhere** — not in the aggregate test, and not for any single embedder
+(including `qwen3_0.6b`, the specific combo the retracted "top single combo"
+claim was about — its 4 chunkers, recall@10 0.6097–0.6265, are fully,
+mutually tied on every metric, Holm-adj p≥0.44 throughout). The **only**
+significant chunker-pairwise result anywhere in this whole test (aggregate
+or per-embedder, 9 embedders × 3 metrics × 6 pairs + 1 aggregate family) is
+**`fixed_size` losing to `recursive`** — significant on nDCG@10 in the
+aggregate (Holm-adj p=0.0228) and for `qwen3`/`congen`/`m2v` individually,
+and on recall@10 for `m2v`. Aggregate per-chunker means (hybrid, across 9
+embedders): `recursive` 0.5291, `semantic` 0.5206, `sentence` 0.5205,
+`fixed_size` 0.5073 recall@10 — `recursive` is now numerically highest, not
+`semantic`, though the gap is not significant either.
+
+**Practical conclusion**: the "semantic chunking wins" headline this project
+has repeated since the very first comparison round does not survive being
+tested as an actual significance claim under hybrid retrieval. The honest
+framing going forward is **"fixed_size is the one chunker with a
+demonstrated, provable disadvantage (specifically vs. recursive); the other
+three (recursive, semantic, sentence) form a statistically tied cluster with
+no provable winner."** `semantic` remains a perfectly reasonable choice
+(never proven worse than anything), and it's still the one chunker where a
+strong dense embedder demonstrably earns its cost over BM25 alone (see
+"Per-chunker BM25 vs. embedder" below) — but "semantic is the best chunker"
+should no longer be cited as a tested finding.
+
 ## Embedders compared (9 total)
 
 | embedder | model | group |
@@ -828,16 +866,16 @@ separately per metric):
   four chunkers: `sentence × qwen3_0.6b` now reads **0.6265** and
   `fixed_size × qwen3_0.6b` reads 0.6154, both numerically above
   `semantic`'s 0.6152 (`recursive × qwen3_0.6b` is lower, at 0.6097).
-  **No significance test exists for this specific comparison** (chunker vs.
-  chunker at a fixed embedder+retriever) — the tests that do exist are
-  cross-chunker-aggregate (above) and semantic-only-vs-semantic-only (below),
-  neither of which speaks to whether `sentence` now beats `semantic` for
-  this combo. **Do not claim `sentence` is the new winner** — the honest
-  statement is that the previously-cited semantic lead is no longer visible
-  in the fresh numbers, and adjudicating a replacement claim needs a new,
-  dedicated per-chunker significance test (new open item, see Open items
-  below). **The dedicated per-chunker (semantic-only) top-5 tie test was
-  re-run 2026-07-29** against the rebuilt indices
+  **Resolved same day**: built the missing test
+  (`tools/eval/hybrid_chunker_significance_test.py`, see "Chunkers compared"
+  section above for the full writeup) — for `qwen3_0.6b` specifically, all
+  4 chunkers are fully, mutually tied on every metric (Holm-adj p≥0.44
+  throughout). **`sentence` is not the new winner either** — nothing wins.
+  The same test run across all 9 embedders plus an aggregate family found
+  `semantic` never significantly beats any other chunker anywhere; the only
+  significant chunker-pairwise result in the whole test is `fixed_size`
+  losing to `recursive`. **The dedicated per-chunker (semantic-only) top-5
+  tie test was also re-run 2026-07-29** against the rebuilt indices
   (`hybrid_significance_test_semantic_top5.py`,
   `data/results/hybrid_significance_test_semantic_top5.md`) — the tie
   **partially broke**: `bge_m3` now loses significantly to `qwen3_0.6b`,
@@ -911,27 +949,36 @@ noise, so the same caution applies until a dedicated test runs.
 
 ## Cost / latency characterization
 
-**Not part of the 2026-07-25 refresh** — `cost_latency_pareto.py` was not
-re-run against the clean indices (it's a cost/latency measurement, not
-covered by the `embedder_matrix_9way.py` + siblings chain); the recall/nDCG
-columns in the table below still cite pre-rebuild numbers (`qwen3 × semantic`
-0.6581, `qwen3_0.6b × semantic` 0.6364, `jina_v5 × semantic` 0.5845 —
-refreshed values are 0.6612/0.6435/0.5884 respectively per the "Embedders
-compared" section above), while the cost/latency measurements themselves are
-unaffected by corpus contamination (they measure model/index mechanics, not
-retrieval quality) and remain valid as-is.
+**Refreshed 2026-07-29** against the OCR-remediation-rebuilt indices —
+`cost_latency_pareto.py` was skipped in both the 2026-07-25 and the
+2026-07-29 BM25/hybrid-cache-fix refreshes (it's a cost/latency
+measurement, not covered by the `embedder_matrix_9way.py` + siblings
+chain), so its recall/nDCG columns had gone stale twice over. Re-run in
+full (no `--reuse-latency-cache`) so both the quality columns and the
+latency measurements reflect the current corpus. **Latency/cost mechanics
+came back essentially unchanged** (e.g. `qwen3` encode p50 264.7ms vs. the
+old 264ms, `e5_small` 24.7ms vs. 25ms) — confirming these numbers measure
+model/index mechanics, not corpus content, and were safe to treat as valid
+in the interim. **The quality columns moved substantially** (all lower —
+consistent with every other quality table in this document after the two
+rebuilds): `qwen3 × semantic` dense recall@10 0.6581→**0.5382**,
+`qwen3_0.6b × semantic` 0.6364→**0.5688** (now numerically *above* `qwen3`
+on this specific dense-alone cell — consistent with the cross-chunker
+aggregate lead found above), `jina_v5 × semantic` 0.5845→**0.4705**.
 
-Full data + methodology: `tools/eval/cost_latency_pareto.py` (run with
-`--reuse-latency-cache` to reuse a prior measurement instead of repeating
-~20 min of sequential model loading), rendered report at
-`data/results/cost_latency_pareto.md` (gitignored, regenerate by rerunning
-the script). All numbers below are measured on each embedder's `semantic`-
-chunker combo — the same combos the quality numbers elsewhere in this doc
-that are chunker-specific refer to — so cost and quality columns in the
-table below are apples-to-apples with each other, unlike an earlier
+Full data + methodology: `tools/eval/cost_latency_pareto.py`, rendered
+report at `data/results/cost_latency_pareto.md` (gitignored, regenerate by
+rerunning the script). All numbers below are measured on each embedder's
+`semantic`-chunker combo — the same combos the quality numbers elsewhere in
+this doc that are chunker-specific refer to — so cost and quality columns
+in the table below are apples-to-apples with each other, unlike an earlier
 internal draft of this table which paired semantic-chunker latency against
 cross-chunker-*aggregate* recall (a mismatch caught before being cited
-anywhere).
+anywhere). **Note**: per the "Chunkers compared" section above, `semantic`
+is no longer citable as "the best chunker" (a dedicated significance test
+found it never significantly beats any other chunker) — these numbers still
+describe a reasonable, representative combo, just not a provably-optimal
+one.
 
 **Two current-implementation costs are not floors on what dense/hybrid
 retrieval must cost. For hybrid specifically, they add a roughly fixed
@@ -944,33 +991,35 @@ stating explicitly rather than silently working around:
 1. `DenseRetriever.retrieve()` (`src/rag_lab/retrievers/dense.py`)
    recomputes `np.linalg.norm(embeddings, axis=1)` — the corpus's row norms
    — from scratch on **every query**, even though the corpus (and hence its
-   norms) doesn't change between queries. Measured cost: 39ms (dim=384) /
-   119ms (dim=1024) / 287ms (dim=2560), out of a ~270-670ms total dense
-   search — roughly a third of dense search time is this one avoidable
-   recomputation.
+   norms) doesn't change between queries. Measured cost (2026-07-29, 74,819
+   chunks): 35ms (dim=384) / 97ms (dim=1024) / 246ms (dim=2560), out of a
+   ~250-670ms total dense search — roughly a third of dense search time is
+   this one avoidable recomputation. (Essentially unchanged from the
+   pre-rebuild measurement — this is corpus-size-dependent mechanics, not
+   corpus-content-dependent.)
 2. `HybridRetriever.retrieve()` (`src/rag_lab/retrievers/hybrid.py`) asks
-   **both** sub-retrievers for `k=n` (the entire 81,489-chunk corpus, not a
+   **both** sub-retrievers for `k=n` (the entire 74,819-chunk corpus, not a
    bounded candidate pool) before RRF-fusing and truncating to the caller's
    actual k=10 — and `BM25Retriever.retrieve()` (`src/rag_lab/retrievers/bm25.py`)
    separately rebuilds a fresh `BM25Okapi` index from the tokenized corpus
    on **every single query** instead of caching it once per loaded index.
-   Measured: BM25 rebuild-from-scratch = ~1.0s vs. `get_scores`-only on an
-   already-built index = ~43ms (23x); `DenseRetriever.retrieve(k=n)` = ~765ms
-   vs. `retrieve(k=10)` = ~277ms, with the ~490ms gap being `RankedChunk`
-   construction (full chunk text included) for tens of thousands of chunks
-   nobody will ever look at. Together these two effects — not RRF fusion
-   itself — explain most of the measured ~2.3-2.9s hybrid query latency.
-   Comparing measured hybrid total to intrinsic hybrid estimate directly:
-   the *additive* gap is ~2.15-2.26s for every one of the 9 embedders (the
-   tightest-clustered number in this whole table) — confirming the overhead
-   is corpus-scanning cost, constant regardless of embedder, not an
-   embedder-dependent effect. As a *ratio* the same fixed overhead looks
-   very different depending on the embedder's own baseline cost — ~4x for
-   `qwen3` (2914ms measured vs. 727ms intrinsic, the most expensive embedder)
-   up to ~18x for `e5_small` (2326ms vs. 130ms, the cheapest) — so lead with
-   the additive number; the ratio is an artifact of which embedder you
-   divide by, not a real difference in how much overhead hybrid retrieval
-   carries.
+   Measured 2026-07-29: BM25 rebuild-from-scratch = ~872ms vs.
+   `get_scores`-only on an already-built index = ~36ms (24x);
+   `DenseRetriever.retrieve(k=n)` = ~699ms vs. `retrieve(k=10)` = ~239ms,
+   with the ~460ms gap being `RankedChunk` construction (full chunk text
+   included) for tens of thousands of chunks nobody will ever look at.
+   Together these two effects — not RRF fusion itself — explain most of the
+   measured ~2.1-2.7s hybrid query latency. Comparing measured hybrid total
+   to intrinsic hybrid estimate directly: the *additive* gap is
+   ~1.92-2.03s for every one of the 9 embedders (the tightest-clustered
+   number in this whole table) — confirming the overhead is corpus-scanning
+   cost, constant regardless of embedder, not an embedder-dependent effect.
+   As a *ratio* the same fixed overhead looks very different depending on
+   the embedder's own baseline cost — ~4.0x for `qwen3` (2685ms measured vs.
+   668ms intrinsic, the most expensive embedder) up to ~17.9x for
+   `e5_small` (2083ms vs. 116ms, the cheapest) — so lead with the additive
+   number; the ratio is an artifact of which embedder you divide by, not a
+   real difference in how much overhead hybrid retrieval carries.
 
 **Because of this, the honest cost signal for a quality-vs-cost comparison
 is query-*encode* time (the one component that's genuinely embedder-
@@ -979,16 +1028,16 @@ measured search/hybrid totals.** The table below reports both:
 
 | embedder | dim | encode p50 (ms) | intrinsic dense¹ (ms) | measured dense total p50 (ms) | intrinsic hybrid² (ms) | measured hybrid total p50 (ms) | recall@10 dense (semantic) | recall@10 hybrid (semantic) |
 |---|---|---|---|---|---|---|---|---|
-| qwen3 | 2560 | 264 | 685 | 947 | 727 | 2914 | **0.6581** | 0.6797 |
-| qwen3_0.6b | 1024 | 187 | 360 | 462 | 402 | 2585 | 0.6364 | **0.6935** |
-| jina_v5 | 1024 | 167 | 340 | 440 | 382 | 2548 | 0.5845 | 0.6796 |
-| bge_m3 | 1024 | 167 | 340 | 447 | 383 | 2630 | 0.5822 | 0.6845 |
-| e5_small | 384 | 25 | **87** | **126** | **130** | 2326 | 0.4822 | 0.6821 |
-| congen | 1024 | 62 | 235 | 333 | 278 | 2538 | 0.4726 | 0.6653 |
-| e5 | 1024 | 188 | 361 | 458 | 403 | 2551 | 0.4675 | 0.6383 |
-| sct | 1024 | 62 | 235 | 331 | 277 | 2508 | 0.2089 | 0.5750 |
-| m2v | 1024 | **2** | 175 | 276 | 218 | 2391 | 0.1983 | 0.3966 |
-| bm25 | — | 0 | — | — | — | 1203 (measured; 43 intrinsic) | — | 0.5902 (recall@10 alone) |
+| qwen3 | 2560 | 264.66 | 631.97 | 874.72 | 668.34 | 2684.71 | 0.5382 | 0.6051 |
+| qwen3_0.6b | 1024 | 177.61 | 320.59 | 421.06 | 356.96 | 2325.41 | **0.5688** | **0.6152** |
+| jina_v5 | 1024 | 166.39 | 309.38 | 408.69 | 345.74 | 2294.54 | 0.4705 | 0.5995 |
+| bge_m3 | 1024 | 181.58 | 324.56 | 425.03 | 360.93 | 2316.29 | 0.4144 | 0.5451 |
+| e5_small | 384 | 24.68 | **79.83** | **120.43** | **116.20** | 2083.14 | 0.3802 | 0.5877 |
+| congen | 1024 | 62.18 | 205.16 | 307.30 | 241.53 | 2276.49 | 0.2989 | 0.4666 |
+| e5 | 1024 | 183.61 | 326.59 | 424.34 | 362.96 | 2286.53 | 0.3603 | 0.5455 |
+| sct | 1024 | 61.82 | 204.81 | 304.81 | 241.18 | 2274.26 | 0.1264 | 0.3971 |
+| m2v | 1024 | **2.02** | 145.00 | 247.80 | 181.37 | 2170.54 | 0.1328 | 0.3231 |
+| bm25 | — | 0 | — | — | — | 1067.63 (measured; 36.37 intrinsic) | — | 0.4620 (recall@10 alone) |
 
 ¹ intrinsic dense = encode p50 + dot-product-and-sort at that dim (norms
 cached, not recomputed). ² intrinsic hybrid = encode p50 + dot-product-and
@@ -996,27 +1045,34 @@ cached, not recomputed). ² intrinsic hybrid = encode p50 + dot-product-and
 either side; bounded-pool RRF fuse is <5ms, not separately measured). Build
 cost (`embed_seconds`, `chunks_per_sec`, index size on disk) and the full
 p50/p95 breakdowns for every number above: `data/results/cost_latency_pareto.md`.
+**Refreshed 2026-07-29** against the OCR-remediation-rebuilt indices (see
+caveat paragraph above) — every quality column moved down from the
+pre-rebuild numbers, latency/cost columns essentially unchanged.
 
 **Reading this table**: `m2v` (Model2Vec static embedding) is by far the
 cheapest to encode (2ms) but also the weakest embedder in the whole matrix
 (see Embedders compared above) — not a real Pareto contender. Among
 genuinely competitive embedders, `e5_small` is the standout: intrinsic
-dense cost of 87ms (2-8x cheaper than every other option in the top two
-quality tiers) for recall@10=0.4822 dense / 0.6821 hybrid — within 0.02 of
-the hybrid headline number despite the cheapest intrinsic cost by far in
-that tier. `qwen3` (4B) is the most expensive per query in every column and
-does not lead on hybrid recall despite that — its cost is justified mainly
-by the entity-type robustness finding above (no significant weak spot),
-not by raw recall@10.
+dense cost of 80ms (2-8x cheaper than every other option in the top two
+quality tiers) for recall@10=0.3802 dense / 0.5877 hybrid — now noticeably
+below the hybrid headline number (a 0.028 gap, wider than the pre-rebuild
+0.02) but still the cheapest intrinsic cost by far in that tier. `qwen3`
+(4B) is the most expensive per query in every column and does not lead on
+hybrid recall despite that — its cost is justified mainly by the
+entity-type robustness finding above (no significant weak spot), not by
+raw recall@10.
 
-**New finding, surfaced by computing semantic-chunker-specific numbers for
-this table (resolves Open item #8)**: `qwen3_0.6b × semantic × hybrid`
-(recall@10=**0.6935**) is numerically *higher* than every other single
-combo in the whole study, including `bge-m3 × semantic × hybrid`
-(recall@10=0.6845, previously cited as the top combo — a +0.009 gap).
-Note that `bge-m3` never had a stronger evidentiary basis for "best" than
-`qwen3_0.6b` does now — it was simply the highest number known before this
-check, not a significance-tested claim either.
+**Note on `qwen3_0.6b`'s numerically-highest recall@10 in this table**:
+unlike the pre-rebuild version of this section, this is **not** being
+cited as "the top combo in the whole study" — per the chunker-vs-chunker
+significance test (see "Chunkers compared" above and Open item #13),
+`semantic` never significantly beats any other chunker for any embedder,
+so a semantic-chunker-specific combo cannot be crowned a study-wide winner
+regardless of which embedder numerically tops this table. The gap between
+`qwen3_0.6b` (0.6152) and the next two — `qwen3` (0.6051) and `jina_v5`
+(0.5995) — is narrow and untested; `bge_m3` fell the furthest of the top
+tier (0.6845→0.5451), consistent with the cross-chunker dense-alone
+3-way-tie break noted above (`bge_m3` losing ground to `qwen3`/`qwen3_0.6b`).
 
 **Resolved 2026-07-22**: ran the dedicated per-chunker (semantic-only)
 pairwise significance test across all five top hybrid combos
@@ -1292,6 +1348,27 @@ holds as stated.
     results (dense, BM25, hybrid), not only the one an eval script happens
     to recompute automatically — check `data/results/*` mtimes against the
     rebuild timestamp before trusting any significance test.
+13. ~~New open item from #12: no significance test exists for chunker vs.
+    chunker at a fixed embedder+retriever~~ — DONE 2026-07-29, same day.
+    Built `tools/eval/hybrid_chunker_significance_test.py` (pure recompute
+    from persisted `gold_hybrid_73det` results): one 6-pair
+    (fixed_size/recursive/semantic/sentence) family per embedder, plus an
+    aggregate family (each chunker's per-query score averaged across all 9
+    embedders first). Full table: `data/results/hybrid_chunker_significance_test.md`.
+    **This resolved the immediate question (no, `sentence` is not the new
+    winner for `qwen3_0.6b` — all 4 chunkers are fully tied, Holm-adj
+    p≥0.44) and surfaced a much bigger one**: `semantic` does not
+    significantly beat any other chunker **anywhere** in this whole test —
+    not for any single embedder, not in the aggregate. The project's
+    long-standing "semantic chunking wins" headline (originally a raw,
+    never-significance-tested 6-embedder mean, see "Chunkers compared"
+    section above) does not survive being tested as an actual claim. The
+    only significant result anywhere in the test is `fixed_size` losing to
+    `recursive` (aggregate nDCG@10, plus 3-4 individual embedders) —
+    `recursive`/`semantic`/`sentence` form a tied top cluster with no
+    provable winner, `fixed_size` is the one demonstrated laggard. See the
+    "Chunkers compared" section above for the full writeup and the revised
+    practical framing.
 
 ## Source scripts (for reproducibility / methods section)
 

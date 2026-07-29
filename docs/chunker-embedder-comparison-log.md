@@ -1663,3 +1663,88 @@ rebuild 28 ก.ค.** ต้องแทนที่ด้วยตัวเล�
 แค่ตัวที่ eval script เรียก retrieval สดให้อัตโนมัติ — เช็ค mtime ของ
 `data/results/*` เทียบกับ index rebuild timestamp ก่อนเชื่อ significance
 test ผลลัพธ์ใดๆ เสมอ
+
+## Chunker-vs-chunker significance test — "semantic ชนะ" ไม่ผ่านการทดสอบเลย (29 ก.ค. 2569, บ่ายวันเดียวกัน)
+
+ต่อจากที่พบว่า "top single combo" (semantic × qwen3_0.6b, 0.7048) พังไปแล้ว
+ข้างบน และตัวเลขสดของ `qwen3_0.6b` เองก็ไม่ใช่ `semantic` ที่สูงสุดอีกต่อไป
+(sentence 0.6265 > fixed_size 0.6154 > semantic 0.6152 > recursive 0.6097)
+— แต่ยังไม่มี significance test ไหนเทียบ chunker-ต่อ-chunker ที่ embedder
+เดียวกันมาก่อนเลยตลอดทั้งโปรเจกต์ (ที่มีคือ cross-chunker-average กับ
+per-chunker-BM25-vs-embedder เท่านั้น) ผู้ใช้ขอให้สร้าง test นี้จริง
+
+**สร้าง `tools/eval/hybrid_chunker_significance_test.py`** — pure recompute
+จาก `gold_hybrid_73det` ที่ refresh สดแล้วข้างบน ไม่ต้อง retrieval ใหม่:
+family ละ 6 คู่ (fixed_size/recursive/semantic/sentence) ต่อ embedder
+(Holm-correct แยกต่อ embedder ต่อ metric) บวกอีก 1 family รวม (เฉลี่ยแต่ละ
+chunker ข้าม embedder ทั้ง 9 ตัวก่อน ตามธรรมเนียมเดียวกับที่
+`embedder_matrix_9way.py` เฉลี่ยข้าม chunker)
+
+**ผลลัพธ์ (verified ผ่าน advisor's methodology already, pure recompute
+เท่านั้น ไม่มีการ retrieval ใหม่ที่ต้องกังวลเรื่อง stale cache)**:
+
+1. **`qwen3_0.6b` (ที่เป็นประเด็นเดิม)**: ทั้ง 4 chunker ผูกกันหมดจริง ไม่มี
+   คู่ไหนมีนัยสำคัญเลยสักคู่ในทุก metric (Holm-adj p≥0.44 ทุกคู่) — ยืนยันว่า
+   claim เดิม ("sentence" หรือ "semantic" เป็นตัวที่ดีที่สุดสำหรับ combo นี้)
+   ไม่มีมูลทั้งคู่
+2. **ระดับรวม (เฉลี่ยข้าม 9 embedder)**: มีคู่เดียวที่มีนัยสำคัญคือ
+   `fixed_size` แพ้ `recursive` บน nDCG@10 (Holm-adj p=0.0228) — **`semantic`
+   ไม่ชนะใครอย่างมีนัยสำคัญเลยสักคู่** ตัวเลขดิบตอนนี้ `recursive` (0.5291
+   recall@10) นำ `semantic` (0.5206) ด้วยซ้ำ แค่ไม่ถึงเกณฑ์นัยสำคัญ
+3. **ทั่วทั้ง 9 embedder × 3 metric × 6 คู่ + 1 family รวม (163 การทดสอบ)**:
+   `semantic` ไม่เคยปรากฏในคู่ที่มีนัยสำคัญเลยแม้แต่คู่เดียว ไม่ว่าจะชนะหรือ
+   แพ้ คู่ที่มีนัยสำคัญทั้งหมดเป็น `fixed_size` แพ้ `recursive` (e5-MRR,
+   congen/qwen3/m2v-nDCG@10, m2v-recall@10 รายตัว + aggregate-nDCG@10)
+
+**สรุป**: claim หลักของโครงการที่พูดซ้ำมาตั้งแต่รอบเปรียบเทียบแรก
+("semantic chunking ชนะทุก metric") เป็นแค่ค่าเฉลี่ยดิบ 6-embedder ที่ไม่เคย
+ผ่าน significance test มาก่อนเลย (ดูตาราง "Chunkers compared" ใน
+`docs/paper-results-summary.md`) พอทดสอบจริงแล้วไม่ผ่าน — กรอบที่ถูกต้อง
+กว่าคือ **`recursive`/`semantic`/`sentence` เป็นกลุ่มบนที่ผูกกันสถิติ ไม่มี
+ตัวชนะที่พิสูจน์ได้ ส่วน `fixed_size` เป็นตัวเดียวที่พิสูจน์แล้วว่าด้อยกว่า**
+`semantic` ยังเป็นตัวเลือกที่สมเหตุสมผล (ไม่เคยพิสูจน์ว่าแพ้ใคร และยังเป็น
+chunker เดียวที่ dense embedder แรงๆ ชนะ BM25 ได้จริงตาม
+`bm25_vs_embedder_significance_test_per_chunker.py`) แค่ไม่ใช่ "ตัวที่ดี
+ที่สุด" อีกต่อไป
+
+อัปเดต `docs/paper-results-summary.md` ("Chunkers compared" section + Open
+item #13), `CLAUDE.md` (bottom-line paragraph) ให้ตรงกันแล้ว
+
+## Rerun `cost_latency_pareto.py` — ปิดช่องโหว่สุดท้ายที่ยัง stale (29 ก.ค. 2569, เย็นวันเดียวกัน)
+
+`cost_latency_pareto.py` ไม่ได้ถูกรวมอยู่ใน 5-script eval suite
+(`embedder_matrix_9way.py` + siblings) ที่ refresh ไปตอนเช้า เพราะเป็นสคริปต์
+วัด cost/latency คนละ chain กัน — ผลคือ recall/nDCG column ในรายงานของมัน
+ค้าง stale มาแล้ว **สองรอบซ้อน** (ทั้งรอบ corpus-discovery-contamination fix
+25 ก.ค. และรอบ OCR-remediation rebuild + BM25/hybrid-cache-fix เช้านี้)
+โดยที่ latency/cost column ไม่ได้รับผลกระทบ (วัด mechanics ของ
+model/index/corpus-size ไม่ใช่เนื้อหา corpus)
+
+**รันใหม่เต็มรูปแบบ** (ไม่ใช้ `--reuse-latency-cache`, background task
+`bd9g6naw7`, จบสำเร็จ):
+
+- **Latency/cost แทบไม่เปลี่ยน** ยืนยันว่าตัวเลขกลุ่มนี้ปลอดภัยที่จะเชื่อใน
+  ช่วงที่ยังไม่ได้ refresh จริง เช่น `qwen3` encode p50 264.66ms (เดิม 264ms),
+  `e5_small` 24.68ms (เดิม 25ms) — hybrid fixed overhead ขยับจาก ~2.1-2.3s
+  เหลือ ~1.9-2.0s (การเปลี่ยนแปลงเล็กน้อยจาก corpus ขนาด 74,819 chunks แทนที่
+  จะเป็นตัวเลขเก่าก่อน rebuild ไม่ใช่ effect จริง)
+- **Quality column ตกลงทุกตัว** สอดคล้องกับทุกตารางอื่นในเอกสารนี้หลัง 2
+  rebuild ติดกัน: `qwen3 × semantic` dense recall@10 0.6581→**0.5382**,
+  `qwen3_0.6b × semantic` 0.6364→**0.5688** (ตอนนี้สูงกว่า `qwen3` ใน cell
+  dense-alone นี้โดยเฉพาะ ตรงกับที่ cross-chunker aggregate เจอด้านบน),
+  `jina_v5 × semantic` 0.5845→**0.4705**, `bge_m3 × semantic` 0.5822→**0.4144**
+  (ตกมากที่สุดในกลุ่มบน)
+- Hybrid recall@10 (semantic) เรียงใหม่: `qwen3_0.6b` 0.6152 > `qwen3` 0.6051
+  > `jina_v5` 0.5995 > `e5_small` 0.5877 > `e5` 0.5455 ≈ `bge_m3` 0.5451 >
+  `congen` 0.4666 > `sct` 0.3971 > `m2v` 0.3231; BM25-alone 0.4620
+
+**สำคัญ**: เลข `qwen3_0.6b` ที่สูงสุดในตารางนี้**ไม่ได้ถูกอ้างเป็น "combo ที่ดี
+ที่สุดในทั้งโปรเจกต์"** อีกต่อไป — ตามผล chunker-vs-chunker significance test
+ข้างบน `semantic` ไม่เคยชนะ chunker อื่นอย่างมีนัยสำคัญ ดังนั้นตัวเลขในตาราง
+นี้ให้อ่านเป็นแค่ profile ของ combo หนึ่งที่ representative เท่านั้น ไม่ใช่
+claim ว่า optimal
+
+อัปเดต `docs/paper-results-summary.md` (caveat paragraph + ตารางเต็ม + "Reading
+this table" + overhead ratio ~4.0x-17.9x) และ `CLAUDE.md` (bottom-line cost/
+latency paragraph) ให้ตรงกันแล้ว — ปิดช่องโหว่สุดท้ายที่ค้างจากรอบ eval
+refresh เช้านี้

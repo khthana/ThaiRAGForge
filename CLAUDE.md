@@ -130,14 +130,23 @@ see `docs/adr/`.
   `docs/chunker-embedder-comparison-log.md`, "Re-eval หลัง OCR-remediation rebuild" entry.
   Current bottom line (2026-07-29, bootstrap + Holm-corrected, all 9 embedders,
   OCR-remediation-rebuilt indices):
-  **`semantic` chunking + `hybrid` retrieval (BM25 + dense via RRF)** is still a defensible
-  system-level recommendation, but the specific "semantic has the single best combo in the
-  whole study" claim **no longer holds**: `semantic × qwen3_0.6b` recall@10 dropped from a
-  stale 0.7048 to a fresh **0.6152**, and is no longer even the top chunker for that embedder —
-  `sentence × qwen3_0.6b` now reads 0.6265 and `fixed_size × qwen3_0.6b` reads 0.6154, both
-  numerically above `semantic`. No significance test exists yet for chunker-vs-chunker at a
-  fixed embedder+retriever, so **don't cite `sentence` as the new winner either** — the honest
-  state is "previously-cited semantic lead no longer visible, unadjudicated." Cross-chunker-averaged
+  **the "`semantic` chunking wins" headline this project has repeated since the first
+  comparison round does not survive being significance-tested, and should be retired.**
+  `semantic × qwen3_0.6b` recall@10 dropped from a stale 0.7048 to a fresh **0.6152**, no longer
+  even the top chunker for that embedder numerically (`sentence` 0.6265, `fixed_size` 0.6154) —
+  which prompted building the missing test
+  (`tools/eval/hybrid_chunker_significance_test.py`, chunker-vs-chunker at a fixed
+  embedder+retriever, one family per embedder + an aggregate family across all 9). **Result:
+  `semantic` never significantly beats any other chunker, anywhere** — not for `qwen3_0.6b`
+  (all 4 chunkers fully tied, Holm-adj p≥0.44) nor in the aggregate (`recursive` is now
+  numerically highest at 0.5291 recall@10 vs. `semantic`'s 0.5206, not significant either). The
+  *only* significant chunker-pairwise result in the whole test is `fixed_size` losing to
+  `recursive` (aggregate nDCG@10 + several individual embedders). **Revised framing:
+  `recursive`/`semantic`/`sentence` are a statistically tied top cluster with no provable
+  winner; `fixed_size` is the one demonstrated laggard.** `semantic` is still a perfectly
+  reasonable default (never proven worse than anything, and still the one chunker where a
+  strong dense embedder demonstrably beats BM25, see below) — just no longer citable as "the
+  best chunker." Cross-chunker-averaged
   hybrid recall@10 (`qwen3_0.6b` 0.6167, `qwen3` 0.5945, `jina_v5` 0.5831, `e5` 0.5753,
   `bge-m3` 0.5730, `e5_small` 0.5658, `congen` 0.4692, `sct` 0.3939, `m2v` 0.3028). **The
   dedicated semantic-only top-5 pairwise tie test
@@ -183,10 +192,17 @@ see `docs/adr/`.
   `tools/eval/cost_latency_pareto.py` (vector dim, index size, query latency p50/p95) found
   `HybridRetriever.retrieve()` and `BM25Retriever.retrieve()`'s current implementation
   (full-corpus `k=n` fetch before fusing, `BM25Okapi` rebuilt from scratch every query) adds a
-  roughly **fixed ~2.1-2.3s of overhead to every hybrid query, nearly independent of embedder**
-  (it scales with corpus size, not embedding dim) — the ~2.3-2.9s measured figure is mostly this
-  avoidable per-query overhead on top of a ~130-730ms intrinsic cost, not RRF fusion itself;
-  report at `data/results/cost_latency_pareto.md`.
+  roughly **fixed ~1.9-2.0s of overhead to every hybrid query, nearly independent of embedder**
+  (it scales with corpus size, not embedding dim) — the ~2.1-2.7s measured figure is mostly this
+  avoidable per-query overhead on top of a ~116-668ms intrinsic cost, not RRF fusion itself.
+  **Refreshed 2026-07-29** against the OCR-remediation-rebuilt indices: latency/cost mechanics
+  came back essentially unchanged (confirms these measure model/index/corpus-size mechanics, not
+  corpus content), but the recall@10 columns in the report dropped substantially like every other
+  quality number in this section (e.g. `qwen3 × semantic` dense 0.6581→0.5382,
+  `qwen3_0.6b × semantic` dense 0.6364→0.5688) — per Open item #13 above, semantic is not a
+  provable "best chunker", so don't cite this report's recall numbers as a chunker-supremacy
+  claim, only as one representative combo's cost/quality profile; report at
+  `data/results/cost_latency_pareto.md`.
 
 ## Agent skills
 
