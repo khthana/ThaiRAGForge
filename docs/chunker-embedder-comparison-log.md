@@ -1847,3 +1847,83 @@ diff −0.0043, p=0.8802 = เสมอราบ) กลับทิศจาก
 `docs/research-framework-gap-analysis.md` (ข้อ 7), memory
 `[[project_research_framework_gap_analysis]]` แล้ว ปิดการกวาด `data/results/*`
 ทั้งหมดครบทุกรายการ
+
+## ปิด 2 open item สุดท้ายที่เป็น pure recompute: MAP/precision@1 sig-test + BM25/hybrid แยก entity_type (29 ก.ค. 2569, กลางคืน)
+
+เลือกทำ 2 อันนี้เพราะเช็คแล้วว่าเป็น **pure recompute จริง** — ผลที่ persist ไว้เก็บ
+ranked results ครบทุก query และทุก combo retrieve ที่ `top_k=10` อยู่แล้ว ส่วน
+`entity_type` ก็ join จาก gold YAML ด้วยข้อความ query ได้ (pattern ที่
+`embedder_matrix_9way.py:243` ทำอยู่แล้วสำหรับ dense) → ไม่ต้องแตะ GPU เลย
+
+### 1. `map_precision_significance_test.py` — สอง metric สุดท้ายที่ไม่เคยถูกทดสอบ
+
+MAP กับ precision@1 ถูกรายงานใน `multi_k_report.md` และถูกอ้างใน paper summary
+มาตลอด แต่**ไม่เคยผ่าน significance test** — เป็นความเสี่ยงแบบเดียวกับที่ทำให้
+headline "semantic ชนะ" ต้องถอน และยังมีปัญหา **scope ไม่ตรงกัน** ค้างอยู่ด้วย
+(tie test เดิม scope แค่ `semantic` chunker แต่ตาราง multi-k เฉลี่ยข้าม 4 chunker
+→ ยืนยันหรือหักล้างกันเองไม่ได้) จึงรัน **ทั้ง 2 scope × ทั้ง 2 retriever**
+Holm แยกครอบครัวต่อ (retriever, scope, metric)
+
+ผลสำคัญ 3 ข้อ:
+
+1. **lead ของ `qwen3_0.6b` ฝั่ง dense แข็งกว่าบน MAP/precision@1 มากกว่าบน recall@10** —
+   scope aggregate มันชนะ **ทั้ง 8 ตัวที่เหลืออย่างมีนัยสำคัญ** ทั้งสอง metric
+   (เทียบกับ recall@10 ที่ชนะแค่ `bge_m3` กับ `qwen3`) → คำกล่าว "qwen3_0.6b นำทุก
+   metric" **ยืนยันเป็นข้อสรุปที่ทดสอบแล้วสำหรับ dense-alone** ไม่ใช่แค่ค่าเฉลี่ยดิบ
+2. **กลุ่มที่เสมอกันยังเสมอบน 2 metric ใหม่** — ที่ scope ที่ tie ถูกอ้างจริง
+   (hybrid, `semantic`) `bge_m3` แพ้บน MAP อีกครั้ง (drop-out แบบเดียวกับ
+   recall@10/nDCG@10) ส่วนอีก 4 ตัวเสมอกันหมด และบน **precision@1 ไม่มีคู่ไหน
+   มีนัยสำคัญเลยแม้แต่คู่เดียว** ทั้ง 5 ตัว → คำแนะนำ "อย่าตั้งใครเป็น embedder
+   ที่ดีที่สุดสำหรับ hybrid" ตอนนี้ครอบคลุมครบ 5 metric แล้ว ไม่ใช่ 3
+3. **scope mismatch เป็นเรื่องจริงและมีผล** — `qwen3_0.6b` สูงสุดที่ scope aggregate
+   แต่ `qwen3` สูงสุดเชิงตัวเลขที่ scope semantic ทั้งสอง metric (แม้ไม่มีนัยสำคัญ)
+   → "qwen3_0.6b นำทุก metric" เป็น **ข้อความระดับ aggregate scope เท่านั้น**
+   ต้องระบุ scope กำกับทุกครั้งที่อ้าง
+
+ข้อสังเกตเพิ่ม: **hybrid บีบความต่างระหว่าง embedder ให้แคบลง** — ครอบครัว 9 embedder
+เดียวกันไปจาก 8/8 มีนัยสำคัญ (dense) เหลือ 4/8 (hybrid) สอดคล้องกับการที่ BM25
+เป็นพื้นร่วมที่ยกทุกตัวขึ้นเท่าๆ กัน
+
+### 2. `bm25_hybrid_entity_type_breakdown.py` — และมันกลับข้อสรุปเดิมเรื่อง headroom
+
+เดิมมีแต่ dense-alone ที่เคยแยก entity_type (ที่มาของ finding specialist/generalist)
+ส่วน BM25 กับ hybrid มีแต่ค่า aggregate → ตอบไม่ได้ว่า hybrid เข้าใกล้เพดาน person
+0.976 แค่ไหน และปิดช่องว่าง faculty (เพดาน 0.681) ได้หรือไม่ ตอนนี้ตอบได้ทั้งคู่
+
+**ceiling attainment (recall ÷ ceiling — ตัวเลขที่เทียบข้ามหมวดได้จริง)**:
+
+| entity_type | ceiling | hybrid ดีสุด | % ceiling | dense ดีสุด | % | BM25 | % |
+|---|---|---|---|---|---|---|---|
+| person | 0.9760 | bge_m3 0.8211 | **84.1%** | 0.5735 | 58.8% | 0.8147 | **83.5%** |
+| faculty_adjunct_aggregate | 0.6810 | qwen3_0.6b 0.4922 | **72.3%** | 0.4698 | 69.0% | 0.4224 | 62.0% |
+| program | 0.9000 | qwen3_0.6b 0.6187 | **68.7%** | 0.6023 | 66.9% | 0.3484 | 38.7% |
+| course | 0.8729 | qwen3_0.6b 0.5683 | **65.1%** | 0.5500 | 63.0% | 0.3600 | 41.2% |
+
+**ข้อสรุปเดิมเรื่อง headroom กลับทิศ** — ย่อหน้าเดิมใน paper summary
+("person มีช่องว่างให้ปรับปรุงจริงมากกว่าที่ตัวเลขดิบทำให้เข้าใจ") วัดบน
+**dense-alone** เท่านั้น พอดูระบบที่แนะนำจริง (hybrid) กลับกลายเป็นว่า **person
+คือหมวดที่แก้ไปได้มากที่สุดแล้ว (84.1%)** ไม่ใช่หมวดที่เหลือช่องว่างมากที่สุด —
+จุดอ่อน person ของ dense ถูก BM25 ซ่อมจนเกือบหมด หมวดที่เหลือช่องว่างจริงมากสุด
+ตอนนี้คือ **`course` (65.1%)** ซึ่งเกิดขึ้นหลังการวิเคราะห์เพดานรอบแรก
+ส่วน faculty hybrid ปิดช่องว่างได้จริง (62.0% → 72.3%)
+
+**finding ใหม่ 2 อันที่เห็นได้เฉพาะจากการแยกหมวดนี้**:
+
+1. **หลักฐานตรงของกลไก complementarity ระหว่าง lexical กับ dense** — BM25 เปล่าๆ
+   ได้ **0.8147** บน person ซึ่ง**ชนะ dense-alone ของทุก embedder** (ดีสุด bge_m3
+   0.5735) แบบขาดลอย แต่ร่วงเหลือ **0.3484** บน program ที่ dense เกือบสองเท่า
+   (qwen3_0.6b 0.6023) → **BM25 แบก person (จับชื่อตรงตัว), dense แบก program**
+   นี่คือคำอธิบายเชิงกลไกว่าทำไม hybrid ถึงชนะทั้งคู่ และเป็น**หลักฐานตรง**
+   ต่างจาก proxy ทางอ้อม (rescue rate, union coverage, correlation) ที่ใช้ตอน
+   สอบสวน Open item #2 แล้วได้ผลไม่ชัด
+2. **"hybrid ไม่เคยทำให้แย่ลง" เป็นข้อความระดับ aggregate ไม่ใช่ระดับหมวด** —
+   เฉพาะ query กลุ่ม person นั้น hybrid **ต่ำกว่า BM25 เปล่าๆ** สำหรับ embedder
+   ส่วนใหญ่ (`qwen3_0.6b` 0.7220, `qwen3` 0.7340, `congen` 0.7228, `jina_v5` 0.7382
+   เทียบ BM25 0.8147) มีแค่ `bge_m3` (0.8211) ที่แซงได้ และ `e5`/`e5_small`
+   ที่ใกล้เคียง → การ fuse สัญญาณ dense ที่อ่อนในหมวดหนึ่ง **ลากหมวดนั้นลงต่ำกว่า
+   BM25 ได้** แม้ค่ารวมข้ามหมวดจะดีขึ้น เป็น failure shape เดียวกับเคส `sct`/`m2v`
+   แต่เกิด**ภายใน** embedder ที่แข็งโดยรวม แยกตามหมวด — ควรระบุเป็นข้อจำกัดของ
+   คำแนะนำ hybrid ที่เป็น headline
+
+อัปเดต `docs/paper-results-summary.md` (§ ceiling + § multi-k + Open item #9/#10 +
+รายการสคริปต์), `CLAUDE.md`, memory แล้ว

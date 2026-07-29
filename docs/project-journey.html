@@ -694,16 +694,44 @@ Gold set นี้ <b>ไม่ใช่ 1 คำถาม = 1 คำตอบ</
 <tr><td><b>ทั้งชุด</b></td><td class="num">73</td><td class="num">8.8</td><td class="num">43</td><td class="num"><b>0.892</b></td></tr>
 </tbody>
 </table>
+<div class="note">
+<span class="label">อ่านตัวเลขใหม่ — และข้อสรุปนี้ถูกกลับทิศในภายหลัง</span>
+เมื่อวัดบน <b>dense-alone</b> ตัวเลข faculty ที่ดูต่ำ (~0.45) อยู่ที่ ~66% ของเพดานตัวเอง
+ขณะที่ person (~0.57) อยู่ที่ ~58% → ตอนนั้นสรุปว่า "person มีช่องว่างให้ปรับปรุงมากกว่า"<br><br>
+<b>แต่พอวัดบนระบบที่แนะนำจริง (hybrid) เมื่อ 29 ก.ค. ข้อสรุปนี้กลับทิศ</b> — ดูหัวข้อถัดไป
+</div>
+
+<h4>ceiling attainment วัดบน hybrid (29 ก.ค. 2569) — กลับข้อสรุปข้างบน</h4>
+<table>
+<thead><tr><th>entity_type</th><th class="num">เพดาน</th><th class="num">hybrid ดีสุด</th><th class="num">% ของเพดาน</th><th class="num">BM25 เปล่า</th><th class="num">%</th></tr></thead>
+<tbody>
+<tr><td>person</td><td class="num">0.9760</td><td class="num">0.8211</td><td class="num"><b>84.1%</b></td><td class="num">0.8147</td><td class="num">83.5%</td></tr>
+<tr><td>faculty_adjunct_aggregate</td><td class="num">0.6810</td><td class="num">0.4922</td><td class="num"><b>72.3%</b></td><td class="num">0.4224</td><td class="num">62.0%</td></tr>
+<tr><td>program</td><td class="num">0.9000</td><td class="num">0.6187</td><td class="num"><b>68.7%</b></td><td class="num">0.3484</td><td class="num">38.7%</td></tr>
+<tr><td>course</td><td class="num">0.8729</td><td class="num">0.5683</td><td class="num"><b>65.1%</b></td><td class="num">0.3600</td><td class="num">41.2%</td></tr>
+</tbody>
+</table>
 <div class="win">
-<span class="label">อ่านตัวเลขใหม่</span>
-ตัวเลข faculty ที่ดูต่ำ (~0.45) จริงๆ อยู่ที่ <b>~66% ของเพดานตัวเอง</b>
-ขณะที่ person (~0.57) อยู่ที่ <b>~58% ของเพดาน</b><br>
-→ <b>person มีช่องว่างให้ปรับปรุงจริงมากกว่าที่ตัวเลขดิบทำให้เข้าใจ</b>
-ระยะห่างจาก 1.0 ของสองหมวดนี้เทียบกันตรงๆ ไม่ได้ถ้าไม่รู้เพดาน<br><br>
-<b>นัยต่ออนาคต</b>: คำถามแบบ "list all X" <b>ผิดกระบวนทัศน์ top-k similarity ตั้งแต่ต้น</b>
-— ไม่ว่า embedding หรือ chunking จะดีแค่ไหนก็ดันเพดาน 0.68 ไม่ขึ้น
-entity tagger ที่สร้างไว้แล้วทั้ง 4 ชนิดคือโครงสร้างพื้นฐานที่จะยกเพดานนี้ไป 1.0 ได้
-(กรองด้วย entity tag ตรงๆ แทนการหาความคล้าย) แต่ยังไม่เคยสร้าง/ทดสอบ
+<span class="label">finding ใหม่ 2 อันที่เห็นได้เฉพาะจากการแยกหมวดนี้</span>
+<b>1. หลักฐาน<i>ตรง</i>ของกลไก complementarity</b> — BM25 เปล่าๆ ได้ <b>0.8147</b> บน person
+ซึ่ง<b>ชนะ dense-alone ของทุก embedder</b> (ดีสุด bge_m3 0.5735) แบบขาดลอย
+แต่ร่วงเหลือ <b>0.3484</b> บน program ที่ dense เกือบสองเท่า (0.6023)<br>
+→ <b>BM25 แบก person (จับชื่อตรงตัว) · dense แบก program</b> นี่คือคำอธิบายเชิงกลไก
+ว่าทำไม hybrid ถึงชนะทั้งคู่ และเป็นหลักฐาน<b>ตรง</b> ต่างจาก proxy ทางอ้อมที่เคยลองแล้วได้ผลไม่ชัด<br><br>
+<b>2. "hybrid ไม่เคยทำให้แย่ลง" เป็นข้อความระดับ aggregate ไม่ใช่ระดับหมวด</b> —
+เฉพาะ query กลุ่ม person นั้น hybrid <b>ต่ำกว่า BM25 เปล่าๆ</b> สำหรับ embedder ส่วนใหญ่
+(qwen3_0.6b 0.7220 · qwen3 0.7340 · jina_v5 0.7382 เทียบ BM25 0.8147) มีแค่ bge_m3 ที่แซงได้
+→ การ fuse สัญญาณ dense ที่อ่อนในหมวดหนึ่ง <b>ลากหมวดนั้นลงต่ำกว่า BM25 ได้</b>
+แม้ค่ารวมข้ามหมวดจะดีขึ้น
+</div>
+<div class="note">
+<span class="label">สรุปที่ถูกต้อง ณ ตอนนี้</span>
+<b>person คือหมวดที่แก้ไปได้มากที่สุดแล้ว (84.1%)</b> ไม่ใช่หมวดที่เหลือช่องว่างมากที่สุด —
+จุดอ่อน person ของ dense ถูก BM25 ซ่อมจนเกือบหมด
+หมวดที่เหลือช่องว่างจริงมากที่สุดตอนนี้คือ <b>course (65.1%)</b> ซึ่งเกิดขึ้นหลังการวิเคราะห์รอบแรก<br><br>
+<b>นัยต่ออนาคต</b>: คำถามแบบ "list all X" ยัง<b>ผิดกระบวนทัศน์ top-k similarity ตั้งแต่ต้น</b>
+— ดันเพดาน 0.68 ไม่ขึ้นไม่ว่า embedding/chunking จะดีแค่ไหน entity tagger ทั้ง 4 ชนิด
+คือโครงสร้างพื้นฐานที่จะยกเพดานไป 1.0 ได้ แต่ยังไม่เคยสร้าง/ทดสอบ
 </div>
 
 <h3>7.7 BM25 — ผลที่พลิกกรอบคำถามวิจัยทั้งหมด</h3>
@@ -1038,8 +1066,10 @@ bge-m3 เสียสถานะนั้นไปแล้ว และตั
 <h3>Q4. hybrid คุ้มไหม?</h3>
 <p>
 <b>คุ้มที่สุดในบรรดาทุกอย่างที่ทดสอบมา</b> — ชนะ dense อย่างเดียว 26/27 การทดสอบ<br>
-<b>ยกเว้น</b>: อย่าผสมกับ embedder ที่อ่อนเกินไป (<code>sct</code>, <code>m2v</code>
-ทำให้ผลแย่ลงอย่างมีนัยสำคัญเมื่อเทียบกับ BM25 เปล่าๆ)
+<b>ยกเว้น 2 ข้อ</b>: (1) อย่าผสมกับ embedder ที่อ่อนเกินไป (<code>sct</code>, <code>m2v</code>
+ทำให้ผลแย่ลงอย่างมีนัยสำคัญเมื่อเทียบกับ BM25 เปล่าๆ) (2) <b>"ไม่เคยทำให้แย่ลง" เป็นข้อความ
+ระดับ aggregate ไม่ใช่ระดับหมวด</b> — เฉพาะ query กลุ่ม person นั้น hybrid ต่ำกว่า BM25
+เปล่าๆ สำหรับ embedder ส่วนใหญ่ (ดู §7.6)
 </p>
 <div class="win">
 <span class="label">คำแนะนำระดับระบบสำหรับเปเปอร์</span>
@@ -1156,12 +1186,6 @@ pipeline OCR ไม่มี ground truth → บอกให้ผู้ใช�
 
 <h3>ยังไม่ได้ทำ (เรียงตามคุณค่า)</h3>
 <ol>
-<li><b>significance test สำหรับ MAP และ precision@1</b> — สอง metric นี้ไม่เคยถูกทดสอบเลย
-(ทดสอบแค่ recall@10 / MRR / nDCG@10) และมีปัญหา<b>ขอบเขตไม่ตรงกัน</b>ด้วย:
-การทดสอบ "กลุ่มเสมอ" ที่มีอยู่ครอบคลุมเฉพาะ semantic chunker
-ขณะที่ตาราง multi-k เฉลี่ยข้าม 4 chunker</li>
-<li><b>BM25 และ hybrid ยังไม่เคยแยกผลตาม entity_type</b> — จึงยังไม่รู้ว่า hybrid
-เข้าใกล้เพดาน person 0.976 แค่ไหน หรือปิดช่องว่างของ faculty ได้หรือไม่</li>
 <li><b><code>strip_course_comparison_tables</code> สร้างแล้วแต่ยังไม่ต่อเข้า loader ใดๆ</b>
 — ต้องมี eval ที่ครอบคลุมเชิงหัวข้อก่อน เพราะ gold query แบบชื่อวิชา
 <b>ตรวจจับการถดถอยจากการตัดคำบรรยายทิ้งไม่ได้</b> (มันไม่เคยแตะข้อความส่วนคำบรรยายเลย)</li>
@@ -1183,6 +1207,8 @@ pipeline OCR ไม่มี ground truth → บอกให้ผู้ใช�
 <li>gap-analysis Tier 1 + Tier 2 ทั้งหมด (metrics, BM25, significance testing, cost/latency, การเพิ่ม embedder)</li>
 <li>บั๊ก corpus discovery (ยืนยัน 0% contamination)</li>
 <li>RQ3 ablation ทั้ง 3 ตัว (rebuild ล้าง confound เสร็จ 29 ก.ค.)</li>
+<li>MAP/precision@1 significance test (29 ก.ค.) — กลุ่มที่เสมอกันยังเสมอบน metric ใหม่ทั้งสอง</li>
+<li>BM25/hybrid แยกตาม entity_type (29 ก.ค.) — ได้กลไก complementarity เป็นหลักฐานตรง</li>
 </ul>
 
 <!-- ============================================================ -->

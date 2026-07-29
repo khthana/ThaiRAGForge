@@ -203,6 +203,27 @@ see `docs/adr/`.
   provable "best chunker", so don't cite this report's recall numbers as a chunker-supremacy
   claim, only as one representative combo's cost/quality profile; report at
   `data/results/cost_latency_pareto.md`.
+- **Per-entity_type breakdown of BM25/hybrid (2026-07-29,
+  `tools/eval/bm25_hybrid_entity_type_breakdown.py`) gives the mechanism behind the
+  hybrid win, and one caveat to it.** BM25 alone scores **0.8147** on `person` queries —
+  beating every embedder's dense-alone person score (best `bge_m3` 0.5735) outright —
+  while collapsing to **0.3484** on `program`, where dense nearly doubles it
+  (`qwen3_0.6b` 0.6023). **BM25 carries person (exact name match), dense carries program**;
+  that is direct evidence for the complementarity the Open item #2 proxies never
+  established. Caveat: **"hybrid never hurts" is an aggregate claim, not a per-category
+  one** — on `person` specifically hybrid sits *below* BM25-alone for most embedders
+  (`qwen3_0.6b` 0.7220, `qwen3` 0.7340, `jina_v5` 0.7382), only `bge_m3` (0.8211) exceeding
+  it. Measured against the structural ceiling, hybrid reaches 84.1% on `person`, 72.3%
+  `faculty_adjunct_aggregate`, 68.7% `program`, 65.1% `course` — **this reverses the old
+  "person has the most addressable headroom" reading, which was dense-alone-specific;
+  `course` now has the most.** Also settled the same day: MAP and precision@1 are
+  significance-tested at last (`tools/eval/map_precision_significance_test.py`, run at both
+  the cross-chunker-aggregate and `semantic`-only scopes) — `qwen3_0.6b` beats all 8 other
+  embedders on both, dense-alone (stronger than its recall@10 result), the semantic-scope
+  tied cluster **holds on both new metrics** (precision@1 has no significant pair at all),
+  and "`qwen3_0.6b` leads every metric" is an **aggregate-scope-only** claim (`qwen3` is
+  numerically highest at semantic scope). Hybrid compresses embedder differences: the same
+  9-embedder family goes 8/8 significant dense → 4/8 hybrid.
 - **Two settled negative/null results — don't re-propose these without new evidence.**
   Both were built and run for real, and both were refreshed 2026-07-29 against the
   OCR-remediation-rebuilt indices (they had gone stale like everything else, see the

@@ -736,13 +736,58 @@ more genuine, addressable headroom than the raw numbers next to
 faculty_adjunct_aggregate make it look** — the two categories' distance
 from 1.0 is not directly comparable without this ceiling.
 
-**Not yet done**: this ceiling was computed against the dense-alone
-per-entity_type breakdown (the only one that exists — see
-`gold_embedder_breakdown_9way.md`). **BM25 and hybrid have never been
-broken down by entity_type** (only their cross-chunker aggregates exist),
-so it's not yet possible to say how close hybrid's person-query recall gets
-to the 0.976 ceiling specifically, nor whether hybrid closes the
-`faculty_adjunct_aggregate` gap to its lower 0.681 ceiling. New open item.
+**Resolved 2026-07-29**: the ceiling above was originally computed against the
+dense-alone breakdown, the only one that existed. BM25 and hybrid have now
+been broken out by entity_type too
+(`tools/eval/bm25_hybrid_entity_type_breakdown.py`, full table:
+`data/results/bm25_hybrid_entity_type_breakdown.md`, pure recompute from
+persisted results). Ceilings are recomputed there over the full 106-query
+set, which adds the `course` category (ceiling 0.8729) that postdates the
+73-query table above.
+
+**Ceiling attainment — the comparable quantity across categories** (best
+system per category; `% of ceiling` = recall ÷ ceiling):
+
+| entity_type | ceiling | best hybrid | recall | % of ceiling | best dense | % of ceiling | BM25 alone | % of ceiling |
+|---|---|---|---|---|---|---|---|---|
+| person | 0.9760 | bge_m3 | 0.8211 | **84.1%** | bge_m3 (0.5735) | 58.8% | 0.8147 | **83.5%** |
+| faculty_adjunct_aggregate | 0.6810 | qwen3_0.6b | 0.4922 | **72.3%** | qwen3 (0.4698) | 69.0% | 0.4224 | 62.0% |
+| program | 0.9000 | qwen3_0.6b | 0.6187 | **68.7%** | qwen3_0.6b (0.6023) | 66.9% | 0.3484 | 38.7% |
+| course | 0.8729 | qwen3_0.6b | 0.5683 | **65.1%** | qwen3_0.6b (0.5500) | 63.0% | 0.3600 | 41.2% |
+
+**This reverses the headroom reading in the paragraph above, which was
+dense-alone-specific.** Under the actually-recommended system (hybrid),
+`person` is the *most* solved category at 84.1% of its ceiling, not the one
+with the most addressable headroom — dense-alone's person weakness (58.8%)
+is almost entirely repaired by fusing BM25. The category with the most real
+headroom left is now **`course`** (65.1%), which did not exist when the
+original ceiling analysis was written. Hybrid does also close the
+`faculty_adjunct_aggregate` gap (62.0% BM25 → 72.3% hybrid), answering the
+second open question.
+
+**Two findings that only this breakdown makes visible:**
+
+1. **Direct evidence for the lexical/dense complementarity mechanism.**
+   BM25 alone reaches **0.8147** on `person` — beating *every* dense
+   embedder's dense-alone person score (best: bge_m3 0.5735) by a wide
+   margin — while collapsing to **0.3484** on `program`, where dense
+   nearly doubles it (qwen3_0.6b 0.6023). **BM25 carries person queries
+   (exact name match); dense carries program queries.** This is the
+   mechanistic explanation for the hybrid-beats-both result, and it is
+   *direct* evidence, unlike the indirect proxies (rescue rate, union
+   coverage, per-query correlation) used in the Open item #2 investigation
+   that came back inconclusive.
+2. **"Hybrid never hurts" is an aggregate statement, not a per-category
+   one.** On `person` queries specifically, hybrid is *below* BM25-alone
+   (0.8147) for most embedders — `qwen3_0.6b` 0.7220, `qwen3` 0.7340,
+   `congen` 0.7228, `jina_v5` 0.7382 — with only `bge_m3` (0.8211)
+   exceeding it and `e5`/`e5_small` (0.8105/0.8051) roughly matching it.
+   Fusing a dense signal that is weak on a category can drag that
+   category below the BM25 baseline even when the cross-category
+   aggregate improves. This is the same failure shape as the
+   `sct`/`m2v` RRF cases, but occurring *within* an otherwise-strong
+   embedder, per category — worth stating as a limitation of the headline
+   hybrid recommendation.
 
 **Implication for future work (not started, candidate direction beyond the
 current Tier 1-3 plan)**: because `faculty_adjunct_aggregate` queries are
@@ -1035,17 +1080,52 @@ breaking the old dense-alone 3-way tie (see "Embedders compared" above) and
 `bge_m3` falling out of the top tier generally after the OCR-remediation
 rebuild.
 
-**This does not mean MAP/precision@1 are now "confirmed"**, though — no
-significance test has ever been run on these two metrics; only
-recall@10/MRR/nDCG@10 were tested (`hybrid_significance_test_semantic_top5.py`).
-There's also a **scope mismatch** worth flagging: that test's "tied cluster"
-finding is scoped to the `semantic` chunker only (a 4-way tie among
-`qwen3_0.6b`/`qwen3`/`jina_v5`/`e5_small`), while the table above is
-aggregated *across all 4 chunkers* — so even now that the numbers agree
-directionally, this table doesn't directly confirm or refute that specific
-tie. Building a MAP/precision@1 significance test (either aggregate or
-semantic-only, to actually match the existing tie's scope) remains an open
-item — not yet built.
+### MAP / precision@1 significance test (built 2026-07-29 — resolves the last untested metrics)
+
+The two metrics above were reported but had **never been significance-tested**
+— only recall@10/MRR/nDCG@10 ever were. Built
+`tools/eval/map_precision_significance_test.py` (pure recompute from persisted
+results; full table: `data/results/map_precision_significance_test.md`). It
+runs **both scopes**, because the existing tied-cluster finding is scoped to
+the `semantic` chunker only while the multi-k tables above aggregate across all
+4 — so previously neither could speak to the other. Holm-corrected within each
+(retriever, scope, metric) family.
+
+| retriever / scope | metric | highest | significantly beats | ties |
+|---|---|---|---|---|
+| dense / aggregate | MAP | `qwen3_0.6b` (0.4447) | **8 of 8** | — |
+| dense / aggregate | precision@1 | `qwen3_0.6b` (0.7429) | **8 of 8** | — |
+| dense / semantic | MAP | `qwen3_0.6b` (0.4976) | 3 of 4 | `qwen3` |
+| dense / semantic | precision@1 | `qwen3_0.6b` (0.7830) | 3 of 4 | `qwen3` |
+| hybrid / aggregate | MAP | `qwen3_0.6b` (0.4922) | 4 of 8 | `qwen3`, `bge_m3`, `e5`, `e5_small` |
+| hybrid / aggregate | precision@1 | `qwen3_0.6b` (0.7382) | 4 of 8 | `qwen3`, `bge_m3`, `e5`, `e5_small` |
+| hybrid / semantic | MAP | `qwen3` (0.5014) | 1 of 4 (`bge_m3`) | `qwen3_0.6b`, `jina_v5`, `e5_small` |
+| hybrid / semantic | precision@1 | `qwen3` (0.7170) | **0 of 4** | all four |
+
+**Three things this settles:**
+
+1. **`qwen3_0.6b`'s dense-alone lead is stronger on MAP/precision@1 than on
+   recall@10.** In the aggregate dense scope it significantly beats **all
+   eight** other embedders on both metrics — a cleaner result than recall@10,
+   where it beats only `bge_m3` and `qwen3`. The "qwen3_0.6b now leads every
+   metric" reading of the multi-k tables above is therefore **confirmed as a
+   tested claim for dense-alone**, not just a raw-mean observation.
+2. **The tied cluster survives on the two new metrics.** At the scope the tie
+   was actually claimed at (hybrid, `semantic`), `bge_m3` again loses on MAP
+   (the same drop-out seen on recall@10/nDCG@10), and the remaining four are
+   fully mutually tied; on precision@1 **nothing is significant at all**, all
+   five tie. **Don't crown a single best hybrid embedder — that guidance now
+   holds across all five metrics, not three.**
+3. **The scope mismatch was real and matters.** `qwen3_0.6b` is highest at the
+   aggregate scope but `qwen3` is numerically highest at the semantic scope on
+   both new metrics — so "qwen3_0.6b leads every metric" is **an
+   aggregate-scope statement only**, and neither difference is significant at
+   the semantic scope anyway. Cite the scope alongside the claim.
+
+Note also that hybrid *compresses* embedder differences relative to dense: the
+same 9-embedder family goes from 8-of-8 significant (dense) to 4-of-8 (hybrid),
+consistent with BM25 supplying a common floor that narrows the gap between
+embedders.
 
 ## Cost / latency characterization
 
@@ -1326,33 +1406,48 @@ holds as stated.
    single-combo across the entire study" in the "Hybrid retrieval" section
    above for the current writeup. Don't cite any one embedder as the
    confirmed best hybrid combo among those four.
-9. **Updated 2026-07-29**: the original 2026-07-22 version of this item
-   (`bge_m3` leading MAP while `qwen3_0.6b` led precision@1 under hybrid —
-   opposite directions) was itself computed from a stale
-   `multi_k_report.md` (2026-07-22 mtime, one rebuild behind
-   `gold_hybrid_73det`) — a third instance of the "not in the 5-script
-   refresh chain" staleness bug, after BM25/hybrid and
-   `cost_latency_pareto.py`. Re-ran it: the contradiction is **gone** —
-   `qwen3_0.6b` now leads MAP, precision@1/ndcg@1, and recall@10 all
-   together among the top-3-by-recall@10 embedders (dense and hybrid
-   alike). Still **not significance-tested** (only recall@10/MRR/nDCG@10
-   were covered by the semantic-top5 script, and that test's scope —
-   `semantic` chunker only — doesn't match this table's
-   aggregated-across-chunkers scope anyway). Building a MAP/precision@1
-   significance test remains open, just no longer motivated by a
-   contradiction that needed explaining.
-10. New 2026-07-22 (from "Structural recall@10 ceiling by entity_type"
-    section above): BM25 and hybrid have never been broken down by
-    entity_type (only dense-alone has, via `embedder_matrix_9way.py`) — so
-    it's not yet known how close hybrid's person-query recall gets to its
-    0.976 structural ceiling, or whether hybrid narrows the
-    `faculty_adjunct_aggregate` gap to its much lower 0.681 ceiling.
-    Related, larger, unstarted idea: an entity-indexed/structured lookup
-    path (using the already-built `people.json`/`faculties.json`/
-    `programs.json` taggers) for "list all X" style queries, which are
-    structurally capped well below 1.0 under any top-k similarity
-    approach — not part of the current Tier 1-3 plan, a candidate future
-    direction only.
+9. ~~**Updated 2026-07-29**: MAP/precision@1 contradiction + never
+   significance-tested~~ — **FULLY CLOSED 2026-07-29**. Two separate
+   problems, both now resolved. (a) The original 2026-07-22 version of this
+   item (`bge_m3` leading MAP while `qwen3_0.6b` led precision@1 — opposite
+   directions) was computed from a stale `multi_k_report.md`, one rebuild
+   behind `gold_hybrid_73det` — a third instance of the "not in the
+   5-script refresh chain" staleness bug. Re-ran it: the contradiction is
+   **gone**. (b) The remaining gap — that neither metric had ever been
+   significance-tested, and that the existing tie test's scope
+   (`semantic`-only) didn't match the multi-k tables' scope
+   (cross-chunker-aggregate) — is closed by
+   `tools/eval/map_precision_significance_test.py`, which runs **both**
+   scopes × both retrievers. Results in "MAP / precision@1 significance
+   test" above: `qwen3_0.6b` significantly beats all 8 other embedders on
+   both metrics dense-alone (stronger than its recall@10 result), the
+   semantic-scope tied cluster **holds on both new metrics** (nothing at
+   all is significant on precision@1), and the scope mismatch turns out to
+   matter — `qwen3` is numerically highest at semantic scope, so
+   "`qwen3_0.6b` leads every metric" is an aggregate-scope claim only.
+
+10. ~~New 2026-07-22: BM25 and hybrid have never been broken down by
+    entity_type~~ — **DONE 2026-07-29**
+    (`tools/eval/bm25_hybrid_entity_type_breakdown.py`,
+    `data/results/bm25_hybrid_entity_type_breakdown.md`), see "Structural
+    recall@10 ceiling by entity_type" above for the full writeup. Both
+    original questions answered: hybrid reaches **84.1%** of the `person`
+    ceiling (dense-alone only 58.8%), and it **does** narrow the
+    `faculty_adjunct_aggregate` gap (BM25 62.0% → hybrid 72.3%). **The
+    headroom reading in that section is reversed by this**: under hybrid,
+    `person` is the most-solved category, not the one with the most
+    addressable headroom — that title now belongs to `course` (65.1%),
+    which postdates the original analysis. Two further findings fell out:
+    (i) **direct** evidence for the lexical/dense complementarity
+    mechanism (BM25 alone 0.8147 on person vs 0.3484 on program; dense
+    the reverse) — the mechanism Open item #2's indirect proxies failed to
+    establish; and (ii) **"hybrid never hurts" is an aggregate claim, not
+    a per-category one** — on `person` specifically, hybrid sits *below*
+    BM25-alone for most embedders, only `bge_m3` exceeding it. The larger
+    unstarted idea (an entity-indexed/structured lookup path for "list
+    all X" queries, using the already-built taggers) remains a candidate
+    future direction, not part of the current plan.
+
 11. New 2026-07-23: found + fixed a corpus-discovery bug affecting **every
     number in this document**. `runner.py::_discover_paths` (and
     `cli.py::build`) did a bare `rglob("*.md")` with no filtering, unlike
@@ -1505,6 +1600,13 @@ holds as stated.
   significance test among the top 5 hybrid combos, semantic chunker only, no cross-chunker
   averaging (imports `build_combo_to_chunker_embedder`/`bootstrap_pvalue`/`holm_correct` from
   `embedder_matrix_9way.py`); resolved Open item #8's "crown neither" question
+- `tools/eval/map_precision_significance_test.py` — MAP + precision@1 pairwise significance,
+  run at **both** scopes (cross-chunker aggregate, and `semantic`-only to match the existing
+  tie test) × both retrievers (dense, hybrid); closed Open item #9's untested-metric half
+- `tools/eval/bm25_hybrid_entity_type_breakdown.py` — BM25 and hybrid recall@10 by
+  entity_type against the structural ceiling, with ceiling-attainment percentages; closed
+  Open item #10, and produced the first direct evidence of the BM25/dense per-category
+  complementarity that makes hybrid work
 - `tools/eval/multi_k_report.py` — MAP/Precision@k/Recall@k/nDCG@k for k=1,3,5,10 across
   dense/hybrid (9 embedders, aggregated across 4 chunkers) and BM25; pure recompute over
   already-persisted top-10 retrieval results, no re-retrieval needed; closed Open item #4
