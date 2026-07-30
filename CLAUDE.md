@@ -326,6 +326,14 @@ see `docs/adr/`.
      indices reuse `chunker_compare_full` combos as their *baseline* arm, so **an index
      rebuild silently turns them into a clean-baseline-vs-dirty-treatment confound** — they
      need real GPU rebuilds after a corpus change, not just a re-eval.
+- **Candidate next axes, written up but not started**: `docs/rq4-design.md`
+  (end-to-end RAG answer quality — the one unstarted research question, local-only
+  generation with objective citation/abstention metrics rather than LLM-as-judge)
+  and `docs/colbert-late-interaction-notes.md` (ColBERT: motivated by *our own*
+  results — the cross-encoder reranker hurt hybrid MRR, and BM25/dense split
+  person vs program — with a pre-registered prediction so an aggregate win can't
+  be mistaken for resolving that split). Neither is committed to; RQ4 is the one
+  that blocks the paper.
 - Narrative overview of the whole project (what was done in what order, what each step
   found, which conclusions have since been retracted): `docs/project-journey.html` — the
   tracked source; render to PDF with headless Chrome (`--headless --no-pdf-header-footer
