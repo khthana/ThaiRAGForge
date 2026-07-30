@@ -16,7 +16,18 @@ document title wording). Do **not** cite numbers from the 252-entry set
 (`gold_query_set.yaml`) — it's diluted with 179 thematic queries that have
 near-zero discriminative power (see
 [[project_thematic_query_bootstrap]] / `docs/chunker-embedder-comparison-log.md`)
-and materially changes rank order.
+and materially changes rank order. **Why they had no discriminative power is now
+known, and it was not a property of thematic retrieval** (2026-07-30): all 179
+were meeting-scoped — each entry's gold ids come from exactly one meeting — yet
+every one asked about "ในการประชุม**ครั้งนี้**" without ever naming the meeting, so
+no retriever could tell which of ~120 meetings was meant, and every other meeting
+that discussed the same theme scored as a miss. The queries were unanswerable as
+posed, so their scores were noise rather than a measurement of chunking.
+`tools/eval/qualify_thematic_queries.py` rewrote all 179 to name their meeting
+(the identity was already in each entry's own gold ids, so nothing was
+re-judged); the subset is now well-posed but **has not been re-evaluated**, so it
+is still not citable — it is a candidate for a future meeting-scoped eval, not a
+retired one.
 
 **Status**: gap-analysis Tier 1 and Tier 2 (`docs/research-framework-gap-analysis.md`
 §8) are both fully closed as of 2026-07-21 — MAP/Precision@k/multi-k, BM25 baseline,
@@ -1678,13 +1689,23 @@ holds as stated.
       — checked name by name, and the one 9-way script that does not import that
       set (`run_gold_hybrid_eval_9way_new.py`) uses an explicit 12-combo
       allowlist. So no current number is computed from a contaminated index.
-    - **Two WARNs worth a human look**: (a) 5 query strings are duplicated in the
-      252-entry `gold_query_set.yaml`, all `thematic`, each pair carrying a
-      *different* relevant set — and because results are persisted keyed by
-      `sha256(query)`, both entries share one result file and get graded against
-      two different answer keys. `gold_query_set_73det.yaml` has 0 duplicates, and
-      thematic queries are already excluded from every cited result, so nothing
-      above is affected. (b) 24 `*.md.dup` archives have no live counterpart —
+    - **Both WARNs are now closed** (2026-07-30). (a) 5 query strings were
+      duplicated in the 252-entry `gold_query_set.yaml`, all `thematic`, each pair
+      carrying a *different* relevant set — and because results are persisted keyed
+      by `sha256(query)`, both entries shared one result file and were graded
+      against two different answer keys. Chasing that warning found the **real,
+      larger defect** it was a symptom of: every one of the 179 thematic entries is
+      meeting-scoped but asks about "ครั้งนี้" without naming the meeting (the 5
+      duplicates are merely where two meetings produced byte-identical text — their
+      gold sets are *disjoint*, shared=0 for all 5 pairs, which is the giveaway).
+      Fixed by rewriting all 179 to name their meeting, deriving it from each
+      entry's own gold ids; special sessions are spelled out as วาระพิเศษ per
+      ADR-0003. The rewrite touched exactly 179 `query:` lines and nothing else,
+      was guarded by a byte-identical YAML round-trip, and **invalidated no cache**
+      — checked first that no live result directory answers a thematic query.
+      `gold_query_set_73det.yaml` was unaffected (0 duplicates, no thematic
+      entries), so no cited number moves. (b) 24 `*.md.dup` archives had no live
+      counterpart —
       **reviewed one by one 2026-07-30 and now closed: no corpus file was lost.**
       21 are tail fragments of a wrapped title (before the manifest rebuild, a
       title that wrapped produced one file per line — e.g. `และมาตรฐานคุณวุฒิสาขา`
@@ -1739,8 +1760,9 @@ holds as stated.
       "examined and clean" and "nothing left to examine". **Current state: 25
       checks, 22 pass / 2 warn / 1 fail** — the FAIL is the documented
       `BuildCombo.id` caveat, and both WARNs are the human-judgement items above
-      (5 duplicate thematic queries, 24 orphan archives). `E3a: 0 of 9,552 live
-      result files` is the check that matters, and it is a real pass.
+      (5 duplicate thematic queries, 24 orphan archives) — **both since closed,
+      leaving 24 pass / 0 warn / 1 fail**. `E3a: 0 of 9,552 live result files` is
+      the check that matters, and it is a real pass.
 
 ## Source scripts (for reproducibility / methods section)
 

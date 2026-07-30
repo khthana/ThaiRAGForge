@@ -1,6 +1,6 @@
 # Pipeline invariant audit
 
-Run 2026-07-30 04:16 UTC. 23 pass / 1 warn / 1 fail.
+Run 2026-07-30 04:22 UTC. 24 pass / 0 warn / 1 fail.
 
 | check | status | detail |
 |---|---|---|
@@ -22,7 +22,7 @@ Run 2026-07-30 04:16 UTC. 23 pass / 1 warn / 1 fail.
 | E1 gold ids resolve (gold_query_set_73det.yaml) | PASS | 1046 refs, 0 dangling |
 | E2 no duplicate query (gold_query_set_73det.yaml) | PASS | 106 queries, 0 duplicated |
 | E1 gold ids resolve (gold_query_set.yaml) | PASS | 1219 refs, 0 dangling |
-| E2 no duplicate query (gold_query_set.yaml) | WARN | 252 queries, 5 duplicated |
+| E2 no duplicate query (gold_query_set.yaml) | PASS | 252 queries, 0 duplicated |
 | E0 combo id identifies its index unambiguously | FAIL | 12 combo ids exist under >1 index root (BuildCombo.id omits the corpus, so results cannot be attributed to one index) |
 | E3a results reference ids their index holds | PASS | 0 of 9552 live result files reference an id their index does not hold |
 | E3d retired result sets name ids no index holds | PASS | 0 of 0 retired result files carry titles from an earlier corpus state (retired sets, read by no current script; 0 of 0 means they have been archived off-repo, not that they were checked) |

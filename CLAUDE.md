@@ -66,9 +66,11 @@ see `docs/adr/`.
   still means a *live* result set has drifted. Because 0 is ambiguous between
   "examined and clean" and "nothing left to examine", the E3 checks now print their
   denominator — `E3a 0 of 9,552 live result files` is a real pass, `E3d 0 of 0` says
-  so out loud. Current state: 23 pass / 1 warn / 1 fail, the single FAIL being the
-  `BuildCombo.id` caveat above and the WARN the 5 duplicate thematic queries in
-  the 252-entry gold set. C4's 24 orphan archives were reviewed one by one and
+  so out loud. Current state: **24 pass / 0 warn / 1 fail**, the single FAIL being the
+  `BuildCombo.id` caveat above. Both former warns were chased to root cause rather
+  than waived, and each turned out to be a symptom of something bigger than the
+  warning said (the 5 duplicate thematic queries → the whole 179-entry subset was
+  unanswerable; see above). C4's 24 orphan archives were reviewed one by one and
   closed (nothing was lost: 21 tail fragments of a wrapped title, 1 rename, 2
   misfiled-but-live); the verdicts are encoded as rules, and the same-document
   test compares page-1 `เรื่อง` headings because whole-file similarity decays
@@ -163,7 +165,11 @@ see `docs/adr/`.
   first 6 embedders and are superseded but kept for reference.) Scores against the Gold query
   set `config/eval/gold_query_set_73det.yaml` (73 deterministic queries — use this one, not the
   252-entry `gold_query_set.yaml`, which dilutes results with low-discrimination thematic
-  queries). Full process narrative: `docs/chunker-embedder-comparison-log.md`; clean
+  queries — and the reason they don't discriminate is now known: all 179 were
+  meeting-scoped but never named the meeting ("ในการประชุมครั้งนี้"), so they were
+  unanswerable as posed. `tools/eval/qualify_thematic_queries.py` rewrote all 179 to name
+  their meeting 2026-07-30; the subset is now well-posed but **un-re-evaluated**, so still
+  don't cite it). Full process narrative: `docs/chunker-embedder-comparison-log.md`; clean
   citation-ready numbers for paper-writing: `docs/paper-results-summary.md` (update this one
   whenever a headline number changes — the log stays append-only). **Refreshed 2026-07-25**
   for the corpus-discovery contamination fix (0% contamination, see
