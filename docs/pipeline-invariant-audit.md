@@ -1,24 +1,24 @@
 # Pipeline invariant audit
 
-Run 2026-07-30 04:22 UTC. 24 pass / 0 warn / 1 fail.
+Run 2026-07-30 05:14 UTC. 21 pass / 3 warn / 1 fail.
 
 | check | status | detail |
 |---|---|---|
-| C1 resolution_id unique | PASS | 2853 files -> 2853 ids |
-| C2 no empty document | PASS | 0 empty of 2853 |
+| C1 resolution_id unique | PASS | 2854 files -> 2854 ids |
+| C2 no empty document | PASS | 0 empty of 2854 |
 | C3a manifest entries point at real files | PASS | 0 dead |
 | C3b no duplicate file keys | PASS | 0 duplicated |
 | C3c every corpus file listed in its manifest | PASS | 0 unlisted (title falls back to filename stem) |
 | C3d one source URL, one base title | PASS | 0 URLs claimed by differently-titled documents |
-| C4 no orphaned .md.dup archive | PASS | 0 of 240 archives are unaccounted for (21 are tail fragments of a live file's title, 1 are live under a repaired name, 1 under a truncated title, 1 under a title naming a different agenda item) |
-| C5 master_list.csv row count | PASS | 2853 rows vs 2853 corpus files (rows are meeting-level, not file-level -- informational) |
+| C4 no orphaned .md.dup archive | PASS | 0 of 239 archives are unaccounted for (21 are tail fragments of a live file's title, 1 are live under a repaired name, 1 under a truncated title, 0 under a title naming a different agenda item) |
+| C5 master_list.csv row count | PASS | 2854 rows vs 2854 corpus files (rows are meeting-level, not file-level -- informational) |
 | I1 row alignment (chunks/vectors/lexical) | PASS | 0 misaligned of 55 |
 | I2 chunk_id unique within index | PASS | 0 indexes with duplicates |
 | I3a no chunks from outside the corpus | PASS | 0 indexes contaminated |
-| I3b corpus coverage | PASS | lowest: chunker_compare_full 2853/2853, chunker_compare_full 2853/2853, chunker_compare_full 2853/2853, chunker_compare_full 2853/2853, chunker_compare_full 2853/2853 |
+| I3b corpus coverage | WARN | lowest: chunker_compare_full 2853/2854, chunker_compare_full 2853/2854, chunker_compare_full 2853/2854, chunker_compare_full 2853/2854, chunker_compare_full 2853/2854 |
 | I4 embeddings finite and non-zero (sampled) | PASS | 0 indexes with bad vectors |
-| I5 manifest n_resolutions matches corpus | PASS | 0 drifted |
-| I6 index newer than corpus | PASS | 0 indexes built before the corpus's last edit |
+| I5 manifest n_resolutions matches corpus | WARN | 41 drifted |
+| I6 index newer than corpus | WARN | 41 indexes built before the corpus's last edit |
 | E1 gold ids resolve (gold_query_set_73det.yaml) | PASS | 1046 refs, 0 dangling |
 | E2 no duplicate query (gold_query_set_73det.yaml) | PASS | 106 queries, 0 duplicated |
 | E1 gold ids resolve (gold_query_set.yaml) | PASS | 1219 refs, 0 dangling |
