@@ -1621,6 +1621,60 @@ holds as stated.
     **not** need a GPU rebuild, and should be done before the next eval refresh
     rather than carried as a known error.
 
+15. New 2026-07-30: **swept the whole class of bug that #14 belonged to**, instead
+    of waiting to trip over the next one. Three silent-corruption bugs had by then
+    been found by accident (#11 corpus-discovery contamination, #12 stale
+    BM25/hybrid cache, #14 `resolution_id` collisions), all with the same shape: a
+    mismatch between two artifacts produced at different times by different
+    scripts, which never crashes — it just makes a reported number wrong.
+    `tools/eval/audit_pipeline_invariants.py` now checks 23 such invariants
+    mechanically (report: `docs/pipeline-invariant-audit.md`). Results:
+    - **Clean, verified**: `resolution_id` uniqueness (2,853/2,853), no empty
+      document, manifest hygiene (0 dead entries, 0 duplicate keys, 0 unlisted
+      files, no URL claimed by differently-titled documents), `master_list.csv`
+      count, **row alignment of chunks↔embeddings↔lexical across all 63 built
+      combos** (a misalignment here would silently return the wrong chunk for a
+      vector, and it had never been checked), embeddings finite and non-zero-norm
+      (sampled), and **all 2,265 gold relevant-id references resolve, 0 dangling**.
+    - **One new structural finding**: `BuildCombo.id`
+      (`combos.py`) hashes loader+chunker+embedder but **not the corpus**, so 12
+      combo ids exist under two index roots at once (`chunker_compare_full` and
+      `chunker_compare_smoke`) — a 12-file smoke subset and the 2,853-file corpus
+      are indistinguishable by id, and a persisted result records only the id.
+      This is the structural reason the #12 stale-cache incident was invisible:
+      nothing in a result file says which index produced it. (The *cache* key in
+      `pipeline._cache_key` does include the docset, so index reuse itself is
+      safe — the ambiguity is in naming and results attribution.)
+    - **Stale-artifact map, now explicit**: 7 result directories are older than
+      the indices they name, all dated 2026-07-16..21, and every one of the 6
+      current result sets (2026-07-29/30) is clean — 0 unknown ids. The 14
+      unknown ids in the stale dirs classify entirely as pre-fix artifacts
+      (contamination ids like `academic_resolutions/entity_tags/...`, and
+      pre-curriculum-split titles), so they are evidence the fixes worked rather
+      than a new problem. `gold_full_embedder_matrix` (5,928 files, 2,479 with
+      dead ids) is read by **no** script; the others are read only by the
+      superseded pre-9-way scripts. **Risk to note: re-running one of those
+      scripts would silently report pre-fix numbers.**
+    - **The 8 pre-contamination-fix indices (`n_resolutions`=2874, built
+      2026-07-21) are exactly `_EXCLUDED_COMBO_DIRS` in `embedder_matrix_9way.py`**
+      — checked name by name, and the one 9-way script that does not import that
+      set (`run_gold_hybrid_eval_9way_new.py`) uses an explicit 12-combo
+      allowlist. So no current number is computed from a contaminated index.
+    - **Two WARNs worth a human look**: (a) 5 query strings are duplicated in the
+      252-entry `gold_query_set.yaml`, all `thematic`, each pair carrying a
+      *different* relevant set — and because results are persisted keyed by
+      `sha256(query)`, both entries share one result file and get graded against
+      two different answer keys. `gold_query_set_73det.yaml` has 0 duplicates, and
+      thematic queries are already excluded from every cited result, so nothing
+      above is affected. (b) 24 `*.md.dup` archives have no live counterpart; 20
+      reconcile to a renamed/merged live file, 3-4 do not and need eyes (all are
+      administrative items — minutes approval, a Joint-Degree subsidy filing —
+      not curriculum documents).
+    - The three checks that FAIL on index artifacts (duplicate `chunk_id` in 49
+      indices, 1 orphan resolution_id / 23 chunks, coverage 2847/2853) are all the
+      **same** pre-relabel debt from #14, traced to exactly the 6 collision ids —
+      not separate bugs. They clear when the relabel in #14 is done.
+
 ## Source scripts (for reproducibility / methods section)
 
 - `tools/eval/embedder_matrix_9way.py` — current 9-embedder matrix:
@@ -1674,6 +1728,9 @@ holds as stated.
 - `tools/eval/gold_embedder_breakdown_73det.py` — per-entity_type breakdown, original 6 embedders
 - `tools/eval/embedder_significance_test.py` — 15-pair embedder significance, original 6-embedder version
 - `tools/eval/embedder_significance_test_by_entity_type.py` — same, split by entity_type, original 6-embedder version
+- `tools/eval/audit_pipeline_invariants.py` — 23-check sweep across corpus/index/eval
+  for silent-corruption invariants (Open item #15); read-only, exits 1 on FAIL,
+  report at `docs/pipeline-invariant-audit.md`. Run it before trusting an eval refresh
 - `tools/corpus_prep/audit_resolution_ids.py` — `resolution_id` uniqueness audit
   (Open item #14); read-only, exits 1 on any clash, reports manifest-title vs.
   filename vs. body-heading agreement and whether the files share a source PDF

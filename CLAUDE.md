@@ -42,6 +42,19 @@ see `docs/adr/`.
   the evidence to tell a data error from a genuine shared title. Run it after any
   corpus/manifest change. An id change makes built indices stale for the affected
   files — they store the ids they were built with.
+- **Run `tools/eval/audit_pipeline_invariants.py` before trusting any eval refresh.**
+  Three silent-corruption bugs have been found by accident rather than by looking
+  (corpus-discovery contamination, stale BM25/hybrid result cache, `resolution_id`
+  collisions); they share a shape — a mismatch between two artifacts produced at
+  different times by different scripts, which never crashes, it just makes a number
+  wrong. This script checks 23 such invariants across corpus/index/eval layers
+  (id uniqueness, row alignment of chunks↔vectors↔lexical, index-vs-corpus
+  membership, embedding sanity, gold-id resolution, results-vs-index freshness)
+  and exits 1 on any FAIL. Latest report: `docs/pipeline-invariant-audit.md`.
+  Known caveat it surfaced: `BuildCombo.id` hashes loader+chunker+embedder but
+  **not the corpus**, so a smoke-subset combo and a full-corpus combo share an id
+  and a persisted result cannot be attributed to one index — this is *why* the
+  stale-cache incident was invisible. Check the index root by hand when it matters.
 - The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;
   corpus-prep tooling in `tools/corpus_prep/` needs Poppler + Ollama.
 - Corpus layout is `<ปี>/ครั้งที่ N/` (special sessions: `ครั้งที่ Ns`); per-meeting
