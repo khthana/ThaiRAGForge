@@ -1644,7 +1644,7 @@ holds as stated.
     BM25/hybrid cache, #14 `resolution_id` collisions), all with the same shape: a
     mismatch between two artifacts produced at different times by different
     scripts, which never crashes — it just makes a reported number wrong.
-    `tools/eval/audit_pipeline_invariants.py` now checks 23 such invariants
+    `tools/eval/audit_pipeline_invariants.py` now checks 25 such invariants
     mechanically (report: `docs/pipeline-invariant-audit.md`). Results:
     - **Clean, verified**: `resolution_id` uniqueness (2,853/2,853), no empty
       document, manifest hygiene (0 dead entries, 0 duplicate keys, 0 unlisted
@@ -1662,7 +1662,8 @@ holds as stated.
       nothing in a result file says which index produced it. (The *cache* key in
       `pipeline._cache_key` does include the docset, so index reuse itself is
       safe — the ambiguity is in naming and results attribution.)
-    - **Stale-artifact map, now explicit**: 7 result directories are older than
+    - **Stale-artifact map, now explicit** (all 7 dirs since archived off-repo,
+      2026-07-30, so E4 and E3c/E3d now report 0 of 0): 7 result directories were older than
       the indices they name, all dated 2026-07-16..21, and every one of the 6
       current result sets (2026-07-29/30) is clean — 0 unknown ids. The 14
       unknown ids in the stale dirs classify entirely as pre-fix artifacts
@@ -1690,7 +1691,27 @@ holds as stated.
     - The three checks that FAIL on index artifacts (duplicate `chunk_id` in 49
       indices, 1 orphan resolution_id / 23 chunks, coverage 2847/2853) are all the
       **same** pre-relabel debt from #14, traced to exactly the 6 collision ids —
-      not separate bugs. They clear when the relabel in #14 is done.
+      not separate bugs. **All three now PASS** (49 indices clean, 0 orphans,
+      coverage 2853/2853) after the relabel in #14 was applied.
+    - **The cleanup that followed broke two checks, in opposite directions — and
+      that is the most transferable lesson here.** Archiving the superseded
+      artifacts off-repo took C4 (orphaned `.md.dup`) from WARN 24 to PASS 0, not
+      because the orphans were resolved but because its subject matter had left the
+      directory it scans: *a check whose inputs move becomes a vacuous PASS*. In
+      the other direction, deleting the 8 superseded combos removed the only
+      indices still holding pre-contamination-fix ids, so E3a jumped 7 → 3,106 for
+      result sets no script reads — *a known-retired artifact must not be able to
+      hold the gate red*, or the gate stops being read. Fixes: C4 follows the
+      archives to their new root and reports a denominator; retired sets are
+      classified separately (E3c contamination-artifact ids, E3d earlier-corpus
+      titles, `RETIRED_RESULT_DIRS`); the write-only Streamlit dirs are excluded
+      from E3b, since interactive queries are not gold by design. Every E3 check
+      now prints its denominator, because 0 is otherwise ambiguous between
+      "examined and clean" and "nothing left to examine". **Current state: 25
+      checks, 22 pass / 2 warn / 1 fail** — the FAIL is the documented
+      `BuildCombo.id` caveat, and both WARNs are the human-judgement items above
+      (5 duplicate thematic queries, 24 orphan archives). `E3a: 0 of 9,552 live
+      result files` is the check that matters, and it is a real pass.
 
 ## Source scripts (for reproducibility / methods section)
 

@@ -1,6 +1,6 @@
 # Pipeline invariant audit
 
-Run 2026-07-30 03:47 UTC. 19 pass / 5 warn / 1 fail.
+Run 2026-07-30 03:59 UTC. 22 pass / 2 warn / 1 fail.
 
 | check | status | detail |
 |---|---|---|
@@ -24,8 +24,8 @@ Run 2026-07-30 03:47 UTC. 19 pass / 5 warn / 1 fail.
 | E1 gold ids resolve (gold_query_set.yaml) | PASS | 1219 refs, 0 dangling |
 | E2 no duplicate query (gold_query_set.yaml) | WARN | 252 queries, 5 duplicated |
 | E0 combo id identifies its index unambiguously | FAIL | 12 combo ids exist under >1 index root (BuildCombo.id omits the corpus, so results cannot be attributed to one index) |
-| E3a results reference ids their index holds | PASS | 0 result files with unknown ids |
-| E3d retired result sets name ids no index holds | WARN | 346 result files in ['congen_sct_truncation_fix', 'gold_chunker_compare', 'gold_chunker_compare_73det', 'gold_embedder_compare', 'gold_full_embedder_matrix', 'mode_b_routed', 'silver_chunker_compare'] carry titles from an earlier corpus state -- retired, not read by any current script |
-| E3c retired result sets cite pre-fix contamination ids | WARN | 2762 result files cite an id from the corpus-discovery contamination bug -- expected for result sets computed before its fix; do not reuse them |
-| E3b results answer a known gold query | WARN | 1022 unrecognized queries |
+| E3a results reference ids their index holds | PASS | 0 of 9552 live result files reference an id their index does not hold |
+| E3d retired result sets name ids no index holds | PASS | 0 of 0 retired result files carry titles from an earlier corpus state (retired sets, read by no current script; 0 of 0 means they have been archived off-repo, not that they were checked) |
+| E3c retired result sets cite pre-fix contamination ids | PASS | 0 of 9552 result files cite an id from the corpus-discovery contamination bug -- expected for sets computed before its fix; do not reuse them |
+| E3b results answer a known gold query | PASS | 0 unrecognized queries across 9552 result files (['mode_b', 'mode_b_routed'] excluded: interactive UI queries are not gold by design) |
 | E4 results newer than their index | PASS | 0 result sets computed before their index was rebuilt |

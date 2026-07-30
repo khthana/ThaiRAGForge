@@ -63,8 +63,13 @@ see `docs/adr/`.
   removed the only indices still holding the pre-contamination-fix ids, which made
   E3a jump 7→3,106 for result sets nothing reads. Those are now classified separately
   (E3c contamination ids, E3d pre-repair titles, `RETIRED_RESULT_DIRS`) so a FAIL
-  still means a *live* result set has drifted. Current state: 19 pass / 5 warn / 1
-  fail, the single FAIL being the `BuildCombo.id` caveat above.
+  still means a *live* result set has drifted. Because 0 is ambiguous between
+  "examined and clean" and "nothing left to examine", the E3 checks now print their
+  denominator — `E3a 0 of 9,552 live result files` is a real pass, `E3d 0 of 0` says
+  so out loud. Current state: 22 pass / 2 warn / 1 fail, the single FAIL being the
+  `BuildCombo.id` caveat above; the warns are C4's 24 orphan archives and 5
+  duplicate thematic queries in the 252-entry gold set, both needing human
+  judgement, not code.
 - The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;
   corpus-prep tooling in `tools/corpus_prep/` needs Poppler + Ollama.
 - **Superseded backups live off-repo** (2026-07-30): 2,389 `*.dup` / `*.bak` files

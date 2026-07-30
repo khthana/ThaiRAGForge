@@ -891,3 +891,23 @@ resolution_id ไม่ซ้ำ
    `.pre_reocr.bak` ไม่อยู่ข้างไฟล์แล้ว **re-OCR รอบใหม่จะสร้าง backup ใหม่จาก
    ข้อความ *ปัจจุบัน*** ทำให้ต้นฉบับก่อน re-OCR รอบแรกมีอยู่ที่ D: ที่เดียว
    อย่าลบทิ้ง และอย่า merge ทับกันโดยไม่ดู
+
+**2026-07-30 (later the same day)** — the archive grew by a second round, after
+the eval re-run confirmed the `resolution_id` relabel had changed no number:
+`chunks.parquet.pre_relabel.bak` (41 files, 607 MB) and the 7 retired result
+directories (18,026 files, 345 MB) moved to the same destination, again by
+`tools/archive_unused.py` (`--index-backups --retired-results`). The archive now
+holds 20,456 files / ~1,010 MB; the repo's `data/` dropped to ~15.9 GB.
+
+Two things worth knowing about that move rather than rediscovering them:
+
+- `data/results/mode_b` and `mode_b_routed` are **write-only** from the UI —
+  `query_service` calls `save_retrieval_result` and never loads one back — so
+  archiving `mode_b_routed` cost nothing and its 2026-07-17 entries were never
+  being served. The Streamlit page simply recreates the directory.
+- Moving the retired result sets is what makes a re-run of the superseded
+  pre-9-way eval scripts (`run_gold_chunker_eval.py`, `routing_eval.py`,
+  `gold_embedder_breakdown.py`, `congen_sct_truncation_fix_eval.py`) fail loudly
+  instead of quietly reporting pre-fix numbers from a stale cache. Their
+  `*_report.md` summaries live at the `data/results/` root, not inside the moved
+  directories, so every number the docs cite is still on disk.

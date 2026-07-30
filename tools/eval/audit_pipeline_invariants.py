@@ -94,6 +94,12 @@ RETIRED_RESULT_DIRS = {
     "mode_b_routed",
 }
 
+# Written by the Streamlit UI (query_service only ever saves to these, never reads
+# back), so they hold whatever a human typed while clicking around. E3b asks whether
+# an *eval* result set answers a query some gold set defines; an interactive dir
+# failing that is the design, not drift, so it would be a permanent expected warning.
+UI_RESULT_DIRS = {"mode_b", "mode_b_routed"}
+
 findings: list[tuple[str, str, str]] = []  # (check, status, detail)
 
 
@@ -381,6 +387,12 @@ def audit_eval(corpus_ids: set[str], ids_by_combo: dict[Path, set[str]], quick: 
     stale_dirs, unknown_ids, unknown_queries = [], [], []
     stale_contaminated: list[str] = []
     retired_drift: list[str] = []
+    # Denominators matter here: these three checks all report a *count of bad
+    # files*, so 0 is ambiguous between 'examined and clean' and 'nothing left
+    # to examine' -- which is exactly what happened when the retired result sets
+    # were archived off-repo and E3c/E3d silently went to a vacuous 0.
+    n_examined = 0
+    n_examined_retired = 0
     for rdir in sorted(result_dirs):
         files = sorted(rdir.glob("*.json"))
         if not files:
@@ -393,6 +405,9 @@ def audit_eval(corpus_ids: set[str], ids_by_combo: dict[Path, set[str]], quick: 
             if not isinstance(data, dict) or "results" not in data:
                 continue
             checked += 1
+            n_examined += 1
+            if rdir.name in RETIRED_RESULT_DIRS:
+                n_examined_retired += 1
             combo = (data.get("combination_id") or "").split("__")
             # combination_id is <loader>__<chunker>__<embedder>__<hash>[__<retriever>...]
             name = "__".join(combo[:4]) if len(combo) >= 4 else ""
@@ -415,7 +430,8 @@ def audit_eval(corpus_ids: set[str], ids_by_combo: dict[Path, set[str]], quick: 
                 if drifted:
                     where = retired_drift if rdir.name in RETIRED_RESULT_DIRS else unknown_ids
                     where.append(f"{rdir.name}/{f.name}: {len(drifted)} ids not in {name}")
-            if data.get("query") and data["query"] not in all_queries:
+            if (data.get("query") and data["query"] not in all_queries
+                    and rdir.name not in UI_RESULT_DIRS):
                 unknown_queries.append(f"{rdir.name}: {data['query'][:60]}")
         # E4: results older than the index they name
         for name in combo_names:
@@ -430,18 +446,23 @@ def audit_eval(corpus_ids: set[str], ids_by_combo: dict[Path, set[str]], quick: 
                 break
 
     record("E3a results reference ids their index holds", not unknown_ids,
-           f"{len(unknown_ids)} result files with unknown ids")
+           f"{len(unknown_ids)} of {n_examined - n_examined_retired} live result files "
+           f"reference an id their index does not hold")
     record("E3d retired result sets name ids no index holds", not retired_drift,
-           f"{len(retired_drift)} result files in {sorted(RETIRED_RESULT_DIRS)!r} carry "
-           f"titles from an earlier corpus state -- retired, not read by any current script",
+           f"{len(retired_drift)} of {n_examined_retired} retired result files carry titles "
+           f"from an earlier corpus state (retired sets, read by no current script; 0 of 0 "
+           f"means they have been archived off-repo, not that they were checked)",
            warn=True)
     record("E3c retired result sets cite pre-fix contamination ids", not stale_contaminated,
-           f"{len(stale_contaminated)} result files cite an id from the corpus-discovery "
-           f"contamination bug -- expected for result sets computed before its fix; do not reuse them",
+           f"{len(stale_contaminated)} of {n_examined} result files cite an id from the "
+           f"corpus-discovery contamination bug -- expected for sets computed before its fix; "
+           f"do not reuse them",
            warn=True)
     for m in unknown_ids[:8]:
         print(f"        {m}")
-    record("E3b results answer a known gold query", not unknown_queries, f"{len(set(unknown_queries))} unrecognized queries", warn=True)
+    record("E3b results answer a known gold query", not unknown_queries, f"{len(set(unknown_queries))} unrecognized queries across "
+           f"{n_examined} result files ({sorted(UI_RESULT_DIRS)!r} excluded: "
+           f"interactive UI queries are not gold by design)", warn=True)
     for m in sorted(set(unknown_queries))[:5]:
         print(f"        {m}")
     record("E4 results newer than their index", not stale_dirs, f"{len(stale_dirs)} result sets computed before their index was rebuilt")
