@@ -57,6 +57,16 @@ see `docs/adr/`.
   stale-cache incident was invisible. Check the index root by hand when it matters.
 - The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;
   corpus-prep tooling in `tools/corpus_prep/` needs Poppler + Ollama.
+- **Superseded backups live off-repo** (2026-07-30): 2,389 `*.dup` / `*.bak` files
+  moved to `D:\academic_resolutions (ข้อมูลดิบ + OCR)\_superseded_from_repo\`,
+  path structure preserved (moved, not deleted — ADR-0004 recoverability intact).
+  `tools/archive_unused.py` is the mover: it records a per-category verdict
+  (SAFE = no code path reads these; GATED = something does, needs a flag) and
+  dry-runs by default. Two consequences to know before touching `.bak` again:
+  `llm_ocr_scan.py`'s floor check reads `.pre_reocr.bak`/`.corrupted_ocr.bak`, so
+  point it at the archive; and `reocr_apply.py` backs a file up only once, so a
+  future re-OCR would archive *current* text — the true pre-re-OCR original now
+  exists only on D:. See `docs/llm-ocr-scan-log.md` (last section).
 - Corpus layout is `<ปี>/ครั้งที่ N/` (special sessions: `ครั้งที่ Ns`); per-meeting
   `meeting_manifest.json` is the metadata source of truth for titles/URLs — never
   encode metadata in filenames (ADR-0003). The reconciled inventory is

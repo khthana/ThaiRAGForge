@@ -866,3 +866,28 @@ combo (`chunker_compare_full`) 28 ก.ค. ตามคำแนะนำข้�
 `docs/chunker-embedder-comparison-log.md` ("Re-eval หลัง OCR-remediation
 rebuild"), ตัวเลขล่าสุดที่ `docs/paper-results-summary.md`, memory
 `[[project_eval_refresh_2026_07_29]]`. หัวข้อนี้ปิดสมบูรณ์แล้ว
+
+## ย้าย `.bak` / `.dup` ออกจาก repo (30 ก.ค. 2569)
+
+คอร์ปัสสะสมไฟล์สำรอง 2,389 ไฟล์ (57.4 MB) ที่ไม่ใช่ข้อมูลใช้งาน ย้ายออกไปที่
+
+    D:\academic_resolutions (ข้อมูลดิบ + OCR)\_superseded_from_repo\
+
+โดย**คงโครงสร้าง path เดิม** (`academic_resolutions/<ปี>/ครั้งที่ N/<ชื่อ>`) —
+ย้าย ไม่ได้ลบ คุณสมบัติ "กู้คืนได้" ตาม ADR-0004 จึงยังอยู่ แค่ไปอยู่ไดรฟ์ข้อมูล
+ด้วยกับสแกนต้นฉบับ (ไดรฟ์ C: เหลือพื้นที่น้อย) ตัวที่ย้าย: `*.md.dup` /
+`*.txt.dup` / `*.dup.superseded` (493), `*.pre_reocr.bak` (1,774),
+`*.corrupted_ocr.bak` (112), `*.pre_manual_fix.bak` (10) หลังย้าย
+`academic_resolutions/` เหลือแค่ไฟล์ที่ใช้งานจริง: live `.md`, `_LINK.txt`,
+`meeting_manifest.json` และรายงานของเครื่องมือ — ยืนยันคอร์ปัสยังครบ 2,853
+resolution_id ไม่ซ้ำ
+
+**สองข้อที่ต้องรู้ก่อนรันอะไรที่เกี่ยวกับ `.bak` อีก** (นี่คือเหตุผลที่บันทึกไว้):
+
+1. `llm_ocr_scan.py` อ่าน `.pre_reocr.bak`/`.corrupted_ocr.bak` (`BAK_SUFFIXES`)
+   เป็น floor sanity check — ตอนนี้ไฟล์ไม่อยู่ในคอร์ปัสแล้ว **ถ้าจะรัน floor
+   check อีก ต้องชี้ไปที่ path ข้างบน** ไม่ใช่คิดว่า floor set หายไป
+2. `reocr_apply.py` สำรองไฟล์ละครั้งเดียว (`if not backup.exists()`) — พอ
+   `.pre_reocr.bak` ไม่อยู่ข้างไฟล์แล้ว **re-OCR รอบใหม่จะสร้าง backup ใหม่จาก
+   ข้อความ *ปัจจุบัน*** ทำให้ต้นฉบับก่อน re-OCR รอบแรกมีอยู่ที่ D: ที่เดียว
+   อย่าลบทิ้ง และอย่า merge ทับกันโดยไม่ดู
