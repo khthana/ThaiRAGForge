@@ -7,8 +7,16 @@ Reuses the label/exclusion logic from embedder_matrix_9way.py (fixes the
 same type-only-label collision risk and superseded-combo exclusion the
 original 6-embedder script didn't need to handle).
 
+The result dirs and query set are CLI arguments (2026-07-30) so the *same*
+tested code path can be pointed at the thematic subset. That reuse is the
+point rather than a convenience: the thematic numbers reverse this test's
+headline finding on several embedders, and a reversal is only citable if
+both sides were measured by identical machinery -- same pairing, same
+average-over-chunkers-first, same bootstrap seed, same Holm families.
+
 Run with:
     .venv/Scripts/python.exe tools/eval/hybrid_significance_test_9way.py
+    .venv/Scripts/python.exe tools/eval/hybrid_significance_test_9way.py --thematic
 """
 from __future__ import annotations
 
@@ -17,6 +25,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import yaml
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
@@ -45,20 +54,43 @@ def main() -> None:
     parser.add_argument("--n-boot", type=int, default=10000)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--alpha", type=float, default=0.05)
+    parser.add_argument(
+        "--thematic", action="store_true",
+        help="Point every path at the 179 meeting-qualified thematic queries instead "
+        "of the 73-det entity-anchored set. Nothing else changes.",
+    )
     args = parser.parse_args()
+
+    if args.thematic:
+        dense_dir = REPO / "data" / "results" / "thematic_dense"
+        bm25_dir = REPO / "data" / "results" / "thematic_bm25"
+        hybrid_dir = REPO / "data" / "results" / "thematic_hybrid"
+        gold = REPO / "config" / "eval" / "gold_query_set.yaml"
+        output = REPO / "data" / "results" / "thematic_hybrid_significance_test.md"
+        set_label = "179 meeting-qualified thematic queries"
+    else:
+        dense_dir, bm25_dir, hybrid_dir = _DENSE_RESULTS_DIR, _BM25_RESULTS_DIR, _HYBRID_RESULTS_DIR
+        gold, output = _GOLD_QUERY_SET, _OUTPUT
+        set_label = "73-det Gold set"
 
     base_combo_to_embedder = build_combo_to_embedder(_INDEX_DIR)  # keys end in __dense
     base_combo_to_embedder = {k[: -len("__dense")]: v for k, v in base_combo_to_embedder.items()}
 
-    query_set = load_gold_query_set(str(_GOLD_QUERY_SET))
-    qrels = {e.query: e.relevant_resolution_ids for e in query_set}
+    if args.thematic:
+        # gold_query_set.yaml holds both shapes; take only the thematic ones
+        raw = yaml.safe_load(Path(gold).read_text(encoding="utf-8"))
+        qrels = {e["query"]: e["relevant_resolution_ids"]
+                 for e in raw if e.get("entity_type") == "thematic"}
+    else:
+        query_set = load_gold_query_set(str(gold))
+        qrels = {e.query: e.relevant_resolution_ids for e in query_set}
     queries = list(qrels.keys())
     query_idx = {q: i for i, q in enumerate(queries)}
     n_q = len(queries)
 
-    dense_persisted = [load_retrieval_result(p) for p in _DENSE_RESULTS_DIR.glob("*.json")]
-    bm25_persisted = [load_retrieval_result(p) for p in _BM25_RESULTS_DIR.glob("*.json")]
-    hybrid_persisted = [load_retrieval_result(p) for p in _HYBRID_RESULTS_DIR.glob("*.json")]
+    dense_persisted = [load_retrieval_result(p) for p in dense_dir.glob("*.json")]
+    bm25_persisted = [load_retrieval_result(p) for p in bm25_dir.glob("*.json")]
+    hybrid_persisted = [load_retrieval_result(p) for p in hybrid_dir.glob("*.json")]
     print(f"loaded dense={len(dense_persisted)} bm25={len(bm25_persisted)} hybrid={len(hybrid_persisted)}")
 
     embedders = sorted(set(base_combo_to_embedder.values()))
@@ -114,7 +146,7 @@ def main() -> None:
     metric_labels = {"recall": f"recall@{args.k}", "mrr": "mrr", "ndcg": f"ndcg@{args.k}"}
 
     report_lines = [
-        "# Hybrid vs its components -- 9-embedder matrix: paired bootstrap significance test (73-det Gold set)",
+        f"# Hybrid vs its components -- 9-embedder matrix: paired bootstrap significance test ({set_label})",
         "",
         f"Paired bootstrap over {n_q} queries (n_boot={args.n_boot}, seed={args.seed}), each "
         f"system's per-query score averaged across the 4 chunkers first. Two separate "
@@ -168,9 +200,9 @@ def main() -> None:
     report_lines.append("")
 
     report = "\n".join(report_lines)
-    _OUTPUT.write_text(report, encoding="utf-8")
+    output.write_text(report, encoding="utf-8")
     print(report)
-    print(f"written to {_OUTPUT}")
+    print(f"written to {output}")
 
 
 if __name__ == "__main__":

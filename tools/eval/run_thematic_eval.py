@@ -133,6 +133,13 @@ def main() -> None:
     ap.add_argument("--retrieval", default="", help="comma-separated: dense,bm25,hybrid")
     ap.add_argument("--skip-retrieval", action="store_true")
     ap.add_argument("--combos", type=int, default=0, help="limit combos (timing probe)")
+    ap.add_argument(
+        "--bm25-embedder", default="m2v",
+        help="BM25 ignores the embedder axis -- a chunker's lexical.json is identical "
+        "across its 9 embedder variants -- so bm25 runs over one embedder's 4 combos "
+        "(9x cheaper) rather than all 36. Same reasoning as run_gold_bm25_eval.py's "
+        "--embedder-filter; the default is the cheapest embedder to load.",
+    )
     ap.add_argument("--n-boot", type=int, default=N_BOOT)
     ap.add_argument("--seed", type=int, default=SEED)
     args = ap.parse_args()
@@ -152,8 +159,15 @@ def main() -> None:
         spec = {"dense": StrategySpec(type="dense"),
                 "bm25": StrategySpec(type="bm25"),
                 "hybrid": StrategySpec(type="hybrid")}[mode]
-        print(f"\n[{mode}] retrieval over {len(dirs)} combo(s) x {len(query_set)} queries")
-        run_query_set(query_set, dirs, spec, k=args.k, results_dir=str(_RESULTS[mode]))
+        mode_dirs = dirs
+        if mode == "bm25":
+            keep = {cid.rsplit("__dense", 1)[0]
+                    for cid, (_, e) in combo_meta.items() if e == args.bm25_embedder}
+            mode_dirs = [d for d in dirs if Path(d).name in keep]
+            print(f"[bm25] embedder axis collapsed to '{args.bm25_embedder}': "
+                  f"{len(mode_dirs)} combos, one per chunker")
+        print(f"\n[{mode}] retrieval over {len(mode_dirs)} combo(s) x {len(query_set)} queries")
+        run_query_set(query_set, mode_dirs, spec, k=args.k, results_dir=str(_RESULTS[mode]))
         print(f"[{mode}] done -> {_RESULTS[mode]}")
 
     lines = ["# Thematic query-set eval (179 meeting-qualified queries)", ""]
@@ -199,12 +213,20 @@ def main() -> None:
             if c in by_chunker.get("recall", {}):
                 lines.append(f"| {c} | " + " | ".join(
                     f"{statistics.fmean(by_chunker[m][c]):.4f}" for m in ("recall", "mrr", "ndcg")) + " |")
-        lines += ["", "| embedder | recall@%d | mrr | ndcg@%d |" % (args.k, args.k), "|---|---|---|---|"]
-        for e in EMBEDDER_ORDER:
-            if e in by_embedder.get("recall", {}):
-                lines.append(f"| {e} | " + " | ".join(
-                    f"{statistics.fmean(by_embedder[m][e]):.4f}" for m in ("recall", "mrr", "ndcg")) + " |")
-        lines.append("")
+        if mode == "bm25":
+            # no per-embedder table: BM25 never reads a vector, so the embedder
+            # label on its combos is only the index the lexical.json was read from
+            lines += ["_BM25 is embedder-agnostic; run over one embedder's 4 combos "
+                      "(one per chunker), so there is no per-embedder row._", ""]
+        else:
+            lines += ["", "| embedder | recall@%d | mrr | ndcg@%d |" % (args.k, args.k),
+                      "|---|---|---|---|"]
+            for e in EMBEDDER_ORDER:
+                if e in by_embedder.get("recall", {}):
+                    lines.append(f"| {e} | " + " | ".join(
+                        f"{statistics.fmean(by_embedder[m][e]):.4f}"
+                        for m in ("recall", "mrr", "ndcg")) + " |")
+            lines.append("")
 
     # ---- the 2026-07-17 claim, retested: fixed_size vs semantic ----
     if "dense" in loaded:

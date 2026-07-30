@@ -54,6 +54,61 @@ retiring the "semantic chunking wins" headline (#13).
 `e5` rising from 5th to 2nd and `congen` from 7th to 3rd also says embedder choice
 is **query-shape dependent**, which no cited number currently reflects.
 
+### The BM25/hybrid arms of the thematic set reverse this project's most robust finding
+
+BM25-alone and hybrid were then run over the same 179 queries and put through the
+**same** significance machinery — literally the same script, `--thematic` pointing
+it at the thematic result dirs (`hybrid_significance_test_9way.py`; the default
+73-det run was verified byte-identical afterwards, so the reversal below is not a
+methodology artifact). Report: `data/results/thematic_hybrid_significance_test.md`.
+
+**BM25 is much weaker on this query shape**: 0.2988 recall@10 aggregate, against
+0.4930 on the entity-anchored set where it ties the top dense tier and beats
+`bge_m3` outright. That is the person/program mechanism again — thematic queries
+contain no name to match exactly, which is the only thing lexical retrieval is
+better at.
+
+**Consequence: "hybrid beats dense-alone for every embedder" (26/27 significant)
+is entity-anchored-specific and does not generalize.** On thematic recall@10 the
+family splits three ways — 3 significant *for* hybrid, 4 ties, **2 significant
+against**:
+
+| dense-alone recall@10 | | hybrid − dense | verdict |
+|---|---|---|---|
+| `m2v` 0.1930 | below BM25 | **+0.0672** | hybrid significantly better |
+| `sct` 0.2737 | below BM25 | **+0.0899** | hybrid significantly better |
+| `e5_small` 0.2855 | below BM25 | **+0.0394** | hybrid significantly better |
+| `bge_m3` 0.3980 | above BM25 | +0.0260 | tie |
+| `jina_v5` 0.4183 | above BM25 | −0.0249 | tie |
+| `qwen3_0.6b` 0.4357 | above BM25 | −0.0121 | tie |
+| `congen` 0.4535 | above BM25 | −0.0229 | tie |
+| `e5` 0.4879 | above BM25 | **−0.0445** | hybrid significantly **worse** |
+| `qwen3` 0.4949 | above BM25 | **−0.0526** | hybrid significantly **worse** |
+
+The benefit of fusion is **monotone in how far the dense arm sits from the lexical
+arm** (r = **−0.925** between dense score and hybrid−dense delta), and the sign
+flips almost exactly at BM25's own 0.2988. MRR and nDCG@10 give the same ordering,
+with `congen`/`qwen3_0.6b` also crossing into significantly-worse.
+
+**This subsumes the m2v/sct "RRF failure case" as a special case of one rule rather
+than a quirk of two bad models.** Stated generally, and now measured in both
+directions:
+
+> RRF fusion helps the weaker arm and taxes the stronger one. It is worth doing
+> when the two arms are comparable in strength, and it damages the better arm
+> whenever they are not — regardless of *which* arm is the weak one.
+
+On the entity-anchored set BM25 was the strong arm, so fusion lifted every dense
+embedder and hurt only the two dense models weaker than BM25. On the thematic set
+BM25 is the weak arm, so the same rule fires in reverse. Hybrid still beats
+BM25-alone for 8 of 9 embedders here (`m2v` significantly worse, `e5_small` a tie
+on recall) — the asymmetry is real, not an artifact of one direction being easier.
+
+**Practical reading**: hybrid is the right default only where lexical retrieval is
+competitive. A router that already classifies queries (`query_service`) could in
+principle skip fusion for entity-free queries; that is a hypothesis this result
+motivates, not something measured.
+
 **Operational advice is unchanged but better founded**: keep the two shapes
 reported separately; never average them. The thematic numbers are citable *as a
 separate query shape* now, not as part of the headline comparison. Caveat: the

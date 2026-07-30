@@ -177,7 +177,17 @@ see `docs/adr/`.
   `semantic` is the *worst* chunker on thematic and the best on entity-anchored), so pooling
   the sets cancels two real effects instead of diluting one. Still low-powered per pair
   (2/27 significant, 62% ties) — cite them as a separate query shape, never averaged in.
-  Side-by-side: `tools/eval/thematic_vs_deterministic.py`). Full process narrative: `docs/chunker-embedder-comparison-log.md`; clean
+  Side-by-side: `tools/eval/thematic_vs_deterministic.py`. **The BM25/hybrid arms
+  (2026-07-30, `hybrid_significance_test_9way.py --thematic`) reverse this project's most
+  robust finding and are the bigger result**: BM25 is weak on thematic (0.2988 vs 0.4930
+  entity-anchored — no name to match exactly), so "hybrid beats dense-alone for every
+  embedder" is **entity-anchored-specific**. On thematic recall@10 it is 3 significant for
+  hybrid / 4 ties / **2 significant against** (`e5` −0.0445, `qwen3` −0.0526), and the
+  hybrid−dense delta is monotone in dense strength (**r = −0.925**), flipping sign right at
+  BM25's own score. General rule, now measured in both directions and subsuming the old
+  m2v/sct "RRF failure case": **RRF helps the weaker arm and taxes the stronger one — fuse
+  only when the two arms are comparable, whichever one is weak.** Report:
+  `data/results/thematic_hybrid_significance_test.md`). Full process narrative: `docs/chunker-embedder-comparison-log.md`; clean
   citation-ready numbers for paper-writing: `docs/paper-results-summary.md` (update this one
   whenever a headline number changes — the log stays append-only). **Refreshed 2026-07-25**
   for the corpus-discovery contamination fix (0% contamination, see
