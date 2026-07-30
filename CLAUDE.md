@@ -171,8 +171,13 @@ see `docs/adr/`.
   queries — and the reason they don't discriminate is now known: all 179 were
   meeting-scoped but never named the meeting ("ในการประชุมครั้งนี้"), so they were
   unanswerable as posed. `tools/eval/qualify_thematic_queries.py` rewrote all 179 to name
-  their meeting 2026-07-30; the subset is now well-posed but **un-re-evaluated**, so still
-  don't cite it). Full process narrative: `docs/chunker-embedder-comparison-log.md`; clean
+  their meeting 2026-07-30 and `run_thematic_eval.py` re-evaluated them, which changed the
+  reason to keep them apart: they carry signal that points **the opposite way** on the
+  chunker axis (fixed_size − semantic is **+0.0256** thematic vs **−0.0359** entity-anchored;
+  `semantic` is the *worst* chunker on thematic and the best on entity-anchored), so pooling
+  the sets cancels two real effects instead of diluting one. Still low-powered per pair
+  (2/27 significant, 62% ties) — cite them as a separate query shape, never averaged in.
+  Side-by-side: `tools/eval/thematic_vs_deterministic.py`). Full process narrative: `docs/chunker-embedder-comparison-log.md`; clean
   citation-ready numbers for paper-writing: `docs/paper-results-summary.md` (update this one
   whenever a headline number changes — the log stays append-only). **Refreshed 2026-07-25**
   for the corpus-discovery contamination fix (0% contamination, see

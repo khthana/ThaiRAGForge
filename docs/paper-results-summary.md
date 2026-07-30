@@ -25,9 +25,41 @@ that discussed the same theme scored as a miss. The queries were unanswerable as
 posed, so their scores were noise rather than a measurement of chunking.
 `tools/eval/qualify_thematic_queries.py` rewrote all 179 to name their meeting
 (the identity was already in each entry's own gold ids, so nothing was
-re-judged); the subset is now well-posed but **has not been re-evaluated**, so it
-is still not citable — it is a candidate for a future meeting-scoped eval, not a
-retired one.
+re-judged), and **the re-eval has now been run**
+(`tools/eval/run_thematic_eval.py`, 179 queries × 36 combos, dense; report
+`data/results/thematic_eval.md`). It changes the reason to keep them separate:
+
+**the thematic queries do not carry *no* signal — they carry signal that points
+the opposite way on the chunker axis.** Same 36 combos, same metric, only the
+query shape differs (`tools/eval/thematic_vs_deterministic.py`):
+
+| | thematic (179) | entity-anchored (106) |
+|---|---|---|
+| mean diff, fixed_size − semantic | **+0.0256** | **−0.0359** |
+| exact ties on that pair | 998/1611 = 62% | 427/954 = 45% |
+| chunker order (dense recall@10) | recursive 0.413 > sentence 0.387 > fixed_size 0.377 > **semantic 0.351 (worst)** | **semantic 0.366 (best)** > recursive 0.345 > fixed_size 0.330 > sentence 0.325 |
+| top embedders | qwen3 0.495 > **e5 0.488** > congen 0.454 > qwen3_0.6b 0.436 | **qwen3_0.6b 0.526** > qwen3 0.478 > jina_v5 0.413 > bge_m3 0.409 |
+
+So the old description — "dilutes with near-zero-signal queries, and materially
+changes rank order" — was right about the symptom and wrong about the mechanism:
+folding the sets together **cancels two opposing real effects** rather than adding
+noise to one. The retired t=0.02 / mean-diff +0.0004 figure was measuring
+unanswerable questions; the rewritten queries give a pooled mean diff 64× larger
+and consistently signed. Per-pair discrimination is still weak (**2 of 27**
+fixed_size-vs-semantic tests significant after Holm, both `bge_m3`, ties still
+62%), so these queries remain individually low-powered — but they are no longer
+evidence-free, and `semantic` being *worst* here is independent support for
+retiring the "semantic chunking wins" headline (#13).
+
+`e5` rising from 5th to 2nd and `congen` from 7th to 3rd also says embedder choice
+is **query-shape dependent**, which no cited number currently reflects.
+
+**Operational advice is unchanged but better founded**: keep the two shapes
+reported separately; never average them. The thematic numbers are citable *as a
+separate query shape* now, not as part of the headline comparison. Caveat: the
+indices predate the 2026-07-30 corpus fixes, and neither changed document is a
+gold id for any thematic query, so a rebuild cannot change which documents count
+as relevant here.
 
 **Status**: gap-analysis Tier 1 and Tier 2 (`docs/research-framework-gap-analysis.md`
 §8) are both fully closed as of 2026-07-21 — MAP/Precision@k/multi-k, BM25 baseline,
