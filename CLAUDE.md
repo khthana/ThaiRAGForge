@@ -361,11 +361,19 @@ see `docs/adr/`.
   deliverable) in `docs/rq4-design.md`. Three findings worth knowing before writing any
   RQ4 text: (a) **citation precision orders exactly as recall@10 did** (hybrid 0.742 >
   dense 0.670 > bm25 0.625 > m2v 0.562) — retrieval quality survives the generation
-  stage; (b) **citation *recall* is flat at ~0.41 across every arm** — better retrieval
-  does not make the model cite *more* gold, only a higher *share* correctly, so **the
-  bottleneck is the generator, not the retriever**, which caps the payoff of further
-  retrieval work and is the one RQ4-only recommendation (re-test with a 2nd generator
-  before leaning on it — a flat line is also the shape of a model-specific ceiling);
+  stage, and this one is unaffected by the correction below; (b) **citation *recall* is
+  flat at ~0.41 across every arm — but the cause is probably OUR PROMPT, not the model,
+  and this was first written up the wrong way.** Citations per answer sit at mean 2.65 /
+  median 2 no matter how much gold is present, and recall *falls* as availability rises
+  (0.778 at 2 gold docs → 0.381 at 5+) — the signature of a fixed budget, not of a model
+  that cannot use evidence. Prompt rule 4 says `ตอบสั้น ๆ ไม่เกิน 3 ประโยค` while the gold
+  set is dominated by aggregation queries (mean 9.87 relevant docs). **So do not cite
+  "the generator is the bottleneck" — the recommendation would flip from "use a stronger
+  model" to "fix the instruction".** Pending ablation: re-run hybrid + bm25 arms with
+  rule 4 replaced by "cite every relevant document" (~212 gens, ~45 min); recall rises →
+  prompt artifact, stays ~0.41 → real ceiling. **Run that BEFORE the deferred
+  `gemma4:e4b` check** — a second model under the same cap would reproduce the flat line
+  and look like confirmation while only re-measuring the instruction;
   (c) **0 fabricated citations out of 978** — RAG's most-feared failure mode is absent
   here, the payoff for exactly-checkable numeric labels. 4b's claims belong to the weak
   arms + closed-book only (context lacks the answer in 4/6 cases for hybrid/dense vs

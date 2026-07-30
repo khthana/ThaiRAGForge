@@ -273,3 +273,47 @@ favours the conclusion — semantically-retrieving arms should absorb more of th
 penalty than BM25 — so the 0.742 vs 0.625 gap is **conservative**, likely wider
 in truth rather than narrower. State it rather than rely on it until the
 residual-relevance study reports.
+
+### Correction (same day): the flat citation recall is probably the prompt, not the model
+
+Finding 2 above was written as "the bottleneck is the generator, not the
+retriever". The *observation* stands — more retrieval does not raise citation
+recall — but the **stated cause is probably wrong**, and the correction changes
+what the paper would recommend.
+
+Two measurements point at a fixed citation budget rather than a comprehension
+limit:
+
+* citations per answer: **mean 2.65, median 2** (BM25 arm: 2.41 / 2), roughly
+  constant regardless of how much gold the context holds;
+* citation recall **declines as more gold becomes available** — 0.778 with 2
+  gold documents in context, 0.492 with 3, 0.472 with 4, **0.381 with 5+**
+  (hybrid arm; BM25 shows the same shape).
+
+A model that could not use the retrieved evidence would score badly at every
+level of availability. This model cites ~2 documents and stops.
+
+**That budget is self-inflicted.** Rule 4 of the prompt reads
+`ตอบสั้น ๆ ไม่เกิน 3 ประโยค`, while the gold set is dominated by aggregation
+queries (mean 9.87 relevant documents: "how many revisions, and what was in
+each"). Mean answer length came out at 348 characters — the model obeyed.
+
+Consequences:
+
+* **Finding 1 is unaffected.** Every arm ran under the same budget, so the
+  citation-precision ordering remains a fair comparison.
+* **Finding 2's recommendation flips** if this is confirmed: from "a stronger
+  generator is needed" to "the instruction caps the metric" — a prompt fix, not
+  a model upgrade.
+* **The `gemma4:e4b` robustness check should not run first.** It would answer
+  the wrong question: a second model under the same 3-sentence cap would very
+  likely reproduce the same flat line, which would look like confirmation of a
+  general ceiling while merely re-measuring the instruction.
+
+**Pending ablation** (not yet run): re-generate the `hybrid_qwen3_0.6b_semantic`
+and `bm25_semantic` arms with rule 4 replaced by an instruction to cite every
+relevant document, ~212 generations / ~45 min. Recall rises → prompt artifact,
+and the RQ4 write-up changes. Recall stays ~0.41 → a real generator ceiling,
+and *then* `gemma4:e4b` is the right next test. Keep the current run: the
+comparison between the two prompts is itself a reportable result about
+instruction sensitivity in citation-grounded generation.
