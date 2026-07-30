@@ -208,3 +208,68 @@ throughput improved to ~16s/query.
 
 Models cite the same label twice (once inline, once in the `อ้างอิง:` line).
 **Dedupe before computing citation precision**, or the denominator inflates.
+
+## Generation run complete (2026-07-30)
+
+530 generations (5 arms × 106 queries), `phi4`, `num_ctx=8192`, temperature 0.
+**0 errors**, 5,749 s wall clock (~13 s/query with context, 1.8 s closed-book).
+Raw answers: `data/rq4/answers/phi4/` (gitignored — regenerable).
+
+### Provisional numbers, before `rq4_score.py`
+
+Computed inline from the raw answers with a throwaway script. **No bootstrap,
+no Holm correction** — these say which effects are worth testing, not which are
+significant. `rq4_score.py` remains the deliverable.
+
+| arm | citation precision | citation recall | phantom citations | answered when gold present |
+|---|---|---|---|---|
+| hybrid × qwen3_0.6b | 0.742 | 0.421 | 0 / 275 | 87/102 |
+| dense × qwen3_0.6b | 0.670 | 0.410 | 0 / 285 | 84/100 |
+| bm25 | 0.625 | 0.407 | 0 / 224 | 69/83 |
+| hybrid × m2v | 0.562 | 0.419 | 0 / 194 | 58/79 |
+| closed_book | — | — | 0 / 0 | — |
+
+### What RQ4 adds that RQ1–RQ3 could not
+
+1. **Retrieval quality survives the generation stage.** Citation precision
+   orders exactly as recall@10 did (0.742 → 0.670 → 0.625 → 0.562). RQ1–RQ2
+   could only show that the right documents arrive; this shows the model then
+   uses them correctly at a proportionally higher rate. It is the first
+   end-to-end confirmation that the retrieval work pays out in answers.
+
+2. **Citation *recall* is flat across every arm (~0.41) — the new result, and
+   the most consequential one.** Better retrieval does not make the model cite
+   *more* of the gold documents in front of it; it makes a larger share of what
+   it cites correct. **The bottleneck is the generator, not the retriever**:
+   `phi4` uses roughly 40% of the available gold regardless of context quality.
+   That caps the return on further retrieval investment in a way no recall@10
+   number can reveal, and it is a recommendation the paper could not otherwise
+   make. Worth re-testing with a second generator before leaning on it (see the
+   deferred `gemma4:e4b` check) — a flat line across arms is exactly the shape a
+   *model-specific* ceiling would take.
+
+3. **Zero fabricated citations in 978 citations.** Not one reference to a label
+   outside the supplied context. RAG's most-feared failure mode does not appear
+   in this setup — a clean negative result, and the payoff for choosing exactly
+   checkable numeric labels over free-text ids.
+
+4. **4b behaves as the corrected design predicted.** Abstention is measurable
+   only where the context genuinely lacks the answer, and the strong arms are
+   too good to supply such cases: 4 for hybrid, 6 for dense, against 23 for
+   BM25, 27 for m2v, and 106 for closed-book. So **4b's claims belong to the
+   weak arms and closed-book** — "abstains correctly ~half the time when the
+   context lacks the answer (m2v 59%, BM25 52%), and 100% with no context at
+   all" is supportable; "hybrid abstains better than dense" is not, on n=4 vs
+   n=6. Closed-book abstaining 106/106 is also the run's validity check: the
+   prompt controls the behaviour, and the model is not answering from parametric
+   knowledge.
+
+### Threat inherited from the retrieval evaluation
+
+Citation precision is judged against the *same* qrels, so it inherits the
+pooling-bias threat in `docs/eval-validity-threats.md` §3: a cited document that
+is genuinely relevant but unjudged counts as a false positive. The direction
+favours the conclusion — semantically-retrieving arms should absorb more of that
+penalty than BM25 — so the 0.742 vs 0.625 gap is **conservative**, likely wider
+in truth rather than narrower. State it rather than rely on it until the
+residual-relevance study reports.

@@ -356,7 +356,23 @@ see `docs/adr/`.
      `chunker_compare_full` itself predates the 2026-07-30 corpus fixes: the only correct
      order is rebuild `chunker_compare_full` first (~20-24 h), then the 4 RQ3 indices
      (bge-m3, full corpus, ~3-6 h), then re-run the three tests.
-- **RQ4 (end-to-end answer quality) is STARTED as of 2026-07-30** —
+- **RQ4 generation is COMPLETE (2026-07-30): 530/530, 0 errors, ~96 min.** Provisional
+  numbers (inline script, **no bootstrap/Holm yet** — `rq4_score.py` is still the
+  deliverable) in `docs/rq4-design.md`. Three findings worth knowing before writing any
+  RQ4 text: (a) **citation precision orders exactly as recall@10 did** (hybrid 0.742 >
+  dense 0.670 > bm25 0.625 > m2v 0.562) — retrieval quality survives the generation
+  stage; (b) **citation *recall* is flat at ~0.41 across every arm** — better retrieval
+  does not make the model cite *more* gold, only a higher *share* correctly, so **the
+  bottleneck is the generator, not the retriever**, which caps the payoff of further
+  retrieval work and is the one RQ4-only recommendation (re-test with a 2nd generator
+  before leaning on it — a flat line is also the shape of a model-specific ceiling);
+  (c) **0 fabricated citations out of 978** — RAG's most-feared failure mode is absent
+  here, the payoff for exactly-checkable numeric labels. 4b's claims belong to the weak
+  arms + closed-book only (context lacks the answer in 4/6 cases for hybrid/dense vs
+  23/27/106 for bm25/m2v/closed-book), and closed-book abstaining 106/106 is the run's
+  validity check. Caveat: citation precision is judged against the same qrels, so it
+  inherits the pooling-bias threat — direction is conservative (see validity bullet).
+- **RQ4 (end-to-end answer quality) design** —
   `docs/rq4-design.md` + its build log. Steps 1-2 built (`tools/eval/rq4_build_contexts.py`,
   `rq4_generate.py`); `rq4_score.py` is what remains. Local-only generation (`phi4`,
   no external API), objective citation/abstention metrics rather than LLM-as-judge.
