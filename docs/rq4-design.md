@@ -134,3 +134,77 @@ justified end-to-end.
 
 Per the project's own lesson (`feedback_scan_before_broad_preprocessing_fix`), the
 pilot in the first open decision should happen before the full 530-generation run.
+
+---
+
+## Build log (2026-07-30): steps 1-2 done, and two corrections to the design above
+
+**Status**: `rq4_build_contexts.py` and `rq4_generate.py` are built and committed;
+the full 530-generation matrix is running on `phi4`. `rq4_score.py` is the
+remaining piece. Contexts live in `data/rq4/contexts/`, answers in
+`data/rq4/answers/<model>/<arm>/` (both gitignored — regenerable).
+
+### Correction 1: §4b's premise was wrong
+
+> "Retrieval recall@10 for the best configuration is ~0.6, so **the context often
+> does not contain the answer**."
+
+That confuses *recall* (what fraction of the gold documents were retrieved) with
+*presence* (did **any** gold document reach the context). Measured:
+
+| arm | context has ≥1 gold doc |
+|---|---|
+| hybrid × qwen3_0.6b × semantic | 102/106 (96%) |
+| dense × qwen3_0.6b × semantic | 100/106 (94%) |
+| BM25-alone | 83/106 (78%) |
+| hybrid × m2v | 79/106 (75%) |
+| closed-book | 0/106 |
+
+So on the best arm only **4** queries are ones where abstention is correct — far
+too few to measure a hallucination rate. 4b survives, but its statistical power
+lives in the *weak* arms (BM25 23, m2v 27) and above all in **closed-book, where
+all 106 are no-gold by construction** and hallucination is measured cleanly.
+Report 4b per arm; do not pool.
+
+### Correction 2: the generator was not the problem — the context window was
+
+The design doc's first open decision ("a model that will not emit parseable
+citations makes 4a unmeasurable") turned out to be a real risk arriving by an
+unexpected route. The first pilot produced **0/4 citations** on prompts carrying
+context, while the short closed-book prompts came back **4/4 correctly
+formatted** — same model, same instructions.
+
+Cause: **Ollama truncates an over-long prompt from the front**, `num_ctx`
+defaulted to 4096, and prompts ran to ~7k tokens, so the instructions at the top
+were cut away before the model saw them. Nothing errors; the answers look
+fluent and plausible and simply carry no citations.
+
+Fixes, all three kept: set `num_ctx` explicitly (8192); **put the instructions
+after the documents** so recency helps and front-truncation cannot reach them;
+cap each context block at 900 chars. Re-piloted: **5/5 citations parsed**,
+answers 200-400 chars instead of 600-1400, closed-book still abstains 5/5, and
+throughput improved to ~16s/query.
+
+### Decisions taken
+
+* **Citation format**: numeric labels `[1]`..`[k]`, not `resolution_id`s. An id
+  here is a full Thai document title; asking a local model to reproduce one
+  verbatim would measure copying accuracy rather than grounding. The fabrication
+  mode 4a needs is still detectable exactly — a citation to `[11]` when 10 blocks
+  were supplied.
+* **Context blocks are documents, not chunks** — grouped by `resolution_id`
+  (ADR-0002), or one document filling 4 of 10 slots would corrupt the
+  citation-precision denominator.
+* **k stays 10**; the per-block char cap absorbed the context-window pressure
+  instead, so every existing recall@10 number remains directly comparable.
+* **Generator: `phi4`**, at `num_ctx=8192` → 10 GB, 100% GPU, no CPU spill.
+  `gemma4:e4b` was **not** piloted. It is deferred, not rejected: the planned
+  check is 30 queries × 5 arms, asking only whether the **arm ordering** agrees.
+  RQ4's claim is about the ordering of arms, so a generator that reorders them
+  would be a threat to validity worth reporting; one that preserves the ordering
+  strengthens the result.
+
+### Scoring caveat for `rq4_score.py`
+
+Models cite the same label twice (once inline, once in the `อ้างอิง:` line).
+**Dedupe before computing citation precision**, or the denominator inflates.

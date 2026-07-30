@@ -153,11 +153,20 @@ see `docs/adr/`.
   `71764a8`) compacts old/new course-comparison tables (code + credit-tuple
   + English description, the corpus's single largest chunks — 17,077 chars
   in one document) to `CODE Title` lines, dropping the description. **Not
-  yet wired into any loader/config** — needs a thematic-inclusive eval
-  before integration (course-name gold queries can't detect a
-  description-stripping regression, since they never touch description
-  text). Narrative: `docs/chunker-embedder-comparison-log.md` (course-table
-  compaction section).
+  yet wired into any loader/config**, but the blocker is now **resolved and the
+  decision is to wire it** (2026-07-30). The old blocker was "needs a
+  thematic-inclusive eval first", since course-name gold queries never touch
+  description text. That eval now exists — and measuring it **closed the question
+  the other way**: only **13 files corpus-wide** contain such a table (0.46%,
+  39.8% of their text removed), and they are cited by **0 of 106** 73det queries
+  and **3 of 179** thematic ones. No gold set can detect a description-stripping
+  regression, so waiting for an eval was waiting for evidence that cannot arrive.
+  User resolved it on domain grounds instead: **course descriptions are not what
+  people ask about**, so the unmeasurable regression is also the unimportant one.
+  Wire it into the loader; it must ride the pending rebuild (it changes chunk text,
+  so it needs re-embedding). Note the ordering constraint already documented: run
+  it *before* `match_courses`, which it improves. Narrative:
+  `docs/chunker-embedder-comparison-log.md` (course-table compaction section).
 - Chunker/embedder/BM25/hybrid comparison eval lives in `tools/eval/`. Current (9-embedder)
   scripts: `run_gold_chunker_eval.py`, `run_gold_bm25_eval.py`, `run_gold_hybrid_eval.py` +
   `run_gold_hybrid_eval_9way_new.py`, `embedder_matrix_9way.py` (retrieval + breakdown +
@@ -336,14 +345,47 @@ see `docs/adr/`.
      indices reuse `chunker_compare_full` combos as their *baseline* arm, so **an index
      rebuild silently turns them into a clean-baseline-vs-dirty-treatment confound** — they
      need real GPU rebuilds after a corpus change, not just a re-eval.
-- **Candidate next axes, written up but not started**: `docs/rq4-design.md`
-  (end-to-end RAG answer quality — the one unstarted research question, local-only
-  generation with objective citation/abstention metrics rather than LLM-as-judge)
-  and `docs/colbert-late-interaction-notes.md` (ColBERT: motivated by *our own*
+     **That confound is now LIVE, not hypothetical (verified 2026-07-30 by mtime):** the 4
+     RQ3 treatment indices were built 2026-07-23, `chunker_compare_full` was rebuilt
+     2026-07-28 for OCR remediation. So **every RQ3 number above is currently void** and
+     must be treated as "unconfirmed, pending rebuild" rather than cited — in *both*
+     directions: 1024's significant loss is inflated (1024 is the dirty arm), and the
+     normalize/segmentation nulls are unsafe too (a handicapped treatment arm that still
+     ties could be genuinely positive on equal footing). Rebuilding the 4 RQ3 indices
+     alone would not fix it and would merely flip the confound's sign, because
+     `chunker_compare_full` itself predates the 2026-07-30 corpus fixes: the only correct
+     order is rebuild `chunker_compare_full` first (~20-24 h), then the 4 RQ3 indices
+     (bge-m3, full corpus, ~3-6 h), then re-run the three tests.
+- **RQ4 (end-to-end answer quality) is STARTED as of 2026-07-30** —
+  `docs/rq4-design.md` + its build log. Steps 1-2 built (`tools/eval/rq4_build_contexts.py`,
+  `rq4_generate.py`); `rq4_score.py` is what remains. Local-only generation (`phi4`,
+  no external API), objective citation/abstention metrics rather than LLM-as-judge.
+  **RQ4 does not depend on the pending index rebuild** — contexts come from persisted
+  retrieval results — but it *will* need re-running after one, like every other
+  persisted-result consumer. Two hard-won gotchas: (a) **Ollama truncates an
+  over-long prompt from the front**, so a default `num_ctx=4096` silently deleted
+  the instructions on long prompts and produced fluent, plausible, citation-free
+  answers — always set `num_ctx` and put instructions *after* the context; (b) the
+  design doc's "recall@10 ~0.6 so the context often lacks the answer" was wrong
+  (recall ≠ presence: 96% of contexts hold ≥1 gold doc), so 4b's power lives in the
+  weak arms and closed-book, not the strong ones.
+- **Candidate next axis, written up but not started**:
+  `docs/colbert-late-interaction-notes.md` (ColBERT: motivated by *our own*
   results — the cross-encoder reranker hurt hybrid MRR, and BM25/dense split
   person vs program — with a pre-registered prediction so an aggregate win can't
-  be mistaken for resolving that split). Neither is committed to; RQ4 is the one
+  be mistaken for resolving that split). Not committed to; RQ4 is the one
   that blocks the paper.
+- **Corpus data-quality audit** (`tools/corpus_prep/audit_title_body_agreement.py`,
+  2026-07-30): flags manifest titles that disagree with the document's own page-1
+  `เรื่อง` subject line. A first version was rejected on measurement (median 0.660,
+  544 files below 0.5, nearly all artifacts); this one strips agenda numbering,
+  compares by **token containment rather than string similarity**, and scores
+  **asymmetrically** (what fraction of the *title's* words the subject line
+  supports, so a truncated title scores 1.0). Result: median **1.000**, **7 flagged,
+  7/7 genuine**. Report + per-case verdicts: `docs/title-body-agreement.md`. Two
+  causes: 4 mispairings (metadata-only, incl. one A↔B swap) and 2 never-fetched
+  documents (the CHECO shape). **Not applied** — mispairings change `resolution_id`s,
+  so it is a decision; both should ride the rebuild already owed.
 - Narrative overview of the whole project (what was done in what order, what each step
   found, which conclusions have since been retracted): `docs/project-journey.html` — the
   tracked source; render to PDF with headless Chrome (`--headless --no-pdf-header-footer
