@@ -34,3 +34,4 @@ docs/code-explained.pdf
 # docs/project-journey.html (see CLAUDE.md for the render command); the HTML is
 # the source of truth, the PDF is a build artifact.
 docs/project-journey.pdf
+data/rq4/
