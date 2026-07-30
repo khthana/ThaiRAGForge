@@ -1609,17 +1609,34 @@ holds as stated.
     `tools/corpus_prep/patch_gold_ids_for_split_titles.py` (YAML round-trip
     verified byte-identical before rewriting, so the diff is 4 lines not 4,000),
     and **all 1,046 + 1,219 gold id references now resolve against the corpus,
-    0 dangling**. **Still open — the numbers above are not yet corrected for
-    this**: every built index stores the ids it was built with, so for those 3
-    queries the gold set and the indices now disagree (the merged id is in fact
-    retrieved in top-10 for 88/88 hybrid combos on the two course queries and
-    11/132 on the program query, so the disagreement is live, not theoretical).
-    Aggregate effect is bounded at roughly ±0.003 recall@10 (3 of 106 queries),
-    i.e. too small to move any conclusion in this document, but the fix is a
-    pure relabel — chunk text and embeddings are unchanged, only
-    `resolution_id`/`chunk_id` strings differ for 7 of 2,853 files — so it does
-    **not** need a GPU rebuild, and should be done before the next eval refresh
-    rather than carried as a known error.
+    0 dangling**. **Closed 2026-07-30 — relabelled and re-evaluated, no number
+    in this document changes.** Every built index stores the ids it was built
+    with, so the gold set and the indices had briefly disagreed for those 3
+    queries; `tools/corpus_prep/relabel_index_resolution_ids.py` rewrote the
+    stored ids in place (a pure relabel — chunk text and embeddings are
+    untouched, so no GPU rebuild), covering 49 combos / 20,828 index rows and
+    568 result files / 907 rows. Attribution was exact rather than heuristic:
+    each row was matched by `(old chunk_id, text)` against the pre-relabel
+    backup, and the source file behind each block identified through the combo's
+    *own* loader by `chunk_index` restarting at 0, not by text similarity —
+    which matters because content matching cannot cross the re-OCR boundary.
+    **Measured effect, per combo, on aggregate recall@10: dense −0.00002,
+    hybrid +0.00018, BM25 −0.00031** — the 3 queries' relevant sets grow by one
+    each, so the mean moves in the 5th decimal. The fresh
+    `embedder_matrix_9way.py` run reproduces `qwen3_0.6b` 0.5263 and `bge_m3`
+    0.4090 exactly as tabulated above. Every significance test that reads
+    persisted results was re-run (`bm25_vs_embedder_*_9way`,
+    `hybrid_significance_test_9way`, `hybrid_chunker_significance_test`,
+    `hybrid_significance_test_semantic_top5`, `map_precision_*`,
+    `bm25_hybrid_entity_type_breakdown`, `bm25_vs_embedder_*_per_chunker`,
+    `embedder_significance_test_by_entity_type_9way`); all verdicts hold with
+    **one narrowing**, on a pair that was already borderline: `bge_m3` losing to
+    `jina_v5` under semantic+hybrid on **nDCG@10** is no longer significant
+    (Holm-adj p 0.0928, still numerically −0.0462). `bge_m3` dropping out of the
+    top-5 tied cluster therefore now rests on recall@10 (all three of
+    `qwen3_0.6b`/`qwen3`/`jina_v5` still significant) and on nDCG@10 versus
+    `qwen3_0.6b`/`qwen3` only. The bootstrap is seeded (`--seed 42`), so this is
+    a real consequence of the relabel, not run-to-run noise.
 
 15. New 2026-07-30: **swept the whole class of bug that #14 belonged to**, instead
     of waiting to trip over the next one. Three silent-corruption bugs had by then

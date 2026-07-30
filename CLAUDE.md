@@ -47,7 +47,7 @@ see `docs/adr/`.
   (corpus-discovery contamination, stale BM25/hybrid result cache, `resolution_id`
   collisions); they share a shape — a mismatch between two artifacts produced at
   different times by different scripts, which never crashes, it just makes a number
-  wrong. This script checks 23 such invariants across corpus/index/eval layers
+  wrong. This script checks 25 such invariants across corpus/index/eval layers
   (id uniqueness, row alignment of chunks↔vectors↔lexical, index-vs-corpus
   membership, embedding sanity, gold-id resolution, results-vs-index freshness)
   and exits 1 on any FAIL. Latest report: `docs/pipeline-invariant-audit.md`.
@@ -55,6 +55,16 @@ see `docs/adr/`.
   **not the corpus**, so a smoke-subset combo and a full-corpus combo share an id
   and a persisted result cannot be attributed to one index — this is *why* the
   stale-cache incident was invisible. Check the index root by hand when it matters.
+  Two lessons about the audit itself, both learned by breaking it the same day it was
+  written: (a) **a check whose subject matter moves becomes a vacuous PASS** — C4
+  (orphaned `.md.dup`) went 24→0 the moment those archives were moved off-repo, so it
+  now follows them to `ARCHIVE_ROOT` and says "0 of 240" rather than "0"; (b) **don't
+  let a known-retired artifact keep the gate red** — deleting the 8 superseded combos
+  removed the only indices still holding the pre-contamination-fix ids, which made
+  E3a jump 7→3,106 for result sets nothing reads. Those are now classified separately
+  (E3c contamination ids, E3d pre-repair titles, `RETIRED_RESULT_DIRS`) so a FAIL
+  still means a *live* result set has drifted. Current state: 19 pass / 5 warn / 1
+  fail, the single FAIL being the `BuildCombo.id` caveat above.
 - The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;
   corpus-prep tooling in `tools/corpus_prep/` needs Poppler + Ollama.
 - **Superseded backups live off-repo** (2026-07-30): 2,389 `*.dup` / `*.bak` files
@@ -182,7 +192,9 @@ see `docs/adr/`.
   dedicated semantic-only top-5 pairwise tie test
   (`tools/eval/hybrid_significance_test_semantic_top5.py`) was re-run 2026-07-29** — the tie
   **partially broke**: `bge-m3` now loses significantly to `qwen3_0.6b`/`qwen3`/`jina_v5` on
-  recall@10 and nDCG@10 (still ties all three on MRR) and drops out of the cluster. The
+  recall@10, and to `qwen3_0.6b`/`qwen3` on nDCG@10 (still ties all three on MRR, and after the
+  2026-07-30 `resolution_id` relabel it also ties `jina_v5` on nDCG@10 — Holm-adj p=0.0928, the
+  one verdict that relabel narrowed), so it drops out of the cluster. The
   remaining four (`qwen3_0.6b` 0.6152, `qwen3` 0.6051, `jina_v5` 0.5995, `e5_small` 0.5877
   recall@10, semantic-only) are still fully, mutually tied on every metric. Don't cite a single
   "best combo" among those four — the tie there is confirmed, not provisional. Hybrid still

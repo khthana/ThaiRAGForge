@@ -27,7 +27,9 @@ Checks, grouped by layer (C = corpus, I = index, E = eval):
     I6  index built before the corpus it indexes was last modified
     E1  every gold relevant_resolution_id resolves against the corpus
     E2  no duplicate query text within a gold set
-    E3  persisted results reference resolution_ids their index actually holds
+    E3  persisted results reference resolution_ids their index actually holds,
+        separating ids left over from the corpus-discovery contamination bug
+        (expected in a retired result set) from a genuine index mismatch
     E4  persisted results older than the index they were computed from
 
 Read-only. Exits 1 if any check FAILs.
@@ -42,6 +44,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -58,6 +61,16 @@ from rag_lab.factory import build_loader  # noqa: E402
 from rag_lab.loaders.common import _meeting_manifest, iter_corpus_files  # noqa: E402
 
 CORPUS = Path("academic_resolutions")
+
+# resolution_id is "<year>/<session>/<title>" (session may carry a trailing "s" for a
+# special session); anything else is make_resolution_id's path fallback.
+_WELL_FORMED_ID = re.compile(r"^\d{4}/\d+s?/")
+
+# Where tools/archive_unused.py moved the off-repo archives; C4's subject matter
+# lives here now, so the check has to follow it rather than report an empty corpus
+# scan as a pass. Missing (different machine, drive not mounted) is tolerated --
+# the check then says so instead of pretending.
+ARCHIVE_ROOT = Path(r"D:/academic_resolutions (ข้อมูลดิบ + OCR)/_superseded_from_repo")
 INDEX_ROOT = Path("data/index")
 RESULTS_ROOT = Path("data/results")
 GOLD = [
@@ -67,6 +80,19 @@ GOLD = [
 # smoke/dev fixtures are deliberately tiny subsets -- coverage and count checks
 # against the full corpus are meaningless for them
 TOY_INDEXES = {"chunker_compare_smoke", "dev_smoke"}
+
+# Result sets no current script reads (see tools/archive_unused.py::RETIRED_RESULTS).
+# They were computed against earlier corpus states -- before the manifest rebuild
+# renumbered titles, before the corpus-discovery contamination fix, before the
+# resolution_id title repair -- so their ids legitimately do not resolve against
+# today's indices. Reporting that as a FAIL would leave the gate permanently red
+# and therefore useless; the finding that matters is "a *live* result set has
+# drifted", so these are recorded separately as a warning instead.
+RETIRED_RESULT_DIRS = {
+    "gold_full_embedder_matrix", "silver_chunker_compare", "gold_chunker_compare",
+    "gold_chunker_compare_73det", "gold_embedder_compare", "congen_sct_truncation_fix",
+    "mode_b_routed",
+}
 
 findings: list[tuple[str, str, str]] = []  # (check, status, detail)
 
@@ -150,19 +176,29 @@ def audit_corpus() -> tuple[set[str], dict[str, Path]]:
     # have no live counterpart -- it was replaced by its `<stem>__N.md` pieces
     # (ADR-0004) -- so only an archive with neither a live file nor any split
     # piece is a file that fell out of the corpus.
+    # The archives themselves now live off-repo (tools/archive_unused.py), so
+    # scanning only CORPUS would turn this into a vacuous PASS -- 0 archives found
+    # is not the same finding as 0 orphans. Look wherever they actually are, and
+    # resolve each archive back to the corpus path it would have occupied.
     live = {str(p) for p in paths}
-    orphans = []
-    for archive in CORPUS.rglob("*.md.dup"):
-        stem = str(archive)[: -len(".dup")]
-        if stem in live:
-            continue
-        if list(archive.parent.glob(f"{Path(stem).stem}__*.md")):
-            continue
-        orphans.append(str(archive))
+    orphans, n_archives, roots = [], 0, [(CORPUS, CORPUS)]
+    if (dest := ARCHIVE_ROOT / CORPUS.name).is_dir():
+        roots.append((dest, ARCHIVE_ROOT))
+    for scan_root, rel_base in roots:
+        for archive in scan_root.rglob("*.md.dup"):
+            n_archives += 1
+            here = CORPUS / archive.relative_to(rel_base).relative_to(CORPUS.name)
+            stem = str(here)[: -len(".dup")]
+            if stem in live:
+                continue
+            if list(here.parent.glob(f"{Path(stem).stem}__*.md")):
+                continue
+            orphans.append(str(archive))
     record(
         "C4 no orphaned .md.dup archive",
         not orphans,
-        f"{len(orphans)} archives with neither a live file nor split pieces",
+        f"{len(orphans)} of {n_archives} archives have neither a live file nor split pieces"
+        + ("" if len(roots) > 1 else " (in-repo only -- archive root not reachable)"),
         warn=True,
     )
     for o in orphans[:5]:
@@ -343,6 +379,8 @@ def audit_eval(corpus_ids: set[str], ids_by_combo: dict[Path, set[str]], quick: 
 
     result_dirs = [p for p in RESULTS_ROOT.iterdir() if p.is_dir()]
     stale_dirs, unknown_ids, unknown_queries = [], [], []
+    stale_contaminated: list[str] = []
+    retired_drift: list[str] = []
     for rdir in sorted(result_dirs):
         files = sorted(rdir.glob("*.json"))
         if not files:
@@ -362,13 +400,28 @@ def audit_eval(corpus_ids: set[str], ids_by_combo: dict[Path, set[str]], quick: 
             known = ids_by_name.get(name) or None
             if known is not None:
                 bad = {r["resolution_id"] for r in data["results"] if r.get("resolution_id") not in known}
-                if bad:
-                    unknown_ids.append(f"{rdir.name}/{f.name}: {len(bad)} ids not in {name}")
+                # A well-formed id is '<year>/<session>/<title>'; make_resolution_id falls
+                # back to the file path when a walk picked up something that is not a
+                # resolution at all. Those are the corpus-discovery contamination bug's
+                # artifacts, so a *retired* result set citing them is expected, not a
+                # mismatch -- it was computed before the fix. Classify rather than
+                # conflate: until the 8 superseded combos were deleted, these files were
+                # excused only because those indices still held the bogus ids.
+                contaminated = {b for b in bad if not _WELL_FORMED_ID.match(b or "")}
+                if contaminated:
+                    stale_contaminated.append(
+                        f"{rdir.name}/{f.name}: {len(contaminated)} pre-fix contamination id(s)")
+                drifted = bad - contaminated
+                if drifted:
+                    where = retired_drift if rdir.name in RETIRED_RESULT_DIRS else unknown_ids
+                    where.append(f"{rdir.name}/{f.name}: {len(drifted)} ids not in {name}")
             if data.get("query") and data["query"] not in all_queries:
                 unknown_queries.append(f"{rdir.name}: {data['query'][:60]}")
         # E4: results older than the index they name
         for name in combo_names:
             ts = built_at.get(name)
+            if rdir.name in RETIRED_RESULT_DIRS:
+                continue
             if ts and datetime.fromisoformat(ts).timestamp() > newest_result:
                 stale_dirs.append(
                     f"{rdir.name}: results {datetime.fromtimestamp(newest_result):%Y-%m-%d %H:%M}"
@@ -376,7 +429,16 @@ def audit_eval(corpus_ids: set[str], ids_by_combo: dict[Path, set[str]], quick: 
                 )
                 break
 
-    record("E3a results reference ids their index holds", not unknown_ids, f"{len(unknown_ids)} result files with unknown ids")
+    record("E3a results reference ids their index holds", not unknown_ids,
+           f"{len(unknown_ids)} result files with unknown ids")
+    record("E3d retired result sets name ids no index holds", not retired_drift,
+           f"{len(retired_drift)} result files in {sorted(RETIRED_RESULT_DIRS)!r} carry "
+           f"titles from an earlier corpus state -- retired, not read by any current script",
+           warn=True)
+    record("E3c retired result sets cite pre-fix contamination ids", not stale_contaminated,
+           f"{len(stale_contaminated)} result files cite an id from the corpus-discovery "
+           f"contamination bug -- expected for result sets computed before its fix; do not reuse them",
+           warn=True)
     for m in unknown_ids[:8]:
         print(f"        {m}")
     record("E3b results answer a known gold query", not unknown_queries, f"{len(set(unknown_queries))} unrecognized queries", warn=True)
