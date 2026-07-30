@@ -369,6 +369,41 @@ see `docs/adr/`.
   design doc's "recall@10 ~0.6 so the context often lacks the answer" was wrong
   (recall ≠ presence: 96% of contexts hold ≥1 gold doc), so 4b's power lives in the
   weak arms and closed-book, not the strong ones.
+- **Evaluation validity — read `docs/eval-validity-threats.md` before defending any
+  number in this project.** Written 2026-07-30 against the question "is 106 queries too
+  few for a reviewer". It is not (BEIR peers run 50-300 topics, and this set is unusually
+  *deep* at 1,046 judgments / 9.87 relevant docs per query vs MS MARCO's ~1.1) — but three
+  other things are real threats, and two are now measured:
+  1. **Statistical power: closed.** `tools/eval/power_analysis.py` →
+     `data/results/power_analysis.md`. **138/180 comparisons significant, and all 42 ties
+     have observed |diff| below their MDE** — no tie here is a power artifact, so every one
+     can be cited as a *bound* rather than a null. Chunker ties are the tightest in the
+     study (`fixed_size` vs `sentence` rules out >0.031 recall@10; family 0.031-0.052),
+     which is the right way to state the retired "semantic wins" headline; embedder ties
+     are looser (0.05-0.10); **`e5_small` vs `jina_v5` on MRR (bound 0.1045) is the one
+     pair that must be called inconclusive, not tied.** The closed-form MDE is
+     simulation-verified against the real bootstrap (achieved power 0.78-0.86 vs nominal
+     0.80), so cite it directly. Recomputed from persisted results → **re-run after any
+     index rebuild** like everything else.
+  2. **Pooling bias: the sharpest threat, measurement built, awaiting human judgement.**
+     The qrels were derived by *string containment*, which is what BM25 does — so a
+     relevant document phrased differently (or with an OCR-truncated title, seen in the
+     first sampled item) is a false negative that penalises dense retrieval for being
+     right. This points straight at "BM25 significantly beats `bge_m3`" and "BM25 carries
+     `person` (0.8147)". `tools/eval/residual_relevance_sample.py` builds a **blinded**
+     126-item review sheet (29 stratified queries, unjudged top-10 hits, arm held in a
+     separate key file); `--score` gives per-arm residual-relevance rates with Wilson
+     intervals. **Decision rule is pre-registered in the doc** (intervals overlap →
+     incomplete, comparisons stand; disjoint → biased, restate every BM25-vs-dense claim).
+     First signal is mildly reassuring: BM25's unjudged pool is the *largest* (4.86/query
+     vs dense 4.28, hybrid 4.00). Do **not** let an LLM judge these — automated relevance
+     is exactly what the Gold set was designed to avoid.
+  3. **Circularity** in `entity_lookup`/`entity_boost`: their qrels come from the same
+     `programs.json`/`people.json` the retrieval mode uses, so 0.9291 is an upper bound,
+     not a measurement. Confined to those arms — chunker/embedder/BM25/hybrid never touch
+     the dictionaries — but it needs an explicit paragraph in the paper, not a footnote.
+  Also covered there: single-annotator labelling (defended by the labels being
+  *rule-derived and re-derivable*, not judged), query provenance, external validity.
 - **Candidate next axis, written up but not started**:
   `docs/colbert-late-interaction-notes.md` (ColBERT: motivated by *our own*
   results — the cross-encoder reranker hurt hybrid MRR, and BM25/dense split

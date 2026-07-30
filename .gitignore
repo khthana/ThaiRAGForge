@@ -17,7 +17,11 @@ academic_resolutions/
 
 # Framework outputs (generated Index artifacts & retrieval results)
 data/index/
-data/results/
+data/results/*
+# ...except the residual-relevance review sheet: everything else under
+# data/results/ is regenerable by re-running a script, but this one carries
+# hand-entered relevance judgements that cannot be reproduced if lost.
+!data/results/residual_relevance/
 data/output/
 data/qdrant/
 data/logs/

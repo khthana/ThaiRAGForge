@@ -477,6 +477,55 @@ short-sentence-oriented teacher) does not. Both are real constraints on the
 Thai-specific ecosystem's current models, worth stating separately rather
 than collapsing into one "needs more investment" story.
 
+## Resolved 2026-07-30: Statistical power — every tie in this document is a bounded claim, not a null
+
+`tools/eval/power_analysis.py` → `data/results/power_analysis.md`. Full
+validity assessment (all seven threats, not just this one):
+`docs/eval-validity-threats.md`.
+
+Most of this document's headline claims are **null results** — the top-4
+embedders are tied, `semantic` never significantly beats any chunker,
+normalization and segmentation do nothing. Until now none of them stated what
+size of difference the design could have detected, which is the first thing a
+reviewer asks about a null. This closes that gap for every comparison at once.
+
+**Headline: across 180 pairwise comparisons on 3 metrics, 138 are significant
+and all 42 ties have an observed difference below their MDE.** No tie in this
+project is an artifact of low power. Every one can be restated as a bound
+("rules out differences larger than X") instead of an absence of evidence.
+
+- **The chunker ties are the tightest results in the study**, which matters
+  because the retirement of "semantic chunking wins" (2026-07-29) currently
+  reads as a failure to find anything. It is not: `fixed_size` vs `sentence`
+  rules out recall@10 differences larger than **0.031**, and the whole
+  6-pair chunker family bounds at **0.031–0.052**. The correct claim is
+  "the chunker axis is bounded small", not "we could not tell".
+- **Embedder ties are looser**, bounding at 0.05–0.10 — so the "top-4 tied
+  cluster" is real but a weaker statement than the chunker one, and should
+  not be written in the same voice.
+- **The weakest tie in the paper is `e5_small` vs `jina_v5` on MRR**,
+  consistent with a difference as large as **0.1045**. Report that pair as
+  *inconclusive*; it is the one equivalence claim here that does not hold up.
+- Median MDE(Holm, 80%) by family, recall@10: embedder pairs **0.105**,
+  hybrid-vs-dense **0.075**, hybrid-vs-BM25 **0.086**, chunker pairs (see
+  above, tightest). Depth is why these are as good as they are — 9.87
+  relevant documents per query means each query's score is an average, not a
+  near-Bernoulli draw.
+- **The closed form is verified, not assumed.** MDE = `(z + z_power)·sd/√n`
+  presumes a normal statistic; these tests are percentile paired bootstraps
+  on discrete, zero-inflated differences. Simulating the *actual* bootstrap
+  at the computed MDE gives achieved power **0.78–0.86** against a nominal
+  0.80 (MC se ≈ 0.02) — mildly conservative, safe to cite.
+- Also reported per pair: `n needed` to detect the observed effect. The
+  closest tie to resolvable is `e5_small` vs `bge_m3` on recall@10, needing
+  **n≈213** (roughly double the current set); the rest need hundreds to tens
+  of thousands (`bge_m3` vs `jina_v5`: n≈29,500). That spread is itself the
+  argument for not chasing them — doubling the gold set would resolve one
+  pair out of 42.
+
+**Known caveat, same as every other persisted-results consumer**: recomputed
+from `data/results/`, so it must be re-run after an index rebuild.
+
 ## Methodology
 
 - **Metrics**: recall@k, precision@k, nDCG@k, MRR, MAP, all resolution-level
@@ -1910,6 +1959,15 @@ holds as stated.
 - `tools/eval/gold_embedder_breakdown_73det.py` — per-entity_type breakdown, original 6 embedders
 - `tools/eval/embedder_significance_test.py` — 15-pair embedder significance, original 6-embedder version
 - `tools/eval/embedder_significance_test_by_entity_type.py` — same, split by entity_type, original 6-embedder version
+- `tools/eval/power_analysis.py` — MDE / achieved-power / CI-bound for every comparison
+  family the study reports, plus a simulation check of the closed form against the real
+  bootstrap; turns each of the 42 ties into a citable bound
+  (`data/results/power_analysis.md`)
+- `tools/eval/residual_relevance_sample.py` — blinded human-review sheet for
+  relevant-but-unjudged top-10 hits, per retrieval arm, testing whether the
+  containment-derived qrels are biased toward BM25 rather than merely incomplete;
+  `--score` reports per-arm rates with Wilson intervals
+  (`data/results/residual_relevance.md`)
 - `tools/eval/audit_pipeline_invariants.py` — 23-check sweep across corpus/index/eval
   for silent-corruption invariants (Open item #15); read-only, exits 1 on FAIL,
   report at `docs/pipeline-invariant-audit.md`. Run it before trusting an eval refresh
