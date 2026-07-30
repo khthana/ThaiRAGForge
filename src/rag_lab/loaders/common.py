@@ -78,9 +78,61 @@ def parse_path(path: str) -> tuple[str | None, str | None, str]:
     return year, session, title
 
 
+@lru_cache(maxsize=None)
+def _title_occurrences(dir_path: str) -> dict[str, list[str]]:
+    """effective title -> the folder's filenames carrying it, sorted.
+
+    Only titles held by more than one file are kept; a single-file title needs
+    no disambiguation and would just cost memory. "Effective" title is what
+    `parse_path` derives (manifest title, else the file stem), computed over
+    every live `.md` in the folder rather than only the manifest's entries, so
+    a stem that happens to equal another file's manifest title is caught too.
+    Cached per directory like `_meeting_manifest`."""
+    manifest = _meeting_manifest(dir_path)
+    by_title: dict[str, list[str]] = {}
+    for f in sorted(Path(dir_path).glob("*.md")):  # excludes archived *.md.dup
+        title = (manifest.get(f.name) or {}).get("title") or f.stem
+        by_title.setdefault(title, []).append(f.name)
+    return {t: names for t, names in by_title.items() if len(names) > 1}
+
+
+def title_collision_rank(path: str) -> int | None:
+    """1-based position of `path` among its folder's files sharing its title,
+    or None when the title is unique there (the overwhelmingly common case).
+
+    Folder-local and deterministic: the answer depends only on the directory's
+    own contents, never on which subset of the corpus a given run happens to
+    load, so an id minted here is stable across a dev-subset build and a
+    full-corpus one."""
+    p = Path(path)
+    entry = _meeting_manifest(str(p.parent)).get(p.name)
+    title = (entry or {}).get("title") or p.stem
+    names = _title_occurrences(str(p.parent)).get(title)
+    return names.index(p.name) + 1 if names and p.name in names else None
+
+
 def make_resolution_id(path: str, year: str | None, session: str | None, title: str) -> str:
+    """`<year>/<session>/<title>`, with a `#N` suffix when that would otherwise
+    name two different documents.
+
+    A `resolution_id` is the citation and relevance-judging unit (ADR-0002), so
+    two files collapsing onto one id silently merges unrelated documents into a
+    single "resolution" -- a retrieval hit on either then counts as a hit on
+    both. It happens because titles come from `meeting_manifest.json`
+    (ADR-0003), where one meeting can legitimately list two agenda items under
+    the same title (and where a wrong title can be copied onto the wrong file).
+    Disambiguating here keeps every id unique without encoding anything in a
+    filename (ADR-0003) or making the human-facing `title` uglier -- the suffix
+    lands on the id alone. `tools/corpus_prep/audit_resolution_ids.py` reports
+    wherever this fires, so a genuine data error surfaces instead of being
+    quietly papered over."""
     if year and session:
-        return f"{year}/{session}/{title}"
+        rank = title_collision_rank(path)
+        # rank 1 keeps the bare id: only the *extra* files claiming a title get
+        # a suffix, so a clash never renames an id that already exists in a
+        # gold query set or a built index -- it only mints new ones alongside.
+        suffix = f" #{rank}" if rank and rank > 1 else ""
+        return f"{year}/{session}/{title}{suffix}"
     return str(Path(path).as_posix())
 
 

@@ -6,6 +6,7 @@ parameter must miss the cache and re-embed.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from rag_lab.chunkers import FixedSizeChunker
 from rag_lab.pipeline import build_index
@@ -43,3 +44,26 @@ def test_changing_chunk_size_misses_cache_and_reembeds(tmp_path):
 
     build_index(_resolutions(), FixedSizeChunker(chunk_size=30), embedder, cache_dir=tmp_path)
     assert embedder.call_count == 2  # different params → cache miss
+
+
+def test_build_refuses_two_resolutions_sharing_an_id():
+    # relevance is judged per resolution_id (ADR-0002), so a collision merges
+    # unrelated documents into one "resolution" and every metric computed from
+    # the artifact is quietly wrong -- worth failing a multi-hour build over
+    clashing = [
+        Resolution(resolution_id="2567/9/เรื่อง เดียวกัน", source_path="a.md", raw_text="ก"),
+        Resolution(resolution_id="2567/9/เรื่อง เดียวกัน", source_path="b.md", raw_text="ข"),
+    ]
+
+    with pytest.raises(ValueError, match="duplicate resolution_id"):
+        build_index(clashing, FixedSizeChunker(chunk_size=20), BagOfWordsEmbedder())
+
+
+def test_the_same_file_listed_twice_is_not_a_collision():
+    # a path repeated in one run (a resume config overlapping its base list) is
+    # harmless -- it is the same document, not two documents on one id
+    same = Resolution(resolution_id="2567/9/เรื่อง หนึ่ง", source_path="a.md", raw_text="ก")
+
+    index = build_index([same, same], FixedSizeChunker(chunk_size=20), BagOfWordsEmbedder())
+
+    assert index.chunks

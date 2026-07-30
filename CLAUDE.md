@@ -34,7 +34,14 @@ see `docs/adr/`.
 - Add a strategy by creating a file + registering it (`src/rag_lab/registry.py`);
   never edit the runner (Open/Closed).
 - `Chunk.resolution_id` is load-bearing — relevance is judged at the Resolution level
-  (ADR-0002).
+  (ADR-0002). It must be unique per file, and that is now enforced rather than
+  assumed (ADR-0002 amendment, 2026-07-30): `make_resolution_id` appends a
+  folder-local ` #N` rank when a meeting lists two items under one title,
+  `pipeline.build_index` refuses to build on a collision, and
+  `tools/corpus_prep/audit_resolution_ids.py` reports every clash (exit 1) with
+  the evidence to tell a data error from a genuine shared title. Run it after any
+  corpus/manifest change. An id change makes built indices stale for the affected
+  files — they store the ids they were built with.
 - The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;
   corpus-prep tooling in `tools/corpus_prep/` needs Poppler + Ollama.
 - Corpus layout is `<ปี>/ครั้งที่ N/` (special sessions: `ครั้งที่ Ns`); per-meeting

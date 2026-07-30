@@ -1575,6 +1575,52 @@ holds as stated.
     "Chunkers compared" section above for the full writeup and the revised
     practical framing.
 
+14. New 2026-07-30: **`resolution_id` was never unique — 6 ids were shared by 12
+    files**, found while verifying (for an unrelated reason) that
+    `data/index/entity_tags_full` was current. `resolution_id` is
+    `<year>/<session>/<title>` with `title` coming from `meeting_manifest.json`,
+    and nothing enforced uniqueness, so 2,853 corpus files produced only 2,847
+    distinct ids. Since relevance is judged per resolution (ADR-0002), a shared
+    id merges two documents into one relevance unit and a top-k hit on either
+    counts for both. Worst case found: an อาจารย์บัณฑิตพิเศษ appointment document
+    carrying a curriculum-revision title (different Drive URLs, unrelated
+    subject matter). **Fixed 2026-07-30** in three parts:
+    (i) 4 of the 6 were data errors with a recoverable correct title, repaired
+    at the source (`tools/corpus_prep/fix_manifest_title_collisions.py` —
+    idempotent, verifies the on-disk title before writing, which matters because
+    `academic_resolutions/` is gitignored so the script *is* the change record);
+    (ii) the remaining 2 are two genuinely distinct agenda items that one
+    meeting listed under one identical title, and are separated by
+    `make_resolution_id`'s new folder-local ` #N` rank rather than by invented
+    metadata; (iii) `pipeline.build_index` now refuses to build on a collision,
+    and `tools/corpus_prep/audit_resolution_ids.py` reports every clash (exit 1)
+    with the evidence needed to distinguish the two cases. Corpus now verifies
+    at 2,853 files → 2,853 unique ids, full test suite green. See the ADR-0002
+    amendment for the reasoning.
+    **Eval exposure, measured not assumed**: an earlier prefix-matched count
+    suggesting the worst case was gold-cited was a false positive of that
+    matching — exact matching shows **3 of 106** `gold_query_set_73det.yaml`
+    queries (1 of 252 in the large set) cite a colliding id, and all 3 cite the
+    *split-bundle* case (2567/1 `__1`/`__2`, two ฉบับปี revisions of one
+    วิศวกรรมชีวการแพทย์ curriculum that had been patched with one shared title).
+    Both pieces are independently relevant under `build_gold_candidates.py`'s
+    rules, so those queries' relevant sets legitimately grow by one (12→13,
+    9→10, 9→10); patched with
+    `tools/corpus_prep/patch_gold_ids_for_split_titles.py` (YAML round-trip
+    verified byte-identical before rewriting, so the diff is 4 lines not 4,000),
+    and **all 1,046 + 1,219 gold id references now resolve against the corpus,
+    0 dangling**. **Still open — the numbers above are not yet corrected for
+    this**: every built index stores the ids it was built with, so for those 3
+    queries the gold set and the indices now disagree (the merged id is in fact
+    retrieved in top-10 for 88/88 hybrid combos on the two course queries and
+    11/132 on the program query, so the disagreement is live, not theoretical).
+    Aggregate effect is bounded at roughly ±0.003 recall@10 (3 of 106 queries),
+    i.e. too small to move any conclusion in this document, but the fix is a
+    pure relabel — chunk text and embeddings are unchanged, only
+    `resolution_id`/`chunk_id` strings differ for 7 of 2,853 files — so it does
+    **not** need a GPU rebuild, and should be done before the next eval refresh
+    rather than carried as a known error.
+
 ## Source scripts (for reproducibility / methods section)
 
 - `tools/eval/embedder_matrix_9way.py` — current 9-embedder matrix:
@@ -1628,5 +1674,12 @@ holds as stated.
 - `tools/eval/gold_embedder_breakdown_73det.py` — per-entity_type breakdown, original 6 embedders
 - `tools/eval/embedder_significance_test.py` — 15-pair embedder significance, original 6-embedder version
 - `tools/eval/embedder_significance_test_by_entity_type.py` — same, split by entity_type, original 6-embedder version
+- `tools/corpus_prep/audit_resolution_ids.py` — `resolution_id` uniqueness audit
+  (Open item #14); read-only, exits 1 on any clash, reports manifest-title vs.
+  filename vs. body-heading agreement and whether the files share a source PDF
+- `tools/corpus_prep/fix_manifest_title_collisions.py` — the 4 title repairs behind
+  that audit's findings (idempotent, verifies before writing)
+- `tools/corpus_prep/patch_gold_ids_for_split_titles.py` — re-points the 4 affected
+  gold-query references at the two repaired 2567/1 split-piece ids
 - Raw result files referenced above all live under `data/results/` (gitignored) —
   regenerate by rerunning the scripts above against `data/index/chunker_compare_full/`.

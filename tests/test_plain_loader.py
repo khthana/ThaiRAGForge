@@ -65,3 +65,78 @@ def test_manifest_title_overrides_truncated_filename(tmp_path):
 
     assert res.title == full_title
     assert res.resolution_id == f"2569/3/{full_title}"
+
+
+def _meeting(tmp_path, entries: list[dict], bodies: dict[str, str]):
+    """A meeting folder with a manifest, returning the folder path."""
+    import json
+
+    folder = tmp_path / "2567" / "ครั้งที่ 9"
+    folder.mkdir(parents=True)
+    for name, body in bodies.items():
+        (folder / name).write_text(body, encoding="utf-8")
+    (folder / "meeting_manifest.json").write_text(
+        json.dumps(entries, ensure_ascii=False), encoding="utf-8"
+    )
+    return folder
+
+
+def test_two_files_sharing_a_manifest_title_get_distinct_ids(tmp_path):
+    # one meeting can list two agenda items under one title (and a wrong title
+    # can be copied onto the wrong file) -- without a rank, both files collapse
+    # onto one resolution_id and a hit on either counts as a hit on both,
+    # silently inflating recall for any gold query citing it (ADR-0002)
+    shared = "เรื่อง ขอความเห็นชอบการปรับปรุงหลักสูตร คณะวิทยาศาสตร์"
+    folder = _meeting(
+        tmp_path,
+        [
+            {"file": "ก.md", "title": shared, "url": "u1"},
+            {"file": "ข.md", "title": shared, "url": "u2"},
+        ],
+        {"ก.md": "## Page 1\nหนึ่ง\n", "ข.md": "## Page 1\nสอง\n"},
+    )
+
+    first = PlainLoader().load(str(folder / "ก.md"))
+    second = PlainLoader().load(str(folder / "ข.md"))
+
+    assert first.resolution_id != second.resolution_id
+    # the first file keeps the bare id: a clash must not rename an id already
+    # cited by a gold query set or stored in a built index, only add one
+    assert first.resolution_id == f"2567/9/{shared}"
+    assert second.resolution_id == f"2567/9/{shared} #2"
+    # the human-facing title stays clean -- the rank lands on the id alone
+    assert first.title == second.title == shared
+
+
+def test_rank_ignores_an_archived_dup_holding_the_same_title(tmp_path):
+    # a split bundle archives its pre-split original as *.md.dup (ADR-0004);
+    # those are excluded from the corpus, so one must never push a live file's
+    # id to " #2" and invalidate every reference to it
+    title = "เรื่อง ขอความเห็นชอบการปรับปรุงหลักสูตร"
+    folder = _meeting(
+        tmp_path,
+        [{"file": "ก.md", "title": title, "url": "u1"}],
+        {"ก.md": "## Page 1\nx\n", "ก.md.dup": "## Page 1\nเดิม\n"},
+    )
+
+    res = PlainLoader().load(str(folder / "ก.md"))
+
+    assert res.resolution_id == f"2567/9/{title}"
+
+
+def test_id_does_not_depend_on_which_files_a_run_loads(tmp_path):
+    # the rank is folder-local by design: a dev-subset build that loads only
+    # the second file must mint the same id a full-corpus build gives it
+    shared = "เรื่อง เดียวกัน"
+    folder = _meeting(
+        tmp_path,
+        [
+            {"file": "ก.md", "title": shared, "url": "u1"},
+            {"file": "ข.md", "title": shared, "url": "u2"},
+        ],
+        {"ก.md": "## Page 1\nหนึ่ง\n", "ข.md": "## Page 1\nสอง\n"},
+    )
+
+    alone = PlainLoader().load(str(folder / "ข.md"))
+
+    assert alone.resolution_id == f"2567/9/{shared} #2"

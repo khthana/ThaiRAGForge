@@ -53,12 +53,36 @@ def _cache_key(
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
+def _assert_unique_resolution_ids(resolutions: list[Resolution]) -> None:
+    """Fail fast when two source files carry the same `resolution_id`.
+
+    Relevance is judged per resolution (ADR-0002), so a collision silently
+    merges unrelated documents: chunks from both land under one id and a hit on
+    either counts as a hit on both, inflating recall for whichever gold query
+    cites it. `make_resolution_id` disambiguates folder-local title clashes, so
+    reaching here means something it cannot see went wrong -- worth stopping a
+    multi-hour build over, since every number computed from the artifact would
+    be quietly wrong otherwise."""
+    seen: dict[str, str] = {}
+    clashes: list[str] = []
+    for r in resolutions:
+        first = seen.setdefault(r.resolution_id, r.source_path)
+        if first != r.source_path:
+            clashes.append(f"  {r.resolution_id!r}\n    {first}\n    {r.source_path}")
+    if clashes:
+        raise ValueError(
+            f"{len(clashes)} duplicate resolution_id(s); run "
+            f"tools/corpus_prep/audit_resolution_ids.py:\n" + "\n".join(clashes)
+        )
+
+
 def build_index(
     resolutions: list[Resolution],
     chunker: BaseChunker,
     embedder: BaseEmbedder,
     cache_dir: str | Path | None = None,
 ) -> Index:
+    _assert_unique_resolution_ids(resolutions)
     store = ArtifactStore()
     cache_path: Path | None = None
     if cache_dir is not None:
