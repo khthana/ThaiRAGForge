@@ -16,7 +16,9 @@ Checks, grouped by layer (C = corpus, I = index, E = eval):
     C2  no corpus file loads to empty text
     C3  meeting_manifest hygiene: dead `file` entries, duplicate keys, files
         absent from the manifest, one URL claimed by differently-titled files
-    C4  a `*.md.dup` archive with no live counterpart (a file dropped by accident)
+    C4  a `*.md.dup` archive with no live counterpart (a file dropped by accident),
+        classifying the legitimate reasons one has none: a tail fragment of a
+        wrapped title, a rename, a truncated title, a title naming another item
     C5  corpus file count vs master_list.csv
     I1  row alignment: embeddings rows == chunk rows == lexical rows
     I2  chunk_id unique within an index
@@ -46,7 +48,9 @@ import csv
 import json
 import re
 import sys
+import unicodedata
 from collections import Counter, defaultdict
+from difflib import SequenceMatcher
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -71,6 +75,29 @@ _WELL_FORMED_ID = re.compile(r"^\d{4}/\d+s?/")
 # scan as a pass. Missing (different machine, drive not mounted) is tolerated --
 # the check then says so instead of pretending.
 ARCHIVE_ROOT = Path(r"D:/academic_resolutions (ข้อมูลดิบ + OCR)/_superseded_from_repo")
+
+
+_PAGE1_HEADING = re.compile(r"มติคณะกรรมการสภาวิชาการ.{0,80}?(เรื่อง\s.{10,300})", re.S)
+
+
+def _page1_heading(text: str) -> str:
+    """The 'เรื่อง ...' subject line the document states about itself.
+
+    Preferred over the manifest title when asking what a file *is*: the manifest
+    can be wrong (that is what the ADR-0002 amendment repaired), the body cannot.
+    Falls back to the head of the text when the heading does not parse.
+    """
+    m = _PAGE1_HEADING.search(_flat(text[:3000]))
+    return _flat(m.group(1))[:200] if m else _flat(text[:200])
+
+
+def _flat(s: str) -> str:
+    """Collapse whitespace and NBSP so Thai filenames/titles compare equal.
+
+    Corpus filenames mix U+00A0 with ordinary spaces, and OCR inserts line breaks
+    mid-title, so a naive == or `in` misses matches that are the same string.
+    """
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFC", s.replace(" ", " "))).strip()
 INDEX_ROOT = Path("data/index")
 RESULTS_ROOT = Path("data/results")
 GOLD = [
@@ -186,8 +213,24 @@ def audit_corpus() -> tuple[set[str], dict[str, Path]]:
     # scanning only CORPUS would turn this into a vacuous PASS -- 0 archives found
     # is not the same finding as 0 orphans. Look wherever they actually are, and
     # resolve each archive back to the corpus path it would have occupied.
+    # Two further reasons an archive legitimately has no same-named live file,
+    # both established by reviewing all 24 orphans on 2026-07-30. Encoded as rules
+    # rather than as a list of 24 reviewed paths, so the check keeps working as the
+    # corpus changes instead of going stale the moment a file is renamed:
+    #   (a) the archive's *filename* is a tail fragment of a longer title. Before
+    #       the manifest rebuild, a wrapped title produced one file per line, so
+    #       the fragment is a substring of some live file's full manifest title
+    #       (21 of 24; e.g. "และมาตรฐานคุณวุฒิสาขา" + "วิชาเภสัชศาสตร์ ระดับ" +
+    #       "ปริญญาตรี พ.ศ. ๒๕๖๗" were three files for one agenda item).
+    #   (b) the document is live under a different name -- renamed by a title
+    #       repair -- which only content can show (3 of 24, ratio 0.90/0.99/1.00).
+    #       Compare against the folder only, and note this evidence is one-way:
+    #       a *low* ratio proves nothing, because the archive predates the re-OCR.
     live = {str(p) for p in paths}
     orphans, n_archives, roots = [], 0, [(CORPUS, CORPUS)]
+    fragment_of_title, renamed = 0, 0
+    mistitled: list[str] = []
+    truncated_title: list[str] = []
     if (dest := ARCHIVE_ROOT / CORPUS.name).is_dir():
         roots.append((dest, ARCHIVE_ROOT))
     for scan_root, rel_base in roots:
@@ -199,16 +242,67 @@ def audit_corpus() -> tuple[set[str], dict[str, Path]]:
                 continue
             if list(here.parent.glob(f"{Path(stem).stem}__*.md")):
                 continue
+            manifest = _meeting_manifest(str(here.parent))
+            frag = _flat(Path(stem).stem)
+            siblings = [f for f in sorted(here.parent.glob("*.md")) if str(f) in live]
+            if frag and any(
+                frag in _flat((manifest.get(f.name) or {}).get("title") or "")
+                for f in siblings
+            ):
+                fragment_of_title += 1
+                continue
+            # Same document under a different name. Compare page-1 headings rather
+            # than whole files: the archive predates the re-OCR, so full-text
+            # similarity decays (one pair sits at 0.638 while its headings are
+            # identical), but the heading is short and stable.
+            ahead = _page1_heading(archive.read_text(encoding="utf-8"))
+            twin = next(
+                (f for f in siblings
+                 if SequenceMatcher(
+                     None, ahead, _page1_heading(f.read_text(encoding="utf-8"))
+                 ).ratio() >= 0.90),
+                None,
+            )
+            if twin is not None:
+                # Does the live twin's manifest title actually describe this
+                # document? When it does not, nothing fell out of the corpus, but
+                # the surviving file is filed under the wrong agenda item -- the
+                # same class of defect as the ADR-0002 title repairs. Surface it
+                # here rather than absorbing it into the rename count.
+                twin_title = _flat((manifest.get(twin.name) or {}).get("title") or "")
+                twin_head = _page1_heading(twin.read_text(encoding="utf-8"))
+                if SequenceMatcher(None, frag, twin_title).ratio() >= 0.60:
+                    renamed += 1
+                elif twin_title and SequenceMatcher(
+                    None, twin_title, twin_head[: len(twin_title)]
+                ).ratio() >= 0.85:
+                    # The title is the head of the document's own subject line, cut
+                    # short -- incomplete, not wrong. It still becomes a truncated
+                    # resolution_id, so it is worth counting separately.
+                    truncated_title.append(f"{here.parent}/{twin.name}")
+                else:
+                    mistitled.append(
+                        f"{here.parent}/{twin.name}\n            filed as {twin_title[:60]!r}"
+                        f"\n            body says {twin_head[:60]!r}"
+                    )
+                continue
             orphans.append(str(archive))
     record(
         "C4 no orphaned .md.dup archive",
         not orphans,
-        f"{len(orphans)} of {n_archives} archives have neither a live file nor split pieces"
-        + ("" if len(roots) > 1 else " (in-repo only -- archive root not reachable)"),
+        f"{len(orphans)} of {n_archives} archives are unaccounted for "
+        f"({fragment_of_title} are tail fragments of a live file's title, {renamed} are "
+        f"live under a repaired name, {len(truncated_title)} under a truncated title, "
+        f"{len(mistitled)} under a title naming a different agenda item)"
+        + ("" if len(roots) > 1 else "; in-repo only -- archive root not reachable"),
         warn=True,
     )
     for o in orphans[:5]:
         print(f"        {o}")
+    for m in truncated_title:
+        print(f"        TRUNCATED TITLE {m}")
+    for m in mistitled:
+        print(f"        WRONG TITLE {m}")
 
     # C5 master_list.csv
     master = CORPUS / "master_list.csv"

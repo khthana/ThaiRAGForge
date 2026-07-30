@@ -1,6 +1,6 @@
 # Pipeline invariant audit
 
-Run 2026-07-30 03:59 UTC. 22 pass / 2 warn / 1 fail.
+Run 2026-07-30 04:16 UTC. 23 pass / 1 warn / 1 fail.
 
 | check | status | detail |
 |---|---|---|
@@ -10,7 +10,7 @@ Run 2026-07-30 03:59 UTC. 22 pass / 2 warn / 1 fail.
 | C3b no duplicate file keys | PASS | 0 duplicated |
 | C3c every corpus file listed in its manifest | PASS | 0 unlisted (title falls back to filename stem) |
 | C3d one source URL, one base title | PASS | 0 URLs claimed by differently-titled documents |
-| C4 no orphaned .md.dup archive | WARN | 24 of 240 archives have neither a live file nor split pieces |
+| C4 no orphaned .md.dup archive | PASS | 0 of 240 archives are unaccounted for (21 are tail fragments of a live file's title, 1 are live under a repaired name, 1 under a truncated title, 1 under a title naming a different agenda item) |
 | C5 master_list.csv row count | PASS | 2853 rows vs 2853 corpus files (rows are meeting-level, not file-level -- informational) |
 | I1 row alignment (chunks/vectors/lexical) | PASS | 0 misaligned of 55 |
 | I2 chunk_id unique within index | PASS | 0 indexes with duplicates |

@@ -1684,15 +1684,44 @@ holds as stated.
       `sha256(query)`, both entries share one result file and get graded against
       two different answer keys. `gold_query_set_73det.yaml` has 0 duplicates, and
       thematic queries are already excluded from every cited result, so nothing
-      above is affected. (b) 24 `*.md.dup` archives have no live counterpart; 20
-      reconcile to a renamed/merged live file, 3-4 do not and need eyes (all are
-      administrative items — minutes approval, a Joint-Degree subsidy filing —
-      not curriculum documents).
+      above is affected. (b) 24 `*.md.dup` archives have no live counterpart —
+      **reviewed one by one 2026-07-30 and now closed: no corpus file was lost.**
+      21 are tail fragments of a wrapped title (before the manifest rebuild, a
+      title that wrapped produced one file per line — e.g. `และมาตรฐานคุณวุฒิสาขา`
+      + `วิชาเภสัชศาสตร์ ระดับ` + `ปริญญาตรี พ.ศ. ๒๕๖๗` were three files for one
+      agenda item), 1 is live under a repaired name, and the last 2 are live but
+      misfiled. Those verdicts are encoded as rules in C4, not as a list of 24
+      reviewed paths, so the check keeps working as the corpus changes; the
+      same-document test compares **page-1 `เรื่อง` headings**, because whole-file
+      similarity decays across the re-OCR boundary (one confirmed pair sits at
+      0.638 full-text with byte-identical headings).
     - The three checks that FAIL on index artifacts (duplicate `chunk_id` in 49
       indices, 1 orphan resolution_id / 23 chunks, coverage 2847/2853) are all the
       **same** pre-relabel debt from #14, traced to exactly the 6 collision ids —
       not separate bugs. **All three now PASS** (49 indices clean, 0 orphans,
       coverage 2853/2853) after the relabel in #14 was applied.
+    - **One genuine corpus defect fell out of that review**, and it is the only
+      one: `2568/ครั้งที่ 7`'s file titled *รายงานการส่งหลักสูตร…ความสอดคล้อง (CHECO)*
+      contains **รับรองรายงานการประชุม** (minutes approval) instead, and no file in
+      that meeting holds the CHECO text — the source PDF `CHECO 7-2568.pdf` is
+      itself the wrong document, so fixing it needs the correct scan, not a code
+      change. Scope checked both ways: of 24 CHECO-titled files corpus-wide, **1
+      is mismatched** (the other 23 all contain `ความสอดคล้อง`), and **0 gold
+      queries in `gold_query_set_73det.yaml` cite it** (2 refs in the 252-entry
+      set point at 2567/8 and 2567/11, different meetings), so **no reported
+      number is affected**. A second file (`2567/ครั้งที่ 6` MoA) carries a title
+      truncated mid-subject — incomplete rather than wrong, but it becomes a
+      truncated `resolution_id`.
+    - **A title-vs-body check was prototyped for that class and rejected on
+      measurement, not intuition.** Comparing every manifest title against its
+      document's own page-1 heading gives median agreement of only 0.660 across
+      2,820 files, with 544 below 0.5 — and the worst-scoring cases are mostly
+      artifacts of the comparison itself (a `20. ` agenda-number prefix, ปรับปรุง
+      vs ปรับปรุงแก้ไข), not defects. Shipping it as a gate would have meant 544
+      false alarms. The scan did show real mismatches beyond the CHECO one (e.g.
+      `2568/8` titled *ระบบ E-Portfolio* over a body about a different project),
+      so the population is worth a proper investigation — but the metric needs a
+      formulation that survives the noise first.
     - **The cleanup that followed broke two checks, in opposite directions — and
       that is the most transferable lesson here.** Archiving the superseded
       artifacts off-repo took C4 (orphaned `.md.dup`) from WARN 24 to PASS 0, not

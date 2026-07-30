@@ -66,10 +66,19 @@ see `docs/adr/`.
   still means a *live* result set has drifted. Because 0 is ambiguous between
   "examined and clean" and "nothing left to examine", the E3 checks now print their
   denominator — `E3a 0 of 9,552 live result files` is a real pass, `E3d 0 of 0` says
-  so out loud. Current state: 22 pass / 2 warn / 1 fail, the single FAIL being the
-  `BuildCombo.id` caveat above; the warns are C4's 24 orphan archives and 5
-  duplicate thematic queries in the 252-entry gold set, both needing human
-  judgement, not code.
+  so out loud. Current state: 23 pass / 1 warn / 1 fail, the single FAIL being the
+  `BuildCombo.id` caveat above and the WARN the 5 duplicate thematic queries in
+  the 252-entry gold set. C4's 24 orphan archives were reviewed one by one and
+  closed (nothing was lost: 21 tail fragments of a wrapped title, 1 rename, 2
+  misfiled-but-live); the verdicts are encoded as rules, and the same-document
+  test compares page-1 `เรื่อง` headings because whole-file similarity decays
+  across the re-OCR boundary. That review surfaced the corpus's one known
+  title↔content defect: `2568/ครั้งที่ 7`'s CHECO-titled file actually holds
+  รับรองรายงานการประชุม and the CHECO text is absent — the source PDF is wrong, so
+  it needs a re-download, not a code fix (0 gold queries in the 73det set cite
+  it). A general title-vs-body check was prototyped and **rejected on
+  measurement**: median agreement is 0.660 over 2,820 files with 544 below 0.5,
+  nearly all false alarms from agenda-number prefixes.
 - The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;
   corpus-prep tooling in `tools/corpus_prep/` needs Poppler + Ollama.
 - **Superseded backups live off-repo** (2026-07-30): 2,389 `*.dup` / `*.bak` files
