@@ -76,9 +76,12 @@ see `docs/adr/`.
   test compares page-1 `เรื่อง` headings because whole-file similarity decays
   across the re-OCR boundary. That review surfaced the corpus's one known
   title↔content defect: `2568/ครั้งที่ 7`'s CHECO-titled file actually holds
-  รับรองรายงานการประชุม and the CHECO text is absent — the source PDF is wrong, so
-  it needs a re-download, not a code fix (0 gold queries in the 73det set cite
-  it). A general title-vs-body check was prototyped and **rejected on
+  รับรองรายงานการประชุม and the CHECO text is absent. Cause is the download stage
+  fetching the wrong Drive id (two byte-identical PDFs, same SHA-256); the manifest,
+  `_LINK.txt` and `master_list.csv` all already hold the correct id
+  (`1d4iz1dpnPweAn7pxBfxlvJf9IJZwIJFJ`), which has never been fetched — so the fix
+  is a re-download + re-OCR of that one URL, no metadata change (0 gold queries in
+  the 73det set cite it). A general title-vs-body check was prototyped and **rejected on
   measurement**: median agreement is 0.660 over 2,820 files with 544 below 0.5,
   nearly all false alarms from agenda-number prefixes.
 - The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;

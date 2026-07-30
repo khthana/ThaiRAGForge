@@ -1724,9 +1724,15 @@ holds as stated.
     - **One genuine corpus defect fell out of that review**, and it is the only
       one: `2568/ครั้งที่ 7`'s file titled *รายงานการส่งหลักสูตร…ความสอดคล้อง (CHECO)*
       contains **รับรองรายงานการประชุม** (minutes approval) instead, and no file in
-      that meeting holds the CHECO text — the source PDF `CHECO 7-2568.pdf` is
-      itself the wrong document, so fixing it needs the correct scan, not a code
-      change. Scope checked both ways: of 24 CHECO-titled files corpus-wide, **1
+      that meeting holds the CHECO text. **Diagnosed precisely 2026-07-30**: the
+      download stage fetched the CHECO agenda item from the wrong Drive id
+      (`1Mtr…`, which belongs to the minutes item), producing two byte-identical
+      PDFs — same SHA-256 — under two names. The repo's `_LINK.txt`, the manifest
+      and `master_list.csv` all already record the *correct* id
+      (`1d4iz1dpnPweAn7pxBfxlvJf9IJZwIJFJ`), and no `_LINK.txt` anywhere on the raw
+      drive points at it, so the real PDF has simply never been fetched. The fix is
+      therefore a targeted re-download + re-OCR of one known URL, with no metadata
+      change needed — not a hunt for a lost document. Scope checked both ways: of 24 CHECO-titled files corpus-wide, **1
       is mismatched** (the other 23 all contain `ความสอดคล้อง`), and **0 gold
       queries in `gold_query_set_73det.yaml` cite it** (2 refs in the 252-entry
       set point at 2567/8 and 2567/11, different meetings), so **no reported
