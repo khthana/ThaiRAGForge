@@ -36,8 +36,15 @@ exactly the automated-relevance risk the Gold set was designed to avoid
 Build the sheet:
     .venv/Scripts/python.exe tools/eval/residual_relevance_sample.py
 
-Then fill in `verdict:` for each item (`y` relevant / `n` not / `?` unsure)
-in data/results/residual_relevance/review_sheet.yaml, and score it:
+Then fill in `verdict:` for each item (`y` relevant / `n` not / `?` unsure).
+**Recommended**: `residual_relevance_review_app.py`, a small Streamlit
+reviewer (`.venv/Scripts/streamlit.exe run
+tools/eval/residual_relevance_review_app.py`) that shows each candidate's
+full, untruncated chunk text and writes verdicts back into
+data/results/residual_relevance/review_sheet.yaml with one click -- editing
+the sheet's `snippet:` field by hand caps it at `--snippet` chars (600 by
+default), which can cut a chunk before the sentence that would establish
+relevance, making some items unjudgeable from the raw YAML alone. Then score:
     .venv/Scripts/python.exe tools/eval/residual_relevance_sample.py --score
 """
 from __future__ import annotations
@@ -108,9 +115,32 @@ def snippet_for(query: str, rid: str, k: int) -> str:
     return ""
 
 
+def build_text_index(qrels: dict[str, set[str]]) -> dict[tuple[str, str], str]:
+    """(query, resolution_id) -> full, untruncated chunk text, for every hit
+    across all three arms. Shared by `build()` (which then truncates to
+    `--snippet` chars for the on-disk sheet) and
+    `residual_relevance_review_app.py` (which doesn't truncate at all --
+    the reviewer needs the whole chunk to judge relevance, and a fixed
+    character cut sometimes lands before the sentence that would establish
+    it)."""
+    text_of: dict[tuple[str, str], str] = {}
+    for rdir, combo in ARMS.values():
+        for path in (REPO / "data" / "results" / rdir).glob("*.json"):
+            r = load_retrieval_result(path)
+            if r.combination_id != combo or r.query not in qrels:
+                continue
+            for hit in sorted(r.results, key=lambda h: h.rank):
+                text_of.setdefault((r.query, hit.resolution_id), hit.text)
+    return text_of
+
+
+def load_qrels() -> dict[str, set[str]]:
+    """query -> gold relevant_resolution_ids, from the 73det Gold set."""
+    return {e.query: set(e.relevant_resolution_ids) for e in load_gold_query_set(_GOLD)}
+
+
 def build(args) -> None:
-    query_set = load_gold_query_set(_GOLD)
-    qrels = {e.query: set(e.relevant_resolution_ids) for e in query_set}
+    qrels = load_qrels()
     # QuerySetEntry carries only query + qrels; entity_type lives in the yaml
     etype = {e["query"]: e.get("entity_type", "")
              for e in yaml.safe_load(_GOLD.read_text(encoding="utf-8"))}
@@ -132,14 +162,7 @@ def build(args) -> None:
 
     # cache one snippet per (query, rid) -- reading every result file per lookup
     # would be O(queries * files); build the map in one pass instead
-    text_of: dict[tuple[str, str], str] = {}
-    for rdir, combo in ARMS.values():
-        for path in (REPO / "data" / "results" / rdir).glob("*.json"):
-            r = load_retrieval_result(path)
-            if r.combination_id != combo or r.query not in qrels:
-                continue
-            for hit in sorted(r.results, key=lambda h: h.rank):
-                text_of.setdefault((r.query, hit.resolution_id), hit.text)
+    text_of = build_text_index(qrels)
 
     items: dict[tuple[str, str], dict] = {}
     unjudged_totals: dict[str, dict[str, int]] = {a: {} for a in ARMS}
