@@ -120,7 +120,7 @@
 <h1>ThaiRAGForge — เส้นทางโปรเจกต์ทั้งหมด</h1>
 <p class="subtitle">
 เราทำอะไรไปบ้าง แต่ละขั้นได้ผลอย่างไร และเมื่อปรับข้อมูลแล้วเกิดอะไรขึ้น<br>
-ปรับปรุงล่าสุด 29 กรกฎาคม 2569 · ครอบคลุมงานตั้งแต่ 1–29 ก.ค. 2569 (100 commit)
+ปรับปรุงล่าสุด 3 สิงหาคม 2569 · ครอบคลุมงานตั้งแต่ 1 ก.ค.–3 ส.ค. 2569 (120 commit)
 </p>
 
 <div class="note">
@@ -130,7 +130,9 @@
 <code>docs/paper-results-summary.md</code> (ตัวเลขพร้อมอ้างอิงในเปเปอร์),
 <code>docs/chunker-embedder-comparison-log.md</code> (บันทึกกระบวนการแบบ append-only
 รวมทางตันและบั๊กทั้งหมด), <code>docs/llm-ocr-scan-log.md</code> (งานล้าง OCR),
-<code>docs/entity-extraction-and-gold-eval-log.md</code> (งาน entity + gold set)
+<code>docs/entity-extraction-and-gold-eval-log.md</code> (งาน entity + gold set),
+<code>docs/eval-validity-threats.md</code> (ความน่าเชื่อถือของ gold set — power,
+pooling bias, circularity), <code>docs/rq4-design.md</code> (RQ4 คุณภาพคำตอบ end-to-end)
 </div>
 
 <nav id="toc">
@@ -144,6 +146,7 @@
 <li><a href="#s-p4">เฟส 4 — Entity tagging + Gold query set</a></li>
 <li><a href="#s-p5">เฟส 5 — การทดลองเปรียบเทียบหลัก</a></li>
 <li><a href="#s-p6">เฟส 6 — สามรอบที่ข้อมูลเปลี่ยนแล้วข้อสรุปพัง</a></li>
+<li><a href="#s-p7">เฟส 7 — ความแม่นยำเชิงสถิติ, RQ4, และการแก้ไข pooling bias (30 ก.ค.–3 ส.ค.)</a></li>
 <li><a href="#s-now">ผลลัพธ์ปัจจุบัน — ตอบทีละคำถามวิจัย</a></li>
 <li><a href="#s-dead">ข้อสรุปที่ตายไปแล้ว</a></li>
 <li><a href="#s-lesson">บทเรียนเชิงกระบวนการ</a></li>
@@ -229,6 +232,10 @@ metric มาตรฐานอย่าง recall@10 มี <b>เพดาน�
 24–25 ก.ค. ████████ rebuild ทั้ง 36 combo (รอบที่ 1) · refresh eval ทั้งหมด
 25–27 ก.ค. ██████████ พบ OCR gap 2 กลไก · kernel-A remediation 1,982 หน้า
 28–29 ก.ค. ██████████ rebuild (รอบที่ 2) · ⚠ เจอ cache ค้าง 3 วัน · ข้อสรุปพลิกจริง
+30 ก.ค.    ████████ resolution_id fix · thematic query กลับมามีความหมาย ·
+           eval-validity assessment เริ่ม · RQ4 เริ่ม
+30 ก.ค.–3 ส.ค. ██████████ pooling-bias study (ตัดสินเอง 126 รายการ → ถอน → แก้)
+           · RQ4 generate+ablation ครบ · rebuild รอบที่ 3 เริ่ม (ยังไม่เสร็จ)
 </div>
 
 <h3>ข้อสรุปที่แข็งที่สุด ณ ปัจจุบัน</h3>
@@ -236,7 +243,8 @@ metric มาตรฐานอย่าง recall@10 มี <b>เพดาน�
 <span class="label">ผ่าน bootstrap + Holm correction ทั้งหมด</span>
 <ol style="margin:0">
 <li><b>Hybrid (BM25 + dense ด้วย RRF) ชนะ dense อย่างเดียว</b> — มีนัยสำคัญ 26 จาก 27 การทดสอบ
-เป็นผลที่แข็งที่สุดในโปรเจกต์</li>
+เป็นผลที่แข็งที่สุดในโปรเจกต์ <span style="font-size:0.85em">(แต่วัดบน entity-anchored
+query เท่านั้น — บน thematic query กลับทิศได้ ดู §9.3)</span></li>
 <li><b>BM25 เปล่าๆ แข็งกว่าที่คาดมาก</b> — หลังล้าง OCR แล้วมันชนะ <code>bge-m3</code> อย่างมีนัยสำคัญ</li>
 <li><b>โมเดลเล็กเสมอโมเดลใหญ่ในตระกูลเดียวกัน</b> — ยืนยัน 2 ตระกูลอิสระ (Qwen3, e5)</li>
 <li><b>"semantic chunking ชนะ" — ตกรอบ</b> ไม่เคยชนะใครอย่างมีนัยสำคัญเลยแม้แต่ครั้งเดียว</li>
@@ -1012,7 +1020,301 @@ top-10"</b> ซึ่งตรงกับกลไก phantom hits ที่ว
 </div>
 
 <!-- ============================================================ -->
-<h2 id="s-now"><span class="stage-no">9</span>ผลลัพธ์ปัจจุบัน — ตอบทีละคำถามวิจัย</h2>
+<h2 id="s-p7"><span class="stage-no">9</span>เฟส 7 — ความแม่นยำเชิงสถิติ, RQ4, และการแก้ไข pooling bias (30 ก.ค.–3 ส.ค.)</h2>
+
+<p class="lead">
+หลังรอบ 29 ก.ค. เห็นชัดว่าตัวเลขในเอกสารนี้ "พลิกได้" เมื่อทดสอบจริง คำถามที่ตามมา
+ไม่ใช่ "ตัวเลขไหนดีที่สุด" อีกต่อไป แต่คือ <b>"ชุดคำถามและวิธีวัดของโปรเจกต์นี้
+ทนต่อการถูกโจมตีโดยผู้ตรวจสอบ (reviewer) แค่ไหน"</b> — เฟสนี้เป็นการหันกล้องกลับมา
+ตรวจสอบเครื่องมือวัดผลเอง ควบคู่ไปกับการเริ่มคำถามวิจัยข้อสุดท้าย (RQ4) และงาน
+คุณภาพข้อมูลอีกเส้นที่ยังค้าง
+</p>
+
+<h3>9.1 <code>resolution_id</code> ไม่ unique จริงอย่างที่สมมติมาตลอด (30 ก.ค.)</h3>
+<p>
+ADR-0002 ทั้งฉบับตั้งอยู่บนสมมติฐานว่า <code>resolution_id</code> ไม่ซ้ำต่อไฟล์
+— แต่ตรวจพบว่า <b>6 id ถูกใช้ร่วมกันใน 12 ไฟล์</b> เกิดจากกรณีที่การประชุมครั้งเดียว
+มีวาระซ้ำชื่อกันสองเรื่อง ซึ่งไม่เคยมีใครกันไว้
+</p>
+<div class="win">
+<span class="label">แก้ไข</span>
+<code>make_resolution_id</code> เติม <b>rank " #N" ที่เป็น folder-local</b> เมื่อพบชื่อซ้ำ
+ในโฟลเดอร์เดียวกัน · <code>pipeline.build_index</code> <b>ปฏิเสธการ build ทันที</b>
+ถ้าเจอ id ชนกัน (fail-fast แทนที่จะ build เงียบๆ บนข้อมูลผิด) ·
+<code>tools/corpus_prep/audit_resolution_ids.py</code> รายงานทุกกรณีชนกันพร้อมหลักฐาน
+เพื่อแยกให้ออกว่าเป็น "ข้อมูลผิดจริง" หรือ "ชื่อซ้ำกันโดยบังเอิญ"<br><br>
+ผลข้างเคียง: การเปลี่ยน id ทำให้ index ที่ build ไว้ก่อนหน้ากลายเป็น <b>stale</b>
+(ยังเก็บ id แบบเก่าอยู่) — ยกไปแก้พร้อมการ rebuild รอบที่ 3 (ดู §9.9)
+</div>
+
+<h3>9.2 thematic query กลับมามีความหมาย (30 ก.ค.)</h3>
+<p>
+ย้อนไปดูสาเหตุว่าทำไม 179 thematic query (§6.4) ถึงแทบไม่มีอำนาจจำแนก chunker เลย
+(t=0.02) แล้วพบต้นตอที่ไม่เคยสังเกตมาก่อน: <b>คำถามทั้ง 179 ข้อถูกออกแบบให้ผูกกับ
+การประชุมครั้งใดครั้งหนึ่งโดยเฉพาะ แต่ไม่มีข้อไหนเลยระบุชื่อการประชุมนั้นในตัวคำถาม</b>
+(เขียนแค่ "ในการประชุมครั้งนี้") — คำถามจึงตอบไม่ได้จริงตั้งแต่ถูกสร้าง ไม่ใช่ว่า
+chunker หรือ embedder แยกแยะไม่ออก
+</p>
+<div class="win">
+<span class="label">แก้ไขแล้ว — และพลิกเป็นสัญญาณคนละทิศกับที่คาด</span>
+<code>tools/eval/qualify_thematic_queries.py</code> เขียนคำถามทั้ง 179 ข้อใหม่ให้ระบุ
+ชื่อการประชุม แล้ว re-evaluate ด้วย <code>run_thematic_eval.py</code> — เหตุผลที่ยังต้อง
+<b>แยกชุดนี้ออกจาก entity-anchored set อยู่ดี เปลี่ยนไปจากเดิม</b>: แต่ก่อนคือ "เจือจาง"
+ตอนนี้คือ <b>"ชี้ไปคนละทาง"</b> — chunker-axis กลับหัว
+(<code>fixed_size − semantic</code> = <b>+0.0256</b> บน thematic เทียบกับ <b>−0.0359</b>
+บน entity-anchored; <code>semantic</code> เป็น chunker <b>แย่ที่สุด</b>บน thematic
+แต่ดีที่สุดบน entity-anchored) การนำสองชุดมาเฉลี่ยรวมจะ<b>หักล้างผลจริงสองอันเข้าด้วยกัน
+</b> ไม่ใช่แค่เจือจางผลอันเดียว ยังคงมีอำนาจทดสอบต่ำต่อคู่ (2/27 มีนัยสำคัญ,
+เสมอกัน 62%) — อ้างเป็น query shape แยกต่างหาก ห้ามเฉลี่ยรวม
+</div>
+
+<h3>9.3 กฎ RRF ที่วัดครบทั้งสองทิศ — "hybrid ชนะเสมอ" คือ finding เฉพาะ entity-anchored</h3>
+<p>
+เมื่อ thematic query กลับมาใช้ได้จริง จึงรัน BM25/hybrid significance test บนมันเป็นครั้งแรก
+(<code>hybrid_significance_test_9way.py --thematic</code>) แล้วพบว่า
+<b>ผลนี้พลิกข้อสรุปที่แข็งที่สุดของโปรเจกต์ (§7.8) และใหญ่กว่าที่คาด</b>
+</p>
+<div class="dead">
+<span class="label">"hybrid ชนะ dense ทุก embedder" ไม่เป็นจริงบน thematic</span>
+BM25 อ่อนบน thematic (0.2988) เทียบกับ entity-anchored (0.4930) — เพราะไม่มีชื่อ entity
+ให้จับคู่ตรงตัว บน thematic recall@10: <b>ชนะอย่างมีนัยสำคัญแค่ 3</b> · เสมอ 4 ·
+<b>แพ้อย่างมีนัยสำคัญ 2</b> (<code>e5</code> −0.0445, <code>qwen3</code> −0.0526)
+และส่วนต่าง hybrid−dense เป็นฟังก์ชัน<b>โมโนโทนิก</b>กับความแข็งของ dense เอง
+(r = <b>−0.925</b>) โดยพลิกเครื่องหมายพอดีที่คะแนนของ BM25 เอง
+</div>
+<div class="win">
+<span class="label">กฎทั่วไปที่วัดแล้วทั้งสองทิศ — ครอบคลุมกรณี m2v/sct เดิมด้วย</span>
+<b>RRF ช่วยแขนที่อ่อนกว่า และเก็บภาษีจากแขนที่แข็งกว่า — fuse เมื่อสองแขนสูสีกันเท่านั้น
+ไม่ว่าแขนไหนจะเป็นฝ่ายอ่อน</b> นี่คือกรอบเดียวที่อธิบายทั้งกรณีเดิม (m2v/sct ที่ dense
+อ่อนกว่า BM25 มาก → hybrid แย่ลง) และกรณีใหม่นี้ (dense แข็งกว่า BM25 มาก บน thematic
+→ hybrid ก็แย่ลงเหมือนกัน) ด้วยกลไกเดียว
+</div>
+
+<h3>9.4 course-table compaction — เคลียร์ปมค้างจากเฟส 4 (30 ก.ค.)</h3>
+<p>
+<code>strip_course_comparison_tables</code> (§12 เดิม) ค้างมาตั้งแต่ 26 ก.ค. เพราะรอ
+"eval ที่ครอบคลุมเชิงหัวข้อก่อน" — ตอนนี้ eval นั้นมีแล้ว (thematic ที่แก้ไขข้อ 9.2)
+แต่การวัดจริงกลับ<b>ปิดคำถามไปคนละทางกับที่คาด</b>
+</p>
+<div class="win">
+<span class="label">วัดขนาดปัญหาจริงก่อนตัดสินใจ (ตามบทเรียน §12.3 เดิม)</span>
+สแกนทั้งคอร์ปัสพบว่ามีเพียง <b>13 ไฟล์ (0.46%)</b> ที่มีตารางแบบนี้ (ตัดทิ้ง 39.8%
+ของข้อความในไฟล์เหล่านั้น) และถูกอ้างถึงโดย <b>0 จาก 106 query ของ 73det</b> และ
+<b>3 จาก 179 query เชิงหัวข้อ</b> — <b>ไม่มี gold set ไหนตรวจจับการถดถอยจากการตัดนี้ได้เลย</b>
+การรอ eval จึงเท่ากับรอหลักฐานที่ไม่มีวันมาถึง<br><br>
+ผู้ใช้ตัดสินบนหลักฐานเชิงโดเมนแทน: <b>คนไม่ได้ถามหาคำบรรยายรายวิชา</b> — regression
+ที่วัดไม่ได้ก็คือ regression ที่ไม่สำคัญ ผลคือ <b>ตัดสินใจต่อเข้า loader</b>
+(ทำแล้วใน <code>plain_loader.py</code>) และให้ขี่การ rebuild รอบ 3 ไปด้วย
+เพราะเปลี่ยนเนื้อ chunk ต้อง re-embed
+</div>
+
+<h3>9.5 audit_pipeline_invariants.py — สแกนหาบั๊กทั้งตระกูลเชิงระบบ (30 ก.ค.)</h3>
+<p>
+หลังเจอบั๊ก "ผลลัพธ์ persist ค้างไม่ refresh" (§8.2) ซ้ำถึง 5 จุดโดยบังเอิญ จึงสร้าง
+เครื่องมือตรวจสอบเชิงระบบแทนการไล่จับทีละจุด: <b>25 invariant</b> ครอบคลุม
+corpus/index/eval 3 ชั้น (id ไม่ซ้ำ, chunk↔vector↔lexical เรียงตรงกัน,
+สมาชิก index ตรงกับ corpus, embedding สมเหตุสมผล, gold id resolve ได้, ผลลัพธ์ไม่เก่ากว่า index)
+</p>
+<div class="note">
+<span class="label">สองบทเรียนเกี่ยวกับตัวเครื่องมือตรวจสอบเอง — เจอในวันเดียวกับที่เขียนมันเสร็จ</span>
+<b>(ก) เช็คที่หัวข้อของมันเคลื่อนที่ได้ จะกลายเป็น PASS ที่ไร้ความหมายเงียบๆ</b> —
+C4 (ไฟล์ <code>.md.dup</code> ที่ไม่มีใครอ้างอิง) ตกจาก 24 เหลือ 0 ทันทีที่ archive
+ถูกย้ายออกจาก repo — ไม่ใช่เพราะปัญหาถูกแก้ ต้องให้เช็คตามไปยัง <code>ARCHIVE_ROOT</code>
+และรายงาน "0 จาก 240" ไม่ใช่แค่ "0"<br><br>
+<b>(ข) อย่าปล่อยให้ artifact ที่เลิกใช้แล้วทำให้ gate แดงค้างอยู่</b> — การลบ combo
+เก่า 8 ตัวที่เก็บ id แบบก่อนแก้ contamination bug ทำให้ E3a กระโดดจาก 7 เป็น 3,106
+ทั้งที่ผลลัพธ์เหล่านั้นไม่มีใครอ่านแล้ว จึงแยกเป็นหมวดต่างหาก
+(E3c/E3d/<code>RETIRED_RESULT_DIRS</code>) เพื่อให้ FAIL ยังคงหมายถึง
+"ผลลัพธ์ที่ยังมีชีวิตอยู่จริงเบี่ยงเบนไป" เสมอ
+</div>
+<div class="win">
+<span class="label">สถานะปัจจุบัน</span>
+<b>24 pass / 0 warn / 1 fail</b> — FAIL ตัวเดียวที่เหลือคือ <code>BuildCombo.id</code>
+hash เฉพาะ loader+chunker+embedder ไม่รวมคอร์ปัส (รู้ตัวมาตั้งแต่ตอนหาสาเหตุบั๊ก cache ค้าง)
+ทั้งสอง warn เดิมถูกไล่จนถึงต้นตอแทนที่จะ waive ทิ้ง และทั้งคู่กลายเป็นเรื่องใหญ่กว่าที่
+ข้อความเตือนบอกไว้ (thematic query 5 ข้อซ้ำ → เผยว่าทั้งชุด 179 ข้อตอบไม่ได้เลย)
+</div>
+
+<h3>9.6 audit_title_body_agreement.py — ตรวจ manifest กับเนื้อไฟล์ (30 ก.ค.)</h3>
+<p>
+เครื่องมือรุ่นแรกถูกปฏิเสธเพราะการวัดเอง (median 0.660, 544 ไฟล์ต่ำกว่า 0.5
+เกือบทั้งหมดเป็น false alarm จากเลขวาระหน้าปก) รุ่นที่สองตัดเลขวาระออกก่อน
+เทียบด้วย <b>token containment</b> แทน string similarity และให้คะแนนแบบ<b>ไม่สมมาตร</b>
+(วัดว่าคำใน<i>ชื่อเรื่อง</i>กี่ % ปรากฏในบรรทัด<i>เรื่อง</i>หน้าแรก เพื่อไม่ให้ชื่อที่ถูกตัดสั้น
+โดน penalize)
+</p>
+<div class="win">
+<span class="label">ผล — median 1.000, flag แค่ 7, จริงทั้ง 7</span>
+เหตุแบ่งเป็น 2 กลุ่ม: <b>4 กรณีจับคู่ผิด</b> (metadata ผิด รวม 1 กรณีสลับ A↔B)
+และ <b>2 เอกสารที่ไม่เคยถูกดาวน์โหลดจริง</b> (รูปแบบเดียวกับ CHECO §เดิม — สอง PDF
+byte-identical กัน SHA-256 ตรงกัน แต่ดึงผิดไฟล์) — <b>ยังไม่ถูกนำไปแก้</b> เพราะการแก้
+จะเปลี่ยน <code>resolution_id</code> จึงเป็นการตัดสินใจที่ต้องขี่การ rebuild
+ครั้งถัดไป ไม่ใช่ครั้งนี้
+</div>
+
+<h3>9.7 ความน่าเชื่อถือของชุดประเมินผล — ตอบคำถาม "106 query น้อยไปหรือเปล่า"</h3>
+<p>
+คำถามจากผู้ใช้เอง นำไปสู่การเขียน <code>docs/eval-validity-threats.md</code>
+คำตอบสั้น: <b>ขนาดไม่ใช่จุดอ่อน</b> — งาน BEIR ระดับเดียวกันใช้ 50–300 topic
+(TREC-COVID 50, Touché 49, Robust04 249) ส่วนชุดนี้ <b>ลึกผิดปกติ</b>: 1,046 judgment,
+เฉลี่ย 9.87 มติถูกต่อคำถาม เทียบ MS MARCO ที่ ~1.1 — ซึ่งเป็นเหตุผลเดียวกับที่ power สูง
+</p>
+
+<h4>9.7.1 Statistical power — ปิดแล้ว</h4>
+<div class="win">
+<span class="label"><code>tools/eval/power_analysis.py</code></span>
+<b>138 จาก 180 คู่เปรียบเทียบมีนัยสำคัญ และทั้ง 42 คู่ที่เสมอ มี |diff| จริง
+ต่ำกว่า MDE (Minimum Detectable Effect) ของมันเอง</b> — ไม่มีคู่ไหนในนี้เป็นแค่
+"power ไม่พอ" ทุกคู่อ้างเป็น<b>ขอบเขต</b>ได้จริง (ดู [[feedback_report_ties_as_bounds]])
+chunker tie แคบที่สุด (ตัดความต่าง recall@10 &gt;0.031 ออกได้แล้ว) ส่วน embedder
+tie กว้างกว่า (0.05–0.10) — คู่เดียวที่ต้องเรียกว่า "สรุปไม่ได้" จริงๆ คือ
+<code>e5_small</code> vs <code>jina_v5</code> บน MRR (ขอบเขต 0.1045)
+รูปแบบปิด (closed-form) ตรวจสอบกับ bootstrap จำลองจริงแล้วตรงกัน (power จริง 0.78–0.86
+เทียบเป้า 0.80)
+</div>
+
+<h4>9.7.2 Pooling bias — ประเด็นที่ใหญ่ที่สุด ปิดด้วยการแก้ตัวเองกลางทาง (30 ก.ค.–3 ส.ค.)</h4>
+<p>
+qrels ของโปรเจกต์นี้สร้างจาก <b>string containment</b> — วิธีเดียวกับที่ BM25 ใช้ค้น
+— เอกสารที่เกี่ยวข้องจริงแต่ใช้ถ้อยคำต่างออกไป (หรือชื่อถูกตัดจาก OCR) จะกลายเป็น
+false negative ที่<b>ลงโทษ dense retrieval สำหรับการตอบถูก</b> ชี้ตรงไปที่ข้อสรุป
+"BM25 ชนะ bge_m3" และ "BM25 แบก person (0.8147)" (§9.3, §7.6)
+</p>
+<div class="dead">
+<span class="label">รอบแรก (3 ส.ค.) — ผู้ใช้ตัดสินเองทั้ง 126 รายการ แล้วถูกถอนคืนวันเดียวกัน</span>
+สร้างชุดรีวิวแบบ blinded 126 รายการ (<code>residual_relevance_sample.py</code>,
+29 query แบบ stratified, สุ่ม hit ที่ยังไม่ผ่าน qrels ต่ออาร์ม, คำตอบจริงเก็บแยกใน
+<code>sample_key.yaml</code>) ผู้ใช้ตัดสินเองทุกรายการด้วยวิธี <b>copy ชื่อ entity
+แล้วใช้ Ctrl+F ของเบราว์เซอร์หาในหน้า</b> — ผลออกมา <b>relevant ~98–100% ทุกอาร์ม</b>
+(dense 47/47, BM25 49/49, hybrid 48/49) ซึ่งสูงจนไม่น่าเชื่อ<br><br>
+<b>ต้นตอ</b>: การแก้ UI เมื่อครู่เดียวกันของ session เดียวกัน (แสดงเนื้อเต็มของ
+เอกสารอ้างอิงที่ qrels ยืนยันแล้วว่าเกี่ยวข้อง เพื่อช่วยตัดสินใจ) ทำให้เอกสารอ้างอิงนั้น
+อยู่ <b>หน้าเดียวกัน</b>กับ candidate ที่กำลังตัดสิน — การค้นทั้งหน้าด้วย Ctrl+F
+จึงเจอชื่อ entity ในส่วนอ้างอิงได้พอๆ กับในตัว candidate ตรวจสอบเชิงกลไกแล้วยืนยัน:
+<b>100 จาก 100 รายการที่ candidate ไม่มีคำนั้นจริง กลับมีคำนั้นอยู่ในส่วนอ้างอิงแทน
+ไม่มีข้อยกเว้นเลยแม้แต่รายการเดียว</b> ไม่ใช่ความผิดของผู้ตัดสิน — เป็นข้อบกพร่องของ
+UI ที่ปล่อยให้การค้นแบบไม่จำกัดขอบเขตตอบคำถามผิดข้อไปโดยไม่รู้ตัว
+</div>
+<div class="win">
+<span class="label">การแก้ไข — ได้รับอนุญาตจากดุลพินิจเชิงโดเมนของผู้ใช้เอง</span>
+ผู้ใช้ยืนยันเองว่า <b>สำหรับรูปแบบคำถามชุดนี้โดยเฉพาะ</b> (ระบุชื่อคน/วิชา/คณะ/หลักสูตร
+ตรงตัว) <b>ไม่มีกรณีไหนเลยที่คำตอบเกี่ยวข้องได้โดยไม่มีชื่อ entity ปรากฏในเนื้อเอกสารจริง</b>
+— ต่างจากคำถามเชิงหัวข้อ (เช่น "วิชาเกี่ยวกับ AI มีในหลักสูตรไหน") ที่ความเกี่ยวข้อง
+เชิงความหมายโดยไม่มีคำตรงตัวเป็นไปได้จริง และต้องใช้ดุลพินิจคนจริงๆ ตัดสิน ไม่ใช่
+string matching — คำยืนยันนี้ทำให้ <b>การตรวจสอบด้วยการจับคู่ข้อความกลายเป็นวิธีที่
+ใช้แทนได้จริงในกรณีนี้เท่านั้น</b> ไม่ใช่การให้ LLM ตัดสิน relevance ซึ่งเป็นความเสี่ยงที่
+gold set ทั้งชุดถูกออกแบบมาเพื่อหลีกเลี่ยงตั้งแต่ต้น (§6.4)<br><br>
+<code>tools/eval/residual_relevance_decompose.py</code> นำกฎการจับคู่แบบเดียวกับที่
+<code>build_gold_candidates.py</code> ใช้สร้าง qrels เอง มาเช็คซ้ำกับเนื้อเอกสารเต็ม
+ของ candidate โดยตรง — พลิกคำตัดสิน 100 จาก 126 รายการจาก y เป็น n
+(คำตัดสินมือเดิมทั้งหมดเก็บสำรองไว้ที่ <code>review_sheet.manual_backup_2026_08_03.yaml</code>)
+</div>
+<table>
+<thead><tr><th style="width:24%">อาร์ม</th><th class="num">อัตรา residual relevance ที่แก้แล้ว</th><th>ผลต่อข้อสรุป</th></tr></thead>
+<tbody>
+<tr><td>dense</td><td class="num">9/47 = <b>0.191</b></td><td rowspan="3">Wilson CI ทับซ้อนกันทั้งสามอาร์ม → <b>ยังไม่ลำเอียง แค่ยังไม่ครบ</b> (คำตัดสินเดิมคงอยู่) — แต่ขนาดเล็กลงมากจาก ~43–49% ที่รอบแรก (ผิด) ประมาณไว้ เหลือ ~8–11% เท่านั้น (~0.8–1.1 มติเพิ่มต่อคำถาม เทียบเฉลี่ยเดิม 9.87)</td></tr>
+<tr><td>BM25</td><td class="num">11/49 = <b>0.224</b></td></tr>
+<tr><td>hybrid</td><td class="num">11/49 = <b>0.224</b></td></tr>
+</tbody>
+</table>
+<div class="note">
+<span class="label">บทเรียนเชิงวิธีวัด</span>
+<b>UI รีวิวห้ามแสดงเนื้อหาที่ยืนยันว่าเกี่ยวข้องแล้ว ไว้ในขอบเขตการค้นเดียวกันกับรายการ
+ที่กำลังถูกตัดสิน</b> เมื่อวิธีตัดสิน (สายตาคนหรือ Ctrl+F) ไม่สามารถถูกจำกัดให้ค้นเฉพาะ
+candidate ได้ — เนื้อหาอ้างอิงจะ "ชนะ" การค้นเสมอเพราะมันเกี่ยวข้องโดยนิยามอยู่แล้ว
+แล้วตอบคำถามผิดข้อไปแบบเงียบๆ
+</div>
+
+<h4>9.7.3 Circularity ใน entity_lookup/entity_boost</h4>
+<p>
+qrels กับ dictionary ที่ retrieval mode ใช้ (<code>programs.json</code>/<code>people.json</code>)
+มาจากแหล่งเดียวกัน — <b>0.9291 จึงเป็นเพดานบน ไม่ใช่การวัด</b> จำกัดอยู่แค่สองโหมดนี้
+(chunker/embedder/BM25/hybrid ไม่แตะ dictionary เลย) แต่ต้องเขียนเป็นย่อหน้าชัดเจนใน
+เปเปอร์ ไม่ใช่แค่เชิงอรรถ
+</p>
+
+<h3>9.8 RQ4 — คุณภาพคำตอบปลายทาง (30 ก.ค.–3 ส.ค., COMPLETE)</h3>
+<p>
+คำถามวิจัยข้อสุดท้ายที่ยังไม่เริ่ม และเป็นตัวเดียวที่<b>ไม่ถูกบล็อกโดยการ rebuild
+ที่ค้างอยู่</b> (context มาจากผลการค้นที่ persist ไว้แล้ว ไม่ต้องใช้ GPU ใหม่)
+รูปแบบ: <b>5 อาร์ม × 106 query = 530 การ generate</b> ด้วย <code>phi4</code> รันบนเครื่อง
+เท่านั้น (ไม่ใช้ API ภายนอก) วัดด้วย metric เชิงวัตถุ (citation precision/recall,
+unsupported-citation rate, abstention correctness) ไม่ใช้ LLM ตัดสินคุณภาพคำตอบ
+</p>
+<div class="note">
+<span class="label">บั๊กที่พบระหว่างสร้าง — เงียบและอันตราย</span>
+Ollama ตัด prompt ที่ยาวเกิน <code>num_ctx</code> จาก<b>ด้านหน้า</b> โดยไม่มีคำเตือน —
+ค่า default 4096 จึงลบคำสั่งของ prompt ทิ้งเงียบๆ เมื่อ context ยาว ได้คำตอบที่ลื่นไหล
+น่าเชื่อ แต่ไม่มีการอ้างอิงเลยสักคำ แก้ด้วยการตั้ง <code>num_ctx</code> เอง +
+วาง instruction <b>หลัง</b> context เสมอ
+</div>
+<div class="win">
+<span class="label">ผลสุดท้าย (หลังทำ ablation เพื่อแก้ข้อสรุปที่เขียนผิดรอบแรก)</span>
+<b>Citation precision เรียงลำดับตรงกับ recall@10 เป๊ะ</b> (hybrid &gt; dense &gt; bm25 &gt; m2v)
+— คุณภาพการค้นรอดมาถึงขั้นตอนสร้างคำตอบ arm-ordering ทดสอบนัยสำคัญแล้ว:
+hybrid/dense/bm25 เป็นกลุ่มบนที่เสมอกันเป็นส่วนใหญ่ (hybrid-vs-bm25 ยังแยกกันได้)
+ส่วน m2v แพ้ทั้งสามอย่างมีนัยสำคัญทั้ง precision และ recall<br><br>
+<b>0 การอ้างอิงที่กุขึ้นมาเอง จากทั้งหมด 978 ครั้ง</b> — failure mode ที่ RAG กลัวที่สุด
+ไม่เกิดขึ้นเลยในงานนี้ ซึ่งเป็นผลตอบแทนของการใช้ label ตัวเลขที่ตรวจสอบได้ชัดเจน
+([1]..[k] ไม่ใช่ resolution_id เต็ม)
+</div>
+<div class="dead">
+<span class="label">ข้อสรุปที่เขียนผิดรอบแรก แล้วแก้เองในวันเดียวกัน</span>
+Citation <i>recall</i> แบนราบที่ ~0.41 ทุกอาร์ม ไม่ว่าจะมีมติถูกอยู่ในบริบทกี่ฉบับ
+— <b>เขียนไว้รอบแรกว่า "ตัวสร้างคำตอบ (generator) คือคอขวด"</b> แต่ตรวจดูให้ละเอียดพบว่า
+จำนวนการอ้างอิงต่อคำตอบคงที่ที่ค่าเฉลี่ย 2.65 / median 2 <b>ไม่ว่าจะมีมติถูกให้อ้างกี่ฉบับ</b>
+และ recall <b>ยิ่งลดลง</b>เมื่อมีมติถูกมากขึ้น (0.778 ที่มี 2 ฉบับ → 0.381 ที่มี 5+ ฉบับ)
+— เป็นลายเซ็นของ<b>งบประมาณคงที่ที่ prompt กำหนดไว้ ไม่ใช่ขีดจำกัดของโมเดล</b>:
+กติกาข้อ 4 ของ prompt เขียนว่า "ตอบสั้น ๆ ไม่เกิน 3 ประโยค" ขณะที่ gold set
+ส่วนใหญ่เป็นคำถามแบบรวบยอด (เฉลี่ย 9.87 มติถูกต่อคำถาม) — <b>สองสิ่งนี้ชนกันเอง</b>
+</div>
+<div class="win">
+<span class="label">ยืนยันด้วย ablation จริง ไม่ใช่แค่อนุมาน — คำแนะนำพลิกตามที่ทำนายไว้</span>
+รัน hybrid + BM25 ซ้ำ (212 gen) โดยแทนกติกาข้อ 4 ด้วย "อ้างอิงมติที่เกี่ยวข้องทุกฉบับ"
+(<code>cite_all</code>) ผล: <b>citation recall ขึ้นอย่างมีนัยสำคัญทั้งสองอาร์ม</b>
+(hybrid 0.2862→0.3865, bm25 0.2127→0.3034, Holm-adj p&lt;0.0001 ทั้งคู่)
+<b>โดย precision ไม่เปลี่ยนแปลงอย่างมีนัยสำคัญ</b> — แปลว่าโมเดลไม่ได้อ้างมั่วขึ้น
+มันแค่อ้างถูกมากขึ้นจริง คำแนะนำพลิกตามที่ทำนายไว้: <b>นี่คือปัญหาที่ prompt
+ไม่ใช่ข้อจำกัดของ phi4</b><br><br>
+ขยายผลอีก 3 อาร์ม (dense/m2v/closed-book) ภายใต้ <code>cite_all</code> จนครบตาราง
+5 อาร์ม × 2 prompt พบว่า <b>กำไรจาก recall ไม่เป็นสากล</b> — มีนัยสำคัญสำหรับ
+hybrid/dense/bm25 แต่<b>ไม่มีนัยสำคัญสำหรับ m2v</b> (+0.026, p=0.657) สอดคล้องกับ
+คุณภาพการค้นที่อ่อนอยู่แล้ว (ไม่มีหลักฐานถูกพอในบริบทให้อ้างเพิ่ม ไม่ว่า prompt
+จะสั่งอย่างไร) และ arm-ordering ยิ่ง<b>คมขึ้น</b>ภายใต้ <code>cite_all</code>
+(8/12 คู่มีนัยสำคัญ เทียบ 6/12 ภายใต้ prompt เดิม)
+</div>
+<div class="note">
+<span class="label">ต้นทุนเล็กๆ ที่เจอเมื่อเปลี่ยน prompt</span>
+closed-book abstention ตกจาก <b>106/106 → 104/106</b> ภายใต้ <code>cite_all</code>
+(hallucination 2 ครั้ง, phantom citation 5 ครั้ง จาก 5) — คำสั่ง "อ้างอิงทุกฉบับ"
+ไม่มี guard กันกรณีไม่มีเอกสารเลย ต้องปรับถ้อยคำก่อนใช้ <code>cite_all</code>
+เป็น prompt สุดท้ายของเปเปอร์
+</div>
+
+<h3>9.9 การ rebuild รอบที่ 3 เริ่มแล้ว (3 ส.ค.)</h3>
+<p>
+สิ่งที่ค้างจากทั้งเฟสนี้ — course-table compaction (§9.4) และการแก้ label
+<code>resolution_id</code> (§9.1) — ทั้งคู่เปลี่ยนเนื้อ chunk จึงต้องขี่การ rebuild
+ครั้งใหม่ ก่อนเริ่มได้ตรวจแล้วว่าชุด config เดิมของรอบ 28 ก.ค. ใช้ซ้ำได้ปลอดภัย
+(<code>BuildCombo.id</code> hash เฉพาะชนิด loader/chunker/embedder ไม่รวมเนื้อคอร์ปัส
+จึงเขียนทับ directory เดิมแทนที่จะข้ามหรือสร้างซ้ำ) รันเป็น background job
+4 ขั้นตามลำดับ (~20–24 ชม.) — ระหว่างนี้ผู้ใช้ทำการรีวิว residual-relevance ด้วยมือ
+ไปพร้อมกัน (§9.7.2) เพราะสอง process ไม่แย่งทรัพยากรกัน (rebuild ใช้ GPU, รีวิวใช้ CPU
+อ่านไฟล์ที่ persist ไว้แล้วเท่านั้น)
+</p>
+<div class="note">
+<span class="label">สิ่งที่รอบนี้จะปลดล็อกเมื่อเสร็จ</span>
+resolution_id ที่แก้ถูกต้อง (§9.1) จะไหลเข้ามาอัตโนมัติ (โค้ดแก้แล้วใน
+<code>common.py</code> การ load คอร์ปัสรอบใหม่จะได้ id ที่ถูกต้องเอง) ·
+RQ3 ablation ทั้ง 3 ตัว, <code>power_analysis.py</code>, <code>reranker_significance_test.py</code>,
+และ context ของ RQ4 ยังต้องรันซ้ำอีกครั้งตาม
+[[feedback_refresh_all_retrieval_paths_after_rebuild]] · การแก้ title↔body mispairing
+(§9.6, 7 กรณี) <b>ยังไม่ถูกใส่เข้าไปในรอบนี้</b> — เป็นการตัดสินใจที่ยังไม่ได้ถามผู้ใช้
+ต้องยกไปคุยก่อนรอบถัดไป ไม่ใช่สมมติว่ารวมอยู่แล้ว
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s-now"><span class="stage-no">10</span>ผลลัพธ์ปัจจุบัน — ตอบทีละคำถามวิจัย</h2>
 <p style="font-size:0.9em;color:var(--muted)">
 ทุกตัวเลขด้านล่างมาจาก Gold 106 query · paired bootstrap + Holm ·
 index หลัง OCR remediation (29 ก.ค. 2569)
@@ -1105,7 +1407,7 @@ normalization ไม่ช่วย · การตัดตามขอบค�
 </table>
 
 <!-- ============================================================ -->
-<h2 id="s-dead"><span class="stage-no">10</span>ข้อสรุปที่ตายไปแล้ว</h2>
+<h2 id="s-dead"><span class="stage-no">11</span>ข้อสรุปที่ตายไปแล้ว</h2>
 <p>
 ตารางนี้มีไว้กันไม่ให้ตัวเลขเก่าหลุดเข้าไปในเปเปอร์ — ทุกข้อเคยถูกเขียนไว้ในเอกสาร
 ของโปรเจกต์นี้จริงและถูกพูดซ้ำหลายรอบ ก่อนจะถูกทดสอบหรือวัดใหม่แล้วล้ม
@@ -1125,11 +1427,15 @@ normalization ไม่ช่วย · การตัดตามขอบค�
 <tr><td>"SEA-Embedding-ModernBERT-300M"</td><td><b>ลบทิ้ง</b></td><td>ตรวจสอบแล้วไม่มีอยู่จริง — เป็นรายการที่หลอนมาจาก session เก่า</td></tr>
 <tr><td>"ต้องใช้ LLM ตัดสิน relevance ของ gold set"</td><td><b>ไม่จำเป็น</b></td><td>คำนวณ deterministic จาก entity tag ได้เลย</td></tr>
 <tr><td>"cascade architecture สำหรับสแกน OCR"</td><td><b>ทิ้ง</b></td><td>file-level diff ล้มมันตั้งแต่ก่อน implement</td></tr>
+<tr><td>"hybrid ชนะ dense อย่างเดียว ทุก embedder" (§7.8)</td><td><b>หดขอบเขต</b></td><td>เป็นจริงเฉพาะ entity-anchored query — บน thematic แพ้อย่างมีนัยสำคัญ 2 จาก 9 embedder และส่วนต่าง hybrid−dense กลับทิศพอดีที่คะแนน BM25 เอง (§9.3)</td></tr>
+<tr><td>"thematic query แค่เจือจางผล ไม่มีอำนาจจำแนก"</td><td><b>แก้ไข</b></td><td>ต้นตอคือคำถามไม่ระบุการประชุม ไม่ใช่คำถามกว้างเกินไป; หลังแก้แล้วมันชี้ไปคนละทางกับ entity-anchored ในแกน chunker (§9.2)</td></tr>
+<tr><td>รีวิว residual-relevance รอบแรก: "~98–100% ของ candidate ที่ qrels ไม่นับ ก็ยังเกี่ยวข้องจริง"</td><td><b>ถอน</b></td><td>เป็นบั๊กของ review UI (หน้าเดียวกันมีเอกสารอ้างอิงเต็มให้ Ctrl+F เจอผิดที่) ยืนยันเชิงกลไก 100/100; ตัวเลขที่แก้แล้วคือ ~19–22% (§9.7.2)</td></tr>
+<tr><td>RQ4: "citation recall แบนราบเพราะตัวสร้างคำตอบ (generator) คือคอขวด"</td><td><b>ถอน</b></td><td>ablation ยืนยันว่าเป็นเพดานที่ prompt กำหนดไว้เอง ("ตอบสั้นไม่เกิน 3 ประโยค") ไม่ใช่ข้อจำกัดของ phi4 — เปลี่ยน prompt แล้ว recall ขึ้นอย่างมีนัยสำคัญ (§9.8)</td></tr>
 </tbody>
 </table>
 
 <!-- ============================================================ -->
-<h2 id="s-lesson"><span class="stage-no">11</span>บทเรียนเชิงกระบวนการ</h2>
+<h2 id="s-lesson"><span class="stage-no">12</span>บทเรียนเชิงกระบวนการ</h2>
 
 <h3>1. หลัง rebuild index ต้อง refresh <i>ทุก</i> เส้นทาง retrieval ที่มีผล persist ไว้</h3>
 <p>
@@ -1182,16 +1488,19 @@ pipeline OCR ไม่มี ground truth → บอกให้ผู้ใช�
 </p>
 
 <!-- ============================================================ -->
-<h2 id="s-todo"><span class="stage-no">12</span>สิ่งที่ยังค้างอยู่</h2>
+<h2 id="s-todo"><span class="stage-no">13</span>สิ่งที่ยังค้างอยู่</h2>
 
 <h3>ยังไม่ได้ทำ (เรียงตามคุณค่า)</h3>
 <ol>
-<li><b><code>strip_course_comparison_tables</code> สร้างแล้วแต่ยังไม่ต่อเข้า loader ใดๆ</b>
-— ต้องมี eval ที่ครอบคลุมเชิงหัวข้อก่อน เพราะ gold query แบบชื่อวิชา
-<b>ตรวจจับการถดถอยจากการตัดคำบรรยายทิ้งไม่ได้</b> (มันไม่เคยแตะข้อความส่วนคำบรรยายเลย)</li>
+<li><b>ต้องรัน RQ3 ablation ทั้ง 3 ตัว, <code>power_analysis.py</code>,
+<code>reranker_significance_test.py</code> และ context ของ RQ4 ใหม่ทั้งหมด
+หลัง rebuild รอบที่ 3 เสร็จ</b> (§9.9) — ตามกฎ
+[[feedback_refresh_all_retrieval_paths_after_rebuild]] ทุกตัวเลขในเอกสารนี้
+ที่มาจากเส้นทางเหล่านี้ยังอิงอยู่กับ index ก่อน rebuild #3</li>
+<li><b>title↔body mispairing 7 กรณี</b> (§9.6) วัดแล้วแต่ยังไม่ถูกแก้ — เปลี่ยน
+<code>resolution_id</code> จึงเป็นการตัดสินใจที่ต้องยกไปคุยกับผู้ใช้ก่อนรอบ rebuild ถัดไป</li>
 <li><b>index <code>entity_tags_full</code> ต้อง rebuild</b> หลังการแก้ person/program loader
 เพื่อให้การแก้ไปถึง <code>entity_lookup</code>/<code>entity_boost</code> ใน UI จริง</li>
-<li><b>RQ4 (คุณภาพคำตอบ end-to-end)</b> — อยู่นอกขอบเขตของเปเปอร์แรกโดยตั้งใจ</li>
 <li><b>entity-indexed retrieval path สำหรับคำถามแบบ "list all X"</b> —
 มีโครงสร้างพื้นฐานพร้อมแล้ว (tagger ทั้ง 4) แต่ยังไม่เคยสร้าง/ทดสอบ
 เป็นทางที่มีเหตุผลรองรับดี เพราะ top-k similarity ติดเพดาน ~0.68 โดยโครงสร้าง</li>
@@ -1206,13 +1515,21 @@ pipeline OCR ไม่มี ground truth → บอกให้ผู้ใช�
 <li>Entity tagger ทั้ง 4 ชนิด + Gold query set 106 ข้อ</li>
 <li>gap-analysis Tier 1 + Tier 2 ทั้งหมด (metrics, BM25, significance testing, cost/latency, การเพิ่ม embedder)</li>
 <li>บั๊ก corpus discovery (ยืนยัน 0% contamination)</li>
-<li>RQ3 ablation ทั้ง 3 ตัว (rebuild ล้าง confound เสร็จ 29 ก.ค.)</li>
+<li>RQ3 ablation ทั้ง 3 ตัว (rebuild ล้าง confound เสร็จ 29 ก.ค. — <b>แต่ตอนนี้ต้องรันซ้ำอีกรอบหลัง rebuild #3</b>)</li>
 <li>MAP/precision@1 significance test (29 ก.ค.) — กลุ่มที่เสมอกันยังเสมอบน metric ใหม่ทั้งสอง</li>
 <li>BM25/hybrid แยกตาม entity_type (29 ก.ค.) — ได้กลไก complementarity เป็นหลักฐานตรง</li>
+<li><code>resolution_id</code> uniqueness bug (30 ก.ค.) — แก้ที่โค้ด, label จะไหลเข้ามาอัตโนมัติเมื่อ rebuild #3 เสร็จ (§9.1)</li>
+<li>thematic query 179 ข้อ เขียนใหม่ + re-eval (30 ก.ค.) — ได้สัญญาณ chunker-axis ที่ตรงข้ามกับ entity-anchored (§9.2)</li>
+<li><code>strip_course_comparison_tables</code> ตัดสินใจแล้วและต่อเข้า <code>PlainLoader</code> แล้ว (30 ก.ค./3 ส.ค.) — ขี่ rebuild #3 ไปด้วย (§9.4)</li>
+<li><code>audit_pipeline_invariants.py</code> (30 ก.ค.) — 25 invariant, 24 pass/0 warn/1 fail ที่รู้สาเหตุแล้ว (§9.5)</li>
+<li>Title↔body agreement audit (30 ก.ค.) — วัดขนาดปัญหาแล้ว (7 กรณีจริงจาก 2,820 ไฟล์), การแก้ยังรอ (ดูรายการค้างด้านบน)</li>
+<li>Evaluation-validity assessment ทั้ง 3 ประเด็น — power ปิด, pooling bias ปิด (แก้ตัวเองกลางทาง, §9.7.2), circularity ระบุขอบเขตแล้ว</li>
+<li><b>RQ4 (คุณภาพคำตอบ end-to-end) — COMPLETE</b> (3 ส.ค., §9.8): 530+212 gen, ablation ยืนยัน citation recall ที่แบนราบเป็นปัญหาของ prompt ไม่ใช่ generator, arm-ordering มีนัยสำคัญ, 0 การอ้างอิงที่กุขึ้นมาเองจาก 978+ ครั้ง</li>
+<li>Index rebuild รอบที่ 3 — <b>เริ่มแล้ว 3 ส.ค. กำลังรันอยู่</b> (§9.9), ยังไม่เสร็จ ณ เวลาที่เขียนเอกสารนี้</li>
 </ul>
 
 <!-- ============================================================ -->
-<h2 id="s-appendix"><span class="stage-no">13</span>ภาคผนวก — อภิธานศัพท์และวิธีการทางสถิติ</h2>
+<h2 id="s-appendix"><span class="stage-no">14</span>ภาคผนวก — อภิธานศัพท์และวิธีการทางสถิติ</h2>
 
 <h3>อภิธานศัพท์</h3>
 <table>
@@ -1266,6 +1583,10 @@ pipeline OCR ไม่มี ground truth → บอกให้ผู้ใช�
 <tr><td><code>docs/entity-extraction-and-gold-eval-log.md</code></td><td>รายละเอียด entity tagging + การสร้าง gold set</td></tr>
 <tr><td><code>docs/research-framework-gap-analysis.md</code></td><td>เทียบสิ่งที่ทำแล้วกับกรอบงานวิจัยในโน้ตต้นฉบับ</td></tr>
 <tr><td><code>docs/reranker-hybrid-interaction-research.md</code></td><td>การค้นวรรณกรรม IR เรื่องทำไม reranker ถึงทำร้าย hybrid</td></tr>
+<tr><td><code>docs/eval-validity-threats.md</code></td><td>จะโต้ผู้ตรวจสอบเรื่องความน่าเชื่อถือของ gold set อย่างไร (power / pooling bias / circularity)</td></tr>
+<tr><td><code>docs/rq4-design.md</code></td><td>RQ4 คุณภาพคำตอบ end-to-end — design, การสร้าง, ผลลัพธ์, ablation</td></tr>
+<tr><td><code>docs/title-body-agreement.md</code></td><td>ผลการตรวจ manifest title กับเนื้อไฟล์จริง (7 กรณีที่ยังไม่ได้แก้)</td></tr>
+<tr><td><code>docs/pipeline-invariant-audit.md</code></td><td>รายงานล่าสุดของ <code>audit_pipeline_invariants.py</code> (25 invariant)</td></tr>
 <tr><td><code>docs/adr/</code></td><td>ทำไมถึงตัดสินใจเชิงสถาปัตยกรรมแบบนั้น</td></tr>
 <tr><td><code>CONTEXT.md</code></td><td>อภิธานศัพท์โดเมนฉบับเต็ม</td></tr>
 </tbody>
