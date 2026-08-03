@@ -242,13 +242,23 @@ def main() -> int:
         )
     lines.append("")
 
-    # ---- family 1: arm ordering, sentence_cap prompt only ----
+    # ---- family 1: arm ordering, one sub-family per prompt variant that has
+    # >=2 arms with citations. Originally sentence_cap-only; now that the
+    # cite_all extension covers all 5 arms, run it there too so the arm
+    # ordering (does citation grounding track recall@10?) can be checked to
+    # still hold under the prompt that actually raised recall.
     base_variant = "phi4" if args.model == "phi4" else args.model
-    ordering_arms = [a for a in ARM_ORDER if a != "closed_book" and (base_variant, a) in scores]
-    if len(ordering_arms) >= 2:
+    cite_all_variant = base_variant + "_cite_all"
+
+    def arm_ordering_family(variant: str, label: str) -> list[str]:
+        out_lines = []
+        ordering_arms = [a for a in ARM_ORDER if a != "closed_book" and (variant, a) in scores]
+        if len(ordering_arms) < 2:
+            return [f"## Significance family 1{label}: skipped (fewer than 2 arms "
+                    f"with citations found for variant {variant})\n"]
         pairs_data = []
         for arm_a, arm_b in combinations(ordering_arms, 2):
-            sa, sb = scores[(base_variant, arm_a)], scores[(base_variant, arm_b)]
+            sa, sb = scores[(variant, arm_a)], scores[(variant, arm_b)]
             for metric in ("precision", "recall"):
                 va, vb, n = paired_arrays(sa, sb, metric)
                 if n > 0:
@@ -256,11 +266,11 @@ def main() -> int:
         rows = run_family(pairs_data, rng, args.n_boot, args.alpha)
         mean_of = {}
         for arm in ordering_arms:
-            s = scores[(base_variant, arm)]
+            s = scores[(variant, arm)]
             mean_of[f"{arm}[precision]"] = s.mean_precision()[0]
             mean_of[f"{arm}[recall]"] = s.mean_recall()
-        lines += [
-            "## Significance family 1: arm ordering (original prompt, does citation "
+        out_lines += [
+            f"## Significance family 1{label}: arm ordering under `{variant}` (does citation "
             "grounding order the way recall@10 did?)",
             "",
             f"Paired bootstrap over queries common to both arms (n_boot={args.n_boot}, "
@@ -269,13 +279,14 @@ def main() -> int:
             "| comparison | mean(a) | mean(b) | diff(b-a) | 95% CI | raw p | Holm-adj p | significant |",
             "|---|---|---|---|---|---|---|---|",
         ]
-        lines += fmt_rows(rows, lambda k: mean_of[k])
-        lines.append("")
-    else:
-        lines.append("## Significance family 1: skipped (fewer than 2 arms with citations found)\n")
+        out_lines += fmt_rows(rows, lambda k: mean_of[k])
+        out_lines.append("")
+        return out_lines
+
+    lines += arm_ordering_family(base_variant, "a")
+    lines += arm_ordering_family(cite_all_variant, "b")
 
     # ---- family 2: prompt ablation, cite_all vs sentence_cap, per arm ----
-    cite_all_variant = base_variant + "_cite_all"
     ablation_arms = [a for a in ARM_ORDER
                       if (base_variant, a) in scores and (cite_all_variant, a) in scores]
     if ablation_arms:

@@ -382,3 +382,60 @@ pattern of a tied top cluster and one clear laggard.
 no single-prompt, all-five-arm table yet. That would need ~318 more
 generations (~2h) and is only worth doing if the paper wants `cite_all` as the
 final reported prompt rather than just as this ablation's proof.
+
+## Extension run complete (2026-08-03): all 5 arms now scored under both prompts
+
+Regenerated `dense_qwen3_0.6b_semantic`, `hybrid_m2v_semantic`, and
+`closed_book` under `cite_all` (318 generations, 0 errors), completing the
+5-arm × 2-prompt table. `rq4_score.py` was extended (`arm_ordering_family`
+helper) to run the 4c arm-ordering significance family under **both** prompt
+variants, not just `sentence_cap` — because the interesting question is
+whether ordering holds under the prompt that actually raised recall, not just
+the one that suppressed it.
+
+**Full recall picture, both prompts:**
+
+| arm | recall: sentence_cap → cite_all | diff | Holm-adj p | significant |
+|---|---|---|---|---|
+| hybrid × qwen3_0.6b | 0.2862 → 0.3865 | +0.1003 | <0.0001 | **yes** |
+| dense × qwen3_0.6b | 0.2354 → 0.3279 | +0.0924 | <0.0001 | **yes** |
+| bm25 | 0.2127 → 0.3034 | +0.0907 | <0.0001 | **yes** |
+| hybrid × m2v | 0.1603 → 0.1862 | +0.0258 | 0.6570 | no |
+
+**New finding: the prompt fix's recall gain is not universal — it doesn't
+reach significance on the weakest arm.** Three of four arms replicate the
+significant, precision-neutral recall gain found in the original ablation;
+`hybrid_m2v_semantic` does not (95% CI [-0.009, +0.057] crosses zero). This is
+consistent with the retrieval-quality story rather than contradicting it: m2v
+is the known RRF-failure-case arm (weak dense signal), and it is plausible the
+model's citations there are capped less by *instruction* than by *not enough
+correct evidence being available in the context to cite in the first place*.
+The prompt fix works where the context has more to give.
+
+**Arm ordering under `cite_all` (family 1b) — replicates and sharpens 4c.**
+Under `sentence_cap` (family 1a), 6/12 arm-pair tests were significant, all
+involving m2v except the hybrid-vs-bm25 pair. Under `cite_all`, **8/12** are
+significant: m2v is now significantly worse than *all three* other arms on
+*both* precision and recall (dense-vs-m2v recall and bm25-vs-m2v recall newly
+clear Holm correction), while hybrid/dense/bm25 remain a mostly-tied top
+cluster (hybrid-vs-bm25 still separates on both metrics; hybrid-vs-dense and
+dense-vs-bm25 still don't). **Conclusion: retrieval quality's effect on
+citation grounding survives the better prompt, and is if anything more
+cleanly separable under it** — the earlier prompt's tight citation budget was
+partly masking how bad m2v's retrieval really is.
+
+**Closed-book side effect, worth flagging rather than burying:** under
+`cite_all`, closed-book picked up 2 hallucinations (0 under `sentence_cap`)
+and 5 phantom citations out of 5 total (0 under `sentence_cap`, where it never
+cited anything). The instruction to "cite every relevant document" has no
+guard for the zero-document case, and in 2/106 queries the model cited a label
+anyway despite being told explicitly (rule 3, unchanged between variants) to
+abstain when no answer is available. This is a small, real cost of the
+`cite_all` wording, not a null: **abstention correctness (4b) degrades
+slightly (106/106 → 104/106) as citation recall improves elsewhere.** Worth
+naming in the paper if `cite_all` is adopted as the reported prompt — a
+tightened version ("cite every relevant document among those you are given; if
+none are given or none are relevant, abstain per rule 3") would be worth a
+quick follow-up pilot before relying on this wording for a final table.
+
+Updated report: `data/results/rq4_score.md`.
