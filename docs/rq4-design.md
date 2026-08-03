@@ -271,8 +271,16 @@ pooling-bias threat in `docs/eval-validity-threats.md` §3: a cited document tha
 is genuinely relevant but unjudged counts as a false positive. The direction
 favours the conclusion — semantically-retrieving arms should absorb more of that
 penalty than BM25 — so the 0.742 vs 0.625 gap is **conservative**, likely wider
-in truth rather than narrower. State it rather than rely on it until the
-residual-relevance study reports.
+in truth rather than narrower.
+
+**Residual-relevance study reported 2026-08-03**: closed at a modest ~19-22%
+residual rate across arms (not directionally biased — see
+`docs/eval-validity-threats.md` §3), i.e. qrels undercount true relevant
+documents by ~8-11%, not the ~43-49% an initial (retracted, buggy) judging
+pass suggested. The conservative-direction argument above still holds, just
+at a smaller, more believable magnitude: the 0.742 vs 0.625 citation-precision
+gap is genuinely conservative, but the correction owed to it is modest, not
+large.
 
 ### Correction (same day): the flat citation recall is probably the prompt, not the model
 

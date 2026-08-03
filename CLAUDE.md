@@ -409,7 +409,7 @@ see `docs/adr/`.
      simulation-verified against the real bootstrap (achieved power 0.78-0.86 vs nominal
      0.80), so cite it directly. Recomputed from persisted results → **re-run after any
      index rebuild** like everything else.
-  2. **Pooling bias: the sharpest threat, measurement built, awaiting human judgement.**
+  2. **Pooling bias: CLOSED 2026-08-03 — not directional, qrels are a modest undercount.**
      The qrels were derived by *string containment*, which is what BM25 does — so a
      relevant document phrased differently (or with an OCR-truncated title, seen in the
      first sampled item) is a false negative that penalises dense retrieval for being
@@ -417,11 +417,27 @@ see `docs/adr/`.
      `person` (0.8147)". `tools/eval/residual_relevance_sample.py` builds a **blinded**
      126-item review sheet (29 stratified queries, unjudged top-10 hits, arm held in a
      separate key file); `--score` gives per-arm residual-relevance rates with Wilson
-     intervals. **Decision rule is pre-registered in the doc** (intervals overlap →
+     intervals. **Decision rule pre-registered in the doc** (intervals overlap →
      incomplete, comparisons stand; disjoint → biased, restate every BM25-vs-dense claim).
-     First signal is mildly reassuring: BM25's unjudged pool is the *largest* (4.86/query
-     vs dense 4.28, hybrid 4.00). Do **not** let an LLM judge these — automated relevance
-     is exactly what the Gold set was designed to avoid.
+     **First-pass manual judging (browser Ctrl+F per item) came back ~98-100% relevant for
+     every arm and was retracted the same day**: the review app's calibration-reference
+     section shows guaranteed-relevant reference docs in full text on the same page as the
+     candidate, so a page-wide search found the entity there instead of in the candidate
+     100/100 times it was checked — a review-UI defect, not an annotator error. **Corrected
+     via `tools/eval/residual_relevance_decompose.py`**, which reapplies
+     `build_gold_candidates.py`'s own per-entity-type matching rule directly against each
+     candidate's full text — licensed by the corpus owner's domain confirmation that, for
+     this query shape (specific named person/course/faculty/programme), relevance requires
+     the entity to literally appear; this is a deterministic rule reuse, **not** LLM
+     judging, so it doesn't reintroduce the automated-relevance risk the Gold set was built
+     to avoid. **Result: residual rate ~19-22% across all three arms** (dense 0.191, BM25
+     0.224, hybrid 0.224), Wilson CIs overlap → confirms incomplete-not-biased, but the
+     magnitude is a modest ~8-11% undercount (~0.8-1.1 missed relevant docs/query vs. the
+     qrels' own mean of 9.87), not a severe one. BM25-vs-dense comparisons stand as relative
+     rankings; absolute recall/precision numbers need only a slight-undercount caveat.
+     Original manual (retracted) verdicts kept at
+     `data/results/residual_relevance/review_sheet.manual_backup_2026_08_03.yaml` for the
+     record.
   3. **Circularity** in `entity_lookup`/`entity_boost`: their qrels come from the same
      `programs.json`/`people.json` the retrieval mode uses, so 0.9291 is an upper bound,
      not a measurement. Confined to those arms — chunker/embedder/BM25/hybrid never touch

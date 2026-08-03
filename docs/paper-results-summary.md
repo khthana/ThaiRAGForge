@@ -526,6 +526,48 @@ project is an artifact of low power. Every one can be restated as a bound
 **Known caveat, same as every other persisted-results consumer**: recomputed
 from `data/results/`, so it must be re-run after an index rebuild.
 
+## Resolved 2026-08-03: Pooling bias — qrels are a modest ~8-11% undercount, not directionally biased
+
+`tools/eval/residual_relevance_sample.py --score` → `data/results/residual_relevance.md`.
+Full validity assessment: `docs/eval-validity-threats.md` §3.
+
+The Gold qrels are built by string containment (the same mechanism BM25 uses
+at query time), so a semantically relevant document phrased differently is a
+false negative that could unfairly penalise dense retrieval. A blinded,
+126-item human review of unjudged top-10 hits (29 stratified queries, dense/
+BM25/hybrid) tested this directly.
+
+**A first judging pass came back at ~98-100% residual relevance for every
+arm and was retracted the same day** — not a real finding, a review-app
+measurement bug. The app's calibration-reference panel (documents the qrels
+already confirm relevant, shown for context) displays full text on the same
+page as the item being judged; a page-wide browser search for the query's
+entity name found it in that guaranteed-relevant reference material instead
+of the candidate for **100 of 100** checked cases. `residual_relevance_decompose.py`
+corrected this by reapplying the qrels' own construction rule (per
+entity-type: title-substring for programme, secretarial-aware given+surname
+regex for person, filing-title-gated tag for faculty, canonical-name
+substring for course) directly against each candidate's full text — valid
+here because these are specific named-entity queries, where the corpus owner
+confirmed no case exists where the answer is relevant without the entity
+literally appearing (unlike thematic queries, where semantic-without-exact-
+match relevance is real).
+
+**Corrected result**: residual relevance rate **dense 0.191, BM25 0.224,
+hybrid 0.224** (all Wilson CIs overlap) — **~0.8-1.1 additional genuinely-
+relevant documents per query** beyond the qrels' own mean of 9.87/query, i.e.
+**~8-11% more**, not the retracted pass's 43-49%. Qualitative verdict
+unchanged from the pre-registered decision rule: incomplete, not
+directionally biased — every BM25-vs-dense comparison in this project stands
+as a relative ranking, and absolute recall/precision numbers need only a
+modest-undercount caveat, not a severe one.
+
+**Method lesson worth citing in the methods section**: a blinded-review UI
+must not show confirmed-relevant reference material in a scope a search tool
+(or a human's eye) can reach while judging a different item — the reference
+material is relevant by construction and will silently answer the wrong
+question.
+
 ## Methodology
 
 - **Metrics**: recall@k, precision@k, nDCG@k, MRR, MAP, all resolution-level
@@ -1966,8 +2008,12 @@ holds as stated.
 - `tools/eval/residual_relevance_sample.py` — blinded human-review sheet for
   relevant-but-unjudged top-10 hits, per retrieval arm, testing whether the
   containment-derived qrels are biased toward BM25 rather than merely incomplete;
-  `--score` reports per-arm rates with Wilson intervals
+  `--score` reports per-arm rates with Wilson intervals. Resolved 2026-08-03,
+  see the "Resolved 2026-08-03: Pooling bias" section above
   (`data/results/residual_relevance.md`)
+- `tools/eval/residual_relevance_decompose.py` — corrected the first (retracted)
+  judging pass by reapplying `build_gold_candidates.py`'s own per-entity-type
+  matching rule directly against each candidate's full text
 - `tools/eval/audit_pipeline_invariants.py` — 23-check sweep across corpus/index/eval
   for silent-corruption invariants (Open item #15); read-only, exits 1 on FAIL,
   report at `docs/pipeline-invariant-audit.md`. Run it before trusting an eval refresh
