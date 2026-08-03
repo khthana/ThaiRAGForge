@@ -139,6 +139,32 @@ def load_qrels() -> dict[str, set[str]]:
     return {e.query: set(e.relevant_resolution_ids) for e in load_gold_query_set(_GOLD)}
 
 
+def build_full_document_index() -> dict[str, str]:
+    """resolution_id -> full document text, sourced directly from the corpus
+    via `PlainLoader` -- NOT from persisted retrieval hits like
+    `build_text_index`. Guarantees coverage of every resolution_id, including
+    an `already_judged_relevant` calibration document that no arm's top-k
+    happened to retrieve for that query (a real possibility -- that's the
+    whole reason this study exists). A title alone can be useless for
+    calibration: person qrels come from body mentions, not the title, so
+    `residual_relevance_review_app.py` needs the actual text to show why a
+    reference document counts as relevant. Cheap (~1.6s for the full
+    ~2,850-file corpus, text-only, no chunking/embedding)."""
+    from rag_lab.loaders.common import is_real_resolution_path
+    from rag_lab.loaders.plain_loader import PlainLoader
+
+    loader = PlainLoader()
+    paths = [
+        p for p in sorted((REPO / "academic_resolutions").rglob("*.md"))
+        if is_real_resolution_path(p)
+    ]
+    index: dict[str, str] = {}
+    for p in paths:
+        r = loader.load(str(p))
+        index[r.resolution_id] = r.raw_text
+    return index
+
+
 def build(args) -> None:
     qrels = load_qrels()
     # QuerySetEntry carries only query + qrels; entity_type lives in the yaml

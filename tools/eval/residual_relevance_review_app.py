@@ -14,6 +14,15 @@ field alongside the verdict -- so the on-disk sheet self-heals as items are
 judged, and a later run of `--score` (or anyone reading the raw YAML) sees the
 full text too.
 
+The "already judged relevant" calibration reference has the same problem one
+level deeper: it used to show only each reference document's title/id, which
+is useless for a `person`-type query (those qrels come from a name mentioned
+in the *body*, per residual_relevance_sample.py's docstring -- the title
+rarely mentions it at all). It now shows each reference document's full text
+too, via `residual_relevance_sample.build_full_document_index` -- a
+corpus-wide lookup independent of what any arm happened to retrieve, so it
+also covers a gold document that missed every arm's top-k for that query.
+
 The retrieving arm stays hidden (`sample_key.yaml` is never opened here) --
 blinding is the whole point of the study design in residual_relevance_sample.py.
 
@@ -46,6 +55,11 @@ def _load_text_index() -> dict[tuple[str, str], str]:
     return rrs.build_text_index(rrs.load_qrels())
 
 
+@st.cache_data
+def _load_full_doc_index() -> dict[str, str]:
+    return rrs.build_full_document_index()
+
+
 def _load_sheet() -> list[dict]:
     return yaml.safe_load(rrs._SHEET.read_text(encoding="utf-8"))
 
@@ -71,6 +85,7 @@ if not rrs._SHEET.exists():
     st.stop()
 
 text_index = _load_text_index()
+full_doc_index = _load_full_doc_index()
 sheet = _load_sheet()
 
 judged = sum(1 for it in sheet if _verdict_of(it) in _JUDGED)
@@ -126,8 +141,18 @@ if full_text is None:
 st.markdown(full_text.replace("\n", "  \n"))
 
 with st.expander("เอกสารที่ qrels ตัดสินว่าเกี่ยวข้องแล้ว (ใช้เทียบมาตรฐานว่า 'เกี่ยวข้อง' หมายถึงอะไรสำหรับคำถามนี้)"):
+    st.caption(
+        "เนื้อหาเต็มของเอกสาร (ไม่ใช่แค่ชื่อเรื่อง) -- สำหรับคำถามสาย person "
+        "เหตุผลที่เอกสารเกี่ยวข้องมักอยู่ในเนื้อหา ไม่ใช่ชื่อเรื่อง"
+    )
     for rid in item.get("already_judged_relevant", []):
-        st.markdown(f"- {rid}")
+        st.markdown(f"**{rid}**")
+        ref_text = full_doc_index.get(rid)
+        if ref_text is None:
+            st.caption("(หาเอกสารต้นฉบับไม่เจอในคลัง)")
+        else:
+            st.markdown(ref_text.replace("\n", "  \n"))
+        st.divider()
 
 col_y, col_n, col_u = st.columns(3)
 for col, verdict in zip((col_y, col_n, col_u), ("y", "n", "?")):
