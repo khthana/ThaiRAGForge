@@ -317,3 +317,68 @@ and the RQ4 write-up changes. Recall stays ~0.41 → a real generator ceiling,
 and *then* `gemma4:e4b` is the right next test. Keep the current run: the
 comparison between the two prompts is itself a reportable result about
 instruction sensitivity in citation-grounded generation.
+
+## Ablation run complete (2026-08-03): the ceiling was a prompt artifact
+
+**`tools/eval/rq4_score.py` built** — the deliverable this doc left open.
+Parses `[n]` citations (deduped per the scoring caveat above), computes 4a/4b
+per (prompt variant, arm), and runs the same paired-bootstrap + Holm machinery
+every other significance test in this project uses, in two independent
+families: arm ordering (does citation grounding order like recall@10 did?) and
+the prompt ablation. Report: `data/results/rq4_score.md`.
+
+**Ablation result — the prompt-artifact hypothesis is confirmed, not the
+generator-ceiling one.** `--variant cite_all` (rule 4 replaced with "cite
+every relevant document found, unlimited length") was generated for
+`hybrid_qwen3_0.6b_semantic` and `bm25_semantic` (212 generations, phi4,
+`num_ctx=8192`, temperature 0, 0 errors) and scored against the original
+`sentence_cap` prompt, paired per query:
+
+| arm | metric | sentence_cap | cite_all | diff | Holm-adj p | significant |
+|---|---|---|---|---|---|---|
+| hybrid × qwen3_0.6b | citation recall | 0.2862 | 0.3865 | +0.1003 | <0.0001 | **yes** |
+| bm25 | citation recall | 0.2127 | 0.3034 | +0.0907 | <0.0001 | **yes** |
+| hybrid × qwen3_0.6b | citation precision | 0.7088 | 0.7139 | −0.0002 | 1.0000 | no |
+| bm25 | citation precision | 0.6114 | 0.5962 | +0.0015 | 1.0000 | no |
+
+Both arms gain a significant ~0.09–0.10 absolute jump in citation recall with
+**no cost to precision** — the model doesn't just cite more sloppily, it
+correctly cites more of the gold set. This settles the question the design
+doc's same-day correction raised: **the flat recall was self-inflicted by rule
+4, not a phi4 comprehension limit.** Per the pre-registered decision rule, this
+means the recommendation is "fix the instruction," not "swap the generator" —
+**the deferred `gemma4:e4b` check is correspondingly de-prioritized**: there is
+no longer an open "is this a real ceiling" question for it to answer. If
+`gemma4:e4b` is tested later for other reasons, it should run under `cite_all`
+(or whatever prompt the paper settles on), not `sentence_cap` — testing it
+under the prompt now known to suppress recall would just reproduce the
+artifact and risk being misread as confirming a ceiling that isn't there.
+
+**Methodology correction, worth flagging explicitly:** the rigorous score
+(recall ≈ 0.21–0.29 under `sentence_cap`) is **lower** than this doc's earlier
+provisional "~0.41" figure, and the two aren't the same metric. §4a defines
+citation recall as `cited ∩ gold / gold` — against the *full* qrels set (mean
+9.87 relevant docs/query) — which is what `rq4_score.py` computes, macro-averaged
+over all 106 queries including the ones where the model abstained (scored as
+recall 0, not excluded). The original throwaway script's bucket breakdown
+("0.778 at 2 gold docs → 0.381 at 5+") was denominated by *gold documents
+actually present in the k=10 context*, a smaller and more forgiving
+denominator that inflates the headline number. The **direction and
+significance of every comparison are unaffected** by this correction (both
+prompt variants and all five arms were scored the same way), but the ~0.41
+figure should not be re-cited — use the table above instead.
+
+**Arm-ordering family (`sentence_cap`, all significance-tested for the first
+time) confirms 4c**: citation precision and recall both order
+hybrid > dense > bm25 > m2v, with hybrid-vs-m2v and dense/bm25-vs-m2v
+significant on precision, and hybrid-vs-m2v and hybrid-vs-bm25 significant on
+recall (Holm-adjusted). The top-3 pairwise gaps (hybrid vs dense, dense vs
+bm25) don't clear Holm correction — consistent with this project's general
+pattern of a tied top cluster and one clear laggard.
+
+**Not yet done, and not required by the ablation's own scope** (docs said
+"~212 generations," which is what ran): `dense_qwen3_0.6b_semantic` and
+`hybrid_m2v_semantic` have not been regenerated under `cite_all`, so there is
+no single-prompt, all-five-arm table yet. That would need ~318 more
+generations (~2h) and is only worth doing if the paper wants `cite_all` as the
+final reported prompt rather than just as this ablation's proof.
