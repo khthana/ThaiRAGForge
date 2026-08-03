@@ -77,7 +77,7 @@ bounded equivalence claim rather than an absence of evidence:
 The last bullet is the kind of distinction the report exists to force: before
 this analysis, all 42 ties were being cited in the same voice.
 
-## 3. Pooling bias — the sharpest threat, measurement in progress
+## 3. Pooling bias — CLOSED 2026-08-03: qrels are severely incomplete, but not directionally biased
 
 **The threat.** The Gold qrels were derived by **string containment**
 (`tools/corpus_prep/build_gold_candidates.py`): a resolution is relevant to a
@@ -130,11 +130,73 @@ data supports, so it cannot be chosen after seeing the numbers):
   Every BM25-vs-dense claim needs restating, with the per-query estimate giving
   the correction's rough size.
 
-**Status: awaiting human judgement of 126 items** (~1–2 hours). This cannot be
-delegated to an LLM: automated relevance judgement is precisely the risk the
-Gold set was designed to avoid (`docs/entity-extraction-and-gold-eval-log.md` —
-the insight that entity dictionaries make relevance *deterministic* is the
-reason this ground truth is defensible at all).
+**First-pass manual verdicts (2026-08-03) were retracted the same day — a
+review-app design bug, not a real finding.** All 126 items were first judged
+by the corpus owner via the sheet's companion Streamlit app
+(`residual_relevance_review_app.py`), reading each candidate and copy-pasting
+the entity name into the browser's native find-in-page (Ctrl+F) to check for
+a match. That first pass came back at a residual rate of ~0.98-1.000 for all
+three arms (125/126 "relevant") — implausibly high, and traced to a genuine
+bug: the same page also displays each item's "already judged relevant"
+calibration references **in full text** (added earlier that day specifically
+so a `person`-type calibration reference wasn't useless title-only text — see
+[[project_residual_relevance_review_app]]). A calibration reference is
+relevant *by construction* (it comes straight from the qrels), so a
+page-wide Ctrl+F almost always finds the entity **somewhere on the page** —
+just not necessarily in the candidate being judged. Verified mechanically:
+of the 100 items marked "relevant" whose candidate text does *not* contain
+the entity, **100/100** have it in a calibration reference on the same page.
+Zero counterexamples. The annotator's process was sound; the page design
+was not — it let a page-wide search silently answer a different question
+than the one being asked.
+
+**Corrected methodology, confirmed by the corpus owner's own domain
+judgement**: for these entity-anchored query shapes, a document cannot be
+relevant unless the named person/course/faculty/program is literally
+present in it — there is no query in this set where the answer is
+plausibly present without the name appearing (the annotator's own
+assessment, checked against every sampled item). That makes literal
+entity-presence a valid, *automatable* relevance criterion here — unlike
+the general case, where "not literally present" could still mean "relevant
+via different phrasing" (the pooling-bias mechanism this study exists to
+catch, and which does NOT reduce to a phrasing question for this query
+shape). `tools/eval/residual_relevance_decompose.py` reapplies the *exact
+same* per-entity-type rule `build_gold_candidates.py` used to construct the
+qrels themselves (title-substring for programme, secretarial-mention-aware
+exact given+surname regex for person, filing-title-gated dictionary tag for
+faculty, canonical-name substring for course) against each candidate's full
+document text (not just the shown chunk), corpus-wide. Original manual
+verdicts are preserved at
+`data/results/residual_relevance/review_sheet.manual_backup_2026_08_03.yaml`
+for the record; the sheet's live verdicts were overwritten with this
+automated, rule-based check (100 of 126 flipped from `y` to `n`).
+
+**Corrected verdicts** (`data/results/residual_relevance.md`):
+
+| arm | judged | relevant | not | residual rate | 95% CI (Wilson) | unjudged/query | est. missed relevant/query |
+|---|---|---|---|---|---|---|---|
+| dense (`qwen3_0.6b` × semantic) | 47 | 9 | 38 | 0.191 | [0.104, 0.325] | 4.28 | 0.82 |
+| BM25 (semantic) | 49 | 11 | 38 | 0.224 | [0.130, 0.359] | 4.86 | 1.09 |
+| hybrid | 49 | 11 | 38 | 0.224 | [0.130, 0.359] | 4.00 | 0.90 |
+
+The three Wilson intervals still overlap heavily, so the **qualitative
+verdict is unchanged**: incompleteness, not directional bias — every
+BM25-vs-dense comparison in this project stands as a relative ranking. But
+the *magnitude* is now a modest, believable one instead of an implausible
+near-total failure: ~0.8-1.1 additional genuinely-relevant documents per
+query beyond the qrels' own mean of 9.87/query, i.e. **~8-11% more**, not
+43-49%. Absolute recall@10/precision numbers are still a slight
+underestimate of true performance, but the correction is small enough that
+it does not materially change how any absolute number in this project
+should be read — the caveat is now "modest undercount," not "severe."
+
+**Method lesson**: a review UI that shows confirmed-relevant reference
+material on the same page as the item being judged creates a live risk that
+any page-scoped verification (not just Ctrl+F — a human's eye can drift the
+same way) answers "is X relevant *to this query*" instead of "is X relevant
+*to this specific candidate*." If this kind of blinded-judgement UI is built
+again, keep calibration material either off-page (a separate, explicitly
+different view) or scoped so a search tool cannot cross the boundary.
 
 ## 4. Circularity in the entity-lookup arms
 
@@ -202,7 +264,7 @@ not generalise beyond it.
 |---|---|---|
 | sample size | not a real weakness | report depth (1,046 judgments, 9.87/query) alongside count |
 | statistical power | **addressed** | cite MDE + CI bounds; restate every tie as a bound, flag `e5_small`/`jina_v5` MRR as inconclusive |
-| pooling bias | **measurement built, awaiting judgement** | 126-item blinded review; decision rule pre-registered above |
+| pooling bias | **CLOSED 2026-08-03** | not directional (all arms tied, ~19-22% residual relevance rate after correcting a review-app measurement bug) — relative comparisons stand, absolute recall/precision numbers need only a modest undercount caveat (~8-11% more relevant docs/query than the qrels record) |
 | circularity | known, scoped | explicit validity paragraph; entity-arm scores as upper bounds |
 | single annotator | mitigated by construction | publish the derivation rules |
 | query provenance | fine, needs stating | describe the chain; keep thematic separate |

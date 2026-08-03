@@ -285,9 +285,22 @@ def score(args) -> None:
     lines = [
         "# Residual relevance: relevant-but-unjudged documents in top-10",
         "",
-        f"{len(verdicts)} candidate documents judged by hand across {n_q} sampled "
-        f"queries, blinded to the retrieving arm. A candidate is a top-{key['k']} hit "
-        "that the Gold qrels do not judge at all.",
+        f"{len(verdicts)} candidate documents across {n_q} sampled queries, blinded to "
+        f"the retrieving arm. A candidate is a top-{key['k']} hit that the Gold qrels do "
+        "not judge at all.",
+        "",
+        "**What a `y` verdict means (2026-08-03 methodology)**: the entity named in the "
+        "query (person/course/faculty/programme) is literally present in the candidate's "
+        "full document text, checked by `residual_relevance_decompose.py` using the exact "
+        "same per-entity-type rule `build_gold_candidates.py` used to build the qrels "
+        "themselves. This replaced an initial manual pass (browser Ctrl+F against the "
+        "review app) that was retracted the same day: the app also shows each item's "
+        "already-judged-relevant calibration references in full text on the same page, so "
+        "a page-wide search could -- and, it turned out, for 100/100 checked cases did -- "
+        "find the entity in the calibration reference rather than the candidate. The "
+        "correction is valid here specifically because the corpus owner confirmed, for "
+        "this query shape, relevance requires the named entity to literally appear -- "
+        "unlike the general pooling-bias case, this is not a phrasing question.",
         "",
         "**Why this matters**: the Gold qrels were built by string containment, which "
         "is how BM25 matches. If dense retrieval surfaces relevant documents the qrels "
