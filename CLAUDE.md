@@ -142,13 +142,22 @@ see `docs/adr/`.
   are cited with) had no title pattern at all, so plain-Thai instructor
   names in several common table types were invisible to tagging regardless
   of language (commit `a4e250e`; +10% people-tags corpus-wide, +37% in the
-  document type that surfaced it). English-titled foreign-faculty names
-  (Mr./Assoc.Prof.Dr.) and a name split across adjacent `<td>` cells are
-  still unmatched — both deferred, user judged low priority/rare. The one
-  index built with the `entity_tags` loader
+  document type that surfaced it). **2026-07-26**: fixed a second gap,
+  scoped via `/grill-me` against a full-corpus scan before writing any code
+  — a name split across *adjacent* `<td>` cells (title+given name in one
+  cell, surname in the next, joined by literal `</td><td>` markup with no
+  `<br/>` or whitespace) was invisible too (commit `e1523b3`; 8 genuine
+  cases found corpus-wide, all in "รับรองรายงานการประชุม" rank-correction
+  tables — 7 new tags across 4 files after guarding against 2 false
+  positives found in a different, OCR-corrupted table type). English-titled
+  foreign-faculty names (Mr./Assoc.Prof.Dr.) are still unmatched — deferred,
+  user judged low priority given how few foreign-faculty mentions exist.
+  The one index built with the `entity_tags` loader
   (`data/index/entity_tags_full`) needs rebuilding after any
-  `person`/`program`/`course` loader change for the fix to reach
-  `entity_lookup`/`entity_boost` in the UI.
+  `person`/`program`/`course` loader change for a fix to reach
+  `entity_lookup`/`entity_boost` in the UI — both fixes above are reflected
+  as of the 2026-07-28 rebuild (refreshed again 2026-08-05 to pick up the
+  `resolution_id` fix below, since that index predated it).
 - `strip_course_comparison_tables` (`src/rag_lab/loaders/common.py`, commit
   `71764a8`) compacts old/new course-comparison tables (code + credit-tuple
   + English description, the corpus's single largest chunks — 17,077 chars

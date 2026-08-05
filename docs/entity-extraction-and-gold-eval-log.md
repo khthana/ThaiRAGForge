@@ -348,6 +348,39 @@ loader, เป็นฐานให้ entity_boost/entity_lookup ใน UI) bui
 สั่ง rebuild แล้ว (`PYTHONPATH=src python -m rag_lab.cli run --config
 config/experiments/entity_tags_full.yaml`, semantic+bge-m3, คาด~60 นาที)
 
+## 6b. แก้บั๊ก cross-cell name split (26 ก.ค. 2569, commit `e1523b3`)
+
+บั๊กที่ log ไว้ตอน § 5 (ชื่อแยกคนละ `<td>` — title+ชื่อต้นอยู่ช่องหนึ่ง นามสกุลอยู่อีก
+ช่อง คั่นด้วย markup `</td><td>` ล้วนๆ ไม่มี `<br/>` หรือช่องว่างคั่น) ตอนนั้นผู้ใช้
+สั่งให้บันทึกไว้ก่อน ยังไม่แก้จนกว่าจะ scope ร่วมกัน — วันนี้ scope ผ่าน `/grill-me`:
+
+ก่อนเขียนโค้ด รัน pattern คู่ cell ที่ต้องสงสัยกับคลังเอกสารทั้งหมดก่อน (ไม่ใช่แค่ไฟล์
+ตัวอย่างเดียวที่เจอตอนแรก) — พบว่าช่องโหว่จริงเล็กกว่าที่ประเมินไว้ตอน § 5 มาก
+("≥4 ไฟล์ น่าจะมากกว่านั้น"): เจอ **8 จุดจริง ใน 4 ไฟล์** ทั้งหมดเป็นตาราง
+"รับรองรายงานการประชุม" (แก้ยศ/ตำแหน่ง) เท่านั้น
+
+ทดลอง fix แบบ naive ("เชื่อม `</td><td>` ที่ติดกันเสมอ") กับผลสแกนทั้งคลังเดียวกัน
+ก่อนนำมาใช้จริง — เจอ false positive จริง 2 จุดในเอกสารคนละประเภท (รายงาน
+"อาจารย์พิเศษสอนเกินร้อยละ 50" ที่ OCR เพี้ยน): ช่องข้อความ prose ที่เพี้ยนถูกอ่านเป็น
+นามสกุลปลอม 1 จุด และเศษ OCR 5 ตัวอักษรลอยๆ ("มเชี่") อีก 1 จุด แก้โดยกำหนดเงื่อนไข
+เพิ่ม: ช่องถัดไปต้องมี**เฉพาะ**ตัวสมัครนามสกุล (ไม่มีอย่างอื่นปน) และยาว **≥6 ตัวอักษร**
+(นามสกุลจริงที่สั้นที่สุดที่เจอคือ "มิตะถา" ยาวพอดี 6 — ผู้ใช้ยืนยันให้คงเกณฑ์ที่ 6 หลัง
+ลองเกณฑ์ 5 แล้วเจอเศษ "มเชี่" หลุดกลับเข้ามา)
+
+ไม่ต้องแก้ฝั่ง query — `match_people` ใช้ร่วมกับ `router.classify_query` อยู่แล้ว และ
+pattern ใหม่ทำงานเฉพาะกับ HTML markup `</td><td>` ตัวจริงเท่านั้น ไม่มีทางเกิดใน query
+ข้อความล้วน ตรวจ diff ทั้งคลังก่อน/หลัง (`data/results/person_cross_cell_fix_review.md`,
+gitignored): 4 ไฟล์เปลี่ยน, เพิ่ม 7 tag, ไม่มีตัวไหนหาย — ผู้ใช้ตรวจ diff เองแล้วยืนยันถูก
+ทั้ง 7 เคส เพิ่ม unit test 5 เคส สูทเต็มเขียว (435 ผ่าน) ส่วนตารางเปลี่ยนอาจารย์
+ผู้รับผิดชอบหลักสูตร (สมมติฐานที่สองของผู้ใช้) สแกนทั้งคลังแล้ว**ไม่พบ pattern นี้เลย**
+— ไม่มีอะไรต้องแก้จริง
+
+**Rebuild**: ตอนแก้เสร็จผู้ใช้เลือก**เลื่อน** rebuild `entity_tags_full` ออกไปก่อน (7 tag
+ใน 4 ไฟล์ ไม่คุ้มเวลา GPU ~80 นาที ตอนนั้น) — แต่ index ตัวนี้ก็ถูก rebuild อยู่ดีในอีก 2
+วันถัดมาด้วยเหตุผลคนละเรื่อง (ดู § 7 ด้านล่าง: OCR-remediation rebuild 28 ก.ค.) ซึ่ง
+เป็นการ build คลังใหม่ทั้งหมดด้วยโค้ด loader ปัจจุบัน จึงพา fix นี้ (และ `a4e250e`) เข้า
+`entity_lookup`/`entity_boost` ไปโดยอัตโนมัติ ไม่ต้องสั่ง rebuild แยกเพื่อ fix นี้อีก
+
 ## 7. Refresh entity_boost/entity_lookup หลัง OCR-remediation rebuild (29 ก.ค. 2569)
 
 ระหว่างกวาดเช็ก `data/results/*` ทั้งหมดเทียบกับ OCR-remediation rebuild
@@ -379,3 +412,21 @@ significance-test เทียบก่อน/หลัง (ไม่มี test
 รายงานเต็ม: `data/results/gold_entity_boost_73det_report.md`,
 `data/results/gold_entity_lookup_73det_report.md` อัปเดต memory
 `[[project_entity_lookup_next_plan]]` แล้ว
+
+## 8. Rebuild entity_tags_full อีกรอบ เพื่อแก้ resolution_id staleness (5 ส.ค. 2569)
+
+`data/index/entity_tags_full` (build 28 ก.ค.) เก่ากว่าการแก้ `resolution_id`-collision
+(30 ก.ค., ดู `resolution_id` bullet ใน CLAUDE.md) — 6 ไฟล์ที่โดน relabel ยังถือ id เดิม
+(ก่อนแก้) อยู่ในดัชนีนี้ แม้ `chunker_compare_full` (rebuild #3, เสร็จ 5 ส.ค. 07:56) จะได้
+id ที่ถูกต้องแล้วโดยอัตโนมัติเพราะ build ใหม่หมดด้วย `make_resolution_id` เวอร์ชันแก้แล้ว
+ก็ตาม — `entity_tags_full` เป็นดัชนีแยกต่างหาก ไม่ได้อยู่ใน rebuild #3 chain จึงต้อง
+สั่ง rebuild เองอีกรอบ (ไม่เกี่ยวกับ entity-loader fix ใดๆ ทั้งสอง fix นั้น "ขึ้น" ไปตั้งแต่
+28 ก.ค. แล้ว — รอบนี้แก้เฉพาะ id ให้ตรงกับคลังปัจจุบัน)
+
+สั่ง build ใหม่ด้วย `config/experiments/entity_tags_full.yaml` (semantic+bge-m3) ใช้เวลา
+1 ชม. 22 นาที เสร็จ 5 ส.ค. 18:32 — ยืนยันว่า `chunks.parquet`/`embeddings.npy`/
+`lexical.json`/`manifest.json` ทั้ง 4 ไฟล์มี mtime ตรงกันแล้ว (ก่อนหน้านี้
+`chunks.parquet` ค้างที่ 30 ก.ค. ขณะที่อีก 3 ไฟล์ยังเป็น 28 ก.ค. — สัญญาณ staleness
+แบบเดียวกับที่ `audit_pipeline_invariants.py` เช็ก) `entity_boost`/`entity_lookup`
+ยังไม่ได้ re-run เทียบตัวเลขใหม่หลัง rebuild นี้ — ถ้าจะอ้างตัวเลขใน § 7 ต่อ ต้อง refresh
+ก่อนตาม [[feedback_refresh_all_retrieval_paths_after_rebuild]]
