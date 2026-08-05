@@ -255,6 +255,48 @@ are statistically tied on dense retrieval (with 512 numerically ahead), and
 shown to be a mistake. Normalization and segmentation conclusions are
 unchanged.
 
+### Refreshed 2026-08-05 — fourth rebuild, after `chunker_compare_full` rebuild #3
+
+The same confound reopened: `chunker_compare_full` rebuild #3 completed
+2026-08-05T07:56 (see `project_index_rebuild_pending` memory), leaving the
+RQ3 treatment indices — last rebuilt 2026-07-29 — pointing at a
+since-superseded baseline again. All three treatment indices were rebuilt a
+fourth time (`data/logs/run_rq3_rebuild_2026_08_05.sh`, ~2.5h, exit=0, no
+restarts) and all three significance scripts re-run. Every 2026-07-29
+conclusion held; numbers moved slightly (same gold set, freshly rebuilt
+text), not qualitatively:
+
+- **Normalization — unchanged.** Still nothing significant (Holm-adj
+  p ≥ 0.335; closest is dense MRR, raw p=0.0796 → Holm-adj 0.398).
+- **Segmentation — unchanged.** Still nothing significant (Holm-adj
+  p ≥ 0.264; closest is dense MRR +0.0458, raw p=0.0440 → Holm-adj 0.264 —
+  the same cell that was closest in the 2026-07-29 refresh, same
+  direction, still doesn't survive correction).
+- **Chunk size — 1024 penalty replicates again, one new nuance.** 1024
+  loses significantly to 512 on dense recall@10 (Holm-adj p=0.0000), dense
+  nDCG@10 (p=0.0354), hybrid recall@10 (p=0.0008), hybrid nDCG@10
+  (p=0.0006); loses to 256 on dense recall@10 (p=0.0016), hybrid recall@10
+  (p=0.0000), hybrid nDCG@10 (p=0.0032). **New nuance**: 256-vs-1024 on
+  dense nDCG@10 is now a near-miss, Holm-adj p=0.0828 (raw p=0.0414) — not
+  significant, so "256 beats 1024 on every dense metric" is no longer
+  accurate; 256's edge over 1024 is recall@10-only on the dense side.
+  256-vs-512 replicates as a flat tie on every dense metric (recall@10
+  0.4117 vs 0.4129, Holm-adj p=0.9676) and on hybrid MRR, and **256 again
+  significantly beats 512 only on hybrid recall@10** (+0.0481, Holm-adj
+  p=0.0154 — same single cell as 2026-07-29's +0.0509/p=0.0112).
+
+**RQ3 headline is unchanged from 2026-07-29, and is now current against
+rebuild #3**: chunk size is the only RQ3 variable with a demonstrated
+effect. **Cite: "1024-char chunks are significantly worse than 512 and 256
+on recall@10; also worse than 512 on nDCG@10." Do not cite: "recall
+declines monotonically with chunk size," "256 beats 1024 on every metric,"
+or "256 is the best setting"** — 256 and 512 remain statistically tied on
+every dense metric, and 256's only proven edge over 512 is hybrid
+recall@10. If `chunker_compare_full` is rebuilt again, treat these numbers
+as stale again until re-run — this is now the third time this exact
+confound has reopened and been closed (2026-07-29, 2026-08-05, pattern
+per `feedback_refresh_all_retrieval_paths_after_rebuild`).
+
 ## Resolved 2026-07-23: Cross-encoder reranker results — a significant negative result for hybrid
 
 Gap-analysis Tier 3, item 8. Built a `CrossEncoderReranker` stage
@@ -310,6 +352,27 @@ without necessarily evicting relevant docs from the top-10) — if anything
 it sharpens that story, since nDCG@10 (which weights the whole top-10, not
 just rank-of-first-hit) no longer moves significantly while MRR (purely
 rank-of-first-hit) still does.
+
+**Refreshed again 2026-08-05** against `chunker_compare_full` rebuild #3
+(this script is not in the persisted-results refresh chain — it re-retrieves
+live — so it needed a separate manual re-run, see
+[[feedback_refresh_all_retrieval_paths_after_rebuild]]). Same 106-query Gold
+set, same methodology:
+
+| Retriever reranked | Metric | No-rerank → Reranked | Holm-adj. p | Direction |
+|---|---|---|---|---|
+| Hybrid (BM25+dense, RRF) | MRR | 0.7814 → 0.6778 | 0.0012 | **significantly worse** |
+| Hybrid (BM25+dense, RRF) | nDCG@10 | 0.6257 → 0.5879 | 0.2840 | worse, not significant |
+| Hybrid (BM25+dense, RRF) | recall@10 | 0.5598 → 0.5663 | 0.7974 | *better*, not significant |
+| Dense-alone (bge-m3) | recall@10 / MRR / nDCG@10 | — | n.s. all three (0.284–0.419) | no effect |
+
+Reranker latency, refreshed: p50 1169ms, p95 1423ms, mean 1224ms — still
+essentially unchanged run to run. **No finding-level change from the
+2026-07-29 refresh**: hybrid MRR is still the sole significant casualty,
+now at even tighter significance (p=0.0012 vs 0.0048), everything else
+stays non-significant. This is now the third consecutive refresh to land on
+the same MRR-only conclusion — treat it as settled unless the reranker
+model, pool size, or query set changes.
 
 **Confirmed not an implementation bug**: the reranker was smoke-tested in
 isolation and scores semantically sensibly (a tuition-fee chunk correctly
@@ -477,7 +540,7 @@ short-sentence-oriented teacher) does not. Both are real constraints on the
 Thai-specific ecosystem's current models, worth stating separately rather
 than collapsing into one "needs more investment" story.
 
-## Resolved 2026-07-30: Statistical power — every tie in this document is a bounded claim, not a null
+## Resolved 2026-07-30, refreshed 2026-08-05: Statistical power — every tie in this document is a bounded claim, not a null
 
 `tools/eval/power_analysis.py` → `data/results/power_analysis.md`. Full
 validity assessment (all seven threats, not just this one):
@@ -489,10 +552,19 @@ normalization and segmentation do nothing. Until now none of them stated what
 size of difference the design could have detected, which is the first thing a
 reviewer asks about a null. This closes that gap for every comparison at once.
 
+**Refreshed 2026-08-05** against the fully re-generated post-rebuild-#3
+retrieval results (dense, BM25, and hybrid all regenerated fresh against the
+rebuilt `chunker_compare_full` index — see
+[[project_index_rebuild_pending]]/[[feedback_refresh_all_retrieval_paths_after_rebuild]]
+in project memory). The split is unchanged in count — a genuine consistency
+check, not a coincidence — but one previously-flagged exception pair is now
+resolved. Numbers below are the current (refreshed) ones.
+
 **Headline: across 180 pairwise comparisons on 3 metrics, 138 are significant
-and all 42 ties have an observed difference below their MDE.** No tie in this
-project is an artifact of low power. Every one can be restated as a bound
-("rules out differences larger than X") instead of an absence of evidence.
+and all 42 ties have an observed difference below their MDE — zero
+"underpowered" verdicts.** No tie in this project is an artifact of low
+power. Every one can be restated as a bound ("rules out differences larger
+than X") instead of an absence of evidence.
 
 - **The chunker ties are the tightest results in the study**, which matters
   because the retirement of "semantic chunking wins" (2026-07-29) currently
@@ -503,28 +575,34 @@ project is an artifact of low power. Every one can be restated as a bound
 - **Embedder ties are looser**, bounding at 0.05–0.10 — so the "top-4 tied
   cluster" is real but a weaker statement than the chunker one, and should
   not be written in the same voice.
-- **The weakest tie in the paper is `e5_small` vs `jina_v5` on MRR**,
-  consistent with a difference as large as **0.1045**. Report that pair as
-  *inconclusive*; it is the one equivalence claim here that does not hold up.
-- Median MDE(Holm, 80%) by family, recall@10: embedder pairs **0.105**,
-  hybrid-vs-dense **0.075**, hybrid-vs-BM25 **0.086**, chunker pairs (see
+- **The weakest tie in the paper is now `sct` vs `m2v` on MRR**, consistent
+  with a difference as large as **0.1048**. The pair previously flagged as
+  the exception (`e5_small` vs `jina_v5` on MRR, reported *inconclusive* as
+  of 2026-07-30) has since resolved cleanly to "ruled out": its CI bound
+  moved to 0.1029, just under its MDE(80%) of 0.0856, so it no longer needs
+  a special caveat. **There is no remaining inconclusive pair in this
+  document — every one of the 42 ties is a clean, citable bound.**
+- Median MDE(Holm, 80%) by family, recall@10: embedder pairs **0.106**,
+  hybrid-vs-dense **0.075**, hybrid-vs-BM25 **0.083**, chunker pairs (see
   above, tightest). Depth is why these are as good as they are — 9.87
   relevant documents per query means each query's score is an average, not a
   near-Bernoulli draw.
 - **The closed form is verified, not assumed.** MDE = `(z + z_power)·sd/√n`
   presumes a normal statistic; these tests are percentile paired bootstraps
   on discrete, zero-inflated differences. Simulating the *actual* bootstrap
-  at the computed MDE gives achieved power **0.78–0.86** against a nominal
-  0.80 (MC se ≈ 0.02) — mildly conservative, safe to cite.
+  at the computed MDE (6 spot-checked pairs) gives achieved power
+  **0.777–0.858** against a nominal 0.80 (MC se ≈ 0.02) — mildly
+  conservative, safe to cite.
 - Also reported per pair: `n needed` to detect the observed effect. The
-  closest tie to resolvable is `e5_small` vs `bge_m3` on recall@10, needing
-  **n≈213** (roughly double the current set); the rest need hundreds to tens
-  of thousands (`bge_m3` vs `jina_v5`: n≈29,500). That spread is itself the
-  argument for not chasing them — doubling the gold set would resolve one
-  pair out of 42.
+  closest tie to resolvable is still `e5_small` vs `bge_m3` on recall@10,
+  needing **n≈212** (roughly double the current set); the rest need hundreds
+  to tens of thousands (`bge_m3` vs `jina_v5`: n≈29,183). That spread is
+  itself the argument for not chasing them — doubling the gold set would
+  resolve one pair out of 42.
 
 **Known caveat, same as every other persisted-results consumer**: recomputed
-from `data/results/`, so it must be re-run after an index rebuild.
+from `data/results/`, so it must be re-run after an index rebuild. Last
+re-run: 2026-08-05, against `chunker_compare_full` rebuild #3.
 
 ## Resolved 2026-08-03: Pooling bias — qrels are a modest ~8-11% undercount, not directionally biased
 
@@ -1663,7 +1741,7 @@ holds as stated.
     that decision and requested the full rebuild**, split into 4 batches
     (one per chunker) to make an otherwise multi-day undertaking
     manageable. All 4 batches (`fixed_size`, `recursive`, `sentence`,
-    `semantic` — configs in `config/experiments/rebuild_clean_*.yaml`)
+    `semantic` — configs in `config/experiments/_history/rebuild_clean_*.yaml`)
     completed 2026-07-24/25, each spot-checked with the same
     contamination grep as the original finding: **0 contaminated chunks**
     across all 36 (chunker × embedder) combos in `chunker_compare_full`.

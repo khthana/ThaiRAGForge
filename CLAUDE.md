@@ -321,11 +321,15 @@ see `docs/adr/`.
      (`BAAI/bge-reranker-v2-m3`, `rerank_pool_size=50` → truncate to k=10) is wired as a
      query-time stage; `tools/eval/reranker_significance_test.py` re-retrieves live against
      `chunker_compare_full/plain__fixed_size__local__ceea7536` (so it goes stale on every
-     index rebuild — it is **not** in the persisted-results refresh chain). Result:
-     **significantly hurts hybrid MRR** (0.7775→0.6775, Holm-adj p=0.0048), **no significant
-     effect on dense-alone**, and it costs ~1.17s/query. The nDCG@10 harm reported
-     2026-07-23 (p=0.030) **did not replicate** post-refresh (p=0.5676) and is retired as a
-     separate claim — MRR-only is the current framing, and it actually sharpens the
+     index rebuild — it is **not** in the persisted-results refresh chain, and must be
+     re-run by hand). **Refreshed 2026-08-05** against rebuild #3: result unchanged —
+     **significantly hurts hybrid MRR** (0.7814→0.6778, Holm-adj p=0.0012, was
+     0.7775→0.6775 p=0.0048 pre-rebuild), **no significant effect on dense-alone** (all
+     three dense metrics Holm-adj p≥0.28), **no significant effect on hybrid recall@10 or
+     nDCG@10** either (p=0.797 / p=0.284) — MRR-only is still the correct framing, and it
+     costs ~1.22s/query mean (p50 1.17s, p95 1.42s). The nDCG@10 harm reported 2026-07-23
+     (p=0.030) still does not replicate (now p=0.284, was p=0.5676 at the 2026-07-29
+     refresh) and stays retired as a separate claim — it actually sharpens the
      literature's "phantom hits" mechanism (early-rank disruption without evicting relevant
      docs from the top-10). Literature grounding — including a paper naming
      `bge-reranker-v2-m3` by name — is in `docs/reranker-hybrid-interaction-research.md`.
@@ -335,27 +339,24 @@ see `docs/adr/`.
      only chunk size matters, and only at 1024.** Configs `config/experiments/rq3_*.yaml`,
      scripts `tools/eval/rq3_*`. Thai normalization (Thai digits + `pythainlp.util.normalize()`)
      and word-aware `newmm`-boundary chunking are both **not significant on any metric**
-     (Holm-adj p≥0.42 / ≥0.4524). Chunk size **is** significant but the citable claim is
-     narrower than it used to be: **1024 loses significantly to both 512 and 256** (dense +
-     hybrid recall@10, hybrid nDCG@10), while **256 vs 512 is a flat tie on dense retrieval
-     with 512 numerically ahead** (0.4146 vs 0.4103, p=0.8802) — 256 only wins on hybrid
-     recall@10. **Do not cite "smaller is monotonically better" or "256 is best"** (both were
-     true of the 2026-07-23 numbers and did not replicate); the project's 512 default is not
-     shown to be suboptimal, only 1024 is shown to be wrong. Note these ablations' treatment
-     indices reuse `chunker_compare_full` combos as their *baseline* arm, so **an index
-     rebuild silently turns them into a clean-baseline-vs-dirty-treatment confound** — they
-     need real GPU rebuilds after a corpus change, not just a re-eval.
-     **That confound is now LIVE, not hypothetical (verified 2026-07-30 by mtime):** the 4
-     RQ3 treatment indices were built 2026-07-23, `chunker_compare_full` was rebuilt
-     2026-07-28 for OCR remediation. So **every RQ3 number above is currently void** and
-     must be treated as "unconfirmed, pending rebuild" rather than cited — in *both*
-     directions: 1024's significant loss is inflated (1024 is the dirty arm), and the
-     normalize/segmentation nulls are unsafe too (a handicapped treatment arm that still
-     ties could be genuinely positive on equal footing). Rebuilding the 4 RQ3 indices
-     alone would not fix it and would merely flip the confound's sign, because
-     `chunker_compare_full` itself predates the 2026-07-30 corpus fixes: the only correct
-     order is rebuild `chunker_compare_full` first (~20-24 h), then the 4 RQ3 indices
-     (bge-m3, full corpus, ~3-6 h), then re-run the three tests.
+     (Holm-adj p≥0.335 / ≥0.264). Chunk size **is** significant but the citable claim stays
+     narrow: **1024 loses significantly to 512** on dense recall@10/nDCG@10 and hybrid
+     recall@10/nDCG@10, and to **256** on dense recall@10 and hybrid recall@10/nDCG@10 (the
+     dense nDCG@10 256-vs-1024 cell is a near-miss, Holm-adj p=0.0828, **not** significant —
+     don't fold it into "256 beats 1024 on every metric"). **256 vs 512 is a flat tie on
+     every dense metric** (recall@10 0.4117 vs 0.4129, Holm-adj p=0.9676) **and on hybrid
+     MRR — 256 only wins on hybrid recall@10** (+0.0481, Holm-adj p=0.0154). **Do not cite
+     "smaller is monotonically better" or "256 is best"**; the project's 512 default is not
+     shown to be suboptimal, only 1024 is shown to be wrong. These ablations' treatment
+     indices reuse `chunker_compare_full` combos as their *baseline* arm, so an index rebuild
+     silently turns them into a clean-baseline-vs-dirty-treatment confound — they need real
+     GPU rebuilds after a corpus change, not just a re-eval, and this happened twice: once
+     for the 2026-07-28 OCR-remediation rebuild (fixed 2026-07-29) and again for
+     `chunker_compare_full` rebuild #3 (2026-08-05T07:56). **Both times, fixing it meant a
+     real GPU rebuild of all 3 RQ3 treatment indices, not just a re-eval** — most recently
+     done 2026-08-05 (`data/logs/run_rq3_rebuild_2026_08_05.sh`, ~2.5h, exit=0). **No known
+     confound remains as of 2026-08-05; the numbers above are current and citable.** If
+     `chunker_compare_full` is rebuilt again, treat RQ3 as stale again until re-run.
 - **RQ4 generation is COMPLETE (2026-07-30): 530/530, 0 errors, ~96 min.** Provisional
   numbers (inline script, **no bootstrap/Holm yet** — `rq4_score.py` is still the
   deliverable) in `docs/rq4-design.md`. Three findings worth knowing before writing any
