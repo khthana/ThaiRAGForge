@@ -130,6 +130,17 @@ def collect() -> list[Category]:
             "numbers if re-run against them",
             [d for name in RETIRED_RESULTS if (d := Path("data/results") / name).exists()],
         ),
+        Category(
+            "qdrant-demo", "Qdrant vertical-slice demo data (person_slice, 2026-07-16)", "SAFE",
+            "tools/eval/build_qdrant_person_slice.py only writes this path, never reads "
+            "it back; no other script or test references it (test_qdrant_retriever.py "
+            "seeds its own collection under pytest's tmp_path). Regenerable by re-running "
+            "the build script",
+            [p for p in [
+                Path("data/qdrant/fixed_size_e5_person_slice"),
+                Path("data/qdrant/person_slice_demo_result.json"),
+            ] if p.exists()],
+        ),
     ]
     return [c for c in cats if c.paths]
 
