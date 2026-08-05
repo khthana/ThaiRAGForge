@@ -136,7 +136,7 @@ Output: `data/index/chunker_compare_full/`.
    ควรรู้ไว้)
    ตรวจสอบแล้วว่า bound ไม่ไปกลืน defect ที่อยู่คนละตาราง (เทียบกับไฟล์ compliance/security
    ที่ยังอยู่ครบหลัง strip) และไฟล์สำนักวิชาศึกษาทั่วไปที่ตาราง SKILL MAPPING ถูกตัดจริง (70,287 →
-   21,756 ตัวอักษร) — เพิ่ม unit test 5 เคสใน `tests/test_loaders_common.py`, รัน full suite ผ่าน
+   21,756 ตัวอักษร) — เพิ่ม unit test 5 เคสใน `tests/loaders/test_loaders_common.py`, รัน full suite ผ่าน
    หมด (104 passed, 3 skipped)
    **⚠️ ยังไม่ได้ rebuild index**: 12 combo ที่ build ไว้ใน `data/index/chunker_compare_full/`
    สร้างก่อนการแก้นี้ ยังมีตาราง Mapping ปนอยู่ในทุก combo — ถ้าต้องการให้ผลสะท้อนการตัดตารางนี้
@@ -266,13 +266,13 @@ person-history, p<0.01" (หัวข้อก่อนหน้า) และ�
 
 1. **Fix**: `_merge_short_fragments()` ใน `src/rag_lab/chunkers/semantic.py` —
    รวมประโยคสั้นต่อกันจนถึง `min_sentence_chars` (ค่าเริ่มต้น 15) ก่อนแยก chunk
-   เทสต์ใหม่ 2 ตัวใน `tests/test_semantic_chunker.py`, suite ผ่านทั้งหมด —
+   เทสต์ใหม่ 2 ตัวใน `tests/chunkers/test_semantic_chunker.py`, suite ผ่านทั้งหมด —
    commit `e8f4b80`
 2. **Rebuild index**: `data/index/chunker_compare_full/plain__semantic__*`
    ทั้ง 3 embedder (bge-m3, e5-large, ConGen-PhayaThaiBERT) เขียนทับ directory
    เดิมตาม content-hash เดิม (combo id hash มาจาก YAML spec ไม่ใช่ runtime
    params เลย hash ไม่เปลี่ยน) ได้ 81,489 chunks ทั้ง 3 ตัว ใช้ config ใหม่
-   `config/experiments/chunker_compare_full_semantic_rebuild.yaml` (ตาม pattern
+   `config/experiments/_history/chunker_compare_full_semantic_rebuild.yaml` (ตาม pattern
    เดียวกับ `_resume.yaml`) รันแบบ background 2 รอบ: รอบแรกโดนระบบ kill หลังทำ
    bge-m3 เสร็จ (~3.5 ชม.), รอบสอง resume 2 combo ที่เหลือจนจบ (~2:40 ชม.)
    รวม **~7 ชม.**
@@ -780,7 +780,7 @@ retrieval (BM25+bge-m3 ผ่าน RRF)** ไม่ใช่ dense-alone หร
 **แก้แล้ว**: `LocalSTEmbedder` มี parameter `max_seq_length` รองรับ
 การ override อยู่แล้ว (`src/rag_lab/embedders/local_st_embedder.py:24`) แค่ไม่
 เคยตั้งเพราะไม่รู้ว่า repo นี้ cap ต่ำผิดปกติ สร้าง config ใหม่
-`config/experiments/chunker_compare_full_fix_congen_sct_maxseqlen.yaml`
+`config/experiments/_history/chunker_compare_full_fix_congen_sct_maxseqlen.yaml`
 เข้าคิวรันหลัง build ปัจจุบัน (sct + qwen3_0.6b) และ e5-small เสร็จ (GPU เดียว
 รันทีละงาน) — เนื่องจาก combo id เป็น hash ของ params ทั้งหมดใน YAML
 (`combos.py:BuildCombo.id`) การเพิ่ม `max_seq_length` เป็น key ใหม่ทำให้ได้
@@ -1395,7 +1395,7 @@ gate ตรงๆ เพราะ `dev_smoke.yaml` ชี้ `input_dir` เข�
 `data/index/chunker_compare_full/` ทั้งชุด (4 chunker × 9 embedder = 36
 combo) แบ่งเป็น 4 batch ตาม chunker (`fixed_size`, `recursive`, `sentence`,
 `semantic` — เรียงจากเร็วไปช้า) เพื่อให้งานหลายวันที่ประเมินไว้ก่อนหน้า
-จัดการได้จริง configs อยู่ที่ `config/experiments/rebuild_clean_*.yaml`
+จัดการได้จริง configs อยู่ที่ `config/experiments/_history/rebuild_clean_*.yaml`
 (commit `2d36663`)
 
 **ผลลัพธ์**: ทั้ง 4 batch เสร็จสมบูรณ์และตรวจสอบแล้วว่าไม่มีการปนเปื้อน
@@ -1558,7 +1558,7 @@ raw HTML เดิม (`CODE<br/>credit-tuple`) ไม่เคยผ่าน�
 strip รันก่อน tag (ลำดับสำคัญ, บันทึกไว้ใน docstring)
 
 **ผลรวม**: 15 เอกสารในคลัง, 200,476 → 139,345 ตัวอักษร (ลด 30.5%) 10 unit
-test ใน `tests/test_loaders_common.py`
+test ใน `tests/loaders/test_loaders_common.py`
 
 **ยังไม่ wire เข้า loader/config ไหนเลย** — ตาม norm ของโปรเจกต์นี้ (วัดผล
 ก่อน ตัดสินใจทีหลัง) ก่อน integrate จริงต้อง (1) eval รวม thematic query

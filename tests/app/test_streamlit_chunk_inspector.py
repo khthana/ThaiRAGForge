@@ -11,7 +11,7 @@ from streamlit.testing.v1 import AppTest
 from rag_lab.config import CorpusSpec, ExperimentConfig, StrategySpec
 from rag_lab.runner import run_experiment
 
-_PAGE = str(Path(__file__).resolve().parents[1] / "app" / "pages" / "2_chunk_inspector.py")
+_PAGE = str(Path(__file__).resolve().parents[2] / "app" / "pages" / "2_chunk_inspector.py")
 
 
 def _write_corpus(tmp_path):

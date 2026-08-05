@@ -15,7 +15,7 @@ from streamlit.testing.v1 import AppTest
 
 from rag_lab.config import ExperimentConfig
 
-_PAGE = str(Path(__file__).resolve().parents[1] / "app" / "pages" / "1_build_run.py")
+_PAGE = str(Path(__file__).resolve().parents[2] / "app" / "pages" / "1_build_run.py")
 
 
 def _write_corpus(tmp_path):

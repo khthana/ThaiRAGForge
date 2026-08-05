@@ -9,7 +9,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "corpus_prep"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "corpus_prep"))
 import canonicalize_people as canon  # noqa: E402
 
 

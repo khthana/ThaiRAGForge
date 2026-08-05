@@ -6,7 +6,7 @@ repo's sentence_bert_config.json -- far below their PhayaThaiBERT backbone's
 true 510-token ceiling (RoBERTa reserves 2 position slots for the padding
 offset, so max_position_embeddings=512 - 2 = 510). Fixed via a
 max_seq_length=510 override
-(config/experiments/chunker_compare_full_fix_congen_sct_maxseqlen.yaml,
+(config/experiments/_history/chunker_compare_full_fix_congen_sct_maxseqlen.yaml,
 new combo dirs since combo id hashes the full embedder params).
 
 Runs Gold 73-det retrieval against both the old (128-cap, buggy) and new

@@ -11,8 +11,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "corpus_prep"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "corpus_prep" / "consensus_review"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "corpus_prep"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "corpus_prep" / "consensus_review"))
 import logic  # noqa: E402
 import reocr_consensus_pages as reocr  # noqa: E402
 

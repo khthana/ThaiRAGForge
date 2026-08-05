@@ -8,7 +8,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "corpus_prep"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "corpus_prep"))
 import tag_people as tag  # noqa: E402
 
 _KOMSAN = {

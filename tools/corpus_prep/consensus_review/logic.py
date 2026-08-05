@@ -5,7 +5,7 @@ scan in `llm_ocr_scan.py`), extracts a flagged page's full Markdown live from
 the real corpus file, detects split-document siblings, persists reviewer
 verdicts to an append-only decision log, and generates the re-OCR worklist
 from that log. See tools/corpus_prep/consensus_review/SPEC.md and
-tickets.md (tickets 1-3).
+docs/tickets.md (tickets 1-3).
 """
 from __future__ import annotations
 

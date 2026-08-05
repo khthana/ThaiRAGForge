@@ -1,4 +1,4 @@
-"""Tickets 1-3 (tickets.md) -- Streamlit-driven smoke tests for review_app.py.
+"""Tickets 1-3 (docs/tickets.md) -- Streamlit-driven smoke tests for review_app.py.
 
 Follows the AppTest pattern already established by
 tests/test_streamlit_build_run.py: drive the real widgets, not the logic
@@ -16,7 +16,7 @@ from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
 _PAGE = str(
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[2]
     / "tools"
     / "corpus_prep"
     / "consensus_review"
@@ -154,7 +154,7 @@ def test_review_app_badges_split_piece_with_no_consensus_sibling(tmp_path):
     assert any("ตัดเป็นหลายชิ้น" in el.value for el in at.warning)
 
 
-# --- Ticket 2 (tickets.md): verdict recording ----------------------------
+# --- Ticket 2 (docs/tickets.md): verdict recording ----------------------------
 
 
 def test_review_app_verdict_button_writes_decision_and_updates_progress(tmp_path):
@@ -245,7 +245,7 @@ def test_review_app_revising_a_verdict_appends_rather_than_overwrites(tmp_path):
     assert any("ตัดสินไปแล้ว: ควร re-OCR" in el.value for el in at.info)
 
 
-# --- Ticket 3 (tickets.md): re-OCR worklist ------------------------------
+# --- Ticket 3 (docs/tickets.md): re-OCR worklist ------------------------------
 
 
 def test_review_app_regenerate_worklist_button_writes_expected_file(tmp_path):

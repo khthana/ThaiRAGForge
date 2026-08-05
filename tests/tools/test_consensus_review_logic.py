@@ -1,4 +1,4 @@
-"""Ticket 1 (tickets.md) -- pure-logic tests for the consensus review app.
+"""Ticket 1 (docs/tickets.md) -- pure-logic tests for the consensus review app.
 
 No Streamlit, no real corpus: everything runs against small synthetic
 fixtures. See tools/corpus_prep/consensus_review/SPEC.md.
@@ -9,7 +9,7 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "corpus_prep" / "consensus_review"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "corpus_prep" / "consensus_review"))
 import logic  # noqa: E402
 
 _CONSENSUS_FIXTURE = """\
@@ -177,7 +177,7 @@ def test_consensus_siblings_finds_sibling_when_present(tmp_path):
     assert siblings == ["2567\\ครั้งที่ 9\\เอกสาร ข__2.md"]
 
 
-# --- Ticket 2 (tickets.md): decision log --------------------------------
+# --- Ticket 2 (docs/tickets.md): decision log --------------------------------
 
 
 def test_append_decision_writes_one_json_line(tmp_path):
@@ -243,7 +243,7 @@ def test_resolve_decisions_latest_record_per_file_wins(tmp_path):
     assert len(resolved) == 2
 
 
-# --- Ticket 3 (tickets.md): re-OCR worklist -------------------------------
+# --- Ticket 3 (docs/tickets.md): re-OCR worklist -------------------------------
 
 
 def _resolved(*decisions: logic.Decision) -> dict[str, logic.Decision]:

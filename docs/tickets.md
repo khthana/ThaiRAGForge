@@ -36,7 +36,7 @@ is independently useful on its own.
       reasons visible, and a badge when the file has split-document siblings
 - [x] `logic.py` functions covered by direct pytest unit tests against small
       synthetic fixtures (no real corpus, no Streamlit)
-- [x] One `AppTest` smoke test (pattern: `tests/test_streamlit_build_run.py`)
+- [x] One `AppTest` smoke test (pattern: `tests/app/test_streamlit_build_run.py`)
       confirms the app loads and renders the first fixture file's page content
 
 ## Record and persist per-file verdicts

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "corpus_prep"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "corpus_prep"))
 import reocr_adjudicate as adjudicate  # noqa: E402
 
 

@@ -15,7 +15,7 @@ from rag_lab.config import ExperimentConfig, StrategySpec
 from rag_lab.query_service import discover_indices
 from rag_lab.runner import run_experiment
 
-_APP = str(Path(__file__).resolve().parents[1] / "app" / "streamlit_app.py")
+_APP = str(Path(__file__).resolve().parents[2] / "app" / "streamlit_app.py")
 
 
 def _build_index(tmp_path):

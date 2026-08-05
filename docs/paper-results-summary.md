@@ -700,7 +700,7 @@ than just a list.
 
 **Why PhayaThaiBERT over WangchanBERTa as the primary Thai backbone (literature
 citation, not an in-house ablation)**: an external literature review
-(`thai-embedding-compare.md`, repo root; sourced from the
+(`docs/thai-embedding-compare.md`; sourced from the
 `mrpeerat/Thai-Sentence-Vector-Benchmark` project and a Forum for Linguistic
 Studies benchmark paper, Dec 2025) already ran this exact backbone ablation
 — WangchanBERTa vs PhayaThaiBERT, both trained with SimCSE/SCT/ConGen — and

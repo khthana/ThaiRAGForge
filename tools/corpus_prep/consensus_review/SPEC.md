@@ -124,7 +124,7 @@ next step (the existing manual re-OCR-diff verification process).
 - Good tests here check observable outcomes only: given a small fixture
   `consensus_priority.md` and a small fixture corpus tree (a handful of `.md`
   files with `## Page N` sections, mirroring the `_write_corpus` helper pattern
-  in `tests/test_streamlit_build_run.py`), verify the parsed structure, the
+  in `tests/app/test_streamlit_build_run.py`), verify the parsed structure, the
   extracted page text, the resolved "latest verdict wins" behavior, and the
   generated worklist's contents — not how `logic.py` is internally organized.
 - `logic.py` gets direct pytest unit tests (no Streamlit involved), following the
@@ -132,7 +132,7 @@ next step (the existing manual re-OCR-diff verification process).
   than through any UI (`tests/test_config.py`, `tests/test_manifest.py` are prior
   art for this style of fixture-driven, filesystem-based unit test).
 - `review_app.py` gets exactly one `streamlit.testing.v1.AppTest` smoke test
-  (prior art: `tests/test_streamlit_build_run.py`), driving the real widgets for
+  (prior art: `tests/app/test_streamlit_build_run.py`), driving the real widgets for
   one end-to-end scenario: load a fixture file, click a verdict button, assert
   the decision landed in `review_decisions.jsonl` and the progress counter moved.
   No per-widget unit testing beyond that single smoke path, matching the existing
