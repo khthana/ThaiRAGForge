@@ -1017,19 +1017,29 @@ system per category; `% of ceiling` = recall ÷ ceiling):
 
 | entity_type | ceiling | best hybrid | recall | % of ceiling | best dense | % of ceiling | BM25 alone | % of ceiling |
 |---|---|---|---|---|---|---|---|---|
-| person | 0.9760 | bge_m3 | 0.8211 | **84.1%** | bge_m3 (0.5735) | 58.8% | 0.8147 | **83.5%** |
-| faculty_adjunct_aggregate | 0.6810 | qwen3_0.6b | 0.4922 | **72.3%** | qwen3 (0.4698) | 69.0% | 0.4224 | 62.0% |
-| program | 0.9000 | qwen3_0.6b | 0.6187 | **68.7%** | qwen3_0.6b (0.6023) | 66.9% | 0.3484 | 38.7% |
-| course | 0.8729 | qwen3_0.6b | 0.5683 | **65.1%** | qwen3_0.6b (0.5500) | 63.0% | 0.3600 | 41.2% |
+| person | 0.9760 | bge_m3 | 0.8220 | **84.2%** | bge_m3 (0.5735) | 58.8% | 0.8147 | **83.5%** |
+| faculty_adjunct_aggregate | 0.6810 | jina_v5 | 0.4939 | **72.5%** | qwen3 (0.4729) | 69.4% | 0.4234 | 62.2% |
+| program | 0.8979 | qwen3_0.6b | 0.6165 | **68.7%** | qwen3_0.6b (0.6066) | 67.6% | 0.3497 | 38.9% |
+| course | 0.8729 | qwen3_0.6b | 0.5723 | **65.6%** | qwen3_0.6b (0.5514) | 63.2% | 0.3585 | 41.1% |
+
+*(Refreshed 2026-08-06 against `chunker_compare_full` rebuild #3's corrected
+`resolution_id`s — same source script, `bm25_hybrid_entity_type_breakdown.py`
+re-run against already-current retrieval results; see
+[[project_eval_refresh_2026_08_06]]. Movement is small (≤0.6 pp on 3 of 4
+rows) and the ranking/story below is unchanged, with one attribution change:
+`faculty_adjunct_aggregate`'s best hybrid embedder is now `jina_v5`, not
+`qwen3_0.6b` — the two were close enough (0.4922 vs 0.4939 pre-refresh) that
+this is noise around a near-tie, not a new finding. `program`'s ceiling also
+corrected 0.9000→0.8979, a rounding fix in the source script, not new data.)*
 
 **This reverses the headroom reading in the paragraph above, which was
 dense-alone-specific.** Under the actually-recommended system (hybrid),
-`person` is the *most* solved category at 84.1% of its ceiling, not the one
+`person` is the *most* solved category at 84.2% of its ceiling, not the one
 with the most addressable headroom — dense-alone's person weakness (58.8%)
 is almost entirely repaired by fusing BM25. The category with the most real
-headroom left is now **`course`** (65.1%), which did not exist when the
+headroom left is now **`course`** (65.6%), which did not exist when the
 original ceiling analysis was written. Hybrid does also close the
-`faculty_adjunct_aggregate` gap (62.0% BM25 → 72.3% hybrid), answering the
+`faculty_adjunct_aggregate` gap (62.2% BM25 → 72.5% hybrid), answering the
 second open question.
 
 **Two findings that only this breakdown makes visible:**
@@ -1037,8 +1047,8 @@ second open question.
 1. **Direct evidence for the lexical/dense complementarity mechanism.**
    BM25 alone reaches **0.8147** on `person` — beating *every* dense
    embedder's dense-alone person score (best: bge_m3 0.5735) by a wide
-   margin — while collapsing to **0.3484** on `program`, where dense
-   nearly doubles it (qwen3_0.6b 0.6023). **BM25 carries person queries
+   margin — while collapsing to **0.3497** on `program`, where dense
+   nearly doubles it (qwen3_0.6b 0.6066). **BM25 carries person queries
    (exact name match); dense carries program queries.** This is the
    mechanistic explanation for the hybrid-beats-both result, and it is
    *direct* evidence, unlike the indirect proxies (rescue rate, union
@@ -1046,8 +1056,8 @@ second open question.
    that came back inconclusive.
 2. **"Hybrid never hurts" is an aggregate statement, not a per-category
    one.** On `person` queries specifically, hybrid is *below* BM25-alone
-   (0.8147) for most embedders — `qwen3_0.6b` 0.7220, `qwen3` 0.7340,
-   `congen` 0.7228, `jina_v5` 0.7382 — with only `bge_m3` (0.8211)
+   (0.8147) for most embedders — `qwen3_0.6b` 0.7264, `qwen3` 0.7342,
+   `congen` 0.7211, `jina_v5` 0.7382 — with only `bge_m3` (0.8220)
    exceeding it and `e5`/`e5_small` (0.8105/0.8051) roughly matching it.
    Fusing a dense signal that is weak on a category can drag that
    category below the BM25 baseline even when the cross-category
