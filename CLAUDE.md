@@ -314,35 +314,55 @@ see `docs/adr/`.
   `qwen3_0.6b × semantic` dense 0.6364→0.5688) — per Open item #13 above, semantic is not a
   provable "best chunker", so don't cite this report's recall numbers as a chunker-supremacy
   claim, only as one representative combo's cost/quality profile; report at
-  `data/results/cost_latency_pareto.md`. **Currency caveat (found 2026-08-06 during a
-  full doc-sync check, not yet acted on)**: every number in this bullet and the next
-  (`entity_type` breakdown) comes from the 2026-07-29/07-30 refresh (post rebuild #2)
-  and has **not** been re-run against rebuild #3 (2026-08-05T07:56) — confirmed via
-  mtimes: `data/results/gold_bm25_73det/`/`gold_hybrid_73det/` (the persisted BM25/
-  hybrid retrieval results everything here is built from) are still 2026-07-29, and
-  every downstream significance test (`*_9way.md`, `hybrid_chunker_significance_test.md`,
-  `bm25_hybrid_entity_type_breakdown.md`, `map_precision_significance_test.md`,
-  `thematic_hybrid_significance_test.md`) is still 2026-07-30. Only the dense-alone
-  aggregate (`embedder_significance_test_9way.md`, `gold_embedder_breakdown_9way.md`,
-  auto-recomputed fresh every run) and RQ3/reranker/power-analysis (explicitly
-  refreshed, commit `9c9547a`) picked up rebuild #3. **This is the exact
-  "dense auto-refreshes, BM25/hybrid persisted results silently don't" pattern
-  [[feedback_refresh_all_retrieval_paths_after_rebuild]] already warns about — it
-  recurred a third time.** Affected ids are a small slice (6/2,853 files) so a large
-  reversal is unlikely (same shape as entity_boost's own rebuild-#3 refresh, which
-  came back flat except one real +0.0306 mrr move), but unverified until re-run.
-- **Per-entity_type breakdown of BM25/hybrid (2026-07-29,
+  `data/results/cost_latency_pareto.md` (not yet re-run against rebuild #3, see caveat
+  below — cost/latency mechanics don't depend on corpus content so this one report is
+  lower-priority to refresh). **Refreshed 2026-08-06** against rebuild #3
+  (2026-08-05T07:56): `run_gold_bm25_eval.py`/`run_gold_hybrid_eval.py` turned out to
+  have *already* been re-run the day before (2026-08-05, retrieval results in
+  `data/results/gold_bm25_73det/`/`gold_hybrid_73det/` dated 08-05, discovered by
+  mtime — not run by this session, cause unconfirmed but harmless), so this pass
+  regenerated only the seconds-level downstream significance tests
+  (`bm25_vs_embedder_significance_test_9way.md`, `hybrid_significance_test_9way.md`,
+  `hybrid_chunker_significance_test.md`, `hybrid_significance_test_semantic_top5.md`,
+  `bm25_vs_embedder_significance_test_per_chunker.md`,
+  `bm25_hybrid_entity_type_breakdown.md`, `map_precision_significance_test.md`) against
+  already-fresh data and diffed every verdict cell against the pre-refresh (2026-07-29/
+  07-30) baseline rather than eyeballing. **Every aggregate/headline claim in this
+  bullet and the next two survives untouched** — 0 verdict flips across
+  `bm25_vs_embedder_significance_test_9way` (9 pairs), `hybrid_significance_test_9way`
+  (54 pairs), and `bm25_vs_embedder_significance_test_per_chunker` (108 cells,
+  including the `qwen3_0.6b`-beats-BM25-under-`semantic` cell). Four small, non-headline
+  movements, all in the direction of *more* separation, not less: (1)
+  `hybrid_chunker_significance_test`'s one citable pairwise result
+  (`fixed_size` loses to `recursive`, aggregate nDCG@10) holds (Holm-adj p=0.0396, was
+  0.0264); a few individual-embedder cells for that same pair flipped in both
+  directions (`congen`/`m2v` lost significance, `bge_m3` gained a different
+  significant pair) — doesn't change "no chunker beats another except this one cell";
+  (2) the semantic-top-5 tie **sharpens**: `bge_m3` now also loses significantly to
+  `qwen3`/`qwen3_0.6b` on MRR (previously its last tied metric), leaving it clearly
+  outside the 4-way tied cluster on every metric, not just recall@10/nDCG@10; (3)
+  `map_precision_significance_test`'s aggregate-scope precision@1 sharpens from
+  `qwen3_0.6b` beating 4/8 to 5/8 (`e5_small` newly loses); MAP stays 4/8, so "8/8
+  dense → 4/8 hybrid" below is unaffected; (4) `bm25_hybrid_entity_type_breakdown`
+  numbers held within noise (see next bullet). **Thematic-query arm
+  (`thematic_hybrid_significance_test.md`, `thematic_vs_deterministic.md`) is a
+  separate, still-unrefreshed gap** — those read `data/results/thematic_{dense,bm25,hybrid}/`,
+  which `run_thematic_eval.py` (not `run_gold_*_eval.py`) populates and which nothing
+  touched on 08-05; still dated 2026-07-30, needs its own (likely multi-hour, 179
+  queries) re-run, not yet scheduled.
+- **Per-entity_type breakdown of BM25/hybrid (2026-07-29, refreshed 2026-08-06 —
+  held flat, see caveat above —
   `tools/eval/bm25_hybrid_entity_type_breakdown.py`) gives the mechanism behind the
   hybrid win, and one caveat to it.** BM25 alone scores **0.8147** on `person` queries —
   beating every embedder's dense-alone person score (best `bge_m3` 0.5735) outright —
-  while collapsing to **0.3484** on `program`, where dense nearly doubles it
-  (`qwen3_0.6b` 0.6023). **BM25 carries person (exact name match), dense carries program**;
+  while collapsing to **0.3497** on `program`, where dense nearly doubles it
+  (`qwen3_0.6b` 0.6066). **BM25 carries person (exact name match), dense carries program**;
   that is direct evidence for the complementarity the Open item #2 proxies never
   established. Caveat: **"hybrid never hurts" is an aggregate claim, not a per-category
   one** — on `person` specifically hybrid sits *below* BM25-alone for most embedders
-  (`qwen3_0.6b` 0.7220, `qwen3` 0.7340, `jina_v5` 0.7382), only `bge_m3` (0.8211) exceeding
-  it. Measured against the structural ceiling, hybrid reaches 84.1% on `person`, 72.3%
-  `faculty_adjunct_aggregate`, 68.7% `program`, 65.1% `course` — **this reverses the old
+  (`qwen3_0.6b` 0.7264, `qwen3` 0.7342, `jina_v5` 0.7382), only `bge_m3` (0.8220) exceeding
+  it. Measured against the structural ceiling, hybrid reaches 84.2% on `person`, 72.5%
+  `faculty_adjunct_aggregate`, 68.7% `program`, 65.6% `course` — **this reverses the old
   "person has the most addressable headroom" reading, which was dense-alone-specific;
   `course` now has the most.** Also settled the same day: MAP and precision@1 are
   significance-tested at last (`tools/eval/map_precision_significance_test.py`, run at both

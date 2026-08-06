@@ -1927,3 +1927,45 @@ Holm แยกครอบครัวต่อ (retriever, scope, metric)
 
 อัปเดต `docs/paper-results-summary.md` (§ ceiling + § multi-k + Open item #9/#10 +
 รายการสคริปต์), `CLAUDE.md`, memory แล้ว
+
+## รีเฟรชหลัง rebuild #3 (2026-08-06)
+
+`chunker_compare_full` rebuild #3 เสร็จ 2026-08-05T07:56 (แก้ `resolution_id`
+ของ 6/2,853 ไฟล์ที่เคยชนกัน) แต่ตอน sync-check เอกสารทั้งชุดวันเดียวกัน พบว่า
+chain การเปรียบเทียบหลักนี้ (BM25/hybrid) ยังไม่ได้รันซ้ำ — เห็นจาก mtime ของ
+`data/results/gold_bm25_73det/`/`gold_hybrid_73det/` ยังเป็น 2026-07-29 ทั้งที่
+RQ3/reranker/power-analysis รีเฟรชไปแล้ว (commit `9c9547a`) นี่คือ pattern
+เดิมที่ [[feedback_refresh_all_retrieval_paths_after_rebuild]] เตือนไว้ — เกิดซ้ำเป็นครั้งที่ 3
+
+พอเริ่มรันจริง (สั่งโดยผู้ใช้ "ทำ 1.") พบเรื่องไม่คาดคิด: **retrieval ถูกรันซ้ำไปแล้ว**
+ตั้งแต่ 2026-08-05 (`gold_bm25_73det/` 848 ไฟล์ ลง 08:31-08:50, `gold_hybrid_73det/`
+ได้ไฟล์ใหม่ 3,816 ไฟล์ 08:53-11:23) — ไม่ใช่ session นี้เป็นคนรัน (เช็คแล้วจาก
+transcript) ที่มาไม่ยืนยันแน่ชัดแต่ผลถูกต้อง ครอบคลุมครบ 36 combo ปัจจุบัน สิ่งที่
+เหลือให้ session นี้ทำจริงๆ คือรัน significance-test ปลายทาง 7 สคริปต์ใหม่ (เร็ว
+ระดับวินาที เพราะอ่านจาก JSON ที่ persist ไว้แล้ว ไม่ retrieve ใหม่) แล้ว diff
+verdict ทีละ cell เทียบ baseline 2026-07-29/07-30 (เขียนสคริปต์ parse ตาราง
+markdown เป็น key เฉพาะ เพราะ diff ตามตำแหน่งบรรทัดใช้ไม่ได้ — บางสคริปต์เรียง
+แถวตาม effect size/p-value ซึ่งเปลี่ยนลำดับได้ทุกรัน)
+
+**ผลสรุป: headline claim ทุกอันในไฟล์นี้/`CLAUDE.md` รอดหมด** — ตาราง 2 อันที่
+ใหญ่ที่สุด (`bm25_vs_embedder_significance_test_9way` 9 คู่,
+`hybrid_significance_test_9way` 54 คู่, `..._per_chunker` 108 cell) **verdict
+ไม่พลิกแม้แต่อันเดียว** ที่ขยับมีแค่ 4 จุดเล็กๆ ระดับ non-headline และขยับไปทาง
+"แยกชัดขึ้น" ทั้งหมด: (1) `fixed_size` แพ้ `recursive` (nDCG@10 aggregate, ผลคู่
+chunker เดียวที่ significant ในการทดสอบทั้งชุด) ยังอยู่ (Holm-adj p=0.0396 จาก
+0.0264); (2) `bge_m3` ใน semantic-top-5 test แพ้ `qwen3`/`qwen3_0.6b` เพิ่มบน MRR
+ด้วย (เดิม MRR คือ metric เดียวที่ยังเสมออยู่) — หลุดจาก tied cluster ชัดเจนขึ้น
+ทุก metric; (3) `map_precision_significance_test` precision@1 ระดับ hybrid-aggregate
+คมขึ้นจาก 4/8 เป็น 5/8 (MAP ยังคง 4/8 เท่าเดิม เลข "8/8 dense → 4/8 hybrid" ที่อ้าง
+ใน CLAUDE.md ไม่กระทบ); (4) `bm25_hybrid_entity_type_breakdown` ตัวเลขนิ่งในช่วง
+noise (person 84.1%→84.2%, faculty 72.3%→72.5%, program 68.7%→68.7%, course
+65.1%→65.6%; BM25 เปล่า person 0.8147 เท่าเดิมเป๊ะ, program 0.3484→0.3497)
+
+**ยังไม่ได้ทำ**: thematic-query arm (`thematic_hybrid_significance_test.md`,
+`thematic_vs_deterministic.md`) อ่านจาก `data/results/thematic_{dense,bm25,hybrid}/`
+ที่ populate โดย `run_thematic_eval.py` คนละสคริปต์ ไม่ถูกแตะโดยการรัน 08-05 เลย
+ยังลง 2026-07-30 อยู่ — ต้องรันแยก คาดว่าหลายชั่วโมง (179 query เทียบชุด 73-det
+ที่มี 106) ยังไม่ได้ schedule; RQ4 ก็ยังไม่ได้รีเฟรชเหมือนกัน (รอ request แยก)
+
+รายละเอียดเต็ม: [[project_eval_refresh_2026_08_06]] อัปเดต `CLAUDE.md` +
+memory (`project_index_rebuild_pending.md`, `MEMORY.md`) แล้ว
