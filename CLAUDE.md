@@ -126,11 +126,24 @@ see `docs/adr/`.
   key finding that re-OCR at temperature=0.0 is fully deterministic in this
   pipeline (a literal-repeat tie-break round reproduced its input
   byte-for-byte, so a later tie-break round was redesigned to genuinely
-  perturb temperature/DPI instead). Remaining 88 pages need real human
-  review. Mechanism B's 2 severe files (the LLM-detection blind spot —
-  massive single-character repetition that neither model's garbled-prose
-  check catches) are now **also fixed** (2026-07-27): re-OCR'd, adjudicated
-  (unanimous new/new), applied, and verified clean by direct read.
+  perturb temperature/DPI instead). The 88-page review queue reported above
+  was a 27 ก.ค. snapshot — **the user finished reviewing the rest by hand;
+  the queue is actually at 0** (re-verified twice 2026-07-28: 343/343
+  (pdf,page) pairs have a logged decision, and a direct `decide_action`
+  sweep found zero "awaiting human review" records). Mechanism B's 2 severe
+  files (the LLM-detection blind spot — massive single-character repetition
+  that neither model's garbled-prose check catches) are now **also fixed**
+  (2026-07-27): re-OCR'd, adjudicated (unanimous new/new), applied, and
+  verified clean by direct read. **2026-07-28**: a dry-run surfaced a real
+  bug in the 2026-07-16 duplicate-`## Page N`-header fix (it treated the
+  first occurrence as disposable boilerplate; both occurrences actually held
+  different real content) — rewrote `replace_page_text` as a contiguous-run
+  union-merge, fixed 94+10+5 files (incl. 5 keep-old-verdict files the old
+  mechanism never reached). Sized the blast radius before deciding whether
+  to rebuild: 41/111 changed files (37%) and 43/106 gold queries (41%) are
+  gold-eval-relevant — `chunker_compare_full` was rebuilt the same day as a
+  result (see the entity-tagging paragraph above for how that rebuild
+  incidentally reached the entity-loader fixes too).
 - Entity tagging (person/program/course/faculty, all rule-based — regex
   anchored on a Thai academic rank or a curated dictionary, not NER; see
   `src/rag_lab/loaders/{person,program,course,faculty}_loader.py`) writes
@@ -301,7 +314,23 @@ see `docs/adr/`.
   `qwen3_0.6b × semantic` dense 0.6364→0.5688) — per Open item #13 above, semantic is not a
   provable "best chunker", so don't cite this report's recall numbers as a chunker-supremacy
   claim, only as one representative combo's cost/quality profile; report at
-  `data/results/cost_latency_pareto.md`.
+  `data/results/cost_latency_pareto.md`. **Currency caveat (found 2026-08-06 during a
+  full doc-sync check, not yet acted on)**: every number in this bullet and the next
+  (`entity_type` breakdown) comes from the 2026-07-29/07-30 refresh (post rebuild #2)
+  and has **not** been re-run against rebuild #3 (2026-08-05T07:56) — confirmed via
+  mtimes: `data/results/gold_bm25_73det/`/`gold_hybrid_73det/` (the persisted BM25/
+  hybrid retrieval results everything here is built from) are still 2026-07-29, and
+  every downstream significance test (`*_9way.md`, `hybrid_chunker_significance_test.md`,
+  `bm25_hybrid_entity_type_breakdown.md`, `map_precision_significance_test.md`,
+  `thematic_hybrid_significance_test.md`) is still 2026-07-30. Only the dense-alone
+  aggregate (`embedder_significance_test_9way.md`, `gold_embedder_breakdown_9way.md`,
+  auto-recomputed fresh every run) and RQ3/reranker/power-analysis (explicitly
+  refreshed, commit `9c9547a`) picked up rebuild #3. **This is the exact
+  "dense auto-refreshes, BM25/hybrid persisted results silently don't" pattern
+  [[feedback_refresh_all_retrieval_paths_after_rebuild]] already warns about — it
+  recurred a third time.** Affected ids are a small slice (6/2,853 files) so a large
+  reversal is unlikely (same shape as entity_boost's own rebuild-#3 refresh, which
+  came back flat except one real +0.0306 mrr move), but unverified until re-run.
 - **Per-entity_type breakdown of BM25/hybrid (2026-07-29,
   `tools/eval/bm25_hybrid_entity_type_breakdown.py`) gives the mechanism behind the
   hybrid win, and one caveat to it.** BM25 alone scores **0.8147** on `person` queries —
@@ -367,43 +396,58 @@ see `docs/adr/`.
      done 2026-08-05 (`data/logs/run_rq3_rebuild_2026_08_05.sh`, ~2.5h, exit=0). **No known
      confound remains as of 2026-08-05; the numbers above are current and citable.** If
      `chunker_compare_full` is rebuilt again, treat RQ3 as stale again until re-run.
-- **RQ4 generation is COMPLETE (2026-07-30): 530/530, 0 errors, ~96 min.** Provisional
-  numbers (inline script, **no bootstrap/Holm yet** — `rq4_score.py` is still the
-  deliverable) in `docs/rq4-design.md`. Three findings worth knowing before writing any
-  RQ4 text: (a) **citation precision orders exactly as recall@10 did** (hybrid 0.742 >
-  dense 0.670 > bm25 0.625 > m2v 0.562) — retrieval quality survives the generation
-  stage, and this one is unaffected by the correction below; (b) **citation *recall* is
-  flat at ~0.41 across every arm — but the cause is probably OUR PROMPT, not the model,
-  and this was first written up the wrong way.** Citations per answer sit at mean 2.65 /
-  median 2 no matter how much gold is present, and recall *falls* as availability rises
-  (0.778 at 2 gold docs → 0.381 at 5+) — the signature of a fixed budget, not of a model
-  that cannot use evidence. Prompt rule 4 says `ตอบสั้น ๆ ไม่เกิน 3 ประโยค` while the gold
-  set is dominated by aggregation queries (mean 9.87 relevant docs). **So do not cite
-  "the generator is the bottleneck" — the recommendation would flip from "use a stronger
-  model" to "fix the instruction".** Pending ablation: re-run hybrid + bm25 arms with
-  rule 4 replaced by "cite every relevant document" (~212 gens, ~45 min); recall rises →
-  prompt artifact, stays ~0.41 → real ceiling. **Run that BEFORE the deferred
-  `gemma4:e4b` check** — a second model under the same cap would reproduce the flat line
-  and look like confirmation while only re-measuring the instruction;
-  (c) **0 fabricated citations out of 978** — RAG's most-feared failure mode is absent
-  here, the payoff for exactly-checkable numeric labels. 4b's claims belong to the weak
-  arms + closed-book only (context lacks the answer in 4/6 cases for hybrid/dense vs
-  23/27/106 for bm25/m2v/closed-book), and closed-book abstaining 106/106 is the run's
-  validity check. Caveat: citation precision is judged against the same qrels, so it
-  inherits the pooling-bias threat — direction is conservative (see validity bullet).
-- **RQ4 (end-to-end answer quality) design** —
-  `docs/rq4-design.md` + its build log. Steps 1-2 built (`tools/eval/rq4_build_contexts.py`,
-  `rq4_generate.py`); `rq4_score.py` is what remains. Local-only generation (`phi4`,
-  no external API), objective citation/abstention metrics rather than LLM-as-judge.
-  **RQ4 does not depend on the pending index rebuild** — contexts come from persisted
-  retrieval results — but it *will* need re-running after one, like every other
-  persisted-result consumer. Two hard-won gotchas: (a) **Ollama truncates an
-  over-long prompt from the front**, so a default `num_ctx=4096` silently deleted
-  the instructions on long prompts and produced fluent, plausible, citation-free
-  answers — always set `num_ctx` and put instructions *after* the context; (b) the
-  design doc's "recall@10 ~0.6 so the context often lacks the answer" was wrong
-  (recall ≠ presence: 96% of contexts hold ≥1 gold doc), so 4b's power lives in the
-  weak arms and closed-book, not the strong ones.
+- **RQ4 (end-to-end answer quality) is FULLY COMPLETE (2026-08-03)** — generation,
+  the prompt ablation, and the `cite_all` extension all done and committed
+  (`f3c04f1`/`f107469`/`f7add7d`/`44817bf`). 5 arms (hybrid/dense/bm25/m2v/closed-book,
+  all `phi4` local-only, no external API) × 106 queries × **2 prompts** (original
+  `sentence_cap` rule 4 + the ablation's `cite_all`) = the full table, scored by
+  `tools/eval/rq4_score.py` (paired bootstrap + Holm, same machinery as every other
+  significance test here). Report: `data/results/rq4_score.md`; narrative + both
+  build phases: `docs/rq4-design.md`. Findings, in the order they were established:
+  (a) **citation precision orders exactly as recall@10 did** (hybrid 0.742 > dense
+  0.670 > bm25 0.625 > m2v 0.562) — retrieval quality survives the generation stage;
+  (b) **the original run's flat ~0.41 citation recall across every arm was a PROMPT
+  artifact, not a generator ceiling — confirmed, not just suspected.** Prompt rule 4
+  said `ตอบสั้น ๆ ไม่เกิน 3 ประโยค` against a gold set dominated by aggregation queries
+  (mean 9.87 relevant docs); re-running hybrid+bm25 under `cite_all`
+  ("cite every relevant document") raised recall significantly for both (hybrid
+  0.2862→0.3865, bm25 0.2127→0.3034, Holm-adj p<0.0001) with **no significant
+  precision cost** — the model cites more correctly, not more sloppily. **Do not cite
+  "the generator is the bottleneck"; the recommendation is "fix the instruction."**
+  (Note: `rq4_score.py`'s recall denominator is the full qrels, stricter than the
+  original inline script's "present-in-context" denominator — the ~0.41 figure and
+  the 0.21-0.29 figures are not the same metric, don't cross-cite them.) The extension
+  then covered the remaining 3 arms under `cite_all` too and found **the gain isn't
+  universal — m2v doesn't improve (+0.026, Holm p=0.657)**, consistent with retrieval
+  quality (the RRF-failure arm likely lacks enough correct evidence in context to cite
+  regardless of instruction), and **arm ordering (4c) sharpens under `cite_all`** (8/12
+  pairwise tests significant vs 6/12 under the original prompt, m2v now significantly
+  worst on both precision and recall). One real cost surfaced: **closed-book
+  abstention dropped 106/106 → 104/106 under `cite_all`** (2 hallucinations, 5 phantom
+  citations) — `cite_all` has no zero-document guard, worth a tightened wording before
+  adopting it as the paper's final prompt; (c) **0 fabricated citations out of 978** in
+  the original run — RAG's most-feared failure mode is absent here, the payoff for
+  exactly-checkable numeric labels. Caveat: citation precision is judged against the
+  same qrels, so it inherits the pooling-bias threat — direction is conservative (see
+  validity bullet below). **De-prioritized, not cancelled**: the `gemma4:e4b`
+  robustness check (does a second model agree on arm ordering) — no longer needed to
+  answer "is the ceiling real" (that's closed), but if run later for other reasons it
+  must use `cite_all`, not the original prompt, or it will just reproduce the retired
+  artifact. Two build-phase gotchas worth keeping in mind for any future generation
+  work: (a) **Ollama truncates an over-long prompt from the front**, so a default
+  `num_ctx=4096` silently deleted the instructions on long prompts and produced
+  fluent, plausible, citation-free answers — always set `num_ctx` and put instructions
+  *after* the context; (b) the design doc's original "recall@10 ~0.6 so the context
+  often lacks the answer" was wrong (recall ≠ presence: 96% of contexts hold ≥1 gold
+  doc), so 4b's power lives in the weak arms and closed-book, not the strong ones.
+  **Currency caveat**: all of the above was built and scored 2026-08-03, against
+  retrieval results that predate `chunker_compare_full` rebuild #3
+  (2026-08-05T07:56) — [[project_index_rebuild_pending]]'s own "how to apply"
+  list named RQ4 contexts as something that needed re-running after that
+  rebuild, and it hasn't been yet. The affected ids are a small slice (6/2,853
+  files), so a large finding reversal is unlikely, but per
+  [[feedback_refresh_all_retrieval_paths_after_rebuild]] this should be
+  re-verified, not assumed, before citing these numbers as final.
 - **Evaluation validity — read `docs/eval-validity-threats.md` before defending any
   number in this project.** Written 2026-07-30 against the question "is 106 queries too
   few for a reviewer". It is not (BEIR peers run 50-300 topics, and this set is unusually
@@ -459,8 +503,8 @@ see `docs/adr/`.
   `docs/colbert-late-interaction-notes.md` (ColBERT: motivated by *our own*
   results — the cross-encoder reranker hurt hybrid MRR, and BM25/dense split
   person vs program — with a pre-registered prediction so an aggregate win can't
-  be mistaken for resolving that split). Not committed to; RQ4 is the one
-  that blocks the paper.
+  be mistaken for resolving that split). Not committed to — RQ4 (the item that
+  used to block starting this) is now complete, see above.
 - **Corpus data-quality audit** (`tools/corpus_prep/audit_title_body_agreement.py`,
   2026-07-30): flags manifest titles that disagree with the document's own page-1
   `เรื่อง` subject line. A first version was rejected on measurement (median 0.660,
