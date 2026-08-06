@@ -161,21 +161,22 @@ see `docs/adr/`.
 - `strip_course_comparison_tables` (`src/rag_lab/loaders/common.py`, commit
   `71764a8`) compacts old/new course-comparison tables (code + credit-tuple
   + English description, the corpus's single largest chunks — 17,077 chars
-  in one document) to `CODE Title` lines, dropping the description. **Not
-  yet wired into any loader/config**, but the blocker is now **resolved and the
-  decision is to wire it** (2026-07-30). The old blocker was "needs a
-  thematic-inclusive eval first", since course-name gold queries never touch
-  description text. That eval now exists — and measuring it **closed the question
-  the other way**: only **13 files corpus-wide** contain such a table (0.46%,
-  39.8% of their text removed), and they are cited by **0 of 106** 73det queries
-  and **3 of 179** thematic ones. No gold set can detect a description-stripping
-  regression, so waiting for an eval was waiting for evidence that cannot arrive.
-  User resolved it on domain grounds instead: **course descriptions are not what
-  people ask about**, so the unmeasurable regression is also the unimportant one.
-  Wire it into the loader; it must ride the pending rebuild (it changes chunk text,
-  so it needs re-embedding). Note the ordering constraint already documented: run
-  it *before* `match_courses`, which it improves. Narrative:
-  `docs/chunker-embedder-comparison-log.md` (course-table compaction section).
+  in one document) to `CODE Title` lines, dropping the description. The old
+  blocker was "needs a thematic-inclusive eval first", since course-name gold
+  queries never touch description text. That eval closed the question the
+  other way instead: only **13 files corpus-wide** contain such a table
+  (0.46%, 39.8% of their text removed), cited by **0 of 106** 73det queries
+  and **3 of 179** thematic ones — no gold set can detect a
+  description-stripping regression, so waiting for an eval was waiting for
+  evidence that cannot arrive. User resolved it on domain grounds instead:
+  **course descriptions are not what people ask about**, so the unmeasurable
+  regression is also the unimportant one. **Wired into `PlainLoader.load()`
+  2026-08-03** (ahead of `strip_mapping_tables`, before `match_courses` per
+  the ordering constraint below) and rode rebuild #3 (completed
+  2026-08-05T07:56) — live in `chunker_compare_full` now, not a pending item.
+  Note the ordering constraint: run it *before* `match_courses`, which it
+  improves. Narrative: `docs/chunker-embedder-comparison-log.md` (course-table
+  compaction section).
 - Chunker/embedder/BM25/hybrid comparison eval lives in `tools/eval/`. Current (9-embedder)
   scripts: `run_gold_chunker_eval.py`, `run_gold_bm25_eval.py`, `run_gold_hybrid_eval.py` +
   `run_gold_hybrid_eval_9way_new.py`, `embedder_matrix_9way.py` (retrieval + breakdown +

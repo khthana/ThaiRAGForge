@@ -427,6 +427,21 @@ id ที่ถูกต้องแล้วโดยอัตโนมัต�
 1 ชม. 22 นาที เสร็จ 5 ส.ค. 18:32 — ยืนยันว่า `chunks.parquet`/`embeddings.npy`/
 `lexical.json`/`manifest.json` ทั้ง 4 ไฟล์มี mtime ตรงกันแล้ว (ก่อนหน้านี้
 `chunks.parquet` ค้างที่ 30 ก.ค. ขณะที่อีก 3 ไฟล์ยังเป็น 28 ก.ค. — สัญญาณ staleness
-แบบเดียวกับที่ `audit_pipeline_invariants.py` เช็ก) `entity_boost`/`entity_lookup`
-ยังไม่ได้ re-run เทียบตัวเลขใหม่หลัง rebuild นี้ — ถ้าจะอ้างตัวเลขใน § 7 ต่อ ต้อง refresh
-ก่อนตาม [[feedback_refresh_all_retrieval_paths_after_rebuild]]
+แบบเดียวกับที่ `audit_pipeline_invariants.py` เช็ก)
+
+**Re-run แล้ว (5 ส.ค. 2569)**, เทียบกับรายงาน 29 ก.ค. เดิม (สำรองไว้ที่
+`data/results/_pre_2026_08_05_refresh/`):
+
+- **entity_lookup**: แทบไม่ขยับเลย (recall@1000 รวม 0.9422 → 0.9422 เท่าเดิม, ต่างกัน
+  แค่ระดับ rounding ในบางเซลล์) — สมเหตุสมผล เพราะ entity_lookup เป็น exhaustive
+  metadata match ไม่ใช่ ranked retrieval การ relabel `resolution_id` แค่ 6 ไฟล์ (จาก
+  2,853 ไฟล์) ไม่ทำให้ recall/precision เปลี่ยน
+- **entity_boost**: recall@10 นิ่งเกือบทั้งหมด (course 0.7164→0.7107, program
+  0.5781→0.5765 — ต่างกันระดับ noise) **ยกเว้น program mrr ที่ขยับจริง 0.6238 →
+  0.6544 (+0.0306)** — ทิศทางเข้าใจได้: การ relabel แก้ id ที่เคย collide กันของ 2
+  ไฟล์ (สมมติว่าเป็นกรณี "รายการวาระซ้ำชื่อ" ที่ § resolution_id เอกสาร CLAUDE.md พูดถึง)
+  เปลี่ยนลำดับการจัดอันดับผลลัพธ์ที่เคยผูกกันเป็น id เดียว ให้แยกจากกันได้ชัดขึ้นสำหรับ
+  query ประเภท program — ยังไม่ได้ significance-test ตัวเลขนี้ (ไม่มี test รองรับ
+  before/after metric เดี่ยวแบบนี้อยู่แล้ว เหมือนที่ § 7 บันทึกไว้) รายงานเต็มอัปเดตแล้วที่
+  `data/results/gold_entity_boost_73det_report.md`,
+  `data/results/gold_entity_lookup_73det_report.md`
