@@ -753,6 +753,75 @@ only 5 documents were supplied.
    they are reported as **inconclusive, not reversed**. Nothing at p < 0.001 moved.
    Every claim in this section is drawn from what survived.
 
+## Resolved 2026-08-07: Circularity in the entity arms — the paragraph the paper owes
+
+This is the third and last of the validity threats in `docs/eval-validity-threats.md`
+(power and pooling bias are closed above). It is the one threat that cannot be closed
+by measurement, because the thing to be measured is the same object on both sides of
+the comparison. What it needs instead is an explicit statement, which is drafted here
+in citable form so the paper does not have to re-derive it.
+
+**Current numbers, for reference.** `entity_lookup` (exhaustive, unranked, scored at
+k=1000 so recall/precision reduce to plain set recall/precision): overall recall
+**0.9422** — `course` 0.9804, `faculty_adjunct_aggregate` 1.0000, `person` 0.9255,
+`program` 0.8918. `entity_boost` (dictionary-narrowed candidate pool, then hybrid
+ranking, recall@10): `person` 0.8182, `course` 0.7107, `program` 0.5765,
+`faculty_adjunct_aggregate` 0.5089. Reports:
+`data/results/gold_entity_{lookup,boost}_73det_report.md`, re-scored 2026-08-06 after
+the `entity_tags_full` rebuild. **Note for anyone citing an older draft: the figure
+0.9291 that circulated in this project's notes is superseded (it predates that
+rebuild) and was also mislabelled `recall@10`; it is recall@1000, and it is now
+0.9422.**
+
+### The paragraph
+
+> The `entity_lookup` and `entity_boost` arms are reported separately from the
+> chunker, embedder, BM25 and hybrid comparisons, and their scores are **not
+> comparable to them**. Relevance judgements for programme- and person-anchored
+> queries were derived from `programs.json` and `people.json`; the same two
+> dictionaries are read by the `entity_tags` loader at index time and by the
+> `entity_lookup` / `entity_boost` retrieval modes at query time. Evaluating those
+> modes against those judgements is therefore partly self-fulfilling: a document the
+> dictionary can name is retrievable *and* judged relevant, and a document it cannot
+> name is neither. `entity_lookup`'s recall of 0.9422 should be read as an **upper
+> bound on what an exhaustive matcher could deliver given this dictionary**, not as a
+> measurement of retrieval quality, and it should never be quoted alongside the
+> dense or lexical recall figures as though the four arms were ranked on the same
+> scale.
+
+### Three things that sharpen it, and are worth keeping in the paper
+
+1. **The circularity is in the candidate set, not uniformly across every metric.**
+   Both arms draw their candidates from the dictionaries, so *recall* is circular in
+   both. But `entity_boost` orders that pool with ordinary hybrid retrieval, which
+   never reads the dictionaries — so its rank-sensitive metrics (MRR 0.9778 person /
+   0.6544 programme) are contaminated only through *which* documents are eligible,
+   not through *how they were ordered*. That is a weaker form of the problem and can
+   be stated as such. `entity_lookup` has no ordering at all (its MRR/nDCG are
+   computed over arbitrary corpus order and are meaningless — the report says so),
+   so nothing rescues it.
+2. **The pooling-bias result does not transfer here, and assuming it does would be
+   the error to avoid.** §Pooling bias establishes that the qrels are a ~8-11%
+   undercount that is *incomplete but not directional* — safe for BM25-vs-dense
+   comparisons because the missing judgements are not correlated with any one system.
+   For the entity arms that independence fails **by construction**: a name the
+   dictionary lacks is missing from the qrels and invisible to the retriever
+   simultaneously. The undercount is aligned with the system's own blind spot, so its
+   effect is optimistic rather than neutral. This is the reason the threat cannot be
+   closed the way the other two were.
+3. **The scope limit is real and is the mitigating fact.** The chunker, embedder,
+   BM25 and hybrid comparisons — the bulk of the results above — do not consult the
+   entity dictionaries at query time at any point. `entity_tags` is a separate index
+   (`entity_tags_full`) that no other arm is built on. The circularity is confined to
+   these two arms and does not propagate into any headline claim.
+
+**What this costs the paper: almost nothing, if stated.** The entity arms were never
+load-bearing for a conclusion; they exist to show that an entity-aware mode is
+buildable on this corpus and roughly where its ceiling sits. Reported as a bounded,
+non-comparable side result, they stay useful. Reported next to the dense/lexical
+numbers without this paragraph, they would be the easiest thing in the paper for a
+reviewer to attack.
+
 ## Methodology
 
 - **Metrics**: recall@k, precision@k, nDCG@k, MRR, MAP, all resolution-level

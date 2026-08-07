@@ -214,18 +214,41 @@ different view) or scoped so a search tool cannot cross the boundary.
 `programs.json` / `people.json` — the **same dictionaries** the `entity_tags`
 loader and the `entity_lookup` / `entity_boost` retrieval modes use. Evaluating
 those modes against these qrels is partly self-fulfilling: `entity_lookup`'s
-recall@10 of 0.9291 substantially measures the dictionary agreeing with itself.
+recall of **0.9422** substantially measures the dictionary agreeing with itself.
+
+> **Corrected 2026-08-07.** This paragraph previously read "recall@10 of 0.9291",
+> which was wrong twice over: the figure predates the 2026-08-05 `entity_tags_full`
+> rebuild and its 08-06 re-score (current value **0.9422**), and the metric is
+> **recall@1000**, not recall@10 — `entity_lookup` is exhaustive and unranked, and is
+> deliberately scored at k=1000 so recall/precision reduce to plain set recall and
+> precision. Quoting it as recall@10 invites exactly the false comparison against the
+> dense/lexical recall@10 columns that the rest of this section argues against.
+> Source: `data/results/gold_entity_lookup_73det_report.md`.
 
 **Scope, which is the mitigating fact.** The chunker, embedder, BM25 and hybrid
 comparisons — the bulk of the paper — do **not** touch the entity dictionaries
 at query time. The circularity is confined to the entity-lookup/entity-boost
 arms and does not propagate.
 
-**What is owed.** The project notes internally that 0.9291 "is not the
-user-facing number". In the paper this must be an explicit validity paragraph,
-not a footnote: state that the entity arms share a source with the ground
-truth, that their scores are therefore an upper bound rather than a
-measurement, and that they are not comparable to the dense/lexical arms.
+**What is owed — DRAFTED 2026-08-07.** The project notes internally that this "is
+not the user-facing number". In the paper this must be an explicit validity
+paragraph, not a footnote: state that the entity arms share a source with the
+ground truth, that their scores are therefore an upper bound rather than a
+measurement, and that they are not comparable to the dense/lexical arms. **That
+paragraph is now written in citable form** — see `docs/paper-results-summary.md`,
+§"Circularity in the entity arms — the paragraph the paper owes", which also
+records three sharpenings worth keeping:
+
+1. the circularity sits in the **candidate set**, so `entity_boost`'s rank-ordering
+   metrics are contaminated only indirectly (hybrid ranking never reads the
+   dictionaries), while `entity_lookup` has no ordering to rescue it;
+2. **§3's "incomplete, not directional" finding does not transfer to these arms** —
+   a name absent from the dictionary is missing from the qrels *and* invisible to the
+   retriever at the same time, so here the undercount is correlated with the system
+   and its effect is optimistic rather than neutral. This is why the threat cannot be
+   closed by measurement the way §1 and §2 were;
+3. the scope limit is genuine — `entity_tags_full` is a separate index no other arm
+   is built on, so nothing propagates into a headline claim.
 
 ## 5. Single annotator, no inter-annotator agreement
 

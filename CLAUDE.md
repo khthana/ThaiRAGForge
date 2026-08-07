@@ -575,10 +575,25 @@ see `docs/adr/`.
      Original manual (retracted) verdicts kept at
      `data/results/residual_relevance/review_sheet.manual_backup_2026_08_03.yaml` for the
      record.
-  3. **Circularity** in `entity_lookup`/`entity_boost`: their qrels come from the same
-     `programs.json`/`people.json` the retrieval mode uses, so 0.9291 is an upper bound,
-     not a measurement. Confined to those arms — chunker/embedder/BM25/hybrid never touch
-     the dictionaries — but it needs an explicit paragraph in the paper, not a footnote.
+  3. **Circularity** in `entity_lookup`/`entity_boost`: **paragraph DRAFTED
+     2026-08-07**, in citable form in `docs/paper-results-summary.md` §"Circularity in
+     the entity arms". Their qrels come from the same `programs.json`/`people.json` the
+     retrieval mode uses, so the score is an upper bound, not a measurement. Confined to
+     those arms — chunker/embedder/BM25/hybrid never touch the dictionaries, and
+     `entity_tags_full` is a separate index nothing else is built on. **Cite the number
+     as recall = 0.9422, and never as `recall@10`**: the long-quoted `0.9291` predates
+     the 2026-08-05 `entity_tags_full` rebuild, and the metric is recall@**1000**
+     (`entity_lookup` is exhaustive and unranked, deliberately scored at k=1000 so
+     recall/precision reduce to plain set recall/precision) — calling it recall@10
+     invites exactly the comparison against the dense/lexical recall@10 columns that the
+     paragraph exists to forbid. Two sharpenings worth keeping: the circularity lives in
+     the **candidate set**, so `entity_boost`'s rank metrics are contaminated only
+     indirectly (hybrid ordering never reads the dictionaries) while `entity_lookup` has
+     no ordering to rescue it; and **the pooling-bias verdict above does NOT transfer
+     here** — a name the dictionary lacks is absent from the qrels *and* invisible to the
+     retriever at once, so the undercount is correlated with the system and reads
+     optimistic rather than neutral. That is why this threat cannot be closed by
+     measurement the way the other two were.
   Also covered there: single-annotator labelling (defended by the labels being
   *rule-derived and re-derivable*, not judged), query provenance, external validity.
 - **Candidate next axis, written up but not started**:
