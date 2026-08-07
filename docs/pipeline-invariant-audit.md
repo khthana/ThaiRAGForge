@@ -1,6 +1,6 @@
 # Pipeline invariant audit
 
-Run 2026-07-30 05:14 UTC. 21 pass / 3 warn / 1 fail.
+Run 2026-08-07 11:19 UTC. 24 pass / 0 warn / 1 fail.
 
 | check | status | detail |
 |---|---|---|
@@ -15,17 +15,17 @@ Run 2026-07-30 05:14 UTC. 21 pass / 3 warn / 1 fail.
 | I1 row alignment (chunks/vectors/lexical) | PASS | 0 misaligned of 55 |
 | I2 chunk_id unique within index | PASS | 0 indexes with duplicates |
 | I3a no chunks from outside the corpus | PASS | 0 indexes contaminated |
-| I3b corpus coverage | WARN | lowest: chunker_compare_full 2853/2854, chunker_compare_full 2853/2854, chunker_compare_full 2853/2854, chunker_compare_full 2853/2854, chunker_compare_full 2853/2854 |
+| I3b corpus coverage | PASS | lowest: chunker_compare_full 2854/2854, chunker_compare_full 2854/2854, chunker_compare_full 2854/2854, chunker_compare_full 2854/2854, chunker_compare_full 2854/2854 |
 | I4 embeddings finite and non-zero (sampled) | PASS | 0 indexes with bad vectors |
-| I5 manifest n_resolutions matches corpus | WARN | 41 drifted |
-| I6 index newer than corpus | WARN | 41 indexes built before the corpus's last edit |
+| I5 manifest n_resolutions matches corpus | PASS | 0 drifted |
+| I6 index newer than corpus | PASS | 0 indexes built before the corpus's last edit |
 | E1 gold ids resolve (gold_query_set_73det.yaml) | PASS | 1046 refs, 0 dangling |
 | E2 no duplicate query (gold_query_set_73det.yaml) | PASS | 106 queries, 0 duplicated |
 | E1 gold ids resolve (gold_query_set.yaml) | PASS | 1219 refs, 0 dangling |
 | E2 no duplicate query (gold_query_set.yaml) | PASS | 252 queries, 0 duplicated |
 | E0 combo id identifies its index unambiguously | FAIL | 12 combo ids exist under >1 index root (BuildCombo.id omits the corpus, so results cannot be attributed to one index) |
-| E3a results reference ids their index holds | PASS | 0 of 9552 live result files reference an id their index does not hold |
+| E3a results reference ids their index holds | PASS | 0 of 23156 live result files reference an id their index does not hold |
 | E3d retired result sets name ids no index holds | PASS | 0 of 0 retired result files carry titles from an earlier corpus state (retired sets, read by no current script; 0 of 0 means they have been archived off-repo, not that they were checked) |
-| E3c retired result sets cite pre-fix contamination ids | PASS | 0 of 9552 result files cite an id from the corpus-discovery contamination bug -- expected for sets computed before its fix; do not reuse them |
-| E3b results answer a known gold query | PASS | 0 unrecognized queries across 9552 result files (['mode_b', 'mode_b_routed'] excluded: interactive UI queries are not gold by design) |
+| E3c retired result sets cite pre-fix contamination ids | PASS | 0 of 23156 result files cite an id from the corpus-discovery contamination bug -- expected for sets computed before its fix; do not reuse them |
+| E3b results answer a known gold query | PASS | 0 unrecognized queries across 23156 result files (['mode_b', 'mode_b_routed'] excluded: interactive UI queries are not gold by design) |
 | E4 results newer than their index | PASS | 0 result sets computed before their index was rebuilt |

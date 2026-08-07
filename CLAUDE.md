@@ -65,9 +65,18 @@ see `docs/adr/`.
   (E3c contamination ids, E3d pre-repair titles, `RETIRED_RESULT_DIRS`) so a FAIL
   still means a *live* result set has drifted. Because 0 is ambiguous between
   "examined and clean" and "nothing left to examine", the E3 checks now print their
-  denominator — `E3a 0 of 9,552 live result files` is a real pass, `E3d 0 of 0` says
-  so out loud. Current state: **24 pass / 0 warn / 1 fail**, the single FAIL being the
-  `BuildCombo.id` caveat above. Both former warns were chased to root cause rather
+  denominator — `E3a 0 of 23,156 live result files` is a real pass, `E3d 0 of 0` says
+  so out loud. Current state (**re-run 2026-08-07 against rebuild #3**): **24 pass /
+  0 warn / 1 fail**, the single FAIL being the
+  `BuildCombo.id` caveat above. That headline was written here before it was true —
+  the report on disk at the time said **21 pass / 3 warn / 1 fail**, the 3 warns
+  being index-staleness ones nobody had chased (`I3b` coverage 2853/2854, `I5` 41
+  manifests drifted, `I6` 41 indexes built before the corpus's last edit). Rebuild
+  #3 cleared all three to 0/0/2854-of-2854, so the claim is now verified rather than
+  asserted. **`E4` (results newer than their index) passing at 0 across 23,156 result
+  files is the mechanical confirmation that the whole 08-06/08-07 refresh chain is
+  complete** — that is the check to look at after a rebuild, not the headline count.
+  Both former warns were chased to root cause rather
   than waived, and each turned out to be a symptom of something bigger than the
   warning said (the 5 duplicate thematic queries → the whole 179-entry subset was
   unanswerable; see above). C4's 24 orphan archives were reviewed one by one and

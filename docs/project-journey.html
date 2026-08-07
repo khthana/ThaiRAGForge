@@ -235,7 +235,10 @@ metric มาตรฐานอย่าง recall@10 มี <b>เพดาน�
 30 ก.ค.    ████████ resolution_id fix · thematic query กลับมามีความหมาย ·
            eval-validity assessment เริ่ม · RQ4 เริ่ม
 30 ก.ค.–3 ส.ค. ██████████ pooling-bias study (ตัดสินเอง 126 รายการ → ถอน → แก้)
-           · RQ4 generate+ablation ครบ · rebuild รอบที่ 3 เริ่ม (ยังไม่เสร็จ)
+           · RQ4 generate+ablation ครบ · rebuild รอบที่ 3 เริ่ม
+5 ส.ค.     ████ rebuild รอบที่ 3 เสร็จ (16.4 ชม.) · entity_tags_full · RQ3 rebuild ซ้ำ
+6–7 ส.ค.   ██████████ refresh ครบทุกเส้นทาง: main chain · thematic (5h12m) · RQ4 (4h05m)
+           · ⚠ วัดได้ว่า temperature 0 ไม่ reproducible · แก้ข้อสรุปที่อ่านเกินจริง 3 ข้อ
 </div>
 
 <h3>ข้อสรุปที่แข็งที่สุด ณ ปัจจุบัน</h3>
@@ -1129,10 +1132,17 @@ C4 (ไฟล์ <code>.md.dup</code> ที่ไม่มีใครอ้า
 </div>
 <div class="win">
 <span class="label">สถานะปัจจุบัน</span>
-<b>24 pass / 0 warn / 1 fail</b> — FAIL ตัวเดียวที่เหลือคือ <code>BuildCombo.id</code>
+<b>24 pass / 0 warn / 1 fail</b> (รันใหม่ 7 ส.ค. — ดู §9.10) — FAIL ตัวเดียวที่เหลือคือ
+<code>BuildCombo.id</code>
 hash เฉพาะ loader+chunker+embedder ไม่รวมคอร์ปัส (รู้ตัวมาตั้งแต่ตอนหาสาเหตุบั๊ก cache ค้าง)
 ทั้งสอง warn เดิมถูกไล่จนถึงต้นตอแทนที่จะ waive ทิ้ง และทั้งคู่กลายเป็นเรื่องใหญ่กว่าที่
 ข้อความเตือนบอกไว้ (thematic query 5 ข้อซ้ำ → เผยว่าทั้งชุด 179 ข้อตอบไม่ได้เลย)
+<div style="margin-top:.6em;font-size:.9em">
+⚠ ตัวเลข "24/0/1" ชุดนี้ <b>ถูกเขียนไว้ก่อนที่จะเป็นจริง</b> — รายงานที่อยู่บนดิสก์
+ตั้งแต่ 30 ก.ค. บอก <b>21 pass / 3 warn / 1 fail</b> โดย warn ทั้งสามคือชุดผลลัพธ์ที่เก่ากว่า
+index ของตัวเอง สิ่งที่ทำให้มันกลายเป็น 24/0/1 จริงคือ rebuild #3 กับ refresh รอบ 6–7 ส.ค.
+ไม่ใช่การแก้ที่เล่าไว้ข้างบน
+</div>
 </div>
 
 <h3>9.6 audit_title_body_agreement.py — ตรวจ manifest กับเนื้อไฟล์ (30 ก.ค.)</h3>
@@ -1256,7 +1266,10 @@ hybrid/dense/bm25 เป็นกลุ่มบนที่เสมอกั�
 ส่วน m2v แพ้ทั้งสามอย่างมีนัยสำคัญทั้ง precision และ recall<br><br>
 <b>0 การอ้างอิงที่กุขึ้นมาเอง จากทั้งหมด 978 ครั้ง</b> — failure mode ที่ RAG กลัวที่สุด
 ไม่เกิดขึ้นเลยในงานนี้ ซึ่งเป็นผลตอบแทนของการใช้ label ตัวเลขที่ตรวจสอบได้ชัดเจน
-([1]..[k] ไม่ใช่ resolution_id เต็ม)
+([1]..[k] ไม่ใช่ resolution_id เต็ม)<br><br>
+<b style="color:var(--muted)">⚠ ทั้งสองข้อความในกล่องนี้ถูกแก้ไขภายหลัง (7 ส.ค.) — ดู §9.10</b>
+การเรียงลำดับ precision อ่านเกินหลักฐาน (dense กับ bm25 ไม่เคยแยกกันได้อย่างมีนัยสำคัญ)
+และ "0 จาก 978" เป็นจริงเฉพาะ prompt เดิม
 </div>
 <div class="dead">
 <span class="label">ข้อสรุปที่เขียนผิดรอบแรก แล้วแก้เองในวันเดียวกัน</span>
@@ -1281,7 +1294,8 @@ Citation <i>recall</i> แบนราบที่ ~0.41 ทุกอาร์�
 hybrid/dense/bm25 แต่<b>ไม่มีนัยสำคัญสำหรับ m2v</b> (+0.026, p=0.657) สอดคล้องกับ
 คุณภาพการค้นที่อ่อนอยู่แล้ว (ไม่มีหลักฐานถูกพอในบริบทให้อ้างเพิ่ม ไม่ว่า prompt
 จะสั่งอย่างไร) และ arm-ordering ยิ่ง<b>คมขึ้น</b>ภายใต้ <code>cite_all</code>
-(8/12 คู่มีนัยสำคัญ เทียบ 6/12 ภายใต้ prompt เดิม)
+(8/12 คู่มีนัยสำคัญ เทียบ 6/12 ภายใต้ prompt เดิม — หลัง refresh 7 ส.ค. เป็น
+<b>9/12 เทียบ 2/12</b> ทิศทางเดิมและชัดขึ้น ดู §9.10)
 </div>
 <div class="note">
 <span class="label">ต้นทุนเล็กๆ ที่เจอเมื่อเปลี่ยน prompt</span>
@@ -1308,16 +1322,114 @@ resolution_id ที่แก้ถูกต้อง (§9.1) จะไหลเ
 <code>common.py</code> การ load คอร์ปัสรอบใหม่จะได้ id ที่ถูกต้องเอง) ·
 RQ3 ablation ทั้ง 3 ตัว, <code>power_analysis.py</code>, <code>reranker_significance_test.py</code>,
 และ context ของ RQ4 ยังต้องรันซ้ำอีกครั้งตาม
-[[feedback_refresh_all_retrieval_paths_after_rebuild]] · การแก้ title↔body mispairing
+[[feedback_refresh_all_retrieval_paths_after_rebuild]] <b>(ทำครบแล้วทั้งหมด — §9.10)</b> ·
+การแก้ title↔body mispairing
 (§9.6, 7 กรณี) <b>ยังไม่ถูกใส่เข้าไปในรอบนี้</b> — เป็นการตัดสินใจที่ยังไม่ได้ถามผู้ใช้
 ต้องยกไปคุยก่อนรอบถัดไป ไม่ใช่สมมติว่ารวมอยู่แล้ว
+</div>
+
+<h3>9.10 rebuild #3 เสร็จ แล้ว refresh ทุกเส้นทางจนครบ (5–7 ส.ค.)</h3>
+<p>
+rebuild รอบที่ 3 เสร็จ <b>5 ส.ค. 07:56</b> (~16.4 ชม., exit 0 — เป็นรอบที่ 4 ของความพยายาม
+และเป็นรอบแรกที่รันจบสะอาด) จากนั้นเดินตามกฎ
+[[feedback_refresh_all_retrieval_paths_after_rebuild]] ไล่ refresh <b>ทุก</b> เส้นทางที่มี
+ผล persist ไว้ ไม่ใช่เฉพาะเส้นที่สคริปต์ eval บังเอิญคำนวณใหม่ให้เอง
+</p>
+<table>
+<tr><th>เส้นทาง</th><th>วันที่</th><th>ผล</th></tr>
+<tr><td>RQ3 ablation ×3 (rebuild index จริง ~2.5 ชม.), power analysis, reranker</td><td>5 ส.ค.</td><td>ข้อสรุปเดิมทั้งหมด</td></tr>
+<tr><td>entity_tags_full rebuild → entity_boost/entity_lookup</td><td>5–6 ส.ค.</td><td>นิ่ง ยกเว้น program MRR +0.0306</td></tr>
+<tr><td>สายหลัก BM25/hybrid + significance test 7 ตัว</td><td>6 ส.ค.</td><td><b>0 verdict flip</b> ใน 2 ตารางใหญ่ที่สุด</td></tr>
+<tr><td>thematic 179 query (dense+BM25+hybrid, 5 ชม. 12 นาที)</td><td>7 ส.ค.</td><td><b>0 verdict flip</b> ครบทั้ง 81 เซลล์</td></tr>
+<tr><td>RQ4 (regenerate 362 จาก 530 cell, 4 ชม. 05 นาที)</td><td>7 ส.ค.</td><td><b>5 flip จาก 33</b> — รายละเอียดด้านล่าง</td></tr>
+<tr><td><code>audit_pipeline_invariants.py</code> รันใหม่</td><td>7 ส.ค.</td><td>24 pass / 0 warn / 1 fail</td></tr>
+</table>
+<div class="win">
+<span class="label">เครื่องมือที่ทำให้การ refresh ตรวจสอบได้จริง</span>
+แทนที่จะกวาดตาดูตัวเลขก่อน/หลัง เขียน <code>tools/eval/diff_significance_reports.py</code>
+เป็นสคริปต์ถาวร ประเด็นสำคัญคือ<b>วิธี key แถว</b>: รายงานเหล่านี้เรียงแถวตาม effect size
+และใช้ label ซ้ำข้าม section — ดังนั้นการ diff ตามตำแหน่งบรรทัด <i>หรือ</i> การยุบเป็น
+dict label→verdict ให้คำตอบผิดทั้งคู่ ต้อง key ด้วย
+<code>(หัวข้อ section, label cell นำหน้า)</code><br><br>
+ผลที่ได้จึงพูดได้เต็มปากว่า "ไม่มี verdict ไหนเปลี่ยน" ไม่ใช่ "ดูแล้วน่าจะเหมือนเดิม"
+</div>
+<div class="dead">
+<span class="label">RQ4 เป็นข้อยกเว้น และเหตุผลคือสมมติฐานที่เชื่อกันมาตลอดว่าผิด</span>
+docstring ของ <code>rq4_generate.py</code> เขียนว่า "<b>Temperature 0.</b> รันรอบเดียว
+ไม่มี sampling variance ให้ต้องเฉลี่ย" — <b>วัดแล้วผิด</b> greedy decoding deterministic
+เฉพาะในเลขคณิตแบบ exact แต่การ reduce บน GPU ไม่มีคุณสมบัติ associative logits
+ที่ค่าใกล้กันจึงสลับอันดับกันได้ระหว่างรอบ แล้วข้อความก็แยกทางกันตั้งแต่จุดนั้น
+โปรเจกต์นี้เชื่อไปก่อนเพราะมีเคสตัวอย่างของตัวเอง — re-OCR ที่ temperature 0.0
+เคยผลิตผลลัพธ์ซ้ำแบบ byte-for-byte<br><br>
+วัดด้วย <code>rq4_determinism_check.py</code> (prompt เหมือนกันทุก byte 24 อัน/variant):
+<table>
+<tr><th>prompt</th><th>ข้อความเหมือนเดิม</th><th>ชุด citation เหมือนเดิม</th><th>abstention เหมือนเดิม</th></tr>
+<tr><td><code>sentence_cap</code></td><td>19/24 (79%)</td><td>21/24 (88%)</td><td>24/24 (100%)</td></tr>
+<tr><td><code>cite_all</code></td><td>6/24 (25%)</td><td><b>14/24 (58%)</b></td><td>23/24 (96%)</td></tr>
+</table>
+<b>ภายใต้ <code>cite_all</code> 42% ของคำถามเปลี่ยนชุดการอ้างอิงทั้งที่ข้อมูลไม่เปลี่ยนเลย</b>
+— diff ของ RQ4 จึงอ่านแบบเดียวกับ thematic/BM25/RQ3 (ซึ่ง deterministic ล้วน) ไม่ได้
+</div>
+<p>
+บทเรียนเชิงวิธีการที่ตามมาทันที: (1) วัด noise floor บน<b>สิ่งที่ scorer อ่านจริง</b>
+ไม่ใช่บนตัวข้อความ — <code>rq4_score.py</code> อ่านแค่ label <code>[n]</code> กับคำว่า
+abstain ซึ่งนิ่งกว่าข้อความมาก (58–88% เทียบ 25–79%) การ diff ข้อความตรงๆ จึงพูดเกินจริง
+(2) เมื่อ input เปลี่ยนแค่บางส่วน ให้ regenerate <b>เฉพาะ</b> รายการที่เปลี่ยน แล้วแช่ที่เหลือไว้
+— รันซ้ำ prompt ที่ไม่ได้เปลี่ยนคือการฉีด noise เข้าไปในคำถามที่ไม่มีเหตุให้ขยับ
+และการแช่ไว้ทำให้การเปรียบเทียบเป็น paired จริง (RQ4 จึง regenerate 362 แช่ 168)
+</p>
+<div class="note">
+<span class="label">ผล RQ4 หลัง refresh — 5 flip จาก 33 และทั้งหมดอยู่ในโซนก้ำกึ่ง</span>
+flip ที่<b>เสีย</b> significance ทั้ง 4 ตัวอยู่ใน family เดียวกัน (<code>sentence_cap</code>)
+และเดิมก็ Holm-adj 0.014–0.081 อยู่แล้ว · ไม่มีอะไรที่ p&lt;0.001 ขยับเลย ·
+ตัวขับหลักคือ precision ของอาร์มเดียว (<code>hybrid_m2v</code> 0.4945→0.5575)
+ที่ทำให้ 3 การเปรียบเทียบแคบลงพร้อมกัน → <b>รายงานทั้ง 4 เป็น inconclusive ไม่ใช่ reversed</b><br><br>
+<b>สิ่งที่รอดครบ</b> คือส่วนที่เป็นหัวใจ: prompt ablation ทั้งชุด (hybrid +0.1181 /
+dense +0.1005 / bm25 +0.0734 ทั้งหมด Holm 0.0000, m2v +0.0217 ไม่มีนัยสำคัญ),
+m2v แย่สุดทั้งสอง metric, abstention 106→104
+</div>
+<div class="dead">
+<span class="label">สองข้อสรุปที่ต้องแก้ (แก้ §9.8)</span>
+<b>1. citation precision ไม่ได้เรียงตรงตาม recall@10</b> — dense กับ bm25
+<b>ไม่เคยแยกกันได้อย่างมีนัยสำคัญ</b>ในทั้งสอง prompt (Holm-adj 1.0000 และ 0.2136)
+และภายใต้ <code>sentence_cap</code> bm25 (0.6463) แซง dense (0.6413) ไปแล้วด้วยซ้ำ
+ข้อสรุปที่ป้องกันได้คือ <b><code>hybrid &gt; {dense, bm25} &gt; m2v</code></b> เท่านั้น
+— การเรียง 4 ชั้นเป็นการอ่านผลเสมอให้เป็นลำดับ<br><br>
+<b>2. "0 การอ้างอิงที่กุขึ้นมาเอง" ผูกกับ prompt</b> — ยังจริงสำหรับ prompt เดิม
+(0 จาก 954 ครบทั้ง 4 อาร์ม) แต่ภายใต้ <code>cite_all</code> อาร์ม dense ขึ้นเป็น
+<b>4 จาก 359</b> ทั้งสี่มาจากคำถามเดียวที่อ้าง <code>[6]</code>–<code>[9]</code>
+ทั้งที่ป้อนเอกสารให้แค่ 5 ฉบับ กลไกจึงไม่ร้ายแรง (label เกินช่วง ไม่ใช่การยัดเนื้อหา
+ให้เอกสารที่มีอยู่จริง) แต่ <code>cite_all</code> ก็กุการอ้างอิงใน<b>สองอาร์ม</b>แล้ว
+ไม่ใช่แค่ closed-book
+</div>
+<div class="note">
+<span class="label">ข้อ 2 เกือบหลุด — และนั่นคือ finding ในตัวมันเอง</span>
+<code>diff_significance_reports.py</code> เทียบเฉพาะ cell ที่ parse เป็นตัวเลขได้
+แต่คอลัมน์ phantom เป็นรูปแบบ <code>count/total</code> — <code>0/370 → 4/359</code>
+จึงไม่เข้าทั้งสาขา numeric และสาขา verdict แล้ว<b>ถูกข้ามไปเงียบๆ</b>
+เจอเพราะไล่เทียบคอลัมน์นั้นด้วยมือ<br><br>
+รูปทรงเดียวกับบั๊ก silent-corruption ทุกตัวในโปรเจกต์นี้: ไม่ crash แค่มีตัวเลข
+ที่ไม่มีใครมอง — <b>คอลัมน์ที่เครื่องมือจำแนกไม่ได้ คือคอลัมน์ที่ควรแสดง ไม่ใช่ทิ้ง</b>
+แก้แล้ว: ตอนนี้ differ รายงานและ exit 1 กับ cell ที่ไม่ใช่ตัวเลขทุกตัว (ยกเว้น
+confidence interval ซึ่งเป็นตัวเลขในสาระและขยับทุกรอบอยู่แล้ว)
+</div>
+<div class="win">
+<span class="label">audit ยืนยันเชิงกลไกว่า refresh ครบจริง</span>
+รัน <code>audit_pipeline_invariants.py</code> ใหม่ (7 ส.ค.): <b>24 pass / 0 warn / 1 fail</b>
+โดย FAIL เดียวคือข้อจำกัด <code>BuildCombo.id</code> ที่รู้สาเหตุแล้ว<br><br>
+ที่น่าสนใจกว่าตัวเลขรวมคือ <b>warn 3 ตัวเดิมหายไปหมด</b> — รายงานฉบับ 30 ก.ค. จริงๆ แล้วเป็น
+21 pass / 3 warn / 1 fail (I3b coverage 2853/2854, I5 manifest drift 41 ตัว,
+I6 index เก่ากว่าคอร์ปัส 41 ตัว) ทั้งสามเป็นอาการของ index ที่ค้างอยู่ก่อน rebuild
+และ rebuild #3 ล้างหมด · เช็คที่ควรดูหลัง rebuild ไม่ใช่ตัวเลขรวม แต่คือ
+<b><code>E4</code> — ไม่มีชุดผลลัพธ์ไหนถูกคำนวณก่อน index ที่มันอ้าง จาก 23,156 ไฟล์</b>
+นั่นคือหลักฐานเชิงกลไกว่าสาย refresh ทั้งหมดเดินครบแล้วจริง
 </div>
 
 <!-- ============================================================ -->
 <h2 id="s-now"><span class="stage-no">10</span>ผลลัพธ์ปัจจุบัน — ตอบทีละคำถามวิจัย</h2>
 <p style="font-size:0.9em;color:var(--muted)">
 ทุกตัวเลขด้านล่างมาจาก Gold 106 query · paired bootstrap + Holm ·
-index หลัง OCR remediation (29 ก.ค. 2569)
+index หลัง rebuild #3 (5 ส.ค. 2569) — refresh ครบทุกเส้นทางแล้ว (§9.10)
 </p>
 
 <h3>Q1. chunker ไหนดีที่สุด?</h3>
@@ -1487,20 +1599,65 @@ hybrid มี overhead 2 วินาที → รายงานไว้ต�
 pipeline OCR ไม่มี ground truth → บอกให้ผู้ใช้รู้ก่อนอนุมัติ
 </p>
 
+<h3>8. วัด noise floor ของตัวสร้างข้อมูล ก่อนอ่าน diff ก่อน/หลัง</h3>
+<p>
+ถ้าตัวเลขที่จะ diff ผลิตโดย LLM ให้รันซ้ำสิ่งที่<b>ไม่ได้เปลี่ยน</b>ก่อน แล้วดูว่ามันขยับเองเท่าไร
+— "temperature 0" ไม่ได้แปลว่า reproducible (§9.10) และโปรเจกต์นี้เชื่อไปก่อนเพราะมีเคส
+ตัวอย่างของตัวเองที่บังเอิญเป็นจริง วัดบน<b>สิ่งที่ scorer อ่านจริง</b> ไม่ใช่ตัวข้อความ
+แล้วอ้างตัวเลข noise floor ควบคู่ไปกับทุกความเคลื่อนไหวที่รายงาน
+</p>
+
+<h3>9. คอลัมน์ที่เครื่องมือจำแนกไม่ได้ คือคอลัมน์ที่ควรแสดง ไม่ใช่ทิ้ง</h3>
+<p>
+สคริปต์ diff เทียบเฉพาะ cell ที่ parse เป็นตัวเลขได้ แล้วข้ามคอลัมน์รูปแบบ
+<code>count/total</code> ไปเงียบๆ — ซึ่งบังเอิญเป็นคอลัมน์ที่บันทึกการอ้างอิงที่กุขึ้นมาเอง
+(§9.10) เป็นรูปทรงเดียวกับบั๊ก silent-corruption ทุกตัวในโปรเจกต์: ไม่มีอะไร crash
+มีแต่ตัวเลขที่ไม่มีใครมอง · <b>สิ่งที่เครื่องมือ "ไม่รู้จะทำอย่างไร" ต้อง fail loud เสมอ
+ไม่ใช่ผ่านเงียบ</b>
+</p>
+
 <!-- ============================================================ -->
 <h2 id="s-todo"><span class="stage-no">13</span>สิ่งที่ยังค้างอยู่</h2>
 
-<h3>ยังไม่ได้ทำ (เรียงตามคุณค่า)</h3>
+<p style="font-size:0.9em;color:var(--muted)">
+สถานะ ณ 7 ส.ค. 2569 — งาน refresh หลัง rebuild #3 ปิดครบทุกเส้นทางแล้ว (§9.10)
+รายการที่เหลือเป็นงานใหม่ ไม่ใช่หนี้ค้างจากการ rebuild
+</p>
+<h3>ยังไม่ได้ทำ (เรียงตามคุณค่าต่อต้นทุน)</h3>
 <ol>
-<li><b>ต้องรัน RQ3 ablation ทั้ง 3 ตัว, <code>power_analysis.py</code>,
-<code>reranker_significance_test.py</code> และ context ของ RQ4 ใหม่ทั้งหมด
-หลัง rebuild รอบที่ 3 เสร็จ</b> (§9.9) — ตามกฎ
-[[feedback_refresh_all_retrieval_paths_after_rebuild]] ทุกตัวเลขในเอกสารนี้
-ที่มาจากเส้นทางเหล่านี้ยังอิงอยู่กับ index ก่อน rebuild #3</li>
-<li><b>title↔body mispairing 7 กรณี</b> (§9.6) วัดแล้วแต่ยังไม่ถูกแก้ — เปลี่ยน
-<code>resolution_id</code> จึงเป็นการตัดสินใจที่ต้องยกไปคุยกับผู้ใช้ก่อนรอบ rebuild ถัดไป</li>
-<li><b>index <code>entity_tags_full</code> ต้อง rebuild</b> หลังการแก้ person/program loader
-เพื่อให้การแก้ไปถึง <code>entity_lookup</code>/<code>entity_boost</code> ใน UI จริง</li>
+<li><b>แก้ cache ของ <code>BM25Okapi</code></b> — ตอนนี้สร้าง index ใหม่ทุกครั้งที่ค้น
+ทำให้ทุก query แบก overhead คงที่ ~1.9–2.0 วินาที (§10 Q4) แก้แล้วได้เวลาคืนแน่นอน
+ไม่ต้องพิสูจน์อะไรเพิ่ม — ถูกที่สุดและชัวร์ที่สุดในรายการนี้</li>
+<li><b>sweep ค่าน้ำหนัก (alpha) ของการ fuse</b> — RRF ไม่มี alpha โดยโครงสร้าง
+(<code>rrf_k=60</code> เป็นค่าลดทอนอันดับ ใช้เท่ากันทั้งสองฝั่ง <b>ไม่ใช่</b>น้ำหนัก)
+แต่ <code>HybridRetriever</code> มี <code>method="weighted"</code> พร้อม
+<code>dense_weight</code>/<code>bm25_weight</code> อยู่แล้ว และสแกนทั้ง repo แล้วพบว่า
+<b>ไม่เคยถูกใช้ที่ไหนเลย</b> — ทุกตัวเลข hybrid ในเอกสารนี้อยู่ที่ 50:50 โดยปริยาย
+กฎ "RRF ช่วยฝั่งที่อ่อน และเก็บภาษีฝั่งที่แข็ง" (§10 Q4) ทำให้ทำนายล่วงหน้าได้จาก
+ตัวเลขของโปรเจกต์เอง (r = −0.921) ไม่ใช่จากวรรณกรรมภายนอก · กับดักที่ต้องวางแผนก่อน:
+จูน alpha บน 106 query เดิมแล้วรายงานบนชุดเดิมคือ overfitting — ให้รายงานเป็น
+<i>ช่วงของ alpha ที่ไม่ทำให้แย่ลง</i> ไม่ใช่ค่าที่ดีที่สุดค่าเดียว</li>
+<li><b>กราฟความสัมพันธ์แบบง่าย</b> — เส้น <code>หลักสูตร→สังกัด→คณะ</code> ไม่ต้อง extract
+อะไรเลย แค่เติม field <code>faculty</code> ลง <code>programs.json</code> ด้วยมือ (ครึ่งวัน)
+ส่วน <code>บุคคล→แทนที่→บุคคล</code> สแกนแล้วพบว่าเป็นเส้นที่<b>ง่ายที่สุด</b>
+(315 ไฟล์/1,250 ตาราง โครงสร้าง <code>(เดิม)</code>/<code>(แก้ไขใหม่)</code> สม่ำเสมอ 99.7%,
+74.8% ของ cell resolve ได้ด้วย <code>match_people()</code> ที่มีอยู่แล้ว) —
+ตรงข้ามกับที่เดาไว้ตอนแรกจากหลักการล้วนๆ ส่วน GraphRAG เต็มรูปแบบ<b>ไม่คุ้ม</b>
+(global search ตอบคำถามรูปแบบที่ gold set ทั้งสองชุดไม่มี และวัดผลไม่ได้)</li>
+<li><b>ขันถ้อยคำ <code>cite_all</code></b> ให้มี guard กรณีไม่มีเอกสารเลย แล้ว pilot สั้นๆ
+— แก้ที่ทำให้ abstention ตกจาก 106 เหลือ 104 (§9.8) ก่อนใช้เป็น prompt สุดท้ายของเปเปอร์</li>
+<li><b>title↔body mispairing 7 กรณี</b> (§9.6) วัดแล้วแต่ยังไม่ถูกแก้ — 4 กรณีเปลี่ยน
+<code>resolution_id</code> จึงเป็นการตัดสินใจที่ต้องคุยก่อน และควรขี่ rebuild รอบถัดไป
+ไม่ใช่รอบพิเศษ · อีก 2 กรณีคือไฟล์ที่ไม่เคยถูกดาวน์โหลดจริง (รวมเคส CHECO ของ
+<code>2568/ครั้งที่ 7</code> ซึ่ง manifest ถือ Drive id ที่ถูกอยู่แล้ว แค่ยังไม่เคยดึง)</li>
+<li><b>HyDE</b> — คุ้มที่จะ<i>ทดสอบ</i> (แปลง query ฝั่งเดียว ไม่ต้อง rebuild) แต่<b>ทำนายว่าติดลบ</b>
+บนชุด entity-anchored: BM25 ได้ 0.8147 บนคำถามประเภทบุคคล แปลว่านี่คือ regime ของ
+การจับ token ตรงตัว ไม่ใช่ความหมาย และ <code>phi4</code> ไม่รู้จักคน/หลักสูตรเหล่านี้
+จะกุชื่อขึ้นมาแล้วถูก embed ไปด้วย (ต่างจาก RQ4 ที่ 0 การกุ เพราะถูกจำกัดด้วย context
+ที่ป้อนให้) โอกาสจริงอยู่ที่ชุด thematic ซึ่ง BM25 ตกเหลือ 0.2990 · ต้นทุนตอนเสิร์ฟคือ
+ข้อคัดค้านตัวจริง: +15.6 วินาที/query บนฐาน ~2.1–2.7 วินาที</li>
+<li><b>ColBERT / late interaction</b> — เขียน note ไว้แล้วพร้อมคำทำนายที่ลงทะเบียนล่วงหน้า
+(<code>docs/colbert-late-interaction-notes.md</code>) ยังไม่ได้เริ่ม</li>
 <li><b>entity-indexed retrieval path สำหรับคำถามแบบ "list all X"</b> —
 มีโครงสร้างพื้นฐานพร้อมแล้ว (tagger ทั้ง 4) แต่ยังไม่เคยสร้าง/ทดสอบ
 เป็นทางที่มีเหตุผลรองรับดี เพราะ top-k similarity ติดเพดาน ~0.68 โดยโครงสร้าง</li>
@@ -1515,17 +1672,25 @@ pipeline OCR ไม่มี ground truth → บอกให้ผู้ใช�
 <li>Entity tagger ทั้ง 4 ชนิด + Gold query set 106 ข้อ</li>
 <li>gap-analysis Tier 1 + Tier 2 ทั้งหมด (metrics, BM25, significance testing, cost/latency, การเพิ่ม embedder)</li>
 <li>บั๊ก corpus discovery (ยืนยัน 0% contamination)</li>
-<li>RQ3 ablation ทั้ง 3 ตัว (rebuild ล้าง confound เสร็จ 29 ก.ค. — <b>แต่ตอนนี้ต้องรันซ้ำอีกรอบหลัง rebuild #3</b>)</li>
+<li>RQ3 ablation ทั้ง 3 ตัว — rebuild ล้าง confound<b>รอบที่สอง</b>เสร็จ 5 ส.ค. (~2.5 ชม., exit=0) ไม่เหลือ confound แล้ว</li>
 <li>MAP/precision@1 significance test (29 ก.ค.) — กลุ่มที่เสมอกันยังเสมอบน metric ใหม่ทั้งสอง</li>
 <li>BM25/hybrid แยกตาม entity_type (29 ก.ค.) — ได้กลไก complementarity เป็นหลักฐานตรง</li>
-<li><code>resolution_id</code> uniqueness bug (30 ก.ค.) — แก้ที่โค้ด, label จะไหลเข้ามาอัตโนมัติเมื่อ rebuild #3 เสร็จ (§9.1)</li>
+<li><code>resolution_id</code> uniqueness bug (30 ก.ค.) — แก้ที่โค้ด, และ rebuild #3 ผลิต id ที่ถูกต้องออกมาเองแล้ว ไม่ต้องรัน relabel <code>--apply</code> เลย (§9.1)</li>
 <li>thematic query 179 ข้อ เขียนใหม่ + re-eval (30 ก.ค.) — ได้สัญญาณ chunker-axis ที่ตรงข้ามกับ entity-anchored (§9.2)</li>
 <li><code>strip_course_comparison_tables</code> ตัดสินใจแล้วและต่อเข้า <code>PlainLoader</code> แล้ว (30 ก.ค./3 ส.ค.) — ขี่ rebuild #3 ไปด้วย (§9.4)</li>
-<li><code>audit_pipeline_invariants.py</code> (30 ก.ค.) — 25 invariant, 24 pass/0 warn/1 fail ที่รู้สาเหตุแล้ว (§9.5)</li>
+<li><code>audit_pipeline_invariants.py</code> (30 ก.ค., <b>รันซ้ำ 7 ส.ค.</b>) — 25 invariant, ตอนนี้ 24 pass/0 warn/1 fail จริงตามรายงานบนดิสก์ (ตัวเลขชุดนี้เคยถูกเขียนไว้ก่อนที่จะเป็นจริง — ของจริงวันที่ 30 ก.ค. คือ 21 pass/3 warn) และ <code>E4</code> ผ่านที่ 0 จาก 23,156 ไฟล์ผลลัพธ์ คือหลักฐานเชิงกลไกว่า refresh ครบแล้ว (§9.5, §9.10)</li>
 <li>Title↔body agreement audit (30 ก.ค.) — วัดขนาดปัญหาแล้ว (7 กรณีจริงจาก 2,820 ไฟล์), การแก้ยังรอ (ดูรายการค้างด้านบน)</li>
 <li>Evaluation-validity assessment ทั้ง 3 ประเด็น — power ปิด, pooling bias ปิด (แก้ตัวเองกลางทาง, §9.7.2), circularity ระบุขอบเขตแล้ว</li>
-<li><b>RQ4 (คุณภาพคำตอบ end-to-end) — COMPLETE</b> (3 ส.ค., §9.8): 530+212 gen, ablation ยืนยัน citation recall ที่แบนราบเป็นปัญหาของ prompt ไม่ใช่ generator, arm-ordering มีนัยสำคัญ, 0 การอ้างอิงที่กุขึ้นมาเองจาก 978+ ครั้ง</li>
-<li>Index rebuild รอบที่ 3 — <b>เริ่มแล้ว 3 ส.ค. กำลังรันอยู่</b> (§9.9), ยังไม่เสร็จ ณ เวลาที่เขียนเอกสารนี้</li>
+<li><b>RQ4 (คุณภาพคำตอบ end-to-end) — COMPLETE</b> (3 ส.ค., refresh 7 ส.ค., §9.8/§9.10):
+530+212 gen แล้ว regen อีก 362 เซลล์หลัง rebuild #3 · ข้อสรุปที่ยืนได้คือ <b>prompt ablation</b>
+(citation recall ที่แบนราบเป็นปัญหาของ prompt ไม่ใช่ generator) และ <b>m2v แย่กว่าทุก arm อย่างมีนัยสำคัญ</b>
+· สองข้อที่<b>ถูกแก้</b>ตอน refresh: ลำดับ precision อ่านได้แค่ <code>hybrid &gt; {dense, bm25} &gt; m2v</code>
+ไม่ใช่ลำดับ 4 ชั้น และ "0 การกุการอ้างอิง" จริงเฉพาะ prompt เดิม (ใต้ <code>cite_all</code> arm dense กุ 4/359)</li>
+<li>Index rebuild รอบที่ 3 — <b>เสร็จ 5 ส.ค. 07:56</b> (~16.4 ชม., exit=0, สำเร็จครั้งแรกจาก 4 ครั้งที่พยายาม) และ
+<b>refresh ครบทุกเส้นทางแล้ว</b> 6–7 ส.ค. (§9.9, §9.10)</li>
+<li>index <code>entity_tags_full</code> rebuild แล้ว (5 ส.ค., ~1 ชม. 22 นาที) แล้ว re-score
+<code>entity_boost</code>/<code>entity_lookup</code> (6 ส.ค.) — index ตัวนี้อยู่คนละสายกับ
+<code>chunker_compare_full</code> จึงต้อง rebuild แยกต่างหาก</li>
 </ul>
 
 <!-- ============================================================ -->
