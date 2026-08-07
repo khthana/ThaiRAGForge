@@ -137,9 +137,11 @@ bootstrap+Holm significance testing, cost/latency Pareto table, and the `sct` /
 word-aware segmentation, chunk-size sweep) ran to completion 2026-07-23 — see
 "RQ3 ablation results" section below. The cross-encoder reranker item also ran
 to completion 2026-07-23 — see "Cross-encoder reranker results" section below
-(a significant *negative* result for hybrid, literature-grounded). Only RQ4
-(end-to-end RAG) remains not started in Tier 3. See the Open items list at the
-end of this file for what's still outstanding within the closed tiers.
+(a significant *negative* result for hybrid, literature-grounded). RQ4
+(end-to-end RAG) ran to completion 2026-08-03 and was refreshed against rebuild
+#3 on 2026-08-07 — see "RQ4" section below; **Tier 3 is now closed too**. See the
+Open items list at the end of this file for what's still outstanding within the
+closed tiers.
 
 **Methodology caveat, added 2026-07-23, resolved 2026-07-25 for the
 corpus-discovery bug, then superseded by a second, larger rebuild 2026-07-28
@@ -659,6 +661,95 @@ must not show confirmed-relevant reference material in a scope a search tool
 (or a human's eye) can reach while judging a different item — the reference
 material is relevant by construction and will silently answer the wrong
 question.
+
+## Resolved 2026-08-03, refreshed 2026-08-07: RQ4 — does better retrieval produce better answers?
+
+Design + full narrative: `docs/rq4-design.md`. Report: `data/results/rq4_score.md`.
+Scripts: `tools/eval/rq4_build_contexts.py` → `rq4_generate.py` → `rq4_score.py`
+(paired bootstrap n_boot=10,000 seed=42 + Holm, the same machinery as every other
+significance test in this document). Generator is **local `phi4` via Ollama**, no
+external API. 5 arms × 106 queries (`gold_query_set_73det.yaml`) × 2 prompt
+variants: `sentence_cap` (the original, rule 4 = "answer in ≤3 sentences") and
+`cite_all` (rule 4 = "cite every relevant document").
+
+### Citation grounding (4a) and arm ordering (4c)
+
+| variant | arm | precision | (n with citations) | recall | phantom / total |
+|---|---|---|---|---|---|
+| `sentence_cap` | hybrid `qwen3_0.6b` × semantic | **0.7016** | 93 | 0.2781 | 0/269 |
+| `sentence_cap` | dense `qwen3_0.6b` × semantic | 0.6413 | 92 | 0.2201 | 0/264 |
+| `sentence_cap` | BM25 × semantic | 0.6463 | 81 | 0.2203 | 0/219 |
+| `sentence_cap` | hybrid `m2v` × semantic | 0.5575 | 83 | 0.1820 | 0/202 |
+| `sentence_cap` | closed-book | — | 0 | 0.0000 | 0/0 |
+| `cite_all` | hybrid `qwen3_0.6b` × semantic | **0.7268** | 101 | **0.3962** | 0/421 |
+| `cite_all` | dense `qwen3_0.6b` × semantic | 0.6629 | 96 | 0.3206 | **4/359** |
+| `cite_all` | BM25 × semantic | 0.5968 | 94 | 0.2938 | 0/324 |
+| `cite_all` | hybrid `m2v` × semantic | 0.5203 | 89 | 0.2038 | 0/273 |
+| `cite_all` | closed-book | — | 0 | 0.0000 | 5/5 |
+
+**Citable claim: retrieval quality survives the generation stage.** Hybrid is
+significantly above every other arm on citation precision and recall under
+`cite_all` (Holm-adj ≤ 0.0132 for all but the dense-precision pair at 0.0558), and
+`m2v` — the RRF-failure arm — is significantly worst on both metrics.
+
+**State it as `hybrid > {dense, BM25} > m2v`, not as a strict 4-way ordering.**
+Dense and BM25 are not significantly separated in either variant (Holm-adj 1.0000
+under `sentence_cap`, 0.2136 under `cite_all`), and under `sentence_cap` BM25
+(0.6463) numerically edges dense (0.6413). An earlier version of this claim
+("citation precision orders exactly as recall@10 did") over-read a tie; corrected
+2026-08-07.
+
+Family 1a (`sentence_cap`) is 2/12 comparisons significant, family 1b (`cite_all`)
+9/12 — **arm ordering is more cleanly separable under the better prompt**, because
+the original prompt's citation budget partly masked how bad `m2v`'s retrieval is.
+
+### The prompt ablation — RQ4's headline, and the most robust result in it
+
+The original run's flat citation recall was **a prompt artifact, not a generator
+ceiling**. Rule 4's ≤3-sentence cap ran against a gold set dominated by
+aggregation queries (mean 9.87 relevant documents per query). Under `cite_all`:
+
+| arm | recall `sentence_cap` → `cite_all` | Δ | Holm-adj p |
+|---|---|---|---|
+| hybrid `qwen3_0.6b` | 0.2781 → 0.3962 | **+0.1181** | 0.0000 |
+| dense `qwen3_0.6b` | 0.2201 → 0.3206 | **+0.1005** | 0.0000 |
+| BM25 | 0.2203 → 0.2938 | **+0.0734** | 0.0000 |
+| hybrid `m2v` | 0.1820 → 0.2038 | +0.0217 | 0.8052 (ns) |
+
+**No significant precision cost anywhere** (every precision cell in this family
+Holm-adj ≥ 0.8052) — the model cites more *correctly*, not more sloppily. The gain
+is **not universal**: `m2v` does not improve, consistent with a context that
+often lacks correct evidence to cite regardless of instruction. **Recommendation
+is "fix the instruction", not "the generator is the bottleneck."**
+
+### Abstention (4b) and fabrication
+
+Closed-book abstains 106/106 under `sentence_cap` and **104/106 under `cite_all`**
+(2 hallucinations, 5 phantom citations out of 5). `cite_all` has no zero-document
+guard — a real, small cost of that wording, worth naming if it is adopted as the
+paper's reported prompt.
+
+**0 fabricated citations out of 954 under the original prompt**, across all four
+retrieval arms — RAG's most-feared failure mode is absent here, which is the
+payoff for exactly-checkable numeric labels. Under `cite_all` fabrication is not
+zero: the dense arm shows 4/359, all from one query citing labels `[6]`–`[9]` when
+only 5 documents were supplied.
+
+### Two caveats a reviewer will raise
+
+1. **Citation precision is judged against the same qrels as retrieval**, so it
+   inherits the pooling-bias threat above. Direction is conservative (the qrels
+   are a ~8-11% undercount, not directionally biased — see the pooling-bias
+   section).
+2. **This refresh is not a clean before/after.** `phi4` at temperature 0 is *not*
+   reproducible (GPU reductions are not associative): re-running byte-identical
+   prompts reproduces the citation set 21/24 under `sentence_cap` but only 14/24
+   under `cite_all`. Against rebuild #3, 362 of 530 (query, arm) cells changed
+   context and were regenerated (the other 168 frozen, keeping the comparison
+   paired), and 5 of 33 verdicts flipped — but all four *lost* verdicts were
+   already borderline (Holm-adj 0.014-0.081) and sit inside that noise floor, so
+   they are reported as **inconclusive, not reversed**. Nothing at p < 0.001 moved.
+   Every claim in this section is drawn from what survived.
 
 ## Methodology
 
@@ -1655,16 +1746,16 @@ holds as stated.
 5. ~~RQ3 (normalization/segmentation ablation)~~ — DONE 2026-07-23, see
    "RQ3 ablation results" section above: only chunk-size has a significant
    effect (smaller is better for recall); normalization and word-aware
-   segmentation do not. RQ4 (end-to-end RAG answer quality) remains
-   explicitly out of scope for this first paper per the gap analysis — later
-   phase.
+   segmentation do not. RQ4 (end-to-end RAG answer quality) was later brought
+   back into scope and **completed 2026-08-03, refreshed 2026-08-07** — see the
+   "RQ4" section above.
 5b. ~~Cross-encoder reranker (Tier 3 item 8)~~ — DONE 2026-07-23, **refreshed
     2026-07-29**, see "Cross-encoder reranker results" section above:
     significantly hurts hybrid MRR only (nDCG@10 no longer significant post-
     refresh, a real finding-level change), no significant effect on
     dense-alone, literature-grounded explanation in
-    `docs/reranker-hybrid-interaction-research.md`. Only RQ4 remains
-    unstarted in Tier 3.
+    `docs/reranker-hybrid-interaction-research.md`. RQ4 — the last Tier 3 item
+    — is **also done** (2026-08-03, refreshed 2026-08-07), so Tier 3 is closed.
 6. ~~Per-entity_type significance test for the 9-embedder matrix~~ — DONE
    2026-07-21 (`tools/eval/embedder_significance_test_by_entity_type_9way.py`).
    `qwen3_0.6b`'s program-query lead is NOT significant vs congen/qwen3-4B

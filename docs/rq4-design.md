@@ -447,3 +447,119 @@ none are given or none are relevant, abstain per rule 3") would be worth a
 quick follow-up pilot before relying on this wording for a final table.
 
 Updated report: `data/results/rq4_score.md`.
+
+## Refresh against `chunker_compare_full` rebuild #3 (2026-08-07)
+
+Everything above was built and scored 2026-08-03, against retrieval results that
+predate the rebuild that finished 2026-08-05T07:56. Per
+`feedback_refresh_all_retrieval_paths_after_rebuild`, RQ4 was the last retrieval
+path still un-refreshed after that rebuild (the main BM25/hybrid chain closed
+08-06, the thematic arm 08-07). It is now closed too — and unlike those two, it
+did **not** come back "0 flips".
+
+### What was re-run
+
+Contexts were rebuilt for all 4 retrieval arms, then only the queries whose
+context actually changed were regenerated; the rest were left frozen so the
+before/after comparison stays paired. **362 of 530 (query, arm) cells changed
+context and were regenerated; 168 were frozen** (`closed_book` has no context, so
+all 106 froze by construction). Both prompt variants, `phi4` local-only as before.
+4h05m wall clock, exit 0, 0 generation errors. Log:
+`data/logs/rq4_regen_2026_08_07.log`. Pre-refresh report preserved at
+`data/results/_pre_2026_08_07_rq4_refresh/rq4_score.md.2026-08-03`.
+
+### The reason this refresh cannot be read like the others
+
+`rq4_generate.py`'s docstring asserted "**Temperature 0.** One pass, no sampling
+variance to average over." **That is false for `phi4` via Ollama**, and it was
+believed partly on this project's own precedent — re-OCR at temperature 0.0
+reproduced its input byte-for-byte (`docs/llm-ocr-scan-log.md`). Greedy decoding
+is deterministic in *exact* arithmetic, but GPU reductions are not associative, so
+two near-tied logits can swap between runs and the continuation diverges. Measured
+before reading any diff (`tools/eval/rq4_determinism_check.py`, 24 byte-identical
+prompts per variant):
+
+| variant | identical text | identical citation set | identical abstention |
+|---|---|---|---|
+| `sentence_cap` | 19/24 (79%) | 21/24 (88%) | 24/24 (100%) |
+| `cite_all` | 6/24 (25%) | **14/24 (58%)** | 23/24 (96%) |
+
+The scorer reads only the `[n]` labels and the abstention token, and those are far
+more stable than the prose (58-88% vs 25-79%) — so a strict text diff overstates
+the problem. But under `cite_all`, **42% of queries move their citation set with
+zero data change.** Any movement in this refresh smaller than that floor is not
+attributable to the rebuild. The docstring has been corrected.
+
+### Result: 5 verdict flips of 33, and they are all borderline
+
+`tools/eval/diff_significance_reports.py` against the 08-03 baseline: 53 keyed
+rows both sides, no rows added or dropped, **5 verdict flips of the 33 rows
+carrying a verdict**, 99 numeric moves ≥ 0.02.
+
+| family | comparison | was | now |
+|---|---|---|---|
+| 1a `sentence_cap` | `bm25`[precision] vs `m2v`[precision] | yes | no |
+| 1a `sentence_cap` | `dense`[precision] vs `m2v`[precision] | yes | no |
+| 1a `sentence_cap` | `hybrid`[precision] vs `bm25`[precision] | yes | no |
+| 1a `sentence_cap` | `hybrid`[recall] vs `bm25`[recall] | yes | no |
+| 1b `cite_all` | `hybrid`[recall] vs `dense`[recall] | no | **yes** |
+
+Three things make these weak evidence of a real change. **All four losses are in
+family 1a** and every one was already in the modest-evidence band (Holm-adj
+0.0140 / 0.0216 / 0.0476 / 0.0808) — nothing at p < 0.001 moved in either
+direction. The **single biggest numeric driver is one arm's mean precision**:
+`phi4 / hybrid_m2v` went 0.4945 → 0.5575, which narrows three m2v comparisons at
+once, and m2v is also the arm with the most context churn. And the flips sit
+inside the noise floor above. **Report these four as inconclusive, not as
+reversed findings** — the honest statement is that family 1a's arm ordering is
+not robustly separable under the original prompt, which is a weaker claim than
+either the old table or the new one makes on its own.
+
+Family 1a is now 2/12 significant and family 1b 9/12 (was 6/12 and 8/12). The
+*direction* of finding 4c — arm ordering sharpens under `cite_all` — therefore
+holds and in fact strengthens; the counts change.
+
+### What survives untouched
+
+- **The prompt ablation, entirely.** Recall rises significantly under `cite_all`
+  for hybrid (+0.1181), dense (+0.1005) and bm25 (+0.0734), all Holm-adj 0.0000,
+  and **not** for m2v (+0.0217, Holm-adj 0.8052). No significant precision cost
+  anywhere (every precision cell Holm-adj ≥ 0.8052). This is RQ4's headline and
+  it did not move at all.
+- **m2v significantly worst on both precision and recall under `cite_all`** — all
+  six comparisons against it still significant.
+- **Abstention 106/106 → 104/106** under `cite_all`, exactly as reported.
+- **0 fabricated citations under the original prompt**: all four `sentence_cap`
+  arms are still 0 phantoms across 954 citations.
+
+### Correction 1: the citation-precision ordering is prompt-dependent
+
+Finding 4a was stated as "citation precision orders exactly as recall@10 did".
+Under `cite_all` it still does: hybrid 0.7268 > dense 0.6629 > bm25 0.5968 > m2v
+0.5203. **Under `sentence_cap` it no longer does** — bm25 0.6463 now edges dense
+0.6413. The inversion is 0.005 and Holm-adj p = 1.0000, i.e. a flat tie, and
+the same pair is not significant under `cite_all` either (Holm-adj 0.2136). So
+the defensible claim is narrower than the old one in a way that was always true
+and merely happened to be masked: **hybrid > {dense, bm25} > m2v, with dense and
+bm25 tied and never separated in either variant.** Don't restate 4a as a strict
+4-way ordering.
+
+### Correction 2: fabricated citations are not at zero under `cite_all`
+
+`phi4_cite_all / dense` went **0/370 → 4/359 phantom citations**. All four are one
+query (`q045`) citing `[6][7][8][9]` when only 5 documents were supplied. So the
+mechanism is benign — out-of-range labels in a single answer, not content
+attributed to a real-but-wrong document — and "0 fabricated out of 978" remains
+true of the original prompt. But `cite_all` now shows fabrication in **two** arms
+(dense and closed-book), not closed-book alone, which strengthens the existing
+recommendation to tighten that wording before adopting it for the paper's final
+table.
+
+**This one was nearly missed, and that is its own finding.**
+`diff_significance_reports.py` compared only cells it could parse as numbers, and
+the phantom column is formatted `count/total` — so `0/370 → 4/359` matched neither
+the numeric branch nor the verdict branch and was **silently skipped**. It was
+found by comparing that column by hand. The differ now reports every non-numeric
+cell change and exits 1 on one (confidence intervals excluded, being numeric in
+substance). Same shape as every silent-corruption bug this project has hit: not a
+crash, just a number nobody looked at.

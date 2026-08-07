@@ -13,9 +13,19 @@ script refuses to start while `ollama ps` shows anything resident, unloads
 existing file is skipped, so an interrupted run loses only the generation in
 flight -- the pattern the thematic bootstrap used across an 80-session run.
 
-**Temperature 0.** One pass, no sampling variance to average over. Worth stating
-because a nonzero temperature would silently turn every arm comparison into a
-noisy one and invite averaging runs that were never run.
+**Temperature 0 -- which is NOT the same as reproducible.** Greedy decoding is
+deterministic in exact arithmetic, but GPU reductions are not associative, so two
+near-tied logits can swap between runs and the continuation diverges from there.
+This docstring used to claim "one pass, no sampling variance to average over";
+that was measured false 2026-08-07 (`tools/eval/rq4_determinism_check.py`, 24
+byte-identical prompts per variant): re-running an *unchanged* prompt reproduces
+the citation set 21/24 under `sentence_cap` but only 14/24 under `cite_all`.
+Consequences: (1) still set temperature 0 -- a nonzero one would be strictly
+worse; (2) when re-generating after an index rebuild, regenerate **only** the
+queries whose context actually changed and leave the rest frozen, so the
+comparison stays paired; (3) quote that noise floor beside any before/after
+movement -- an RQ4 diff cannot be read like the deterministic retrieval refreshes,
+where "0 verdict flips" meant something exact.
 
 The prompt asks for a fixed two-line shape so 4a is parseable at all:
 

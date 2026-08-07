@@ -20,8 +20,16 @@ the `significant` column, with numeric columns reported as movement. A row's
 identity is its leading non-numeric cells: `| bge_m3 | recall | +0.0800 | ...`
 keys on `("bge_m3", "recall")`.
 
-Exit code is 1 if any verdict flipped or any row appeared/disappeared, so this
-can gate a refresh; numeric drift alone exits 0.
+Cells that are neither numeric nor a verdict get their own report and also gate
+the exit. Added 2026-08-07 after this script silently passed a real regression:
+`rq4_score.md`'s phantom-citation column is formatted `count/total`, so `0/370`
+-> `4/359` (fabricated citations appearing where there had been none) matched
+neither the numeric branch nor the verdict branch and was skipped. A column this
+script cannot classify is exactly the one worth showing, not dropping.
+
+Exit code is 1 if any verdict flipped, any row appeared/disappeared, or any
+non-numeric cell changed, so this can gate a refresh; numeric drift alone
+exits 0.
 
 Run:
     .venv/Scripts/python.exe tools/eval/diff_significance_reports.py OLD.md NEW.md
@@ -37,6 +45,10 @@ from pathlib import Path
 
 _NUMERIC = re.compile(r"^[+-]?(\d+\.?\d*|\.\d+)$")
 _VERDICT = re.compile(r"^\*{0,2}(yes|no)\*{0,2}$", re.IGNORECASE)
+# A confidence interval is a bracketed pair of numbers -- numeric in substance, so
+# it is excluded from the non-numeric report (its endpoints move on every re-run
+# and would bury the columns that report actually exists to surface).
+_CI = re.compile(r"^\[[+-]?[\d.]+,\s*[+-]?[\d.]+\]$")
 
 
 def _cells(line: str) -> list[str]:
@@ -120,23 +132,34 @@ def main() -> int:
 
     only_old = sorted(set(old) - set(new))
     only_new = sorted(set(new) - set(old))
-    flips, moves = [], []
+    flips, moves, other = [], [], []
     for key in sorted(set(old) & set(new)):
         vo, vn = _verdict(old[key]), _verdict(new[key])
         if vo is not None and vo != vn:
             flips.append((key, vo, vn))
         for header, cell in new[key].items():
             prev = old[key].get(header)
-            if prev is None or not (_NUMERIC.match(cell) and _NUMERIC.match(prev)):
+            if prev is None:
                 continue
-            delta = float(cell) - float(prev)
-            if abs(delta) >= args.threshold:
-                moves.append((key, header, float(prev), float(cell), delta))
+            if _NUMERIC.match(cell) and _NUMERIC.match(prev):
+                delta = float(cell) - float(prev)
+                if abs(delta) >= args.threshold:
+                    moves.append((key, header, float(prev), float(cell), delta))
+            elif (cell != prev
+                    and not (_VERDICT.match(cell) and _VERDICT.match(prev))
+                    and not (_CI.match(cell) and _CI.match(prev))):
+                # Neither a number nor a verdict -- e.g. the `count/total`
+                # phantom-citation column. Never drop these (see module docstring).
+                other.append((key, header, prev, cell))
 
     n_verdicts = sum(1 for k in set(old) & set(new) if _verdict(old[k]) is not None)
     print(f"VERDICT FLIPS: {len(flips)} of {n_verdicts} rows carrying a verdict")
     for (section, labels), vo, vn in flips:
         print(f"  {section} | {' / '.join(labels)}: {vo} -> {vn}")
+
+    print(f"\nNON-NUMERIC CELL CHANGES: {len(other)}")
+    for (section, labels), header, a, b in other:
+        print(f"  {section} | {' / '.join(labels)} | {header}: {a!r} -> {b!r}")
 
     if only_old or only_new:
         print(f"\nROWS ONLY IN OLD: {len(only_old)}")
@@ -153,7 +176,7 @@ def main() -> int:
             print(f"  {section} | {' / '.join(labels)} | {header}: "
                   f"{a:+.4f} -> {b:+.4f} ({d:+.4f})")
 
-    return 1 if (flips or only_old or only_new) else 0
+    return 1 if (flips or only_old or only_new or other) else 0
 
 
 if __name__ == "__main__":

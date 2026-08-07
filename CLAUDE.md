@@ -433,9 +433,18 @@ see `docs/adr/`.
   `sentence_cap` rule 4 + the ablation's `cite_all`) = the full table, scored by
   `tools/eval/rq4_score.py` (paired bootstrap + Holm, same machinery as every other
   significance test here). Report: `data/results/rq4_score.md`; narrative + both
-  build phases: `docs/rq4-design.md`. Findings, in the order they were established:
-  (a) **citation precision orders exactly as recall@10 did** (hybrid 0.742 > dense
-  0.670 > bm25 0.625 > m2v 0.562) — retrieval quality survives the generation stage;
+  build phases: `docs/rq4-design.md`. **Refreshed against `chunker_compare_full`
+  rebuild #3 on 2026-08-07** — see the currency paragraph at the end of this bullet
+  before citing anything here; two findings below are corrected there. Findings, in
+  the order they were established:
+  (a) **retrieval quality survives the generation stage — but state it as
+  `hybrid > {dense, bm25} > m2v`, not as a strict 4-way ordering.** Post-refresh:
+  under `cite_all` hybrid 0.7268 > dense 0.6629 > bm25 0.5968 > m2v 0.5203, but
+  **dense vs bm25 is not significant in either prompt variant** (Holm-adj 1.0000
+  under `sentence_cap`, 0.2136 under `cite_all`) and under `sentence_cap` bm25
+  (0.6463) numerically *edges* dense (0.6413). The old wording "citation precision
+  orders exactly as recall@10 did (hybrid 0.742 > dense 0.670 > bm25 0.625 > m2v
+  0.562)" over-read a tie and is **corrected 2026-08-07**;
   (b) **the original run's flat ~0.41 citation recall across every arm was a PROMPT
   artifact, not a generator ceiling — confirmed, not just suspected.** Prompt rule 4
   said `ตอบสั้น ๆ ไม่เกิน 3 ประโยค` against a gold set dominated by aggregation queries
@@ -450,14 +459,19 @@ see `docs/adr/`.
   then covered the remaining 3 arms under `cite_all` too and found **the gain isn't
   universal — m2v doesn't improve (+0.026, Holm p=0.657)**, consistent with retrieval
   quality (the RRF-failure arm likely lacks enough correct evidence in context to cite
-  regardless of instruction), and **arm ordering (4c) sharpens under `cite_all`** (8/12
-  pairwise tests significant vs 6/12 under the original prompt, m2v now significantly
-  worst on both precision and recall). One real cost surfaced: **closed-book
-  abstention dropped 106/106 → 104/106 under `cite_all`** (2 hallucinations, 5 phantom
-  citations) — `cite_all` has no zero-document guard, worth a tightened wording before
-  adopting it as the paper's final prompt; (c) **0 fabricated citations out of 978** in
-  the original run — RAG's most-feared failure mode is absent here, the payoff for
-  exactly-checkable numeric labels. Caveat: citation precision is judged against the
+  regardless of instruction), and **arm ordering (4c) sharpens under `cite_all`**
+  (post-refresh **9/12** pairwise tests significant vs **2/12** under the original
+  prompt — direction unchanged and stronger than the 8/12-vs-6/12 first measured;
+  m2v significantly worst on both precision and recall). One real cost surfaced:
+  **closed-book abstention dropped 106/106 → 104/106 under `cite_all`** (2
+  hallucinations, 5 phantom citations) — `cite_all` has no zero-document guard, worth
+  a tightened wording before adopting it as the paper's final prompt; (c) **0
+  fabricated citations across all 954 citations under the original prompt** — RAG's
+  most-feared failure mode is absent here, the payoff for exactly-checkable numeric
+  labels — but **this is prompt-specific, corrected 2026-08-07**: under `cite_all`
+  the dense arm now shows **4/359 phantoms** (previously 0/370), all from one query
+  citing labels `[6]`–`[9]` when only 5 documents were supplied. So `cite_all` shows
+  fabrication in two arms, not closed-book alone. Caveat: citation precision is judged against the
   same qrels, so it inherits the pooling-bias threat — direction is conservative (see
   validity bullet below). **De-prioritized, not cancelled**: the `gemma4:e4b`
   robustness check (does a second model agree on arm ordering) — no longer needed to
@@ -470,14 +484,27 @@ see `docs/adr/`.
   *after* the context; (b) the design doc's original "recall@10 ~0.6 so the context
   often lacks the answer" was wrong (recall ≠ presence: 96% of contexts hold ≥1 gold
   doc), so 4b's power lives in the weak arms and closed-book, not the strong ones.
-  **Currency caveat**: all of the above was built and scored 2026-08-03, against
-  retrieval results that predate `chunker_compare_full` rebuild #3
-  (2026-08-05T07:56) — [[project_index_rebuild_pending]]'s own "how to apply"
-  list named RQ4 contexts as something that needed re-running after that
-  rebuild, and it hasn't been yet. The affected ids are a small slice (6/2,853
-  files), so a large finding reversal is unlikely, but per
-  [[feedback_refresh_all_retrieval_paths_after_rebuild]] this should be
-  re-verified, not assumed, before citing these numbers as final.
+  **Currency: refreshed 2026-08-07 against `chunker_compare_full` rebuild #3, and
+  this is the one refresh in the project that must NOT be read as "0 flips".**
+  Contexts rebuilt for all 4 retrieval arms, then only the **362 of 530**
+  (query, arm) cells whose context actually changed were regenerated — the other
+  168 frozen, so the comparison stays paired (4h05m, exit 0, 0 errors;
+  `data/logs/rq4_regen_2026_08_07.log`). Result: **5 verdict flips of 33**, and
+  they are weak evidence, because `rq4_generate.py`'s "temperature 0 ⇒ no
+  sampling variance" docstring **was false** — re-running byte-identical prompts
+  reproduces the citation set only 21/24 (`sentence_cap`) / **14/24** (`cite_all`),
+  measured by `tools/eval/rq4_determinism_check.py`; see
+  [[feedback_temperature_zero_is_not_reproducible]]. All four *lost* verdicts are
+  in family 1a and were already borderline (Holm-adj 0.014-0.081), nothing at
+  p<0.001 moved, and the largest single driver is one arm's mean precision
+  (`phi4 / hybrid_m2v` 0.4945→0.5575) narrowing three m2v comparisons at once —
+  **report those four as inconclusive, not reversed.** Everything cited above
+  survived: the whole prompt ablation (hybrid +0.1181 / dense +0.1005 / bm25
+  +0.0734 all Holm 0.0000, m2v +0.0217 ns), m2v-worst, and 106→104 abstention.
+  One further lesson: the phantom-citation regression in (c) was **silently
+  skipped by `diff_significance_reports.py`**, because that column is formatted
+  `count/total` and matched neither its numeric nor its verdict branch — the differ
+  now reports and gates on every non-numeric cell change (CIs excluded).
 - **Evaluation validity — read `docs/eval-validity-threats.md` before defending any
   number in this project.** Written 2026-07-30 against the question "is 106 queries too
   few for a reviewer". It is not (BEIR peers run 50-300 topics, and this set is unusually
