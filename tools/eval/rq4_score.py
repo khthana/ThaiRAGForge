@@ -189,6 +189,18 @@ def main() -> int:
     ap.add_argument("--n-boot", type=int, default=N_BOOT)
     ap.add_argument("--seed", type=int, default=SEED)
     ap.add_argument("--alpha", type=float, default=0.05)
+    ap.add_argument("--treatment-variant", default="cite_all",
+                    help="which prompt variant is the treatment arm of the ablation "
+                    "(families 1b and 2), as the suffix on the answers dir. Default "
+                    "`cite_all` reproduces the published run. Pass "
+                    "`cite_all_guarded` to score the zero-document-guarded rewrite "
+                    "against the same baseline. The descriptive/abstention table "
+                    "above is unaffected -- it enumerates whatever is on disk.")
+    ap.add_argument("--out", default=str(_OUTPUT),
+                    help="report path. Defaults to the published rq4_score.md; a "
+                    "non-default --treatment-variant should pass a different path "
+                    "rather than clobber it, the same way rq4_generate.py gives each "
+                    "prompt variant its own answers dir.")
     args = ap.parse_args()
 
     rng = np.random.default_rng(args.seed)
@@ -248,7 +260,7 @@ def main() -> int:
     # ordering (does citation grounding track recall@10?) can be checked to
     # still hold under the prompt that actually raised recall.
     base_variant = "phi4" if args.model == "phi4" else args.model
-    cite_all_variant = base_variant + "_cite_all"
+    cite_all_variant = f"{base_variant}_{args.treatment_variant}"
 
     def arm_ordering_family(variant: str, label: str) -> list[str]:
         out_lines = []
@@ -290,24 +302,26 @@ def main() -> int:
     ablation_arms = [a for a in ARM_ORDER
                       if (base_variant, a) in scores and (cite_all_variant, a) in scores]
     if ablation_arms:
+        tv = args.treatment_variant
         pairs_data = []
         for arm in ablation_arms:
             sa, sb = scores[(base_variant, arm)], scores[(cite_all_variant, arm)]
             for metric in ("recall", "precision"):
                 va, vb, n = paired_arrays(sa, sb, metric)
                 if n > 0:
-                    pairs_data.append((f"{arm}[{metric}]:sentence_cap", f"{arm}[{metric}]:cite_all", va, vb))
+                    pairs_data.append((f"{arm}[{metric}]:sentence_cap",
+                                       f"{arm}[{metric}]:{tv}", va, vb))
         rows = run_family(pairs_data, rng, args.n_boot, args.alpha)
         mean_of = {}
         for arm in ablation_arms:
             sa, sb = scores[(base_variant, arm)], scores[(cite_all_variant, arm)]
             mean_of[f"{arm}[recall]:sentence_cap"] = sa.mean_recall()
-            mean_of[f"{arm}[recall]:cite_all"] = sb.mean_recall()
+            mean_of[f"{arm}[recall]:{tv}"] = sb.mean_recall()
             mean_of[f"{arm}[precision]:sentence_cap"] = sa.mean_precision()[0]
-            mean_of[f"{arm}[precision]:cite_all"] = sb.mean_precision()[0]
+            mean_of[f"{arm}[precision]:{tv}"] = sb.mean_precision()[0]
         lines += [
             "## Significance family 2: prompt ablation (rule 4 'answer in <=3 sentences' "
-            "vs 'cite every relevant document') -- the pending ablation from rq4-design.md",
+            f"vs 'cite every relevant document') -- treatment variant `{tv}`",
             "",
             "This is the deliverable that answers whether the flat ~0.41 citation recall "
             "found under the original prompt was a fixed citation budget (recall rises here) "
@@ -317,7 +331,7 @@ def main() -> int:
             f"Paired bootstrap over queries common to both variants (n_boot={args.n_boot}, "
             f"seed={args.seed}), Holm-corrected across all {len(rows)} tests in this family.",
             "",
-            "| comparison | mean(sentence_cap) | mean(cite_all) | diff | 95% CI | raw p | Holm-adj p | significant |",
+            f"| comparison | mean(sentence_cap) | mean({tv}) | diff | 95% CI | raw p | Holm-adj p | significant |",
             "|---|---|---|---|---|---|---|---|",
         ]
         lines += fmt_rows(rows, lambda k: mean_of[k])
@@ -328,9 +342,11 @@ def main() -> int:
             f"{cite_all_variant} answers on disk yet)\n"
         )
 
-    _OUTPUT.write_text("\n".join(lines), encoding="utf-8")
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(lines), encoding="utf-8")
     print("\n".join(lines))
-    print(f"\nwritten to {_OUTPUT}")
+    print(f"\nwritten to {out_path}")
     return 0
 
 

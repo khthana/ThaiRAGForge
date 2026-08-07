@@ -67,10 +67,32 @@ ABSTAIN = "ไม่พบข้อมูล"
 # "cite_all" is the pending ablation: if recall rises, the flat line was a prompt
 # artifact; if it stays ~0.41, it's a real generator ceiling worth testing gemma4:e4b
 # against.
+#
+# "cite_all_guarded" is that ablation with its one measured cost repaired. The
+# ablation worked (recall rose significantly for hybrid/dense/bm25, no precision
+# cost) but it bought that with two failures rule 4 induces by *recency* -- it is
+# the last rule before the question, so it outranks rule 3 in practice:
+#   - closed-book abstention fell 106/106 -> 104/106. Both failures are the same
+#     shape: zero documents supplied (`label_map == {}`), and the model answers
+#     anyway, citing [1]/[2]/[5] that cannot exist. "Cite every relevant document"
+#     with nothing to cite reads as an instruction to produce citations.
+#   - the dense arm produced 4/359 phantom labels ([6]-[9] against 5 supplied
+#     documents) -- the same over-production, bounded by a real context.
+# So the guard is two clauses, aimed at exactly those two: an explicit zero-document
+# case, and an explicit ceiling on which labels are citable. Rule 3 already covers
+# the first in principle; it is restated inside rule 4 because position, not
+# absence, is what defeated it.
 _RULE4 = {
     "sentence_cap": "4. ตอบสั้น ๆ ไม่เกิน 3 ประโยค",
     "cite_all": "4. อ้างอิงเอกสารที่เกี่ยวข้องทุกฉบับที่พบในเอกสารที่ให้มา ไม่ใช่แค่ฉบับเดียว "
                 "ความยาวคำตอบไม่จำกัด ตราบใดที่ครอบคลุมทุกฉบับที่เกี่ยวข้อง",
+    "cite_all_guarded":
+        "4. อ้างอิงเอกสารที่เกี่ยวข้องทุกฉบับที่พบในเอกสารที่ให้มา ไม่ใช่แค่ฉบับเดียว "
+        "ความยาวคำตอบไม่จำกัด ตราบใดที่ครอบคลุมทุกฉบับที่เกี่ยวข้อง\n"
+        f"5. ถ้าไม่มีเอกสารประกอบมาให้เลย ให้ตอบว่า {ABSTAIN} และอ้างอิงเป็น - เท่านั้น "
+        "ห้ามอ้างอิงหมายเลขใด ๆ ทั้งสิ้น ข้อนี้สำคัญกว่าข้อ 4\n"
+        "6. อ้างอิงได้เฉพาะหมายเลขที่ปรากฏจริงในเอกสารที่ให้มาข้างต้นเท่านั้น "
+        "ห้ามสร้างหมายเลขขึ้นเอง",
 }
 
 

@@ -530,6 +530,37 @@ see `docs/adr/`.
   skipped by `diff_significance_reports.py`**, because that column is formatted
   `count/total` and matched neither its numeric nor its verdict branch — the differ
   now reports and gates on every non-numeric cell change (CIs excluded).
+  **`cite_all`'s two measured costs are now REPAIRED — use `cite_all_guarded`
+  (2026-08-07).** `cite_all` is left untouched (the 530 answers on disk are keyed to
+  that variant name; editing its wording in place would silently decouple them from
+  the prompt that produced them), so the fix is a third `_RULE4` entry in
+  `rq4_generate.py` writing to its own `answers/phi4_cite_all_guarded/`. The
+  diagnosis is the point: rule 3 already forbade the failure and is *identical*
+  between variants, so it was never a missing rule — it was **position**. Rule 4 is
+  the last line before the question, and "cite every relevant document" outranked
+  rule 3 by recency, the same mechanism `build_prompt` exploits deliberately
+  (context first, instructions last), here working against us. So the guard is
+  placed *after* rule 4 and says outright that it outranks it: **rule 5** (no
+  documents supplied at all ⇒ abstain, cite `-`, cite no number, and this beats
+  rule 4) and **rule 6** (cite only labels that literally appear above). Results,
+  each confirmed on the failure it was written for: rule 5 → closed-book abstention
+  **104/106 → 106/106**, phantom **5/5 → 0/0**; rule 6 → dense phantom
+  **4/359 → 0/353** (hybrid never had phantoms under either variant, 0/421 vs 0/369,
+  so dense was the only arm that could test it). **The benefit survives**: guarded
+  beats the `sentence_cap` baseline significantly on both regenerated arms
+  (dense +0.1123 Holm 0.0000, hybrid +0.0706 Holm 0.0252), so the ablation's
+  headline doesn't depend on the unguarded wording. **The apparent cost vs unguarded
+  `cite_all` is not a finding** — neither arm significant and the point estimates
+  point in **opposite directions** (dense +0.0117, hybrid −0.0475), which is what
+  the measured noise floor predicts (14/24 identical citation sets at temperature 0,
+  [[feedback_temperature_zero_is_not_reproducible]]); as a bound, hybrid rules out
+  the guard being *better* than `cite_all`, dense rules out a loss > ~0.016.
+  `rq4_score.py` gained `--treatment-variant` and `--out` so a variant is scored
+  against the same baseline without clobbering the published `rq4_score.md`
+  (guarded report: `data/results/rq4_score_guarded.md`). **Still owed before a final
+  paper table uses it**: `bm25_semantic` and `hybrid_m2v_semantic` have not been
+  regenerated under the guard (~1h30m), so the 4-arm ordering families cannot yet be
+  rerun under it.
 - **Evaluation validity — read `docs/eval-validity-threats.md` before defending any
   number in this project.** Written 2026-07-30 against the question "is 106 queries too
   few for a reviewer". It is not (BEIR peers run 50-300 topics, and this set is unusually

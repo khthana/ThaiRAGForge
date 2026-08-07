@@ -448,6 +448,123 @@ quick follow-up pilot before relying on this wording for a final table.
 
 Updated report: `data/results/rq4_score.md`.
 
+### The tightened wording, built and piloted (2026-08-07): `cite_all_guarded`
+
+The follow-up pilot suggested above was run. `cite_all` is left **untouched** —
+the 530 answers on disk are keyed to that variant name, and editing its wording
+in place would silently decouple them from the prompt that produced them — so
+the repair is a third variant, `cite_all_guarded` (`tools/eval/rq4_generate.py`,
+`_RULE4`), writing to its own `answers/phi4_cite_all_guarded/` directory.
+
+**The diagnosis that shaped it.** Both hallucinations are the same shape: the
+context carried `label_map == {}` (closed-book supplies no documents at all) and
+the model answered anyway, citing `[1]`/`[2]`/`[5]` — labels that cannot exist.
+Rule 3 already forbids exactly this and is *identical* between variants, so the
+failure is not a missing rule. It is **position**: rule 4 is the last thing
+before the question, and "cite every relevant document" read as an instruction
+to produce citations regardless. This is the same recency mechanism that
+`build_prompt` already exploits deliberately (context first, instructions last)
+— here it worked against us. So the guard does not merely add a constraint, it
+adds one *after* rule 4 and says outright that it outranks it:
+
+- **rule 5** — if no documents are supplied at all, answer `ไม่พบข้อมูล`, cite
+  `-`, cite no number whatsoever, and *this rule is more important than rule 4*.
+- **rule 6** — cite only labels that literally appear in the documents above.
+  This targets the second, separate failure: the dense arm emitted 4/359 phantom
+  labels (`[6]`–`[9]` against 5 supplied documents), the same over-production
+  bounded by a real context rather than an empty one.
+
+**Result on the arm that showed the regression** (closed-book, all 106 queries
+regenerated, 489 s). Counted with `rq4_score.py`'s own `parse_citations` /
+`is_abstained`, not a separate regex:
+
+| variant | abstained | phantom / total citations |
+|---|---|---|
+| `sentence_cap` | 106/106 | 0 / 0 |
+| `cite_all` | **104/106** | **5 / 5** |
+| `cite_all_guarded` | **106/106** | **0 / 0** |
+
+The cost of `cite_all` is fully repaired: closed-book behaves exactly as it did
+under the original prompt.
+
+**What that does and does not establish.** It shows the guard removes the
+*cost*. It does not show the guard preserves the *benefit* — rules 5-6 are in
+the prompt for every arm, not just closed-book, and it is entirely possible for
+extra constraints to dampen the "cite everything" push that produced the recall
+gain in the first place. That is the question the ablation actually turns on, so
+the hybrid and dense arms were regenerated under `cite_all_guarded` too; see the
+next subsection. **Do not adopt `cite_all_guarded` as the paper's prompt on the
+strength of the abstention table alone.**
+
+`rq4_score.py` takes `--treatment-variant` (default `cite_all`, so the published
+run reproduces unchanged) and `--out` (so a non-default variant writes its own
+report instead of clobbering `rq4_score.md` — the same principle as giving each
+prompt variant its own answers dir). The descriptive/abstention table needs no
+flag; it enumerates whatever variants are on disk.
+
+### Does the guard keep the benefit? Yes — and the apparent cost is noise
+
+`hybrid_qwen3_0.6b_semantic` and `dense_qwen3_0.6b_semantic` were regenerated
+under `cite_all_guarded` (212 queries, ~1 h 30 m). Report:
+`data/results/rq4_score_guarded.md`; the three-way table below is from
+`rq4_score.py`'s own `ArmScore`, Holm-corrected across all 12 tests.
+
+| arm | variant | recall | precision | phantom / total |
+|---|---|---|---|---|
+| dense | `sentence_cap` | 0.2201 | 0.6413 | 0 / 264 |
+| dense | `cite_all` | 0.3206 | 0.6629 | **4 / 359** |
+| dense | `cite_all_guarded` | **0.3323** | 0.6530 | **0 / 353** |
+| hybrid | `sentence_cap` | 0.2781 | 0.7016 | 0 / 269 |
+| hybrid | `cite_all` | 0.3962 | 0.7268 | 0 / 421 |
+| hybrid | `cite_all_guarded` | 0.3487 | 0.6900 | 0 / 369 |
+
+| comparison | n | diff (recall) | 95% CI | Holm p | sig |
+|---|---|---|---|---|---|
+| dense: `cite_all` vs base | 106 | +0.1005 | [+0.0560, +0.1502] | 0.0000 | **yes** |
+| dense: `guarded` vs base | 106 | **+0.1123** | [+0.0606, +0.1683] | 0.0000 | **yes** |
+| dense: `guarded` vs `cite_all` | 106 | +0.0117 | [−0.0161, +0.0432] | 1.0000 | no |
+| hybrid: `cite_all` vs base | 106 | +0.1181 | [+0.0736, +0.1654] | 0.0000 | **yes** |
+| hybrid: `guarded` vs base | 106 | **+0.0706** | [+0.0237, +0.1196] | 0.0252 | **yes** |
+| hybrid: `guarded` vs `cite_all` | 106 | −0.0475 | [−0.0887, −0.0087] | 0.1344 | no |
+
+No precision comparison is significant (all Holm p = 1.0000).
+
+**Three things this establishes.**
+
+1. **Both guards work, and each is confirmed on the failure it was written for.**
+   Rule 5: closed-book abstention 104/106 → **106/106**, phantom 5/5 → **0/0**.
+   Rule 6: dense phantom **4/359 → 0/353** — and note hybrid never had phantoms
+   under either variant (0/421, 0/369), so dense was the only arm that could
+   test rule 6 at all.
+2. **The benefit survives.** `cite_all_guarded` beats the `sentence_cap`
+   baseline significantly on *both* arms (+0.1123 dense, +0.0706 hybrid). The
+   ablation's headline — the flat ~0.41 recall was a prompt artifact, not a
+   generator ceiling — does not depend on the unguarded wording.
+3. **The apparent cost relative to unguarded `cite_all` is not a finding.**
+   Neither arm is significant, and more tellingly **the two point estimates
+   point in opposite directions** (dense +0.0117, hybrid −0.0475). A real
+   constraint-induced dampening would push the same way on both. This is what
+   the measured generator noise floor predicts: at temperature 0 this pipeline
+   reproduces the citation set only 14/24 under `cite_all`
+   (`tools/eval/rq4_determinism_check.py`), so differences of this size are
+   inside the noise. Stated as a bound rather than a null: on hybrid the
+   interval rules out the guard being *better* than `cite_all` and is
+   consistent with a loss of ~0.01-0.09; on dense it rules out a loss greater
+   than ~0.016.
+
+**Recommendation: adopt `cite_all_guarded` as the paper's reported prompt.** It
+keeps a significant recall gain over the baseline on both arms, and it removes
+both of `cite_all`'s measured costs outright — including the 106/106 closed-book
+abstention, which is the whole experiment's validity check and not merely two
+lost points.
+
+**What is not yet done.** The `bm25_semantic` and `hybrid_m2v_semantic` arms have
+not been regenerated under `cite_all_guarded` (~1 h 30 m more), so the guarded
+run cannot yet reproduce family 1's full 4-arm ordering or family 2's per-arm
+ablation across all arms. The two arms above are the ones the recommendation
+rests on; a final paper table using `cite_all_guarded` throughout would need the
+other two.
+
 ## Refresh against `chunker_compare_full` rebuild #3 (2026-08-07)
 
 Everything above was built and scored 2026-08-03, against retrieval results that
