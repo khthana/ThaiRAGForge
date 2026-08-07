@@ -2134,12 +2134,60 @@ holds as stated.
       titles, `RETIRED_RESULT_DIRS`); the write-only Streamlit dirs are excluded
       from E3b, since interactive queries are not gold by design. Every E3 check
       now prints its denominator, because 0 is otherwise ambiguous between
-      "examined and clean" and "nothing left to examine". **Current state: 25
-      checks, 22 pass / 2 warn / 1 fail** — the FAIL is the documented
-      `BuildCombo.id` caveat, and both WARNs are the human-judgement items above
-      (5 duplicate thematic queries, 24 orphan archives) — **both since closed,
-      leaving 24 pass / 0 warn / 1 fail**. `E3a: 0 of 9,552 live result files` is
-      the check that matters, and it is a real pass.
+      "examined and clean" and "nothing left to examine". State on the day it was
+      written: **25 checks, 22 pass / 2 warn / 1 fail** — the FAIL the documented
+      `BuildCombo.id` caveat, both WARNs the human-judgement items above (5
+      duplicate thematic queries, 24 orphan archives), and both closed by hand
+      the same day.
+    - **Re-run 2026-08-07 against rebuild #3 — and the re-run corrected the
+      record.** Result: **24 pass / 0 warn / 1 fail**, `E3a: 0 of 23,156 live
+      result files`. That 24/0/1 figure is what this document and `CLAUDE.md` had
+      both been quoting since 2026-07-30 — but the report actually on disk that
+      day said **21 pass / 3 warn / 1 fail**. The three unreported WARNs were all
+      index staleness (`I3b` coverage 2853/2854, `I5` 41 drifted manifests, `I6`
+      41 indexes built before the corpus's last edit), and what cleared them was
+      **rebuild #3 plus the 08-06/08-07 refresh chain**, not the two closures
+      above. The headline is now verified rather than asserted, and the lesson is
+      the same one this item is about: a number written into a summary is not
+      evidence — the artifact it was copied from is. The check worth reading
+      after any rebuild is not the headline count but **`E4` (results newer than
+      their index): 0 across all 23,156 live result files**, the mechanical
+      confirmation that no persisted result set is older than the index it
+      claims to describe.
+16. ~~Index rebuild #3 and the refresh of every evaluation path that depends on
+    it~~ — **DONE, chain closed 2026-08-07.** `chunker_compare_full` was rebuilt
+    (completed 2026-08-05T07:56, ~16.4 h, exit 0 — the 4th attempt and the first
+    clean run), taking in the `resolution_id` uniqueness fix and
+    `strip_course_comparison_tables`; `entity_tags_full` and the 3 RQ3 treatment
+    indices were rebuilt alongside it. Everything downstream was then re-run and
+    **verdict-diffed cell by cell** rather than eyeballed
+    (`tools/eval/diff_significance_reports.py`):
+
+    | path | date | scope | flips |
+    |---|---|---|---|
+    | main BM25 / hybrid chain (7 reports) | 08-06 | 171 pairs + 108 cells | **0** |
+    | thematic arm (dense + BM25 + hybrid, 5 h 12 m) | 08-07 | 81 cells | **0** |
+    | `entity_boost` / `entity_lookup` re-score | 08-06 | — | flat (program MRR +0.0306) |
+    | reranker significance test | 08-05 | 6 cells | **0** |
+    | RQ4 (contexts rebuilt, 362 of 530 cells regenerated, 4 h 05 m) | 08-07 | 33 tests | **5** |
+    | pipeline invariant audit | 08-07 | 25 checks | 24 pass / 0 warn / 1 fail |
+
+    Two things this table should not be read as saying. First, **RQ4's 5 flips
+    are not a refresh result** — they sit inside a measured generator noise floor
+    (byte-identical prompts reproduce the citation set only 14/24 of the time
+    under `cite_all`), all four *lost* verdicts were already borderline
+    (Holm-adj 0.014–0.081), and they are reported as **inconclusive, not
+    reversed**. Second, **"0 flips" is not the same as "nothing changed"**: the
+    refresh is what surfaced three claims in this document that had been
+    over-read all along and are corrected above — the RRF sign-flip-at-BM25's-score
+    phrasing, RQ4's 4-way precision ordering, and "0 fabricated citations". Prose
+    *about* a table has no cell to diff, so it survives every refresh
+    automatically; those have to be recomputed by hand.
+
+    One report is deliberately outside the chain:
+    `tools/eval/reranker_significance_test.py` re-retrieves live rather than
+    reading persisted results, so it must be invoked manually after any rebuild —
+    it was, on 08-05.
 
 ## Source scripts (for reproducibility / methods section)
 

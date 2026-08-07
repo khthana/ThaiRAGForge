@@ -1,5 +1,18 @@
 # Tickets: Consensus Review App
 
+> **Status: closed — all 17 tickets done (17/17 checked).** Kept as the build
+> record for `tools/corpus_prep/consensus_review/`. The review queue this app
+> existed to drain reached **0** (verified twice 2026-07-28: 343/343 (pdf, page)
+> pairs carry a logged decision), so the app is now a historical tool, not an
+> active workflow. Narrative and the remediation results: `docs/llm-ocr-scan-log.md`.
+>
+> One defect found *after* these tickets closed is worth knowing before reusing
+> the app: a calibration-reference section that renders guaranteed-relevant
+> documents in full text on the same page as the candidate made a page-wide
+> Ctrl+F find the entity in the *reference* rather than the candidate, which
+> invalidated a 126-item manual judging pass in the pooling-bias study. See
+> `docs/eval-validity-threats.md` §3.
+
 Builds the tool described in `tools/corpus_prep/consensus_review/SPEC.md` — a
 local Streamlit app for triaging the 569 consensus-flagged files from the
 full-corpus LLM OCR-corruption scan.

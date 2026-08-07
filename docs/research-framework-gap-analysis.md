@@ -5,6 +5,20 @@
 effort × คุณค่าเชิงวิจัย และกรองด้วยข้อจำกัดฮาร์ดแวร์ (RTX 3060 12GB → เพดาน ~4-5B
 params fp16)
 
+> **อัปเดตสถานะ 2026-08-07 — RQ ทั้ง 4 ข้อปิดหมดแล้ว ตารางใน §1 ด้านล่างเลิกใช้ได้**
+> (คงไว้เป็นบันทึกจุดเริ่มต้นเท่านั้น) สรุปสถานะจริง ณ วันนี้:
+> **RQ1/RQ2** — embedder 9 ตัว × chunker 4 ตัว × {dense, BM25, hybrid} + bootstrap/Holm
+> ครบ พร้อมมิติต้นทุน (`cost_latency_pareto.py`) และ per-entity_type breakdown ·
+> **RQ3** — ablation ทั้ง 3 ตัว (normalize / word-aware segmentation / chunk size) รันจริง
+> และ rebuild ล้าง confound ไปสองรอบ: normalize กับ segmentation **ไม่มีนัยสำคัญบนทุก metric**,
+> chunk size มีผลเฉพาะที่ 1024 (แพ้ 512 และ 256) ส่วน 256-vs-512 เสมอกัน — **อย่าอ้างว่า
+> "เล็กกว่าดีกว่าเสมอ"** · **RQ4** — สร้าง generation stage จริง (5 arm × 106 query ×
+> 2 prompt, `phi4` local ล้วน) วัดด้วย citation precision/recall + abstention ที่ตรวจสอบได้
+> ไม่ใช่ LLM-as-judge · เพิ่มเติมนอกกรอบเดิม: การประเมิน validity ของ eval เอง
+> (`docs/eval-validity-threats.md` — power, pooling bias, circularity, generator
+> non-determinism) ซึ่งโน้ตต้นฉบับไม่ได้ขอ แต่เป็นสิ่งที่ reviewer จะถามก่อน
+> ตัวเลขล่าสุดทั้งหมดอยู่ที่ `docs/paper-results-summary.md` เสมอ ไม่ใช่ที่นี่
+>
 > **อัปเดตสถานะ 2026-07-21: Tier 1 (§8) ปิดครบทั้ง 4 ข้อแล้ว.** ตารางสถานะใน §3-6
 > ด้านล่างเป็น snapshot ตอนวันที่วิเคราะห์ (20 ก.ค.) — **ไม่ได้อัปเดตย้อนหลัง**
 > (คงไว้เป็นบันทึกจุดเริ่มต้น) ดูตัวเลข/ผลลัพธ์ล่าสุดที่ `docs/paper-results-summary.md`

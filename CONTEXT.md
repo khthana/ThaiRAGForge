@@ -41,7 +41,7 @@ A shared glossary for this project. Terms only — no implementation details.
 - **Retrieval phase** — Query-time, cheap: a Retriever ranks Chunks from a chosen
   Index artifact for a Query.
 - **Dev subset** — A small default slice of the Corpus used for fast iteration; the
-  full ~2,320-Resolution corpus is an explicit opt-in.
+  full **2,854**-Resolution corpus is an explicit opt-in.
 - **Experiment run** — A single execution of the framework that produces persisted,
   comparable artifacts for one or more Combinations.
 
@@ -65,5 +65,41 @@ A shared glossary for this project. Terms only — no implementation details.
 - **Silver query set** — Auto-generated Query→Resolution pairs: each Resolution's
   เรื่อง/title is a Query whose one relevant Resolution is itself. Cheap, immediate,
   but "easy" (title wording overlaps the document).
-- **Gold query set** — A small set of hand-written realistic Queries with manually
-  labelled relevant Resolutions. Harder and truer to real use than the Silver set.
+- **Gold query set** — A set of realistic Queries with labelled relevant Resolutions.
+  Harder and truer to real use than the Silver set. The labels are **rule-derived
+  and re-derivable**, not judged case by case: a Resolution counts as relevant to a
+  programme query when the canonical programme string appears in its title, and to a
+  person query when the person is named in its body. That derivation is the reason a
+  single annotator is not a validity problem here — and also the source of the
+  pooling-bias threat, since it is close to what lexical retrieval does.
+- **Entity-anchored vs thematic Query** — Two Query *shapes*, kept separate and never
+  averaged. Entity-anchored Queries name a specific person / programme / course /
+  faculty; thematic Queries ask what a named meeting decided about a topic. They point
+  in **opposite directions** on the Chunker axis, so pooling them cancels two real
+  effects rather than diluting one.
+- **Reciprocal Rank Fusion (RRF)** — The default Hybrid fusion: each arm contributes
+  `1/(k + rank)`, summed. Note `k` (=60) is a rank-decay constant applied equally to
+  both arms — it is **not** a weight, so RRF has no mixing parameter to tune. The
+  separate `weighted` fusion method does have one.
+- **Reranker** — An optional query-time stage that re-scores an over-fetched candidate
+  pool with a cross-encoder and truncates to k. Measured here as **harmful** to Hybrid
+  MRR, so it is available but not on by default.
+
+## Entities & Evaluation
+
+- **Entity tag** — A person / programme / course / faculty name attached to a
+  Resolution's metadata by a rule-based tagger (regex anchored on a Thai academic rank,
+  or a curated dictionary — deliberately **not** NER, which fragmented organisation
+  names). Consumed by the `entity_tags` Loader and the `entity_lookup` / `entity_boost`
+  retrieval modes.
+- **Structural ceiling** — The best recall@k any Retriever could reach on a Query given
+  what the index physically contains, used to distinguish "the method is weak" from
+  "the evidence is not there".
+- **Verdict flip** — A significance test whose conclusion (significant ↔ tie) changes
+  between two runs of the same comparison. The unit in which a refresh after an index
+  rebuild is reported, because effect sizes always move a little and verdicts should
+  not.
+- **Refresh** — Re-running every evaluation path that persists results after the index
+  is rebuilt. Dense retrieval is recomputed automatically by some scripts; BM25, Hybrid,
+  thematic and RQ4 are **not**, and have silently compared fresh numbers against stale
+  ones when skipped.

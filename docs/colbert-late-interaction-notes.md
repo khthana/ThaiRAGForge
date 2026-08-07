@@ -2,7 +2,21 @@
 
 Status: **not started, not committed to.** Written 2026-07-30 so the option is
 recorded with its reasoning while the findings that motivate it are fresh. This
-is a *new research axis*, not a small experiment; the intended order is RQ4 first.
+is a *new research axis*, not a small experiment; the intended order was RQ4
+first.
+
+**2026-08-07 — RQ4 is complete, so the stated blocker is gone; this is still not
+the next thing to do.** Three cheaper items now rank above it, all justified by
+this project's own measurements rather than by the literature: (1) caching
+`BM25Okapi` instead of rebuilding it per query, which returns a fixed ~1.9–2.0 s
+of every hybrid query for no research risk; (2) sweeping the fusion weight —
+`HybridRetriever` has a `method="weighted"` path with `dense_weight`/`bm25_weight`
+that **has never been used**, so every hybrid number in the project sits at an
+implicit 50:50, and the "RRF helps the weaker arm and taxes the stronger one"
+rule (r = −0.921) predicts where a sweep pays; (3) the two cheap graph edges.
+ColBERT stays ranked where it is because it is the only remaining item whose
+index-side cost is comparable to a full rebuild. The pre-registered prediction
+below is unchanged and still the point of the exercise.
 
 ## What it is
 

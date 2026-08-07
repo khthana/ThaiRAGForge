@@ -86,3 +86,30 @@ Both fixes are corpus changes and therefore make built indices stale for the
 affected files, so they should ride the same rebuild already owed for the CHECO
 fix rather than forcing one of their own. **Not yet applied** — the mispairings
 change `resolution_id`s, so applying them is a decision, not a cleanup.
+
+## Status 2026-08-07 — still not applied, and rebuild #3 went past without them
+
+`chunker_compare_full` rebuild #3 ran 2026-08-04→05 (~16.4 h) carrying the
+`resolution_id` uniqueness fix and `strip_course_comparison_tables`. **These 7
+cases were deliberately not included**, because applying them was never asked
+for and 4 of them change `resolution_id`s — a change to the unit relevance is
+judged at (ADR-0002), which would invalidate gold-set entries that cite the
+affected resolutions. So the "ride the next rebuild" plan still stands; it now
+means the rebuild *after* #3, not #3 itself.
+
+What this costs while it waits, stated plainly so the decision is informed:
+
+* **Nothing measurable in the eval.** None of the 7 files is cited by the 106
+  entity-anchored gold queries, and the corpus-wide flag rate is 0.25%.
+* **The known title↔content defect stays known-and-live**: `2568/ครั้งที่ 7`'s
+  CHECO-titled file still holds รับรองรายงานการประชุม. The manifest, `_LINK.txt`
+  and `master_list.csv` all already carry the correct Drive id
+  (`1d4iz1dpnPweAn7pxBfxlvJf9IJZwIJFJ`), which has still never been fetched, so
+  the fix remains a re-download + re-OCR of one URL with no metadata change.
+* **It is a data-quality claim the paper cannot make cleanly** until applied:
+  "the corpus was audited for title↔body disagreement and 7/7 flags were
+  genuine" is true, but "and repaired" is not.
+
+Run `tools/corpus_prep/audit_title_body_agreement.py` again after any corpus or
+manifest change — the numbers above are from 2026-07-30 and the flag set is
+small enough that a regression would be easy to miss by eye.

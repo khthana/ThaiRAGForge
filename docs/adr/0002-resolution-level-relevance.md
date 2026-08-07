@@ -61,6 +61,16 @@ So uniqueness is now produced and checked rather than hoped for:
   agree, do the two files point at the same source PDF), and exits non-zero —
   so disambiguation never silently papers over a fixable error.
 
+**Closed out 2026-08-05.** The open question this amendment left was what to do
+with the indices already built under the old ids — a relabelling tool was written
+for it. In the event it was never needed: `chunker_compare_full` rebuild #3 ran
+after the fix and so minted the corrected ids from scratch, and the one index
+outside that chain (`entity_tags_full`) was rebuilt separately the same day for
+exactly this reason. Re-scoring `entity_boost`/`entity_lookup` afterwards moved
+one number materially (program MRR 0.6238 → 0.6544) and left the rest flat, which
+is the expected shape: relabelling 6 files out of 2,853 cannot change recall, but
+it can un-merge two documents that were ranked as one.
+
 ## Consequences
 
 - The Chunk schema's `resolution_id` (≈ `req0.md`'s `Chunk.doc_id`) is load-bearing

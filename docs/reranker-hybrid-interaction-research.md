@@ -36,6 +36,36 @@ so a reranker that disrupts early-rank order without reliably evicting
 relevant docs from the top-10 would be expected to show up on MRR more
 reliably than on nDCG@10.
 
+**Refreshed again 2026-08-05** against `chunker_compare_full` rebuild #3.
+This script re-retrieves live rather than reading persisted results, so it
+goes stale on *every* index rebuild and is **not** in the automatic refresh
+chain — it must be re-run by hand. The result is unchanged, third time
+running:
+
+| retriever | metric | no-rerank → reranked | Holm-adj p | verdict |
+|---|---|---|---|---|
+| hybrid | MRR | 0.7814 → 0.6778 (−0.1036) | **0.0012** | **significantly worse** |
+| hybrid | nDCG@10 | 0.6257 → 0.5879 (−0.0378) | 0.2840 | not significant |
+| hybrid | recall@10 | 0.5598 → 0.5663 (+0.0065) | 0.7974 | not significant |
+| dense | MRR | 0.5487 → 0.6092 (+0.0605) | 0.2840 | not significant |
+| dense | nDCG@10 | 0.4342 → 0.4819 (+0.0477) | 0.2840 | not significant |
+| dense | recall@10 | 0.4129 → 0.4455 (+0.0326) | 0.4188 | not significant |
+
+Cost is likewise stable: the `rerank()` call alone is p50 1168.8 ms, p95
+1422.5 ms, mean 1223.5 ms over the 106 Gold queries with
+`rerank_pool_size=50` — roughly **half a second more than the entire
+un-reranked hybrid query it is attached to**, spent to make MRR worse.
+
+Two things worth noting about this third run. First, the nDCG@10 harm
+reported in the original 73-query table (p=0.030) has now failed to
+replicate **twice** (p=0.5676 in 2026-07-29, p=0.2840 here), so it stays
+retired as a separate claim rather than being revived because its p-value
+drifted back down. Second, the dense-alone direction has been mildly
+*positive* on all three metrics in both refreshes without ever clearing
+Holm — consistent with §6's "reranking helps more when the first stage is
+weaker", but not evidence for it. Do not upgrade it to a finding without a
+test powered for it.
+
 Confirmed not an implementation bug (reranker smoke-tested in isolation, scores semantically
 sensibly). The question: is "reranking hurts an already-fused hybrid ranking, but not a
 dense-alone ranking" a known phenomenon, and what does the literature say about *why*?

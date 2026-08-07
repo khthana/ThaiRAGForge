@@ -71,13 +71,23 @@ bounded equivalence claim rather than an absence of evidence:
 - **Embedder ties are looser**, 0.05–0.10, so the "top-4 tied cluster" is a
   real but weaker claim than the chunker one.
 - **The weakest tie in the paper is `e5_small` vs `jina_v5` on MRR**,
-  consistent with a difference as large as **0.1045**. That pair should be
+  consistent with a difference as large as **0.1029**. That pair should be
   reported as *inconclusive*, not as equivalent.
 
 The last bullet is the kind of distinction the report exists to force: before
 this analysis, all 42 ties were being cited in the same voice.
 
-## 3. Pooling bias — CLOSED 2026-08-03: qrels are severely incomplete, but not directionally biased
+**Currency.** This analysis is recomputed from persisted results, so it goes
+stale on every index rebuild like everything else. **Re-run 2026-08-05 against
+`chunker_compare_full` rebuild #3** (`data/results/power_analysis.md`): the
+headline is unchanged — still **138 significant / 42 ruled out / 0
+underpowered** out of 180 — and the individual bounds moved only in the third
+decimal (the `e5_small`/`jina_v5` MRR bound above went 0.1045 → 0.1029, which is
+why this section quotes the new figure). The conclusion "not one tie in the
+study is a power artifact" is therefore verified against the current indices,
+not inherited from the pre-rebuild run.
+
+## 3. Pooling bias — CLOSED 2026-08-03: qrels are modestly incomplete, and not directionally biased
 
 **The threat.** The Gold qrels were derived by **string containment**
 (`tools/corpus_prep/build_gold_candidates.py`): a resolution is relevant to a
@@ -258,6 +268,45 @@ retrieval is under-served, and being the collection rather than a sample of
 collections is a contribution as much as a limitation — provided the paper does
 not generalise beyond it.
 
+## 8. Generator non-determinism (RQ4 only) — measured 2026-08-07
+
+Added after the RQ4 refresh against rebuild #3, because it invalidates a
+reading the other refreshes in this project earned honestly.
+
+**The threat.** Every retrieval number here is deterministic: re-run the same
+index against the same queries and you get the same file, byte for byte. That
+is what makes "0 verdict flips after a rebuild" a strong statement — any flip
+must come from the corpus change. RQ4 is not like that. `tools/eval/
+rq4_generate.py` used to document its temperature-0 setting as "one pass, no
+sampling variance to average over". **That is false.** Greedy decoding is
+deterministic in exact arithmetic, but GPU reductions are not associative, so
+two near-tied logits can swap between runs and the continuation diverges from
+there.
+
+**Measured, not assumed.** `tools/eval/rq4_determinism_check.py` re-runs
+byte-identical prompts (24 per prompt variant) and compares the citation set —
+the thing the scorer actually reads:
+
+| prompt variant | identical citation sets |
+|---|---|
+| `sentence_cap` | 21/24 (88%) |
+| `cite_all` | **14/24 (58%)** |
+
+**Consequence for how RQ4 diffs are read.** The 2026-08-07 refresh produced 5
+verdict flips out of 33. Four were losses in the `sentence_cap` family, all
+already borderline (Holm-adj 0.014–0.081), and nothing at p<0.001 moved. Those
+four **cannot be attributed to the rebuild**, because a re-run with no data
+change at all moves comparisons of that size. They are reported as
+*inconclusive*, not reversed. The prompt-ablation result (all Holm 0.0000) sits
+far outside this noise floor and is unaffected.
+
+**General rule this establishes.** Before diffing any before/after of an
+LLM-generated eval, measure the generator's own noise floor on the quantity the
+scorer consumes. A diff smaller than the noise floor is not a finding in either
+direction. This is the mirror image of §2: there, ties were only citable once
+the MDE was known; here, *differences* are only citable once the reproducibility
+floor is known.
+
 ## Summary of what changes in the paper
 
 | threat | status | action |
@@ -269,3 +318,4 @@ not generalise beyond it.
 | single annotator | mitigated by construction | publish the derivation rules |
 | query provenance | fine, needs stating | describe the chain; keep thematic separate |
 | external validity | inherent | declare as scope |
+| generator non-determinism (RQ4) | **measured 2026-08-07** | report the reproducibility floor (88% / 58% identical citation sets at temperature 0) alongside RQ4's numbers; call the 4 borderline `sentence_cap` flips inconclusive rather than reversed |
