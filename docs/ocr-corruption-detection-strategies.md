@@ -1,7 +1,31 @@
 # OCR non-repetitive-corruption detection: multi-pass strategy recommendations
 
-Status: research/decision-support doc. No code changed. Companion to `docs/llm-ocr-scan-log.md`
-(Thai-language experiment journal) and `tools/corpus_prep/llm_ocr_scan.py` (the scanner script).
+Status: research/decision-support doc, written **before** any remediation was built.
+Companion to `docs/llm-ocr-scan-log.md` (Thai-language experiment journal) and
+`tools/corpus_prep/llm_ocr_scan.py` (the scanner script).
+
+> **Outcome (as of 2026-08-07): the campaign this doc was deciding about is finished.**
+> A consensus AND-gate detection pass, targeted re-OCR, dual-model old-vs-new
+> adjudication and write-back were all built and run — 872 pages in the first batch and
+> 1,982 pages across 393 files in the follow-up "kernel A" batch, with the human-review
+> queue drained to 0 (verified twice, 343/343 decisions logged). The recommendations
+> below are therefore **history, not a plan**; keep them for the reasoning, and read
+> `docs/llm-ocr-scan-log.md` §8–§10 for what actually happened.
+>
+> Three things the run taught that this doc could not have known:
+> 1. **The AND-gate is a cost filter, not a quality filter.** Requiring both models to
+>    agree kept 1,329 files (~47% of the corpus) out of the first batch entirely. That
+>    is not a bug in the gate — it is the price of the gate, and it had to be paid off
+>    with a second, wider batch.
+> 2. **Whole-page old-vs-new comparison overstates the defect rate.** A 100-page sample
+>    put genuine span-confirmed defects at ~56% of phi4-only flags, against an ~83% raw
+>    new-is-better verdict rate.
+> 3. **Re-OCR at `temperature=0.0` is fully deterministic here.** A tie-break round that
+>    simply re-ran its input reproduced it byte-for-byte, so tie-breaking had to be
+>    redesigned to perturb temperature/DPI. (Note this is the *opposite* of what was
+>    later measured for generation on GPU, where temperature 0 is **not** reproducible —
+>    `docs/eval-validity-threats.md` §8. Determinism is a property of the specific
+>    stack, not of the temperature setting.)
 
 ## 1. Empirical situation so far
 
