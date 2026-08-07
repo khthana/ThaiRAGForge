@@ -35,10 +35,10 @@ query shape differs (`tools/eval/thematic_vs_deterministic.py`):
 
 | | thematic (179) | entity-anchored (106) |
 |---|---|---|
-| mean diff, fixed_size − semantic | **+0.0256** | **−0.0359** |
-| exact ties on that pair | 998/1611 = 62% | 427/954 = 45% |
-| chunker order (dense recall@10) | recursive 0.413 > sentence 0.387 > fixed_size 0.377 > **semantic 0.351 (worst)** | **semantic 0.366 (best)** > recursive 0.345 > fixed_size 0.330 > sentence 0.325 |
-| top embedders | qwen3 0.495 > **e5 0.488** > congen 0.454 > qwen3_0.6b 0.436 | **qwen3_0.6b 0.526** > qwen3 0.478 > jina_v5 0.413 > bge_m3 0.409 |
+| mean diff, fixed_size − semantic | **+0.0258** | **−0.0363** |
+| exact ties on that pair | 997/1611 = 62% | 430/954 = 45% |
+| chunker order (dense recall@10) | recursive 0.412 > sentence 0.387 > fixed_size 0.377 > **semantic 0.351 (worst)** | **semantic 0.366 (best)** > recursive 0.346 > fixed_size 0.330 > sentence 0.324 |
+| top embedders | qwen3 0.495 > **e5 0.488** > congen 0.454 > qwen3_0.6b 0.436 | **qwen3_0.6b 0.527** > qwen3 0.479 > jina_v5 0.414 > bge_m3 0.409 |
 
 So the old description — "dilutes with near-zero-signal queries, and materially
 changes rank order" — was right about the symptom and wrong about the mechanism:
@@ -62,7 +62,7 @@ it at the thematic result dirs (`hybrid_significance_test_9way.py`; the default
 73-det run was verified byte-identical afterwards, so the reversal below is not a
 methodology artifact). Report: `data/results/thematic_hybrid_significance_test.md`.
 
-**BM25 is much weaker on this query shape**: 0.2988 recall@10 aggregate, against
+**BM25 is much weaker on this query shape**: 0.2990 recall@10 aggregate, against
 0.4930 on the entity-anchored set where it ties the top dense tier and beats
 `bge_m3` outright. That is the person/program mechanism again — thematic queries
 contain no name to match exactly, which is the only thing lexical retrieval is
@@ -75,20 +75,27 @@ against**:
 
 | dense-alone recall@10 | | hybrid − dense | verdict |
 |---|---|---|---|
-| `m2v` 0.1930 | below BM25 | **+0.0672** | hybrid significantly better |
-| `sct` 0.2737 | below BM25 | **+0.0899** | hybrid significantly better |
-| `e5_small` 0.2855 | below BM25 | **+0.0394** | hybrid significantly better |
-| `bge_m3` 0.3980 | above BM25 | +0.0260 | tie |
-| `jina_v5` 0.4183 | above BM25 | −0.0249 | tie |
-| `qwen3_0.6b` 0.4357 | above BM25 | −0.0121 | tie |
-| `congen` 0.4535 | above BM25 | −0.0229 | tie |
-| `e5` 0.4879 | above BM25 | **−0.0445** | hybrid significantly **worse** |
-| `qwen3` 0.4949 | above BM25 | **−0.0526** | hybrid significantly **worse** |
+| `m2v` 0.1923 | below BM25 | **+0.0681** | hybrid significantly better |
+| `sct` 0.2733 | below BM25 | **+0.0948** | hybrid significantly better |
+| `e5_small` 0.2861 | below BM25 | **+0.0407** | hybrid significantly better |
+| `bge_m3` 0.3959 | above BM25 | +0.0280 | tie |
+| `jina_v5` 0.4193 | above BM25 | −0.0248 | tie |
+| `qwen3_0.6b` 0.4356 | above BM25 | −0.0122 | tie |
+| `congen` 0.4535 | above BM25 | −0.0221 | tie |
+| `e5` 0.4879 | above BM25 | **−0.0449** | hybrid significantly **worse** |
+| `qwen3` 0.4946 | above BM25 | **−0.0516** | hybrid significantly **worse** |
 
 The benefit of fusion is **monotone in how far the dense arm sits from the lexical
-arm** (r = **−0.925** between dense score and hybrid−dense delta), and the sign
-flips almost exactly at BM25's own 0.2988. MRR and nDCG@10 give the same ordering,
-with `congen`/`qwen3_0.6b` also crossing into significantly-worse.
+arm** (r = **−0.921** between dense score and hybrid−dense delta). What lines up
+with BM25's own 0.2990 is the **significance boundary, not the sign**: every
+embedder scoring *below* BM25 is significantly helped by fusion and no embedder
+above it is. The point-estimate sign flips higher — between `bge_m3` (0.3959, still
+**+**0.0280) and `jina_v5` (0.4193, −0.0248), OLS zero-crossing 0.401 — so there is
+a band above BM25 where fusion is measurably neither helping nor hurting. (Versions
+of this section before 2026-08-07 said the sign flipped "almost exactly at BM25's
+own 0.2988"; that was never supported by the table beneath it — on the 2026-07-30
+numbers the crossing was 0.399 — and is corrected here.) MRR and nDCG@10 give the
+same ordering, with `congen`/`qwen3_0.6b` also crossing into significantly-worse.
 
 **This subsumes the m2v/sct "RRF failure case" as a special case of one rule rather
 than a quirk of two bad models.** Stated generally, and now measured in both
@@ -111,10 +118,17 @@ motivates, not something measured.
 
 **Operational advice is unchanged but better founded**: keep the two shapes
 reported separately; never average them. The thematic numbers are citable *as a
-separate query shape* now, not as part of the headline comparison. Caveat: the
-indices predate the 2026-07-30 corpus fixes, and neither changed document is a
-gold id for any thematic query, so a rebuild cannot change which documents count
-as relevant here.
+separate query shape* now, not as part of the headline comparison.
+
+**Currency**: every number in these two sections was re-run 2026-08-07 against
+`chunker_compare_full` rebuild #3 (2026-08-05T07:56) — full dense + BM25 + hybrid
+retrieval over all 179 queries, not just a re-score. **0 verdict flips** across the
+54 significance cells of `thematic_hybrid_significance_test.md` and the 27 of
+`thematic_eval.md`; every effect size moved by less than 0.02 and only p-values
+shifted materially. The old caveat that these indices predated the 2026-07-30
+corpus fixes is therefore discharged, and it was discharged in the predicted
+direction: all 550 distinct gold `resolution_id`s still resolve post-rebuild, so
+nothing changed about which documents count as relevant.
 
 **Status**: gap-analysis Tier 1 and Tier 2 (`docs/research-framework-gap-analysis.md`
 §8) are both fully closed as of 2026-07-21 — MAP/Precision@k/multi-k, BM25 baseline,

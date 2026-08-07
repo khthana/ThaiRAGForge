@@ -205,21 +205,28 @@ see `docs/adr/`.
   unanswerable as posed. `tools/eval/qualify_thematic_queries.py` rewrote all 179 to name
   their meeting 2026-07-30 and `run_thematic_eval.py` re-evaluated them, which changed the
   reason to keep them apart: they carry signal that points **the opposite way** on the
-  chunker axis (fixed_size − semantic is **+0.0256** thematic vs **−0.0359** entity-anchored;
+  chunker axis (fixed_size − semantic is **+0.0258** thematic vs **−0.0363** entity-anchored;
   `semantic` is the *worst* chunker on thematic and the best on entity-anchored), so pooling
   the sets cancels two real effects instead of diluting one. Still low-powered per pair
   (2/27 significant, 62% ties) — cite them as a separate query shape, never averaged in.
   Side-by-side: `tools/eval/thematic_vs_deterministic.py`. **The BM25/hybrid arms
-  (2026-07-30, `hybrid_significance_test_9way.py --thematic`) reverse this project's most
-  robust finding and are the bigger result**: BM25 is weak on thematic (0.2988 vs 0.4930
+  (`hybrid_significance_test_9way.py --thematic`) reverse this project's most
+  robust finding and are the bigger result**: BM25 is weak on thematic (0.2990 vs 0.4930
   entity-anchored — no name to match exactly), so "hybrid beats dense-alone for every
   embedder" is **entity-anchored-specific**. On thematic recall@10 it is 3 significant for
-  hybrid / 4 ties / **2 significant against** (`e5` −0.0445, `qwen3` −0.0526), and the
-  hybrid−dense delta is monotone in dense strength (**r = −0.925**), flipping sign right at
-  BM25's own score. General rule, now measured in both directions and subsuming the old
+  hybrid / 4 ties / **2 significant against** (`e5` −0.0449, `qwen3` −0.0516), and the
+  hybrid−dense delta is monotone in dense strength (**r = −0.921**). What sits at BM25's own
+  score is the **significance boundary** (every embedder below it is significantly helped, none
+  above it is), *not* the sign flip — the point estimate crosses zero near 0.40, between
+  `bge_m3` and `jina_v5`. (An earlier "flipping sign right at BM25's own score" phrasing here
+  and in `paper-results-summary.md` was never supported by its own table; corrected
+  2026-08-07.) General rule, now measured in both directions and subsuming the old
   m2v/sct "RRF failure case": **RRF helps the weaker arm and taxes the stronger one — fuse
   only when the two arms are comparable, whichever one is weak.** Report:
-  `data/results/thematic_hybrid_significance_test.md`). Full process narrative: `docs/chunker-embedder-comparison-log.md`; clean
+  `data/results/thematic_hybrid_significance_test.md`. **Whole thematic arm re-run
+  2026-08-07 against rebuild #3** (dense+BM25+hybrid, 5h12m, exit=0): **0 verdict flips**
+  across all 81 significance cells, every effect size moved <0.02 — the numbers above are
+  current, and the old "indices predate the 2026-07-30 corpus fixes" caveat is discharged). Full process narrative: `docs/chunker-embedder-comparison-log.md`; clean
   citation-ready numbers for paper-writing: `docs/paper-results-summary.md` (update this one
   whenever a headline number changes — the log stays append-only). **Refreshed 2026-07-25**
   for the corpus-discovery contamination fix (0% contamination, see
@@ -344,12 +351,15 @@ see `docs/adr/`.
   `map_precision_significance_test`'s aggregate-scope precision@1 sharpens from
   `qwen3_0.6b` beating 4/8 to 5/8 (`e5_small` newly loses); MAP stays 4/8, so "8/8
   dense → 4/8 hybrid" below is unaffected; (4) `bm25_hybrid_entity_type_breakdown`
-  numbers held within noise (see next bullet). **Thematic-query arm
-  (`thematic_hybrid_significance_test.md`, `thematic_vs_deterministic.md`) is a
-  separate, still-unrefreshed gap** — those read `data/results/thematic_{dense,bm25,hybrid}/`,
-  which `run_thematic_eval.py` (not `run_gold_*_eval.py`) populates and which nothing
-  touched on 08-05; still dated 2026-07-30, needs its own (likely multi-hour, 179
-  queries) re-run, not yet scheduled.
+  numbers held within noise (see next bullet). **Thematic-query arm closed
+  2026-08-07** — it was a separate gap because `data/results/thematic_{dense,bm25,hybrid}/`
+  is populated by `run_thematic_eval.py`, not `run_gold_*_eval.py`, so nothing on 08-05
+  touched it. Now re-run in full (all 3 retrieval paths, 5h12m, exit=0) with **0 verdict
+  flips**; see the thematic paragraph in the bullet above. Use
+  `tools/eval/diff_significance_reports.py` for this kind of before/after check — it keys
+  rows on `(section heading, leading label cells)`, because these reports sort rows by
+  effect size and reuse the same label across sections, so a positional diff or a naive
+  label→verdict dict both give wrong answers.
 - **Per-entity_type breakdown of BM25/hybrid (2026-07-29, refreshed 2026-08-06 —
   held flat, see caveat above —
   `tools/eval/bm25_hybrid_entity_type_breakdown.py`) gives the mechanism behind the

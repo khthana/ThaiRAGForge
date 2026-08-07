@@ -1969,3 +1969,50 @@ noise (person 84.1%→84.2%, faculty 72.3%→72.5%, program 68.7%→68.7%, cours
 
 รายละเอียดเต็ม: [[project_eval_refresh_2026_08_06]] อัปเดต `CLAUDE.md` +
 memory (`project_index_rebuild_pending.md`, `MEMORY.md`) แล้ว
+
+## รีเฟรช thematic arm หลัง rebuild #3 (2026-08-07)
+
+ปิดงานที่ entry ก่อนหน้าค้างไว้ ("ยังไม่ได้ทำ") — รัน `run_thematic_eval.py` ใหม่
+ครบทั้ง 3 retrieval path เทียบ `chunker_compare_full` rebuild #3
+
+**Pre-flight ก่อนจ่ายเวลา GPU หลายชั่วโมง**: เช็คก่อนว่า gold id ยังใช้ได้ไหม
+หลัง `resolution_id` fix — 550 distinct `relevant_resolution_ids` ของ 179 query
+resolve ได้ครบใน `chunks.parquet` ของ index ใหม่ (missing 0, query ที่ gold ตายทั้ง
+ชุด 0) ถ้าข้อนี้ไม่ผ่านต้องแก้ gold ก่อน ไม่ใช่รัน eval
+
+**เวลาที่ใช้จริง** (08:01:37 → 13:13:49, exit=0 ทั้งสองคำสั่ง): dense 36 combo
+41 นาที, bm25 4 combo ~10 นาที, hybrid 36 combo ~4.5 ชม. — hybrid ช้ากว่า dense
+~6.6 เท่าทั้งที่ combo เท่ากัน ตรงกับ overhead ~2 วิ/query ที่ `cost_latency_pareto`
+วัดไว้ (BM25Okapi สร้างใหม่ทุก query) ไม่ใช่ค่า RRF เอง
+ไฟล์ผลลัพธ์ใหม่หมดจริง ไม่มีของเก่าตกค้าง: 6,444/6,444 + 716/716 + 6,444/6,444
+
+**ผล: verdict ไม่พลิกแม้แต่ cell เดียว** — `thematic_hybrid_significance_test.md`
+54 cell, `thematic_eval.md` 27 cell, flip 0 ทั้งคู่ (diff แบบ structural ด้วย
+`tools/eval/diff_significance_reports.py` ที่เขียนเป็นสคริปต์ถาวรรอบนี้ แทนที่จะ
+เขียนทิ้งใน /tmp เหมือนรอบ 08-06 — key เป็น `(หัวข้อ section, cell ป้ายนำหน้า)`
+เพราะทั้งแถวสลับตำแหน่งได้และป้ายซ้ำข้าม section ได้; validate 2 ทาง คือ
+self-diff ได้ 0 flip และ diff รอบ 08-06 ซ้ำแล้วได้ 2 flip ตรงกับที่บันทึกไว้)
+**effect size ทุกตัวขยับน้อยกว่า 0.02** ที่ขยับจริงมีแต่ p-value และเฉพาะแถวที่
+เสมออยู่แล้ว — ขนาดการขยับสอดคล้องกับที่ควรเป็น เพราะ rebuild #3 แตะ 13 ไฟล์ที่มี
+course-comparison table ซึ่งไม่มี query thematic ไหนอ้างถึง
+
+headline ที่ยืนยันแล้วว่ายังถูก (ตัวเลขอัปเดตใน `paper-results-summary.md`):
+สัญญาณ chunker สวนทางกันสองชุด (fixed_size − semantic = **+0.0258** thematic vs
+**−0.0363** entity-anchored, ลำดับ chunker เหมือนเดิมทั้งสองฝั่ง — `semantic`
+แย่สุดบน thematic/ดีสุดบน entity-anchored), BM25 อ่อนบน thematic (**0.2990**),
+hybrid vs dense แยกสามทางเท่าเดิม (3 significant-for / 4 เสมอ / 2 significant-against
+คือ `e5` −0.0449, `qwen3` −0.0516), fixed_size-vs-semantic ยัง **2 of 27** และเป็น
+`bge_m3` recall+ndcg คู่เดิม
+
+**พบข้อความผิดใน `paper-results-summary.md` ระหว่างตรวจ (แก้แล้ว)**: ประโยค "the
+sign flips almost exactly at BM25's own 0.2988" (และที่ `CLAUDE.md` ย่อว่า
+"flipping sign right at BM25's own score") **ตารางใต้ประโยคเองไม่รองรับ และไม่เคย
+รองรับ** — `bge_m3` อยู่ที่ dense 0.3959 ซึ่ง *สูงกว่า* BM25 แต่ delta ยังเป็นบวก
+(+0.0280) จุดตัดศูนย์จาก OLS อยู่ที่ 0.401 (ตัวเลข 07-30 เดิมก็ 0.399 ไม่ใช่ 0.299)
+สิ่งที่ตรงกับคะแนน BM25 จริงๆ คือ **เส้นแบ่ง significance**: embedder ที่คะแนน
+ต่ำกว่า BM25 ทุกตัวได้ประโยชน์อย่างมีนัยสำคัญ และที่สูงกว่าไม่มีตัวไหนได้เลย —
+ระหว่างนั้นมีย่านที่ fusion ไม่ช่วยและไม่เสียแบบวัดได้ ส่วน r ยังยืน (−0.925 →
+**−0.921**) ข้อสรุปเชิงกฎ ("RRF ช่วยแขนที่อ่อน เก็บภาษีแขนที่แข็ง") ไม่กระทบ
+เพราะมันวางอยู่บนความ monotone กับ verdict ไม่ใช่บนตำแหน่งจุดตัด
+
+**ยังไม่ได้ทำ**: RQ4 (`docs/rq4-design.md`) ยังไม่ได้รีเฟรชเทียบ rebuild #3
