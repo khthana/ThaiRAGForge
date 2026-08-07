@@ -330,9 +330,25 @@ see `docs/adr/`.
   `qwen3_0.6b × semantic` dense 0.6364→0.5688) — per Open item #13 above, semantic is not a
   provable "best chunker", so don't cite this report's recall numbers as a chunker-supremacy
   claim, only as one representative combo's cost/quality profile; report at
-  `data/results/cost_latency_pareto.md` (not yet re-run against rebuild #3, see caveat
-  below — cost/latency mechanics don't depend on corpus content so this one report is
-  lower-priority to refresh). **Refreshed 2026-08-06** against rebuild #3
+  `data/results/cost_latency_pareto.md`. **Re-run 2026-08-07 against rebuild #3, and
+  the run split in two: quality adopted, latency rejected.** Quality barely moved
+  (max |Δ| recall@10 **0.0034** over 18 cells, ordering identical), so those columns
+  are now current. The latency columns were thrown out on evidence: `search p50` at
+  dim=1024 is the same numpy op on the same-shaped array for 6 of the 9 embedders, and
+  where those 6 agreed to within **1.9%** on 07-29 they spread **74.2%** here — split
+  exactly at run position 6, everything timed before the 4B `qwen3` at 301-317ms and
+  everything after it at 434-525ms (its memory isn't released before the rest of the
+  loop is timed). Underneath that, a uniform ~1.25x floor shift, confirmed by
+  re-running a standalone numpy benchmark on an idle machine afterwards (129ms,
+  matching this run, not 07-29's 97ms). The tell was `m2v` appearing to cost more per
+  hybrid query than `bge_m3` despite a 4ms encode. `docs/paper-results-summary.md`
+  therefore carries **deliberately split provenance** there — 07-29 latency, 08-07
+  quality — which is sound because latency measures corpus-*size* mechanics a rebuild
+  doesn't change. Two things from the rejected run survive, since both terms of each
+  ratio saw the same conditions: BM25 rebuild = 22x scoring-only (07-29: 24x), and the
+  k=n over-fetch tax is 66% of dense k=n cost in **both** runs. **When re-running this
+  script: idle machine, and check same-dim embedders at different loop positions before
+  trusting any timing.** **Refreshed 2026-08-06** against rebuild #3
   (2026-08-05T07:56): `run_gold_bm25_eval.py`/`run_gold_hybrid_eval.py` turned out to
   have *already* been re-run the day before (2026-08-05, retrieval results in
   `data/results/gold_bm25_73det/`/`gold_hybrid_73det/` dated 08-05, discovered by

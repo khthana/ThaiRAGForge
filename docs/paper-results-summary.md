@@ -182,9 +182,11 @@ which held every conclusion) — see the "Hybrid retrieval" and "BM25 lexical
 baseline" sections below for the updated numbers, and in particular the "Top
 single-combo across the entire study" claim, which no longer holds as
 previously stated. Nothing in this document still cites pre-2026-07-29
-BM25/hybrid numbers; `cost_latency_pareto.py` remains the one exception
-(separate cost/latency measurement, not recall — still not re-run, flagged
-inline where it's cited).
+BM25/hybrid numbers. `cost_latency_pareto.py` was long the one exception; it
+was re-run 2026-08-07 against rebuild #3, and now carries a **split**
+provenance by design — quality columns from that run, latency columns still
+from 2026-07-29 because the new run's timings were rejected as contaminated.
+Both the reason and the evidence are in that section's currency banner.
 
 ## Resolved 2026-07-23: RQ3 ablation results (normalization / segmentation / chunk-size)
 
@@ -1000,9 +1002,10 @@ reported as 0.6364 (below qwen3's 0.6581); post-refresh it's 0.6435, still
 behind qwen3(4B) but by a smaller margin and clearly ahead of every other
 embedder's semantic-chunker dense score. `qwen3` still keeps its
 dense-alone per-chunker lead over `qwen3_0.6b`, unlike the hybrid case
-(above) where `qwen3_0.6b` numerically overtakes it — the note below in
-"Cost / latency characterization" still cites the pre-refresh figures for
-this pairing (that section's table wasn't part of the 2026-07-25 refresh).
+(above) where `qwen3_0.6b` numerically overtakes it. ("Cost / latency
+characterization" below used to lag this section by a refresh; its quality
+columns are current as of 2026-08-07 and agree — `qwen3` 0.5396 vs
+`qwen3_0.6b` 0.5707 dense on the `semantic` combo.)
 
 ## Embedder × entity_type profile (the "specialist vs generalist" finding)
 
@@ -1511,6 +1514,41 @@ embedders.
 
 ## Cost / latency characterization
 
+> **Currency (2026-08-07): quality columns are current against rebuild #3;
+> latency columns are deliberately still the 2026-07-29 measurement.** The
+> re-run against rebuild #3 confirmed what this section already predicted — that
+> the quality columns barely move (max |Δ| recall@10 = **0.0034** across all 18
+> embedder cells, plus +0.0022 for BM25 alone; ordering identical on both dense
+> and hybrid, `qwen3_0.6b` still highest on both) — and its
+> latency columns were then **rejected as contaminated**, on evidence rather
+> than suspicion:
+>
+> - `search p50` at dim=1024 is the same numpy operation on the same-shaped
+>   array for six of the nine embedders. On 07-29 those six agreed to within
+>   **1.9%** (241.2–245.7 ms). In the 08-07 run they spread **74.2%**
+>   (301.3–525.0 ms), split exactly at run position 6: every embedder measured
+>   before `qwen3` (the 4B model) sits at 301–317 ms, every one after it at
+>   434–525 ms. The 4B model's memory is not released before the rest of the
+>   loop is timed, so late-run embedders are charged for their position.
+> - Underneath that, a uniform ~1.25× floor shift: a standalone numpy benchmark
+>   on the same 74,816 × 1024 array, re-run afterwards on an idle machine,
+>   reproduces the 08-07 figure (129 ms), not the 07-29 one (97 ms). The host is
+>   slower now; that is not the rebuild either.
+>
+> The visible symptom is `m2v` appearing to cost *more* per hybrid query
+> (4315 ms) than `bge_m3` (3325 ms) despite encoding in 4 ms — mechanically
+> impossible, and the tell that made the run worth checking. Since latency here
+> measures corpus-size mechanics that a rebuild does not change (established
+> across two previous refreshes), the clean 07-29 numbers remain the right ones
+> to cite and are kept below. **Two things survive from the 08-07 run because
+> both terms were measured under the same conditions**: the BM25
+> rebuild-vs-scoring ratio (22×, vs 24× on 07-29) and the k=n over-fetch tax,
+> which is **66% of dense k=n cost in both runs** (558/847 vs 460/699) —
+> independent confirmation of the mechanism below. Rejected report, with the
+> full evidence: the banner at the top of `data/results/cost_latency_pareto.md`.
+> Next run: measure on an idle machine, and check same-dim embedders at
+> different loop positions before trusting any of it.
+
 **Refreshed 2026-07-29** against the OCR-remediation-rebuilt indices —
 `cost_latency_pareto.py` was skipped in both the 2026-07-25 and the
 2026-07-29 BM25/hybrid-cache-fix refreshes (it's a cost/latency
@@ -1590,16 +1628,24 @@ measured search/hybrid totals.** The table below reports both:
 
 | embedder | dim | encode p50 (ms) | intrinsic dense¹ (ms) | measured dense total p50 (ms) | intrinsic hybrid² (ms) | measured hybrid total p50 (ms) | recall@10 dense (semantic) | recall@10 hybrid (semantic) |
 |---|---|---|---|---|---|---|---|---|
-| qwen3 | 2560 | 264.66 | 631.97 | 874.72 | 668.34 | 2684.71 | 0.5382 | 0.6051 |
-| qwen3_0.6b | 1024 | 177.61 | 320.59 | 421.06 | 356.96 | 2325.41 | **0.5688** | **0.6152** |
-| jina_v5 | 1024 | 166.39 | 309.38 | 408.69 | 345.74 | 2294.54 | 0.4705 | 0.5995 |
-| bge_m3 | 1024 | 181.58 | 324.56 | 425.03 | 360.93 | 2316.29 | 0.4144 | 0.5451 |
-| e5_small | 384 | 24.68 | **79.83** | **120.43** | **116.20** | 2083.14 | 0.3802 | 0.5877 |
-| congen | 1024 | 62.18 | 205.16 | 307.30 | 241.53 | 2276.49 | 0.2989 | 0.4666 |
-| e5 | 1024 | 183.61 | 326.59 | 424.34 | 362.96 | 2286.53 | 0.3603 | 0.5455 |
-| sct | 1024 | 61.82 | 204.81 | 304.81 | 241.18 | 2274.26 | 0.1264 | 0.3971 |
-| m2v | 1024 | **2.02** | 145.00 | 247.80 | 181.37 | 2170.54 | 0.1328 | 0.3231 |
-| bm25 | — | 0 | — | — | — | 1067.63 (measured; 36.37 intrinsic) | — | 0.4620 (recall@10 alone) |
+| qwen3 | 2560 | 264.66 | 631.97 | 874.72 | 668.34 | 2684.71 | 0.5396 | 0.6020 |
+| qwen3_0.6b | 1024 | 177.61 | 320.59 | 421.06 | 356.96 | 2325.41 | **0.5707** | **0.6141** |
+| jina_v5 | 1024 | 166.39 | 309.38 | 408.69 | 345.74 | 2294.54 | 0.4699 | 0.6003 |
+| bge_m3 | 1024 | 181.58 | 324.56 | 425.03 | 360.93 | 2316.29 | 0.4154 | 0.5445 |
+| e5_small | 384 | 24.68 | **79.83** | **120.43** | **116.20** | 2083.14 | 0.3829 | 0.5843 |
+| congen | 1024 | 62.18 | 205.16 | 307.30 | 241.53 | 2276.49 | 0.2976 | 0.4655 |
+| e5 | 1024 | 183.61 | 326.59 | 424.34 | 362.96 | 2286.53 | 0.3606 | 0.5442 |
+| sct | 1024 | 61.82 | 204.81 | 304.81 | 241.18 | 2274.26 | 0.1273 | 0.3963 |
+| m2v | 1024 | **2.02** | 145.00 | 247.80 | 181.37 | 2170.54 | 0.1318 | 0.3214 |
+| bm25 | — | 0 | — | — | — | 1067.63 (measured; 36.37 intrinsic) | — | 0.4642 (recall@10 alone) |
+
+**Mixed provenance, stated deliberately**: the latency columns are the
+2026-07-29 measurement and the two `recall@10` columns are 2026-08-07 against
+rebuild #3, for the reasons in the currency banner at the top of this section.
+This is safe in the one direction that matters — latency measures corpus-*size*
+mechanics that a rebuild does not change, and scoring is unaffected by machine
+state — and both runs use the same nine `semantic`-chunker combos, so the
+apples-to-apples property the paragraph above is careful about still holds.
 
 ¹ intrinsic dense = encode p50 + dot-product-and-sort at that dim (norms
 cached, not recomputed). ² intrinsic hybrid = encode p50 + dot-product-and
@@ -1607,17 +1653,18 @@ cached, not recomputed). ² intrinsic hybrid = encode p50 + dot-product-and
 either side; bounded-pool RRF fuse is <5ms, not separately measured). Build
 cost (`embed_seconds`, `chunks_per_sec`, index size on disk) and the full
 p50/p95 breakdowns for every number above: `data/results/cost_latency_pareto.md`.
-**Refreshed 2026-07-29** against the OCR-remediation-rebuilt indices (see
-caveat paragraph above) — every quality column moved down from the
-pre-rebuild numbers, latency/cost columns essentially unchanged.
+Latency/cost columns: **2026-07-29** against the OCR-remediation-rebuilt
+indices — essentially unchanged from the measurement before that, which is the
+basis for treating them as corpus-size mechanics and keeping them through the
+rebuild-#3 refresh. Quality columns: **2026-08-07** against rebuild #3.
 
 **Reading this table**: `m2v` (Model2Vec static embedding) is by far the
 cheapest to encode (2ms) but also the weakest embedder in the whole matrix
 (see Embedders compared above) — not a real Pareto contender. Among
 genuinely competitive embedders, `e5_small` is the standout: intrinsic
 dense cost of 80ms (2-8x cheaper than every other option in the top two
-quality tiers) for recall@10=0.3802 dense / 0.5877 hybrid — now noticeably
-below the hybrid headline number (a 0.028 gap, wider than the pre-rebuild
+quality tiers) for recall@10=0.3829 dense / 0.5843 hybrid — now noticeably
+below the hybrid headline number (a 0.030 gap, wider than the pre-rebuild
 0.02) but still the cheapest intrinsic cost by far in that tier. `qwen3`
 (4B) is the most expensive per query in every column and does not lead on
 hybrid recall despite that — its cost is justified mainly by the
