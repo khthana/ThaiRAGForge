@@ -243,6 +243,30 @@ see `docs/adr/`.
   caught a genuine tie-break bug (`HybridRetriever` settles exact score ties by dense
   rank, via stable `sorted` over a dense-first dict; a naive `argsort` settles them
   by chunk index).
+- **Soft vs hard routing (2026-08-08, `tools/eval/soft_vs_hard_routing.py` →
+  `data/results/soft_vs_hard_routing.md`)** — the two routing results above were
+  measured on different axes and are now compared directly: 4 arms, each retrieving
+  k=10 from **exactly one index per query** (equal budget), index choice held at its
+  shipped value, alpha the only fitted quantity (LOO within route), routing by
+  `classify_query`. **Soft** (per-route fusion weight, 1 index) 0.6631 recall@10 >
+  **hard** (per-route index, 5 indices) 0.6382 > **neither** 0.6281. **Only `soft vs
+  none` on nDCG@10 is significant** (+0.0360, Holm-adj 0.0216, m=12); soft-vs-hard is
+  +0.0249 recall@10, ns, CI bounding hard-better-than-soft at ≤0.0147. So the claim is
+  **"soft matches hard at one fifth the index cost"**, never "soft beats hard".
+  **The two are substitutes, not complements**: doing both (0.6415) is *worse* than
+  soft alone, still worse at the oracle bound (0.6611 < 0.6710). The per-route table
+  gives the mechanism — on `person` the optimal alpha is **0.15** on the generic index
+  (hand it to BM25, 0.8147 there) but **0.45** on the routed index, whose target *is*
+  the person dense specialist; both mechanisms repair the same per-type weak dense arm,
+  so the second has little left to fix. Two facts for the `ROUTE_COMBO` decision: the
+  `program` target is **actively harmful** (routing 0.5321 vs not routing 0.6105, i.e.
+  −0.0784 on 30 queries — most of why hard routing nets out at only +0.0101), and hard
+  routing's only wins are `course` (+0.0316) and `faculty` (+0.0253). **Family-size
+  trap, worth reading before citing:** this script's arms A/B reproduce
+  `hybrid_alpha_sweep.py` to 4 decimals from an independent code path, yet the
+  `recall@10` **verdict** differs (Holm-adj 0.0252 at m=9 there, 0.0638 at m=12 here).
+  Cite the sweep's m=9 for "is a per-route alpha worth anything"; cite this table's
+  m=12 only for its own four comparisons.
 - `strip_course_comparison_tables` (`src/rag_lab/loaders/common.py`, commit
   `71764a8`) compacts old/new course-comparison tables (code + credit-tuple
   + English description, the corpus's single largest chunks — 17,077 chars

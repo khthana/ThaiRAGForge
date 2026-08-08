@@ -1078,6 +1078,81 @@ corpus, so it bounds fitting-to-the-query, not fitting-to-this-corpus. (3)
 no per-type conclusion for it. (4) Classification is exact on this set, so the
 real-world cost of misrouting is not measured here.
 
+## Resolved 2026-08-08: Soft vs hard routing — they are substitutes, not complements, and the cheap one is not worse
+
+Two results landed the same day pointing opposite ways and had never been put on
+one axis. **Hard routing** (§"Query routing") switches the *index* per route: it
+closed a 43% coverage hole but is only **+0.0101** recall@10 over the best single
+combo used for everything, and it needs 5 indices. **Soft routing** (§ above)
+switches only the *fusion weight* on one index: **+0.0350**. Script:
+`tools/eval/soft_vs_hard_routing.py` → `data/results/soft_vs_hard_routing.md`.
+
+Four arms, every one retrieving k=10 from **exactly one index per query** — equal
+retrieval budget, so no arm wins by fetching more
+([[feedback_state_the_retrieval_budget_in_every_comparison]]). Hybrid throughout.
+Index choice is held at its shipped value in every arm; the only fitted quantity
+is alpha, fitted leave-one-out within a route. Routing uses `classify_query`, not
+the gold label.
+
+| arm | what the classifier moves | indices | recall@10 | MRR | nDCG@10 |
+|---|---|---|---|---|---|
+| **A** single @ 0.50 | nothing (no classifier) | 1 | 0.6281 | 0.8430 | 0.6951 |
+| **C** routed @ 0.50 (**hard**) | the index | 5 | 0.6382 | 0.8233 | 0.7006 |
+| **B** single + per-route alpha (**soft**, LOO) | the fusion weight | 1 | **0.6631** | 0.8705 | **0.7311** |
+| **D** routed + per-route alpha (both, LOO) | both | 5 | 0.6415 | **0.8743** | 0.7242 |
+| _B′ soft (oracle)_ | _upper bound_ | 1 | _0.6710_ | _0.8899_ | _0.7510_ |
+| _D′ both (oracle)_ | _upper bound_ | 5 | _0.6611_ | _0.8940_ | _0.7377_ |
+
+**Nothing here is significant except `B vs A` on nDCG@10** (+0.0360, Holm-adj
+0.0216, m=12). State the rest as bounds:
+
+| comparison | recall@10 | MRR | nDCG@10 |
+|---|---|---|---|
+| B vs A (soft vs none) | +0.0350 [+0.0103, +0.0620] | +0.0275 [−0.0177, +0.0741] | **+0.0360** [+0.0123, +0.0606] |
+| C vs A (hard vs none) | +0.0101 [−0.0291, +0.0503] | −0.0197 [−0.0709, +0.0322] | +0.0056 [−0.0366, +0.0491] |
+| **B vs C (soft vs hard)** | +0.0249 [−0.0147, +0.0628] | +0.0473 [−0.0135, +0.1091] | +0.0304 [−0.0129, +0.0722] |
+| D vs C (does alpha add to routing) | +0.0033 [−0.0202, +0.0274] | +0.0510 [+0.0047, +0.0988] | +0.0236 [+0.0012, +0.0460] |
+
+**The claim is "soft matches hard at one fifth the index cost", not "soft beats
+hard".** Soft leads on all three metrics but no gap survives Holm; the CI bounds
+hard being better than soft by more than **0.0147** recall@10.
+
+**Combining them buys nothing — and the per-route table says why.** D trails B on
+recall@10 and nDCG@10, and still does at the oracle bound (0.6611 < 0.6710):
+
+| route | n | A single@0.50 | B soft | C hard | D both | alpha* on single | alpha* on routed |
+|---|---|---|---|---|---|---|---|
+| `person` | 30 | 0.7487 | **0.8383** | 0.8171 | 0.8327 | **0.15** | **0.45** |
+| `program` | 30 | 0.6105 | **0.6266** | **0.5321** | 0.5690 | 0.75 | 0.80 |
+| `course` | 33 | 0.5946 | 0.6162 | **0.6262** | 0.5932 | 0.65 | 0.60 |
+| `faculty` | 13 | 0.4755 | 0.4623 | **0.5008** | 0.4901 | 0.45 | 0.40 |
+
+The `person` row is the mechanism in one line: on the generic index the optimal
+alpha is **0.15** (hand the query to BM25, which scores 0.8147 on `person`); on
+the routed index — whose target *is* the `person` dense specialist — it rises to
+**0.45**, i.e. back to roughly neutral. **Both forms of routing repair the same
+defect, a per-type weak dense arm, by two different means.** Applying the second
+after the first has little left to fix, which is why D is not additive. Soft
+even wins the `person` route outright (0.8383 vs hard's 0.8171): re-weighting
+toward BM25 on the generic index beats switching to the specialist index.
+
+**Two things this hands to the open ROUTE_COMBO decision.** (1) The `program`
+route's shipped target is not merely stale, it is **actively harmful**: routing
+to it scores **0.5321** where simply not routing scores **0.6105** — hard routing
+*costs* 0.0784 recall@10 on those 30 queries, and that single row is most of why
+hard routing nets out at +0.0101 overall. (2) Hard routing's wins are confined to
+`course` (+0.0316) and `faculty` (+0.0253), the two routes added most recently.
+
+**Caveats.** (1) Arm A's index is the argmax over 36 combos on this same test
+set; its defence is that `routing_eval`'s LOO selector re-picks it in every fold
+(best single = best single (LOO) = 0.6281), not that it was chosen blind.
+(2) `faculty` n=13 — no per-route conclusion from that row alone. (3) The soft
+arm's numbers reproduce `hybrid_alpha_sweep.py` to 4 decimal places from an
+independent code path, but its `recall@10` **verdict** differs (Holm-adj 0.0252
+at m=9 there, 0.0638 at m=12 here) — same data, same difference, larger family.
+Cite the sweep's m=9 for "is a per-route alpha worth anything"; cite this
+table's m=12 only for the four comparisons it was built to make.
+
 ## Methodology
 
 - **Metrics**: recall@k, precision@k, nDCG@k, MRR, MAP, all resolution-level
@@ -2599,6 +2674,11 @@ holds as stated.
   Caches each arm's rank vector once and re-fuses in numpy, so 21 alphas cost one
   retrieval pass. `--self-check` pins the vectorised fusion against the real
   `BM25Retriever`/`HybridRetriever`/`DenseRetriever` at alpha 0.00/0.50/1.00
+- `tools/eval/soft_vs_hard_routing.py` — puts per-route *fusion weight* (soft) and
+  per-route *index* (hard) on one axis: 4 arms, each retrieving k=10 from exactly one
+  index per query so the retrieval budget is equal. Resolves route→index through
+  `query_service.resolve_index`, so the hard arm switches indices the way the shipped
+  router does; alpha is the only fitted quantity, LOO within a route
 - `tools/eval/map_precision_significance_test.py` — MAP + precision@1 pairwise significance,
   run at **both** scopes (cross-chunker aggregate, and `semantic`-only to match the existing
   tie test) × both retrievers (dense, hybrid); closed Open item #9's untested-metric half
