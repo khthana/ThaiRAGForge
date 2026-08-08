@@ -867,9 +867,9 @@ see `docs/adr/`.
   0.8355 (perfect rerank over all 360), **never 0.8948**; (c) unioning the dense
   and BM25 result sets too lifts it to **0.9443 macro / 0.9197 micro**, so
   **80 of the 164 "nothing found it" pairs were a retriever-choice artifact** and
-  the structural floor is **84 pairs (8.0%)**, of which 8 are a labelling
-  artifact → cite **76 (7.3%)**. Splitting the rest into "rank 11-50" vs "never
-  retrieved" still needs a k=50 run (results store rank ≤ 10 only). The §1d
+  the floor is **84 pairs (8.0%)**, of which 8 are a labelling
+  artifact → cite **76 (7.3%)**. **Do not call that floor *structural* — the word
+  was withdrawn 2026-08-08 by `tools/eval/miss_depth_profile.py` (next bullet).** The §1d
   router was **dropped, not recomputed** — `routing_eval.py` is its tested
   descendant and reports `routed (loo)` 0.6780 (+0.0499, **ns**), so recomputing
   an untested +0.0465 here would have manufactured a conflict. **S5 pins this
@@ -890,6 +890,44 @@ see `docs/adr/`.
   `SIGNALS AND SYSTEMS` is 9/10 prerequisite-only at union recall **1.000** and
   `ELECTRONICS ENGINEERING 1` is 10/10 at 0.900. Cite 9.5% as a category that
   exists, never as a cause.
+- **Miss-depth profile (`tools/eval/miss_depth_profile.py` →
+  `data/results/miss_depth_profile.md`, 2026-08-08)** — the split the ceiling
+  bullet above left open. **The ticket said "run k=50"; that is the wrong
+  experiment** — `DenseRetriever`/`BM25Retriever` score the whole corpus then
+  `argsort(-scores)[:k]`, so k=50 is free but erases the only distinction being
+  asked about (rank 51 vs rank 40,000). It computes **untruncated** ranks for 36
+  combos × 3 arms instead, ~14.5 min. **Result: the floor is depth, not absence** —
+  of the 84 all-arm misses, **64 (76.2%) sit at ranks 11-50**, 83 of 84 are inside
+  the top 1,000, exactly **1** is deep (`รายวิชา CALCULUS 2`, rank **2,984**), and
+  **0 are missing from the index**. So drop "structural"; a reranker fetching 50
+  candidates can reach three quarters of them. Two consequences: **`person` has 0
+  misses** (the 84 are course 33 / faculty 28 / program 23, and course is almost
+  purely near-miss at 32-of-33 while faculty splits 14 near / 14 deep — a reranker
+  helps course, not half of faculty); and **the candidate pool should come from
+  `dense`, not the shipped hybrid** — on these hard pairs dense has median best
+  rank **26** and is closest on **70 of 84**, vs hybrid 43 (9) and BM25 210 (6).
+  Read against the **already-measured** cross-encoder result (hurts hybrid MRR
+  0.7814→0.6778, p=0.0012): the evidence is in reach at P=50, the tried reranker
+  does not reach it. **Two replication traps are pinned in the docstring because
+  both were hit while writing it.** (1) Batching all 106 queries into one
+  `(N,1024)@(1024,106)` matmul reproduces only 98/106 top-10s — the *scores* are
+  identical, but BLAS accumulates a batched product differently and
+  `np.argsort`'s default quicksort is unstable, so exact ties reorder; replicate
+  `DenseRetriever.retrieve`'s per-query gemv exactly (and leave `emb` float32).
+  (2) `HybridRetriever` settles equal RRF scores **dense-first**, so fusion must
+  be `dorder[argsort(-fused[dorder], kind="stable")]`. S2/S3/S4 gate all three
+  arms against the persisted results (3,816 / 848 / 3,816 reproduce, 0 differ),
+  S3b *verifies* rather than assumes the chunk-row sharing that licenses the
+  per-chunker BM25 cache (36 combos → 4 `BM25Okapi` builds, the 2.4x speedup),
+  and **S5/S6 reproduce the ceiling report's 84 and 164 from an independent code
+  path**. **S7 exists because the first version of §2 was wrong**: it reported
+  "perfect rerank from a pool of 50 = 0.8869", which is *above* the qrels ceiling
+  0.8856 and therefore impossible for a reranker that still sends 10 documents —
+  the table was measuring what is *in the pool*. §2 now prints both columns and
+  S7 gates the deliverable one against the ceiling — **cite the delivered one**:
+  a perfect rerank over P=50 is 0.6281 → **0.8249**, and P=1000 buys only 0.8738,
+  so the 10-document budget binds, not the pool. Same family as
+  [[feedback_state_the_retrieval_budget_in_every_comparison]].
 - **Candidate next axis, written up but not started**:
   `docs/colbert-late-interaction-notes.md` (ColBERT: motivated by *our own*
   results — the cross-encoder reranker hurt hybrid MRR, and BM25/dense split

@@ -1716,12 +1716,13 @@ Three results worth citing, and one retraction.
    (69.3% of the misses) are found by *some* system**. That is the headroom a
    per-query router or a reranker over a merged pool is aiming at — but at the
    real 10-document budget its ceiling is 0.7771–0.8355, **not** 0.8948.
-3. **The structural floor is 76 pairs (7.3%)**, not the 164 the hybrid-only union
+3. **The floor is 76 pairs (7.3%)**, not the 164 the hybrid-only union
    suggests. Adding the dense and BM25 result sets recovers 80 further pairs, so
    most of "no system found it" was a *retriever-choice* artifact. Of the 84 that
    survive all three retrieval paths, 8 are unanswerable by construction (below),
-   leaving 76 genuinely unaccounted for — still unsplit between "ranked 11–50" and
-   "never retrieved", which needs a k=50 run.
+   leaving 76 genuinely unaccounted for. **These were called a *structural* floor
+   until 2026-08-08; that word is now withdrawn** — the depth profile below shows
+   they are ranked, not absent.
 
 **Retracted from the earlier version of this analysis**: its best single of
 0.6935 is superseded by the 0.6281 above, and its ceiling of 0.9201 is retired
@@ -1732,6 +1733,80 @@ only those 73 non-course queries with the combo set used here reproduces its
 shape (best 0.6728, union 0.9125), so the difference is coverage, not method. Its leave-one-out router
 (+0.0465) is withdrawn in favour of `routing_eval.md`'s tested `routed (loo)`
 = 0.6780 (+0.0499), which does **not** reach significance.
+
+#### How deep are the misses? (`tools/eval/miss_depth_profile.py`, 2026-08-08)
+
+The item above left one question open: of the pairs no system returns at k=10,
+how many are ranked just outside the cut and how many are effectively absent?
+**It was not answered with a k=50 run.** `DenseRetriever` and `BM25Retriever`
+both score the whole corpus and then `argsort(-scores)[:k]`, so k=50 costs
+exactly what an exhaustive rank costs while destroying the one distinction the
+question is about — rank 51 versus rank 40,000. The script therefore recomputes
+**untruncated ranks** for all 36 combos × 3 arms, and pins itself to the
+persisted results first: dense, BM25 and hybrid top-10 must each reproduce
+byte-for-byte (3,816 / 848 / 3,816 reproduce, 0 differ), and the 84 and 164
+counts must agree with the ceiling report from an independent code path.
+
+A resolution's rank is its **best chunk's** rank, because the budget is counted
+in chunks (k=10 chunks ≈ 7 distinct resolutions).
+
+| best rank achieved by any arm | of the 84 all-arm misses | of the 164 hybrid-only misses |
+|---|---|---|
+| 11–50 | **64 (76.2%)** | 129 (78.7%) |
+| 51–100 | 11 | 20 |
+| 101–1000 | 8 | 14 |
+| 1001+ | 1 | 1 |
+| not in the index at all | **0** | **0** |
+
+**The floor is ranking depth, not absence.** Every one of the 84 pairs has a
+chunk in every index, 83 of 84 sit inside the top 1,000, and three quarters sit
+at ranks 11–50 — reachable by any reranker willing to fetch 50 candidates. Only
+one pair is genuinely deep (`รายวิชา CALCULUS 2` → a 2568 curriculum-revision
+resolution, best rank **2,984**). This is why "structural" was withdrawn above.
+
+**How deep a candidate pool a reranker would need — and what it could actually
+deliver.** These are two different quantities and the first version of this
+table conflated them. *In pool* is the fraction of gold sitting inside a
+candidate pool of size P: the reranker's raw material, unbounded by the output
+budget. *Delivered* is recall@10 after a **perfect** rerank that still returns
+only 10 documents, so it is capped by the qrels ceiling 0.8856 for the same
+reason every other 10-document row is (macro; best single = `sentence` ×
+`qwen3_0.6b`, hybrid):
+
+| P | single, in pool | single, **delivered** | all arms, in pool | all arms, **delivered** |
+|---|---|---|---|---|
+| 10 | 0.6281 | **0.6281** | 0.9443 | **0.8614** |
+| 20 | 0.7751 | **0.7534** | 0.9674 | **0.8711** |
+| 50 | 0.8869 | **0.8249** | 0.9837 | **0.8783** |
+| 100 | 0.9169 | **0.8356** | 0.9925 | **0.8814** |
+| 1000 | 0.9798 | **0.8738** | 0.9990 | **0.8846** |
+
+**Cite the delivered column.** A perfect reranker over a 50-document pool from
+one system is worth **0.6281 → 0.8249**, and going ten times deeper (P=1000)
+buys only 0.8738 — the budget, not the pool, is what binds. The "in pool"
+column crosses 0.8856 at P=50 and reaches 0.9798, which is why it must never be
+quoted as a reranker's ceiling. Check S7 gates every delivered cell against the
+0.8856 the script recomputes from the qrels.
+
+Two further facts, both of which change where effort should go:
+
+- **`person` has zero misses.** All 180 `person` pairs are found at k=10 by some
+  arm. The 84 are `course` 33, `faculty_adjunct_aggregate` 28, `program` 23 —
+  and the three types fail differently: `course` is almost purely a near-miss
+  (32 of 33 at ranks 11–50), while `faculty_adjunct_aggregate` splits evenly
+  (14 at 11–50, 14 deeper). A reranker helps `course`; it will not rescue half
+  of `faculty`.
+- **The candidate pool should come from dense, not from the shipped hybrid.**
+  On exactly these hard pairs, `dense` has median best rank **26** and is the
+  closest arm on **70 of 84**; `hybrid` is 43 (9 pairs) and `bm25` is 210 (6).
+  The arm that wins the published recall@10 tables is not the arm that gets
+  nearest on what they miss.
+
+**Standing caveat before anyone reads this as free headroom.** This project
+already measured a real cross-encoder over hybrid candidates and it
+*significantly hurt* MRR (0.7814 → 0.6778, Holm-adj p=0.0012) while doing
+nothing for recall@10. The depth profile says the evidence is within reach at
+P=50; it does not say the reranker that was tried can reach it.
 
 #### A qrels defect this surfaced: two course names, one a prefix of the other
 
