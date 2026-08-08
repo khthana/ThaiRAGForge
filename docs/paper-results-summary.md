@@ -1570,9 +1570,19 @@ across queries) per entity_type:
 | entity_type | n queries | avg relevant docs | max relevant docs | **ceiling recall@10** |
 |---|---|---|---|---|
 | person | 30 | 6.0 | 13 | **0.9760** |
-| program | 30 | 8.2 | 24 | **0.9000** |
+| program | 30 | 8.2 | 24 | **0.8979** |
+| course | 33 | 12.2 | 35 | **0.8729** |
 | faculty_adjunct_aggregate | 13 | 16.8 | 43 | **0.6810** |
-| **all 73 (mean)** | 73 | 8.8 | 43 | **0.8922** |
+| **all 106 (mean)** | 106 | 9.9 | 43 | **0.8856** |
+
+*(Recomputed 2026-08-08 from `config/eval/gold_query_set_73det.yaml` after
+`tools/eval/audit_doc_claims.py` flagged the mean as untraceable. The table had
+been written when the set held 73 queries and was never extended when the 33
+`course` queries landed — so the old `all 73 (mean)` of 0.8922 was a ceiling for
+two-thirds of the set. `program` also moved 0.9000 → 0.8979 with the
+`resolution_id` repair. `person` and `faculty_adjunct_aggregate` are unchanged,
+and the reading below is unaffected: `course` sits mid-table, so nothing about
+`faculty_adjunct_aggregate` being the binding constraint changes.)*
 
 **Reading this**: the low-looking recall@10 numbers for
 `faculty_adjunct_aggregate` in every table above (e.g. bge_m3 dense-alone
@@ -1751,15 +1761,15 @@ separately per metric. Full table:
 
 | embedder | fixed_size | recursive | semantic | sentence |
 |---|---|---|---|---|
-| e5 | +0.0675 (ns) | +0.1188 (**sig**) | +0.1017 (**sig**) | +0.1223 (**sig**) |
-| e5_small | +0.1458 (**sig**) | +0.1332 (**sig**) | +0.0818 (ns) | +0.1396 (**sig**) |
-| bge_m3 | +0.0819 (ns) | +0.0985 (ns) | +0.0476 (ns) | +0.1081 (**sig**) |
-| congen | +0.2360 (**sig**) | +0.2386 (**sig**) | +0.1632 (**sig**) | +0.2627 (**sig**) |
-| jina_v5 | +0.1279 (**sig**) | +0.0847 (ns) | −0.0084 (ns) | +0.1142 (**sig**) |
-| qwen3 | +0.0553 (ns) | +0.0299 (ns) | −0.0761 (ns) | +0.0522 (ns) |
-| qwen3_0.6b | −0.0138 (ns) | −0.0097 (ns) | **−0.1067 (sig)** | −0.0028 (ns) |
-| sct | +0.3965 (**sig**) | +0.4251 (**sig**) | +0.3357 (**sig**) | +0.4108 (**sig**) |
-| m2v | +0.3995 (**sig**) | +0.3687 (**sig**) | +0.3292 (**sig**) | +0.4021 (**sig**) |
+| e5 | +0.0674 (ns) | +0.1161 (**sig**) | +0.1036 (**sig**) | +0.1233 (**sig**) |
+| e5_small | +0.1464 (**sig**) | +0.1306 (**sig**) | +0.0814 (ns) | +0.1371 (**sig**) |
+| bge_m3 | +0.0838 (ns) | +0.0940 (ns) | +0.0489 (ns) | +0.1080 (**sig**) |
+| congen | +0.2360 (**sig**) | +0.2374 (**sig**) | +0.1666 (**sig**) | +0.2619 (**sig**) |
+| jina_v5 | +0.1247 (**sig**) | +0.0824 (ns) | −0.0057 (ns) | +0.1164 (**sig**) |
+| qwen3 | +0.0580 (ns) | +0.0219 (ns) | −0.0753 (ns) | +0.0534 (ns) |
+| qwen3_0.6b | −0.0116 (ns) | −0.0184 (ns) | **−0.1065 (sig)** | −0.0000 (ns) |
+| sct | +0.3969 (**sig**) | +0.4235 (**sig**) | +0.3369 (**sig**) | +0.4109 (**sig**) |
+| m2v | +0.4000 (**sig**) | +0.3663 (**sig**) | +0.3324 (**sig**) | +0.4016 (**sig**) |
 
 **Two findings the aggregate table can't show, both confirmed again post-refresh
 (with one new wrinkle)**:
@@ -1954,14 +1964,14 @@ the `semantic` chunker only while the multi-k tables above aggregate across all
 
 | retriever / scope | metric | highest | significantly beats | ties |
 |---|---|---|---|---|
-| dense / aggregate | MAP | `qwen3_0.6b` (0.4447) | **8 of 8** | — |
-| dense / aggregate | precision@1 | `qwen3_0.6b` (0.7429) | **8 of 8** | — |
-| dense / semantic | MAP | `qwen3_0.6b` (0.4976) | 3 of 4 | `qwen3` |
-| dense / semantic | precision@1 | `qwen3_0.6b` (0.7830) | 3 of 4 | `qwen3` |
-| hybrid / aggregate | MAP | `qwen3_0.6b` (0.4922) | 4 of 8 | `qwen3`, `bge_m3`, `e5`, `e5_small` |
-| hybrid / aggregate | precision@1 | `qwen3_0.6b` (0.7382) | 4 of 8 | `qwen3`, `bge_m3`, `e5`, `e5_small` |
-| hybrid / semantic | MAP | `qwen3` (0.5014) | 1 of 4 (`bge_m3`) | `qwen3_0.6b`, `jina_v5`, `e5_small` |
-| hybrid / semantic | precision@1 | `qwen3` (0.7170) | **0 of 4** | all four |
+| dense / aggregate | MAP | `qwen3_0.6b` (0.4457) | **8 of 8** | — |
+| dense / aggregate | precision@1 | `qwen3_0.6b` (0.7406) | **8 of 8** | — |
+| dense / semantic | MAP | `qwen3_0.6b` (0.4970) | 3 of 4 | `qwen3` |
+| dense / semantic | precision@1 | `qwen3_0.6b` (0.7736) | 3 of 4 | `qwen3` |
+| hybrid / aggregate | MAP | `qwen3_0.6b` (0.4948) | 4 of 8 | `qwen3`, `bge_m3`, `e5`, `e5_small` |
+| hybrid / aggregate | precision@1 | `qwen3_0.6b` (0.7429) | **5 of 8** | `qwen3`, `bge_m3`, `e5` |
+| hybrid / semantic | MAP | `qwen3` (0.5047) | 1 of 4 (`bge_m3`) | `qwen3_0.6b`, `jina_v5`, `e5_small` |
+| hybrid / semantic | precision@1 | `qwen3` (0.7264) | **0 of 4** | all four |
 
 **Three things this settles:**
 

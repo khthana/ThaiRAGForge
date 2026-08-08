@@ -1,0 +1,37 @@
+# Triaged exemptions for tools/eval/audit_doc_claims.py.
+#
+# Every entry carries the reason it was cleared and the date it was checked. An
+# exemption without a written justification is indistinguishable from switching
+# the check off, and nobody can re-audit it later.
+#
+# Adding an entry is a claim that a human read the figure and confirmed it. If
+# the underlying report is re-run, an entry here does NOT re-verify itself --
+# re-check anything whose reason says "recomputed by hand".
+
+# D2: a figure in the prose that no report prints literally.
+numbers:
+  - doc: docs/paper-results-summary.md
+    number: "0.4650"
+    checked: 2026-08-08
+    reason: >-
+      Derived, not reported: person recall@10 at alpha=0.00 minus alpha=1.00 on
+      sentence+qwen3_0.6b (0.8254 - 0.3604), from the grid in
+      data/results/hybrid_alpha_sweep.md lines 35/53. Recomputed by hand
+      2026-08-08 and exact. Its sibling -0.2682 (program, 0.3350 - 0.6032) and
+      the 0.5034 both endpoints share are printed, so only the subtraction is
+      unsourced. Kept as prose rather than added to the sweep script because it
+      is a one-off illustration of aggregate blindness, not a reported metric.
+
+# D4: an eval input that changed after a report that reads it, cleared because
+# the change provably cannot move that report's numbers.
+inputs:
+  - src: src/rag_lab/retrievers/hybrid.py
+    report: hybrid_significance_test_9way.md
+    checked: 2026-08-08
+    reason: >-
+      The 2026-08-08 edit added weighted-RRF `alpha` support. A uniform 0.5x
+      factor cannot reorder a ranking, so alpha=0.50 (the shipped default, and
+      what this report was computed at) is rank-order-identical to plain RRF --
+      pinned as a regression guard by
+      tests/retrievers/test_hybrid_retriever.py. The report's numbers are
+      therefore unchanged by construction, not merely unaffected in practice.

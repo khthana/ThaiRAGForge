@@ -93,6 +93,44 @@ see `docs/adr/`.
   the 73det set cite it). A general title-vs-body check was prototyped and **rejected on
   measurement**: median agreement is 0.660 over 2,820 files with 544 below 0.5,
   nearly all false alarms from agenda-number prefixes.
+- **Run `tools/eval/audit_doc_claims.py` after editing `CLAUDE.md` or
+  `docs/paper-results-summary.md`, and after any eval refresh.** It is the docs
+  layer the sweep above was missing: `audit_pipeline_invariants.py` gates
+  corpus/index/eval and `diff_significance_reports.py` gates report-vs-report,
+  but **nothing read the prose**, which is where this project's avoidable errors
+  actually live — a number typed by hand, correct that day, that no later
+  refresh touches because a refresh re-runs scripts and diffs reports. Four
+  checks: D1 report older than its generator (+ reports that don't declare one),
+  **D2 every 4-decimal figure in the prose must appear in some report** (the main
+  one), D3 a p-value quoted against a contradicting verdict word, D4 an eval
+  *input* changed after a report that reads it (the "editing `ROUTE_COMBO`
+  silently re-scores `soft_vs_hard_routing.md`" failure). Report:
+  `docs/doc-claims-audit.md`; triaged exemptions with written reasons in
+  `tools/eval/doc_claims_allowlist.yaml`. **First run found three real stale
+  tables, and the way it found them is the point**: all three had drifted in the
+  2026-08-06 refresh *without a single verdict cell changing*, so
+  `diff_significance_reports.py` correctly reported 0 flips and nobody re-copied
+  the numbers. (1) the per-chunker BM25-vs-embedder table — every one of 36
+  cells off by ~0.001-0.003; (2) the MAP/precision@1 summary — same, plus it
+  still said hybrid/aggregate precision@1 beat **4 of 8** where the report says
+  **5 of 8**, a figure CLAUDE.md had already been updated with, so the two docs
+  openly disagreed; (3) the structural-ceiling table, which was never extended
+  when the 33 `course` queries landed — it was a ceiling for two-thirds of the
+  set (now `all 106` 0.8856, was `all 73` 0.8922; `program` 0.9000 → 0.8979,
+  `course` 0.8729 added). Two design notes worth keeping. **D2's haystack is
+  deliberately `data/results/**/*.md` only** — including the per-query JSON
+  makes it *vacuous rather than thorough*, since 225 MB of scores contains
+  almost any 4-decimal value by coincidence (untraceable count 122 → 27, and not
+  one of those 95 was genuinely sourced). **D2 clears a figure two ways** — cited
+  as superseded, or inside a dated snapshot — because `paper-results-summary.md`
+  keeps its own supersession history on purpose; `tests/tools/test_audit_doc_claims.py`
+  pins those exemptions in both directions so the next one added can't quietly
+  make the check vacuous. D3 is a **WARN by design** (irreducible false
+  positives: a parenthetical can attribute its p to one arm and its verdict word
+  to another), and D1b warns on the 18 reports with no identifiable generator so
+  D1a's denominator stays honest. Uses filesystem mtimes, not git dates — reports
+  are gitignored and a script's commit lands *after* the run, which flagged all
+  10 pairs as false positives on the first run.
 - The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;
   corpus-prep tooling in `tools/corpus_prep/` needs Poppler + Ollama.
 - **Superseded backups live off-repo** (2026-07-30): 2,389 `*.dup` / `*.bak` files
