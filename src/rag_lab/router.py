@@ -84,48 +84,98 @@ class RouteTarget:
     embedder_model_name: str | None = None
 
 
-# Best-performing (chunker, embedder) combo per route, from the Gold-eval
-# breakdown (tools/eval/gold_embedder_breakdown.py): person peaks under
-# semantic+bge-m3 (recall@10 0.7504), program peaks under
-# sentence+phayathaibert-congen (0.6081). "unmatched" has no clear winner in
-# the per-category data, so it defaults to bge-m3 (the most balanced embedder
-# across every chunker) on fixed_size (a reasonable, cheap default chunker).
+# Best-performing (chunker, embedder) combo per route. Keyed by RETRIEVER
+# first, because the best target for a route is retriever-dependent and a
+# single flat dict silently served whichever retriever it was picked under.
+# Evidence for every entry: `tools/eval/routing_eval.py` ->
+# `data/results/routing_eval.md`, section 2, run per retriever on the
+# 106-query 73det Gold set.
 #
-# course (added 2026-08-08, see routing_eval.py's per-entity_type scan on the
-# 106-query 73det set): qwen3-0.6B is not merely the argmax cell, it leads
-# course under *all four* chunkers (0.5105-0.5759) while the next embedder
-# tops out at 0.5114 and the shipped unmatched default (bge-m3) reaches only
-# 0.2681 -- an embedder-level effect, not a single lucky cell. The chunker
-# within qwen3-0.6B is a near-tie (0.5105-0.5759), so it is settled by the
-# project's one significance-backed chunker result rather than by argmax:
-# recursive is the only chunker ever shown to beat another (fixed_size, on
-# aggregate nDCG@10). It happens to be the argmax here too.
+# Adoption rule used below, so a future refresh has a criterion rather than an
+# argmax: take the scan's best combo only when the leave-one-out selector
+# picks that same target in essentially every fold (>=29/30). One distinct LOO
+# target means the choice does not hinge on any single query, which is what
+# makes adopting it a *refresh* rather than a fit to the eval set. Where the
+# LOO selector wavers, the incumbent stays even if it is numerically behind.
 #
-# faculty deliberately points at the SAME target as unmatched: the scan found
-# no combo demonstrably better for it (best 0.5146 vs this default's 0.4294,
-# on n=13, well inside the embedder family's own MDE ~0.05-0.10 -- and the
-# nine embedders span just 0.2362-0.4729 in mean, versus 0.0000-0.5514 on
-# course). The route exists anyway because classification is 13/13 exact and a
-# named route records "checked, nothing better" in code rather than in a doc,
-# and because the per-entity_type weighted-RRF sweep needs the label.
+# Consequence to state whenever these numbers are cited: after this refresh
+# `routed (shipped)` is chosen ON the 106 queries it is scored on, so it is
+# no longer an independent arm -- it now sits near `routed (oracle)` by
+# construction (dense 0.6189 vs 0.6293, hybrid 0.6831 vs 0.6868 recall@10).
+# **The honest generalisation estimate is `routed (loo)`**, and that arm is
+# unchanged by this refresh (+0.0349 dense / +0.0499 hybrid vs the best single
+# combo, both ns) because it never read these constants in the first place.
+# So the refresh raises the shipped router to what LOO already predicted; it
+# does not create new gain.
 #
-# person and program are KNOWN STALE and deliberately left alone here. They
-# were picked 2026-07-17 from the 252-query set, and the same scan finds both
-# beaten on the 106-query 73det set (person by semantic+qwen3, +0.0598 dense;
-# program by fixed_size+qwen3_0.6b, +0.0813), each stable across 30/30
-# leave-one-out folds -- so refreshing them would be a refresh, not a fit.
-# What blocks it is that the better target is *retriever-dependent* (person
-# peaks at semantic+qwen3 under dense but sentence+bge_m3 under hybrid, and
-# program at fixed_size+qwen3_0.6b vs semantic+qwen3_0.6b), which one
-# retriever-agnostic dict cannot express. Changing it is a separate decision
-# about that structure, not a config edit; see data/results/routing_eval.md.
-ROUTE_COMBO: dict[str, RouteTarget] = {
-    ROUTE_PERSON: RouteTarget("semantic", "local", "BAAI/bge-m3"),
-    ROUTE_PROGRAM: RouteTarget("sentence", "local", "kornwtp/ConGen-BGE_M3-model-phayathaibert"),
+# course -- shipped target is already the argmax under both retrievers (gap
+# +0.0000), so nothing to do. It was chosen 2026-08-08 on an embedder-level
+# effect, not a lucky cell: qwen3-0.6B leads course under *all four* chunkers
+# (0.5105-0.5759) while the next embedder tops out at 0.5114 and bge-m3
+# reaches only 0.2681. The chunker within qwen3-0.6B is a near-tie, settled by
+# the project's one significance-backed chunker result (recursive is the only
+# chunker ever shown to beat another) rather than by argmax.
+#
+# faculty -- STAYS at the unmatched default under both retrievers, and this is
+# the rule above doing its job rather than an oversight. Dense wants
+# fixed_size+e5 (+0.0852) but the LOO selector picks 3 different targets
+# across 13 folds; hybrid wants recursive+e5_small on a gap of only +0.0305.
+# n=13 is inside the embedder family's own MDE (~0.05-0.10). "Checked,
+# nothing stable enough" is recorded here in code rather than in a doc.
+#
+# person / program -- REFRESHED 2026-08-08. Both were picked 2026-07-17 from
+# the retired 252-query set and both are beaten on the 73det set under both
+# retrievers, unanimously across folds: person 30/30 under each, program 30/30
+# dense and 29/30 hybrid. `sentence+congen` in particular was not merely
+# stale but actively harmful under hybrid -- routing `program` to it scored
+# 0.5321 where NOT routing at all scored 0.6105, i.e. -0.0784 on those 30
+# queries, which was most of why hard routing netted out at only +0.0101
+# overall (`tools/eval/soft_vs_hard_routing.py`). Re-running that script after
+# this refresh flipped its headline verdict: `program` now scores 0.6545
+# routed (+0.0440 for routing instead of -0.0784), hard routing wins all four
+# routes, and it overtakes soft (per-route alpha) routing. Any number quoted
+# from that script predating 2026-08-08 is measuring the stale targets above.
+#
+# unmatched -- unchanged and still unmeasured: 0/106 Gold queries reach it
+# since the course/faculty routes landed, so there is no per-route evidence
+# for it either way. bge-m3 on fixed_size is a balanced, cheap default.
+_ROUTE_COMBO_DENSE: dict[str, RouteTarget] = {
+    ROUTE_PERSON: RouteTarget("semantic", "qwen3", "Qwen/Qwen3-Embedding-4B"),
+    ROUTE_PROGRAM: RouteTarget("fixed_size", "qwen3", "Qwen/Qwen3-Embedding-0.6B"),
     ROUTE_COURSE: RouteTarget("recursive", "qwen3", "Qwen/Qwen3-Embedding-0.6B"),
     ROUTE_FACULTY: RouteTarget("fixed_size", "local", "BAAI/bge-m3"),
     ROUTE_UNMATCHED: RouteTarget("fixed_size", "local", "BAAI/bge-m3"),
 }
+
+_ROUTE_COMBO_HYBRID: dict[str, RouteTarget] = {
+    ROUTE_PERSON: RouteTarget("sentence", "local", "BAAI/bge-m3"),
+    ROUTE_PROGRAM: RouteTarget("semantic", "qwen3", "Qwen/Qwen3-Embedding-0.6B"),
+    ROUTE_COURSE: RouteTarget("recursive", "qwen3", "Qwen/Qwen3-Embedding-0.6B"),
+    ROUTE_FACULTY: RouteTarget("fixed_size", "local", "BAAI/bge-m3"),
+    ROUTE_UNMATCHED: RouteTarget("fixed_size", "local", "BAAI/bge-m3"),
+}
+
+ROUTE_COMBO_BY_RETRIEVER: dict[str, dict[str, RouteTarget]] = {
+    "dense": _ROUTE_COMBO_DENSE,
+    "hybrid": _ROUTE_COMBO_HYBRID,
+}
+
+# The map used for any retriever the routing eval has not covered (bm25,
+# entity_lookup, entity_boost, qdrant). Hybrid rather than dense because
+# hybrid is this project's best-measured system, but note it IS an
+# extrapolation for those retrievers, not a measurement -- `routing_eval.py`
+# only runs the dense and hybrid arms.
+ROUTE_COMBO: dict[str, RouteTarget] = _ROUTE_COMBO_HYBRID
+
+
+def route_targets(retriever_type: str | None = None) -> dict[str, RouteTarget]:
+    """The route -> RouteTarget map to use with `retriever_type`.
+
+    Falls back to `ROUTE_COMBO` for retrievers with no measured map of their
+    own, so an unknown retriever routes sensibly instead of raising -- the
+    cost of being wrong here is a slightly worse index, and a KeyError at
+    query time would be worse than that."""
+    return ROUTE_COMBO_BY_RETRIEVER.get(retriever_type or "", ROUTE_COMBO)
 
 
 def _default_program_matcher(text: str) -> list[str]:

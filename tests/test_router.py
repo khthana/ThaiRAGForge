@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from rag_lab.router import (
     ROUTE_COMBO,
+    ROUTE_COMBO_BY_RETRIEVER,
     ROUTE_COURSE,
     ROUTE_FACULTY,
     ROUTE_PERSON,
@@ -11,6 +12,7 @@ from rag_lab.router import (
     ROUTE_UNMATCHED,
     classify_query,
     detect_entities,
+    route_targets,
     rrf_merge,
 )
 from rag_lab.schema import RankedChunk, RetrievalResult
@@ -114,10 +116,35 @@ def test_every_route_classify_query_can_return_has_a_combo():
     # The structural invariant that the original 3-route gap violated in
     # silence: the Gold set gained 33 `course` queries eight days after the
     # router shipped and nothing failed -- they just fell to `unmatched`.
-    # route_query does ROUTE_COMBO[route], so a route with no combo is a
-    # KeyError at query time; a route never returned is dead config.
+    # route_query does route_combo[route], so a route with no combo is a
+    # KeyError at query time; a route never returned is dead config. Every
+    # per-retriever map has to satisfy this, not just the default one --
+    # otherwise adding a route reintroduces the same silent gap for whichever
+    # retriever's map was missed.
     routes = {ROUTE_PERSON, ROUTE_COURSE, ROUTE_PROGRAM, ROUTE_FACULTY, ROUTE_UNMATCHED}
     assert set(ROUTE_COMBO) == routes
+    for retriever, combo in ROUTE_COMBO_BY_RETRIEVER.items():
+        assert set(combo) == routes, retriever
+
+
+def test_route_targets_falls_back_for_an_unmeasured_retriever():
+    # routing_eval only runs dense and hybrid arms. bm25/entity_lookup/qdrant
+    # have no measured map, and the right failure there is a slightly worse
+    # index, not a KeyError at query time.
+    assert route_targets("hybrid") is ROUTE_COMBO_BY_RETRIEVER["hybrid"]
+    assert route_targets("dense") is ROUTE_COMBO_BY_RETRIEVER["dense"]
+    assert route_targets("bm25") is ROUTE_COMBO
+    assert route_targets(None) is ROUTE_COMBO
+
+
+def test_person_and_program_targets_differ_between_dense_and_hybrid():
+    # The whole reason ROUTE_COMBO became retriever-keyed. If these ever
+    # coincide the split is dead weight and should be collapsed back -- but
+    # while they differ, a flat dict silently serves one retriever the other
+    # one's target. Evidence: data/results/routing_eval.md section 2.
+    dense, hybrid = ROUTE_COMBO_BY_RETRIEVER["dense"], ROUTE_COMBO_BY_RETRIEVER["hybrid"]
+    assert dense[ROUTE_PERSON] != hybrid[ROUTE_PERSON]
+    assert dense[ROUTE_PROGRAM] != hybrid[ROUTE_PROGRAM]
 
 
 def test_detect_entities_person_via_titled_regex():

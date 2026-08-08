@@ -23,6 +23,7 @@ from rag_lab.router import (
     RouteTarget,
     classify_query,
     detect_entities,
+    route_targets,
     rrf_merge,
 )
 from rag_lab.schema import RetrievalResult
@@ -208,18 +209,18 @@ def route_query(
     k: int,
     results_dir: str | Path | None = None,
     unmatched_strategy: str = "default",
-    route_combo: dict[str, RouteTarget] = ROUTE_COMBO,
+    route_combo: dict[str, RouteTarget] | None = None,
 ) -> RetrievalResult:
     """Classify `query` (router.classify_query) and retrieve against the
     matching route's index only -- rather than every built combo like
     query_indices, which is for side-by-side comparison, not routing.
 
-    `retriever_spec` is a parameter but `route_combo` is a single fixed dict,
-    so every route serves the same target whichever retriever is passed. The
-    2026-08-08 routing eval shows that is an approximation: the best combo
-    per route is retriever-dependent (person peaks at semantic+qwen3 under
-    dense but sentence+bge_m3 under hybrid). Living with it is deliberate --
-    see data/results/routing_eval.md, section 2.
+    `route_combo` defaults to the map measured for `retriever_spec`'s type
+    (router.route_targets). It has to depend on the retriever: the best combo
+    per route is retriever-dependent -- person peaks at semantic+qwen3 under
+    dense but sentence+bge_m3 under hybrid -- and until 2026-08-08 a single
+    flat dict served whichever retriever it happened to be picked under. Pass
+    `route_combo` explicitly to override. See data/results/routing_eval.md §2.
 
     unmatched_strategy controls what happens when the query matches no route
     pattern at all. Since the 2026-08-08 course/faculty routes, that is
@@ -234,6 +235,8 @@ def route_query(
     no longer have a script that reproduces them -- do not cite them.
     """
     route = classify_query(query)
+    if route_combo is None:
+        route_combo = route_targets(retriever_spec.type)
 
     if route == ROUTE_UNMATCHED and unmatched_strategy == "rrf":
         targets = [route_combo[ROUTE_UNMATCHED], route_combo["person"], route_combo["program"]]

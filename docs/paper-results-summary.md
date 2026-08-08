@@ -917,9 +917,9 @@ to **0/106**, with classification exact and no cross-firing in either direction
 | arm | recall@10 | MRR | nDCG@10 |
 |---|---|---|---|
 | shipped `unmatched` default alone (fixed_size+bge-m3) | 0.4129 | 0.5487 | 0.4342 |
-| routed, 3 routes (the router as it stood) | 0.4831 | 0.6652 | 0.5192 |
+| routed, 3 routes (person/program only, at today's targets) | 0.5230 | 0.6767 | 0.5660 |
 | best single combo over all 106 (semantic+qwen3_0.6b) | 0.5707 | 0.8335 | 0.6574 |
-| **routed, 5 routes (shipped)** | **0.5789** | 0.8251 | 0.6540 |
+| **routed, 5 routes (shipped, targets refreshed 2026-08-08)** | **0.6189** | 0.8366 | 0.7009 |
 | routed, 5 routes (leave-one-out targets) | 0.6057 | 0.8701 | 0.6747 |
 | routed, 5 routes (oracle targets — upper bound, not a system) | 0.6293 | 0.8976 | 0.7275 |
 
@@ -927,44 +927,73 @@ Two claims, and they must be kept apart:
 
 1. **The 5-route router significantly beats the 3-route one it replaces**:
    **+0.0958 recall@10** (Holm-adj p=0.0000), +0.1599 MRR, +0.1349 nDCG@10, all
-   p=0.0000. That is the delivered improvement.
-2. **Routing does *not* significantly beat simply using the best single combo for
-   everything.** Shipped routing is +0.0082 recall@10 over it (Holm-adj p=1.0000)
-   and slightly *behind* on MRR and nDCG@10. Even the oracle upper bound is only
-   +0.0586 (p=0.0462), and the honest LOO estimate +0.0349 is not significant
-   (p=0.5352). **Do not claim routing beats a well-chosen single index on this
-   query set** — claim that it *matches* one without having to know in advance
-   which one that is, and that it fixes a 43% coverage hole.
+   p=0.0000. That is the delivered improvement. This margin is *invariant to the
+   target refresh below* — both arms hold the same person/program targets, so the
+   difference between them is exactly the course/faculty coverage and nothing else.
+2. **No *deployable* routed arm significantly beats simply using the best single
+   combo for everything.** Shipped routing is +0.0481 recall@10 over it (Holm-adj
+   p=0.1548) and the honest LOO estimate is +0.0349 (p=0.3568), neither significant.
+   The only arm that does clear the bar is `routed (oracle)` — significant on all
+   three dense metrics (+0.0586 recall@10 p=0.0462, +0.0642 MRR p=0.0160, +0.0701
+   nDCG@10 p=0.0036) — **and an oracle is not a system**: it is told each route's
+   best target by the same 106 queries it is then scored on. Read those three as
+   *the headroom a perfect per-route map would have*, which is real but small, not
+   as evidence routing works. **Do not claim routing beats a well-chosen single index
+   on this query set** — claim that it *matches* one without having to know in
+   advance which one that is, and that it fixes a 43% coverage hole.
 
 Under **hybrid** the case for routing is weaker still, and for an interpretable
 reason: BM25 partially rescues the misrouted course/faculty queries, so the 3-route
-baseline starts higher (0.5974) and the 5-route gain shrinks to +0.0408
-(Holm-adj p=0.1152, not significant). The LOO arm reaches +0.0499 over its matched
-baseline with a CI excluding zero, [+0.0137, +0.0884], but Holm-adj p=0.0624 at
-m=18 — report it as suggestive, not established. Hybrid MRR moves the *other* way
+baseline starts higher (0.6423 vs 0.5230 dense) and the 5-route gain shrinks to
++0.0408 (Holm-adj p=0.1152, not significant). The LOO arm reaches +0.0499 over its
+matched baseline with a CI excluding zero, [+0.0137, +0.0884], but Holm-adj p=0.0780
+at m=18 — report it as suggestive, not established. Hybrid MRR moves the *other* way
 under LOO (−0.0492, CI [−0.0978, −0.0033]), i.e. per-route target selection is
 reliable for recall@10 and overfits on MRR.
 
-**Two structural findings worth citing on their own.**
+**One structural finding worth citing on its own: the best combo per route is
+retriever-dependent.** `person` peaks at semantic+qwen3 under dense but
+sentence+bge_m3 under hybrid; `program` at fixed_size+qwen3_0.6b vs
+semantic+qwen3_0.6b. Any "specialist per route" framing (see the Embedder ×
+entity_type section) has to name the retriever it holds for. A single
+retriever-agnostic dict cannot express this, which is why `ROUTE_COMBO` was
+**restructured 2026-08-08** into `ROUTE_COMBO_BY_RETRIEVER` (`dense` / `hybrid`
+maps, plus a `route_targets(retriever_type)` accessor that falls back to the hybrid
+map for retrievers the eval never covered — bm25, entity_lookup, qdrant, where the
+choice is an extrapolation and is labelled as one in the source).
 
-- **The best combo per route is retriever-dependent**, which the single
-  retriever-agnostic `ROUTE_COMBO` dict cannot express: `person` peaks at
-  semantic+qwen3 under dense but sentence+bge_m3 under hybrid; `program` at
-  fixed_size+qwen3_0.6b vs semantic+qwen3_0.6b. Any "specialist per route" framing
-  (see the Embedder × entity_type section) has to name the retriever it holds for.
-- **The `person` and `program` targets in `ROUTE_COMBO` are stale and are known to
-  be**, picked 2026-07-17 from the retired 252-query set: person is beaten by
-  +0.0598 and program by +0.0813 (dense), each stable across **30/30**
-  leave-one-out folds — so refreshing them would be a refresh, not a fit. They are
-  deliberately left unchanged because of the retriever-dependence above; that is a
-  decision about the structure of `ROUTE_COMBO`, not a config edit.
+**The `person` and `program` targets were refreshed at the same time**, under a
+stated adoption rule rather than an argmax: take the scan's best combo only when
+the leave-one-out selector picks that same target in ≥29/30 folds, so the choice
+demonstrably does not hinge on any single query.
 
-**Method note on honesty of the `shipped` arm.** The `course` target was chosen
-from this same 106-query scan, so `routed (shipped)` is partly fitted on the set it
-is scored on. That is exactly what the `loo` arm exists to bound, and it is why
-every routed arm is compared against a baseline fitted the *same* way (`oracle` vs
-argmax-over-106, `loo` vs a per-held-out-query re-picked single combo). Comparing a
-LOO arm against an oracle baseline would understate routing; the reverse would
+| route | dense: was → now | hybrid: was → now | LOO folds |
+|---|---|---|---|
+| `person` | semantic+bge_m3 → **semantic+qwen3** (+0.0598) | semantic+bge_m3 → **sentence+bge_m3** (+0.0361) | 30/30, 30/30 |
+| `program` | sentence+congen → **fixed_size+qwen3_0.6b** (+0.0813) | sentence+congen → **semantic+qwen3_0.6b** (+0.1223) | 30/30, 29/30 |
+| `course` | unchanged (already the argmax) | unchanged | 30/33, 32/33 |
+| `faculty` | **unchanged** — 3 distinct LOO targets over 13 folds | **unchanged** — gap only +0.0305 | 11/13, 12/13 |
+
+`faculty` staying put is the rule doing its job, not an oversight: n=13 is inside
+the embedder family's own MDE (~0.05–0.10), so "checked, nothing stable enough" is
+the finding. The retired `sentence+congen` program target was not merely stale but
+**actively harmful under hybrid** — routing `program` to it scored 0.5321 where not
+routing at all scored 0.6105, i.e. −0.0784 on those 30 queries. After the refresh
+that route scores **0.6545**, i.e. +0.0440 for routing instead of −0.0784, and it
+is the single largest reason the soft-vs-hard verdict below flipped.
+
+**Method note on honesty of the `shipped` arm — and it got weaker, not stronger,
+with the refresh.** After 2026-08-08, four of five shipped targets are chosen from
+this same 106-query scan, so `routed (shipped)` is largely fitted on the set it is
+scored on and now sits near `routed (oracle)` by construction (dense 0.6189 vs
+0.6293; hybrid 0.6831 vs 0.6868). **Cite `routed (loo)` as the generalisation
+estimate.** That arm is *unchanged* by the refresh (+0.0349 dense, +0.0499 hybrid,
+both ns) because it never read the shipped constants — which is the cleanest way to
+state what the refresh bought: it raises the shipped router to what LOO already
+predicted for a well-chosen per-route map, rather than creating new gain. Every
+routed arm is compared against a baseline fitted the *same* way (`oracle` vs
+argmax-over-106, `loo` vs a per-held-out-query re-picked single combo); comparing a
+LOO arm against an oracle baseline would understate routing, the reverse would
 overstate it.
 
 **Not measured:** the `unmatched_strategy="rrf"` fan-out in `query_service.route_query`.
@@ -1078,92 +1107,100 @@ corpus, so it bounds fitting-to-the-query, not fitting-to-this-corpus. (3)
 no per-type conclusion for it. (4) Classification is exact on this set, so the
 real-world cost of misrouting is not measured here.
 
-## Resolved 2026-08-08: Soft vs hard routing — they are substitutes, not complements, and the cheap one is not worse
+## Resolved 2026-08-08: Soft vs hard routing — hard wins once its targets are current, and the two are still substitutes
 
 Two results landed the same day pointing opposite ways and had never been put on
-one axis. **Hard routing** (§"Query routing") switches the *index* per route: it
-closed a 43% coverage hole but is only **+0.0101** recall@10 over the best single
-combo used for everything, and it needs 5 indices. **Soft routing** (§ above)
-switches only the *fusion weight* on one index: **+0.0350**. Script:
+one axis. **Hard routing** (§"Query routing") switches the *index* per route;
+**soft routing** (§ above) switches only the *fusion weight* on one index. Script:
 `tools/eval/soft_vs_hard_routing.py` → `data/results/soft_vs_hard_routing.md`.
+
+**Read the date on this section.** It was first run against `ROUTE_COMBO`'s
+2026-07-17 targets and reported soft ≥ hard. Those targets were refreshed the same
+day (§"Query routing"), the script re-run, and **the verdict flipped**: hard
+routing was being judged on a `program` target that actively hurt. The numbers
+below are the post-refresh ones. Nothing about soft routing changed.
 
 Four arms, every one retrieving k=10 from **exactly one index per query** — equal
 retrieval budget, so no arm wins by fetching more
 ([[feedback_state_the_retrieval_budget_in_every_comparison]]). Hybrid throughout.
 Index choice is held at its shipped value in every arm; the only fitted quantity
 is alpha, fitted leave-one-out within a route. Routing uses `classify_query`, not
-the gold label.
+the gold label (the two partitions agree 106/106).
 
 | arm | what the classifier moves | indices | recall@10 | MRR | nDCG@10 |
 |---|---|---|---|---|---|
 | **A** single @ 0.50 | nothing (no classifier) | 1 | 0.6281 | 0.8430 | 0.6951 |
-| **C** routed @ 0.50 (**hard**) | the index | 5 | 0.6382 | 0.8233 | 0.7006 |
-| **B** single + per-route alpha (**soft**, LOO) | the fusion weight | 1 | **0.6631** | 0.8705 | **0.7311** |
-| **D** routed + per-route alpha (both, LOO) | both | 5 | 0.6415 | **0.8743** | 0.7242 |
+| **C** routed @ 0.50 (**hard**) | the index | 5 | **0.6831** | 0.8686 | **0.7502** |
+| **B** single + per-route alpha (**soft**, LOO) | the fusion weight | 1 | 0.6631 | 0.8705 | 0.7311 |
+| **D** routed + per-route alpha (both, LOO) | both | 5 | 0.6629 | **0.8868** | 0.7568 |
 | _B′ soft (oracle)_ | _upper bound_ | 1 | _0.6710_ | _0.8899_ | _0.7510_ |
-| _D′ both (oracle)_ | _upper bound_ | 5 | _0.6611_ | _0.8940_ | _0.7377_ |
+| _D′ both (oracle)_ | _upper bound_ | 5 | _0.6901_ | _0.9112_ | _0.7721_ |
 
-**Nothing here is significant except `B vs A` on nDCG@10** (+0.0360, Holm-adj
-0.0216, m=12). State the rest as bounds:
+Arm C reproduces `routing_eval.md`'s `routed (shipped)` hybrid recall@10 to four
+decimals (0.6831 both) from an entirely separate code path — a useful cross-check
+that the two routing scripts agree on what the shipped router does.
+
+**Two significant results, one per mechanism, and they are on different metrics:**
 
 | comparison | recall@10 | MRR | nDCG@10 |
 |---|---|---|---|
 | B vs A (soft vs none) | +0.0350 [+0.0103, +0.0620] | +0.0275 [−0.0177, +0.0741] | **+0.0360** [+0.0123, +0.0606] |
-| C vs A (hard vs none) | +0.0101 [−0.0291, +0.0503] | −0.0197 [−0.0709, +0.0322] | +0.0056 [−0.0366, +0.0491] |
-| **B vs C (soft vs hard)** | +0.0249 [−0.0147, +0.0628] | +0.0473 [−0.0135, +0.1091] | +0.0304 [−0.0129, +0.0722] |
-| D vs C (does alpha add to routing) | +0.0033 [−0.0202, +0.0274] | +0.0510 [+0.0047, +0.0988] | +0.0236 [+0.0012, +0.0460] |
+| C vs A (hard vs none) | **+0.0549** [+0.0174, +0.0934] | +0.0255 [−0.0241, +0.0756] | +0.0551 [+0.0129, +0.0973] |
+| **B vs C (soft vs hard)** | −0.0199 [−0.0575, +0.0156] | +0.0020 [−0.0553, +0.0576] | −0.0191 [−0.0595, +0.0211] |
+| D vs C (does alpha add to routing) | −0.0202 [−0.0389, −0.0036] | +0.0182 [−0.0258, +0.0638] | +0.0066 [−0.0134, +0.0254] |
 
-**The claim is "soft matches hard at one fifth the index cost", not "soft beats
-hard".** Soft leads on all three metrics but no gap survives Holm; the CI bounds
-hard being better than soft by more than **0.0147** recall@10.
+Paired bootstrap, 10,000 resamples, Holm within m=12. **`C vs A` on recall@10**
+(Holm-adj 0.0242) and **`B vs A` on nDCG@10** (Holm-adj 0.0216) are the only
+significant cells. Everything else is a bound.
 
-**And read "hard" as *hard routing at its shipped targets*, which is the arm that
-exists, not the best hard router obtainable.** `routing_eval.md`'s `routed (loo)`
-arm re-picks each route's target per held-out query and reaches **0.6780** recall@10
-under hybrid — above soft's 0.6631. The comparison is mixed rather than a reversal:
-on MRR that same arm scores **0.7938**, well below soft's 0.8705 and below even the
-no-routing baseline's 0.8430. Neither pair has been significance-tested against the
-other (they come from two scripts and were never in one Holm family), so treat this
-as: **soft's advantage over hard is an advantage over the *current* targets, and a
-target refresh would likely close it on recall@10 while leaving MRR to soft.** That
-is one more reason the ROUTE_COMBO refresh below is the next thing to do, and a
-reason not to retire index routing on the strength of this table alone.
+**The head-to-head is a tie, stated as a bound in both directions.** `B vs C` is
+ns on all three metrics; the CIs rule out soft beating hard by more than **0.0156**
+recall@10, and hard beating soft by more than **0.0575**. So: **hard routing leads
+numerically on every metric and owns the only significant recall@10 result, but it
+has not been shown to beat soft — and it costs 5 indices to soft's 1.** The
+cost-per-point argument for soft survives the flip; the "soft is at least as good"
+claim does not.
 
-**Combining them buys nothing — and the per-route table says why.** D trails B on
-recall@10 and nDCG@10, and still does at the oracle bound (0.6611 < 0.6710):
+**They remain substitutes, not complements — but for a sharper reason than before.**
+D (both) is 0.6629 recall@10, *below* C's 0.6831 and level with B, and `D vs C` is
+**negative** (−0.0202) with a CI excluding zero, though ns after Holm. Yet at the
+oracle bound D′ (0.6901) is the best arm in the table, above C by +0.0071. Put
+together: **there is a sliver of real headroom left for a per-route alpha on top of
+routing, and LOO fitting costs more than that sliver is worth.** That is a stronger
+statement than the pre-refresh version of this section made (it had D worse than B
+even at the oracle) — the mechanism is a fitting cost, not an absence of headroom.
+
+**Per-route, and this is where the refresh shows up:**
 
 | route | n | A single@0.50 | B soft | C hard | D both | alpha* on single | alpha* on routed |
 |---|---|---|---|---|---|---|---|
-| `person` | 30 | 0.7487 | **0.8383** | 0.8171 | 0.8327 | **0.15** | **0.45** |
-| `program` | 30 | 0.6105 | **0.6266** | **0.5321** | 0.5690 | 0.75 | 0.80 |
+| `person` | 30 | 0.7487 | 0.8383 | **0.8531** | 0.8326 | **0.15** | **0.30** |
+| `program` | 30 | 0.6105 | 0.6266 | **0.6545** | 0.6447 | 0.75 | 0.65 |
 | `course` | 33 | 0.5946 | 0.6162 | **0.6262** | 0.5932 | 0.65 | 0.60 |
 | `faculty` | 13 | 0.4755 | 0.4623 | **0.5008** | 0.4901 | 0.45 | 0.40 |
 
-The `person` row is the mechanism in one line: on the generic index the optimal
-alpha is **0.15** (hand the query to BM25, which scores 0.8147 on `person`); on
-the routed index — whose target *is* the `person` dense specialist — it rises to
-**0.45**, i.e. back to roughly neutral. **Both forms of routing repair the same
-defect, a per-type weak dense arm, by two different means.** Applying the second
-after the first has little left to fix, which is why D is not additive. Soft
-even wins the `person` route outright (0.8383 vs hard's 0.8171): re-weighting
-toward BM25 on the generic index beats switching to the specialist index.
+Hard routing now wins **every** route (person +0.1044, program +0.0440, course
++0.0316, faculty +0.0253) where before the refresh it won only course and faculty
+and *lost* program by −0.0784. The `person` row still gives the mechanism in one
+line: on the generic index the optimal alpha is **0.15** — hand the query to BM25,
+which scores 0.8147 on `person` — while on the routed index, whose target *is* a
+person specialist, it rises to **0.30**, i.e. toward neutral. **Both forms of
+routing repair the same defect, a per-type weak dense arm, by different means**,
+which is why applying the second after the first adds nothing.
 
-**Two things this hands to the open ROUTE_COMBO decision.** (1) The `program`
-route's shipped target is not merely stale, it is **actively harmful**: routing
-to it scores **0.5321** where simply not routing scores **0.6105** — hard routing
-*costs* 0.0784 recall@10 on those 30 queries, and that single row is most of why
-hard routing nets out at +0.0101 overall. (2) Hard routing's wins are confined to
-`course` (+0.0316) and `faculty` (+0.0253), the two routes added most recently.
-
-**Caveats.** (1) Arm A's index is the argmax over 36 combos on this same test
-set; its defence is that `routing_eval`'s LOO selector re-picks it in every fold
-(best single = best single (LOO) = 0.6281), not that it was chosen blind.
-(2) `faculty` n=13 — no per-route conclusion from that row alone. (3) The soft
-arm's numbers reproduce `hybrid_alpha_sweep.py` to 4 decimal places from an
-independent code path, but its `recall@10` **verdict** differs (Holm-adj 0.0252
-at m=9 there, 0.0638 at m=12 here) — same data, same difference, larger family.
-Cite the sweep's m=9 for "is a per-route alpha worth anything"; cite this
-table's m=12 only for the four comparisons it was built to make.
+**Caveats.** (1) Arm A's index is the argmax over 36 combos on this same test set;
+its defence is that `routing_eval`'s LOO selector re-picks it in every fold (best
+single = best single (LOO) = 0.6281), not that it was chosen blind. (2) Arm C's
+targets are now *also* fitted on this set (§"Query routing" method note), so C is
+closer to an upper bound than it was — read `routing_eval.md`'s `routed (loo)`
+(0.6780 hybrid recall@10) as the generalisation estimate for the hard arm, which
+still sits above soft's 0.6631. (3) `faculty` n=13 — no per-route conclusion from
+that row alone. (4) The soft arm's numbers reproduce `hybrid_alpha_sweep.py` to 4
+decimal places from an independent code path, but its `recall@10` **verdict**
+differs (Holm-adj 0.0252 at m=9 there, 0.0580 at m=12 here) — same data, same
+difference, larger family. Cite the sweep's m=9 for "is a per-route alpha worth
+anything"; cite this table's m=12 only for the four comparisons it was built to
+make.
 
 ## Methodology
 
@@ -2686,11 +2723,20 @@ holds as stated.
   Caches each arm's rank vector once and re-fuses in numpy, so 21 alphas cost one
   retrieval pass. `--self-check` pins the vectorised fusion against the real
   `BM25Retriever`/`HybridRetriever`/`DenseRetriever` at alpha 0.00/0.50/1.00
+- `tools/eval/routing_eval.py` — query-shape routing on the 106-query 73det set, dense
+  **and** hybrid arms, reusing persisted results (no retrieval). Four routed variants
+  (`prev3`/`shipped`/`oracle`/`loo`) each against a *fitting-budget-matched* single-combo
+  baseline. Section 2 is the evidence behind `router.ROUTE_COMBO_BY_RETRIEVER`, including
+  the leave-one-out target-stability table the ≥29/30-folds adoption rule reads
 - `tools/eval/soft_vs_hard_routing.py` — puts per-route *fusion weight* (soft) and
   per-route *index* (hard) on one axis: 4 arms, each retrieving k=10 from exactly one
   index per query so the retrieval budget is equal. Resolves route→index through
   `query_service.resolve_index`, so the hard arm switches indices the way the shipped
-  router does; alpha is the only fitted quantity, LOO within a route
+  router does; alpha is the only fitted quantity, LOO within a route. **Its hard arm
+  reads `router.route_targets("hybrid")`, so its headline verdict is a function of
+  whatever the shipped targets are that day** — editing those constants silently
+  re-scores this table, and doing so on 2026-08-08 reversed it. Re-run it after any
+  `ROUTE_COMBO_BY_RETRIEVER` change, and date every number taken from it
 - `tools/eval/map_precision_significance_test.py` — MAP + precision@1 pairwise significance,
   run at **both** scopes (cross-chunker aggregate, and `semantic`-only to match the existing
   tie test) × both retrievers (dense, hybrid); closed Open item #9's untested-metric half

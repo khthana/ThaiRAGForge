@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from rag_lab.config import StrategySpec  # noqa: E402
 from rag_lab.query_service import discover_indices, query_indices, route_query  # noqa: E402
-from rag_lab.router import classify_query, detect_entities  # noqa: E402
+from rag_lab.router import classify_query, detect_entities, route_targets  # noqa: E402
 
 st.set_page_config(page_title="RAG Lab — Query & Compare", layout="wide")
 st.title("RAG Lab — Query & Compare (Mode B)")
@@ -102,13 +102,14 @@ def _combo_label(combo_id: str) -> str:
 smart_routing = st.sidebar.checkbox(
     "Smart routing (route by query shape)", value=False, key="smart_routing",
     help=(
-        "Classify the query as person-/program-/unmatched-shaped "
+        "Classify the query as person-/program-/course-/faculty-/unmatched-shaped "
         "(src/rag_lab/router.py) and query only that route's best-performing "
-        "combo, instead of comparing every selected combo side by side. "
-        "Needs a fixed_size+bge-m3, semantic+bge-m3, and "
-        "sentence+ConGen-PhayaThaiBERT combo built under this index dir -- "
-        "see docs on tools/eval/gold_embedder_breakdown.py for how those "
-        "were picked."
+        "combo, instead of comparing every selected combo side by side. Which "
+        "combo each route reaches depends on the Retriever setting below "
+        "(router.route_targets), so the required combos differ between dense and "
+        "hybrid -- the caption under the result names the one actually used. "
+        "Evidence for the targets: tools/eval/routing_eval.py -> "
+        "data/results/routing_eval.md."
     ),
 )
 if not smart_routing:
@@ -121,9 +122,11 @@ else:
         "Unmatched-query fallback", ["default", "rrf"], index=0, key="unmatched_strategy",
         help=(
             "'default': query only the unmatched route's combo (cheaper). "
-            "'rrf': also query the person/program combos and merge with "
-            "Reciprocal Rank Fusion -- improves MRR/ndcg@10 on the Gold set "
-            "but not recall@10 (see project_hybrid_routing memory)."
+            "'rrf': also query the other routes' combos and merge with "
+            "Reciprocal Rank Fusion. UNMEASURED -- since the 2026-08-08 route "
+            "expansion no Gold query falls through to 'unmatched' (0/106), so "
+            "no eval exercises this branch; its old numbers came from the "
+            "retired 252-query/3-route eval and are withdrawn."
         ),
     )
 retriever = st.sidebar.selectbox("Retriever", ["dense", "bm25", "hybrid"], index=0, key="retriever")
@@ -168,7 +171,17 @@ search_clicked = st.button("Search", type="primary", key="search_button")
 
 if search_clicked and query and smart_routing:
     route = classify_query(query)
+    target = route_targets(retriever).get(route)
     st.info(f"Classified route: **{route}**")
+    # Since 2026-08-08 the route -> index map is keyed by retriever (the best
+    # target per route differs between dense and hybrid), so switching the
+    # retriever silently changes which index a route reaches. Say so, or the
+    # same query under two retrievers looks like an unexplained result change.
+    if target is not None:
+        st.caption(
+            f"Route target for retriever `{retriever}`: "
+            f"{target.chunker_type} + {target.embedder_model_name or target.embedder_type}"
+        )
     try:
         result = route_query(
             query, infos, StrategySpec(type=retriever), k,

@@ -7,7 +7,7 @@ ways, and they had never been put on the same axis:
 
   * hard routing (`tools/eval/routing_eval.py`, task #19) switches the *index*
     per route. It closed a 43% coverage hole, but against the best single combo
-    used for everything it is only +0.0101 recall@10 under hybrid -- not
+    used for everything it was only +0.0101 recall@10 under hybrid -- not
     significant. It needs 5 indices to do that.
   * soft routing (`tools/eval/hybrid_alpha_sweep.py`, task #20) switches only
     the *fusion weight* per route, on one index. That is +0.0350 recall@10,
@@ -16,6 +16,16 @@ ways, and they had never been put on the same axis:
 Both read the same signal (`classify_query`), so the interesting question is
 whether the cheap one is as good as the expensive one -- and whether they add.
 
+READ THE DATE ON ANY RESULT FROM THIS SCRIPT. The first run (against
+`ROUTE_COMBO`'s 2026-07-17 targets) had soft ahead of hard, and its per-route
+table is what showed why: the `program` target was not merely stale, routing to
+it scored 0.5321 where not routing scored 0.6105. Those targets were refreshed
+the same day and this script re-run; hard then led on every metric and every
+route. **The soft arm never moved.** So a headline from here is a statement
+about the route targets in force at run time, not a property of the two
+mechanisms -- which is exactly why arm C resolves through the live route map
+(see `target_combo_id`) instead of pinning combo ids.
+
 Design. Four arms, every one of them retrieving k=10 from exactly ONE index per
 query, so no arm wins by spending more (see
 [[feedback_state_the_retrieval_budget_in_every_comparison]]):
@@ -23,7 +33,7 @@ query, so no arm wins by spending more (see
   A  single @ 0.50            -- best single combo for every query, shipped 50:50.
                                  No classifier at all.
   B  single + per-type alpha  -- same one index, fusion weight per route.  SOFT
-  C  routed @ 0.50            -- ROUTE_COMBO's shipped target per route.   HARD
+  C  routed @ 0.50            -- the shipped hybrid target per route.      HARD
   D  routed + per-type alpha  -- both.
 
 Fitting budgets are matched, which is the trap this project has hit before.
@@ -65,7 +75,7 @@ from rag_lab.factory import build_embedder  # noqa: E402
 from rag_lab.io.artifact_store import ArtifactStore  # noqa: E402
 from rag_lab.metrics import ndcg_at_k, recall_at_k, reciprocal_rank  # noqa: E402
 from rag_lab.query_service import discover_indices, resolve_index  # noqa: E402
-from rag_lab.router import ROUTE_COMBO, classify_query  # noqa: E402
+from rag_lab.router import classify_query, route_targets  # noqa: E402
 
 GOLD_PATH = REPO / "config" / "eval" / "gold_query_set_73det.yaml"
 INDEX_DIR = REPO / "data" / "index" / "chunker_compare_full"
@@ -97,9 +107,14 @@ def load_gold() -> tuple[dict[str, list[str]], dict[str, str]]:
 def target_combo_id(route: str, index_list: list) -> str:
     """The combo_id a route retrieves from. Goes through `query_service`'s own
     `resolve_index`, not a local re-implementation, so this arm switches indices
-    exactly the way the shipped router does -- and a ROUTE_COMBO edit is picked
-    up here instead of being silently ignored."""
-    return resolve_index(ROUTE_COMBO[route], index_list).combo_id
+    exactly the way the shipped router does -- and a route-target edit is picked
+    up here instead of being silently ignored.
+
+    Asks for the *hybrid* map explicitly: this whole script is hybrid, and since
+    2026-08-08 the route map is keyed by retriever (router.route_targets), so
+    reading the `ROUTE_COMBO` alias would quietly bind arm C to whichever
+    retriever that alias happens to point at."""
+    return resolve_index(route_targets("hybrid")[route], index_list).combo_id
 
 
 def score_grid(
@@ -288,15 +303,28 @@ def main() -> None:
         out(f"| {metric} | {hi.split()[0]} vs {lo.split()[0]} | {diff:+.4f} "
             f"| [{ci[0]:+.4f}, {ci[1]:+.4f}] | {adj:.4f} | {'**yes**' if sig else 'no'} |")
     out("")
+    # Read the B-vs-A row straight back out of `corrected` rather than quoting
+    # numbers inline: this paragraph is prose ABOUT the table above it, so it
+    # has no cell for a verdict-differ to check and would survive any refresh
+    # unnoticed. The p in particular is NOT a property of this comparison alone
+    # -- Holm makes it depend on every other pair in the family, so it moves
+    # whenever a sibling comparison moves, without B or A changing at all.
+    ba = {
+        m: (d, adj)
+        for m, (hi, lo, d, _p, _ci, adj, _s) in zip(mlabels, corrected)
+        if hi.startswith("B") and lo.startswith("A")
+    }
     out("**Cross-check, and a family-size warning.** Arms A and B here are the same")
     out("two systems `hybrid_alpha_sweep.py` compared on `sentence+qwen3_0.6b`, and")
-    out("the three B-vs-A effect sizes reproduce it to 4 decimal places (+0.0350 /")
-    out("+0.0275 / +0.0360) -- two independent scripts, same folds, same numbers. The")
+    out("the three B-vs-A effect sizes reproduce it to 4 decimal places ("
+        + " / ".join(f"{ba[m][0]:+.4f}" for m in METRICS)
+        + ") -- two independent scripts, same folds, same numbers. The")
     out("**verdict** on `recall@10` nonetheless differs: Holm-adj **0.0252** there")
-    out("(m=9) and **0.0638** here (m=12). Same data, same difference, larger family.")
-    out("Neither is wrong. Cite the sweep's m=9 for \"is a per-route alpha worth")
-    out("anything\" -- that is the family built to answer it -- and cite this table's")
-    out("m=12 only for the four comparisons it exists to make.")
+    out(f"(m=9) and **{ba['recall@10'][1]:.4f}** here (m={len(corrected)}). Same data, "
+        "same difference,")
+    out("larger family. Neither is wrong. Cite the sweep's m=9 for \"is a per-route")
+    out("alpha worth anything\" -- that is the family built to answer it -- and cite")
+    out("this table's m=12 only for the four comparisons it exists to make.")
     out("")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)

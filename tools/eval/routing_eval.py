@@ -19,7 +19,8 @@ Rewritten 2026-08-08. The previous version scored the 252-query
 Three routed variants are reported, because "route to the best combo per
 entity type" is easy to measure dishonestly:
 
-- `shipped`   : the ROUTE_COMBO literal in router.py. Fixed config, nothing
+- `shipped`   : router.py's map FOR THIS RETRIEVER (route_targets), which
+                since 2026-08-08 is keyed by retriever. Fixed config, nothing
                 fitted at eval time -- this is the number that describes
                 what actually runs, and the one to cite.
 - `oracle`    : per-type argmax over all 36 combos, chosen on all 106
@@ -65,7 +66,7 @@ from embedder_matrix_9way import (  # noqa: E402
 from rag_lab.metrics import ndcg_at_k, recall_at_k, reciprocal_rank  # noqa: E402
 from rag_lab.query_service import discover_indices, resolve_index  # noqa: E402
 from rag_lab.results import load_retrieval_result  # noqa: E402
-from rag_lab.router import ROUTE_COMBO, classify_query  # noqa: E402
+from rag_lab.router import classify_query, route_targets  # noqa: E402
 
 GOLD_PATH = REPO / "config" / "eval" / "gold_query_set_73det.yaml"
 INDEX_DIR = REPO / "data" / "index" / "chunker_compare_full"
@@ -109,15 +110,19 @@ def load_scores(
 
 
 def shipped_combo_keys(retriever: str) -> dict[str, str]:
-    """route -> combination_id for the ROUTE_COMBO literal, resolved through
-    the production resolve_index path (not a hardcoded table), so this
-    doubles as an integration check that every shipped route points at a
-    real, unambiguous built index."""
+    """route -> combination_id for the shipped route map, resolved through the
+    production resolve_index path (not a hardcoded table), so this doubles as
+    an integration check that every shipped route points at a real,
+    unambiguous built index.
+
+    Reads `route_targets(retriever)`, i.e. the map that retriever actually
+    gets at query time. Before 2026-08-08 there was one flat dict, so this arm
+    reported the dense-chosen targets as "shipped" under hybrid too."""
     indices = discover_indices(INDEX_DIR)
     suffix = "__dense" if retriever == "dense" else "__hybrid"
     return {
         route: resolve_index(target, indices).combo_id + suffix
-        for route, target in ROUTE_COMBO.items()
+        for route, target in route_targets(retriever).items()
     }
 
 
@@ -170,8 +175,12 @@ def routed_per_query(
         return [scores[(shipped[route_of[q]], q)][metric] for q in queries]
 
     if mode == "prev3":
-        # the router as it stood until 2026-08-08: person/program only, with
-        # course and faculty queries falling through to the unmatched default
+        # person/program routes only, with course and faculty queries falling
+        # through to the unmatched default -- the coverage hole the 2026-08-08
+        # route expansion closed. It reads `shipped`, so since the same day's
+        # target refresh this is "3 routes at TODAY's targets", not a literal
+        # replay of the old router: that is deliberate, it isolates the effect
+        # of route coverage from the effect of which target each route holds.
         prev = {q: (r if r in ("person", "program") else "unmatched") for q, r in route_of.items()}
         return [scores[(shipped[prev[q]], q)][metric] for q in queries]
 
@@ -258,7 +267,10 @@ def main() -> None:
         combos = [c for c in combos if c in present]
         shipped = shipped_combo_keys(retriever)
 
-        out(f"## 2. Per-`entity_type` best combo -- {retriever} (evidence behind `ROUTE_COMBO`)")
+        out(
+            f"## 2. Per-`entity_type` best combo -- {retriever} "
+            f"(evidence behind `ROUTE_COMBO_BY_RETRIEVER['{retriever}']`)"
+        )
         out("")
         means = per_type_means(scores, queries_by_type, combos, "recall@10")
         out("| entity_type | n | best combo | recall@10 | shipped route target | recall@10 | gap |")
@@ -279,7 +291,7 @@ def main() -> None:
         out("")
         out("How many *different* combos the LOO selector picks for a route across its")
         out("folds. One distinct target means the choice does not depend on any single")
-        out("query, so adopting it into `ROUTE_COMBO` is a refresh rather than a fit; more")
+        out("query, so adopting it into the route map is a refresh rather than a fit; more")
         out("than one means the route's top combos are interchangeable and the argmax is")
         out("noise. `n_train` is the fold size, i.e. that route's query count minus one.")
         out("")
