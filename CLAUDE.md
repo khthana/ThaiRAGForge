@@ -545,30 +545,47 @@ see `docs/adr/`.
   rule 4) and **rule 6** (cite only labels that literally appear above). Results,
   each confirmed on the failure it was written for: rule 5 → closed-book abstention
   **104/106 → 106/106**, phantom **5/5 → 0/0**; rule 6 → dense phantom
-  **4/359 → 0/353** (hybrid never had phantoms under either variant, 0/421 vs 0/369,
-  so dense was the only arm that could test it). **The benefit survives**: guarded
-  beats the `sentence_cap` baseline significantly on both regenerated arms
-  (dense +0.1123 Holm 0.0000, hybrid +0.0706 Holm 0.0234), so the ablation's
-  headline doesn't depend on the unguarded wording. **The apparent cost vs unguarded
-  `cite_all` is not a finding** — neither arm significant and the point estimates
-  point in **opposite directions** (dense +0.0117, hybrid −0.0475), which is what
-  the measured noise floor predicts (14/24 identical citation sets at temperature 0,
-  [[feedback_temperature_zero_is_not_reproducible]]); as a bound, hybrid rules out
+  **4/359 → 0/353** (no other arm produced a phantom under any variant, so dense
+  was the only arm that could test it). **All 4 retrieval arms regenerated under
+  the guard 2026-08-08** (bm25+m2v, 212 answers, 4678s, exit 0), so the variant
+  now carries the full 530 answers and every family is rerunnable under it.
+  **The benefit survives**: guarded beats the `sentence_cap` baseline by
+  **+0.1123 on dense** (Holm 0.0000 in every family) and **+0.0706 on hybrid**
+  (Holm 0.0144 in family 2), so the ablation's headline doesn't depend on the
+  unguarded wording; bm25's guarded gain (+0.0539) misses significance where the
+  unguarded +0.0734 made it, and m2v moves under neither. **The apparent cost vs
+  unguarded `cite_all` is not a finding** — no arm significant and the point
+  estimates **don't agree on a direction** (dense +0.0117 vs hybrid −0.0475,
+  bm25 −0.0195, m2v −0.0067), which is what the measured noise floor predicts
+  (14/24 identical citation sets at temperature 0,
+  [[feedback_temperature_zero_is_not_reproducible]]); as bounds, hybrid rules out
   the guard being *better* than `cite_all`, dense rules out a loss > ~0.017.
+  **Two things the 4-arm run added that the 2-arm run could not show.** (1) The
+  guard is **not free**: rule 5 applies to every arm, not just closed-book, and
+  it pushes the weak arms toward abstention — m2v correct-abstain 13→19 and
+  hallucination 16→10 but *missed* (gold present, abstained) 11→18; bm25
+  hallucination 12→10. Report the trade. (2) **The 4c "sharpening" claim belongs
+  to `cite_all`, not to the guard**: family 1's 12 pairwise tests separate
+  **2/12** under `sentence_cap`, **9/12** under `cite_all`, but only **3/12**
+  under `cite_all_guarded` — the guard pulls the strong arms down (hybrid
+  0.3962→0.3487) while dense rises (0.3206→0.3323), compressing the spread.
+  Direction is unchanged everywhere and several guarded cells miss narrowly
+  (0.0576, 0.0896), so it is smaller separation, not lost separation. **Recommendation:
+  report `cite_all_guarded` as the paper's prompt but cite the ordering result from
+  `cite_all` with the 3/12 stated alongside.**
   `rq4_score.py` gained `--treatment-variant` and `--out` so a variant is scored
   against the same baseline without clobbering the published `rq4_score.md`
-  (guarded report: `data/results/rq4_score_guarded.md`). **Every Holm figure above
-  is family 3** (all 12 variant-pair × metric tests); the guarded-vs-baseline pairs
-  also sit in family 2, corrected across 5, where hybrid reads 0.0160 — both correct,
-  so **always quote the family size with a Holm p from this report**. Family 3 was
-  added 2026-08-08 for exactly that reason: the variant-vs-variant pairs
+  (guarded report: `data/results/rq4_score_guarded.md`). **Always quote the Holm
+  family size** — with 4 arms family 3 holds **24** tests and family 2 holds **9**,
+  and on 2026-08-08 they stopped agreeing: `hybrid: guarded vs baseline`, identical
+  data, +0.0706 either way, reads **0.0144 (significant) in family 2** and **0.0600
+  (not significant) in family 3**. Neither is wrong; family 2 is the one built to
+  answer "does this prompt beat the baseline", so cite that one, *as family 2*.
+  Family 3 was added 2026-08-08 because the variant-vs-variant pairs
   (`guarded` vs `cite_all`) exist in no other family, so they had been computed ad
   hoc and the doc quoted numbers no script could reproduce — the
   [[feedback_recompute_derived_stats_from_the_table]] failure mode, caught by
-  re-reading the report against the prose. **Still owed before a final
-  paper table uses it**: `bm25_semantic` and `hybrid_m2v_semantic` have not been
-  regenerated under the guard (~1h30m), so the 4-arm ordering families cannot yet be
-  rerun under it.
+  re-reading the report against the prose.
 - **Evaluation validity — read `docs/eval-validity-threats.md` before defending any
   number in this project.** Written 2026-07-30 against the question "is 106 queries too
   few for a reviewer". It is not (BEIR peers run 50-300 topics, and this set is unusually

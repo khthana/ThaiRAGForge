@@ -737,7 +737,7 @@ payoff for exactly-checkable numeric labels. Under `cite_all` fabrication is not
 zero: the dense arm shows 4/359, all from one query citing labels `[6]`–`[9]` when
 only 5 documents were supplied.
 
-### Both of those costs are repaired — report `cite_all_guarded` (2026-08-07)
+### Both of those costs are repaired — report `cite_all_guarded` (2026-08-07, all four arms 2026-08-08)
 
 The two paragraphs above describe `cite_all`, which is kept unedited so the 530
 answers on disk stay matched to the prompt that produced them. The prompt actually
@@ -754,36 +754,62 @@ but rule 4's **position**, last before the question, winning on recency:
 | hybrid | `sentence_cap` | 0.2781 | 0.7016 | 0 / 269 |
 | hybrid | `cite_all` | 0.3962 | 0.7268 | 0 / 421 |
 | hybrid | `cite_all_guarded` | 0.3487 | 0.6900 | 0 / 369 |
+| bm25 | `sentence_cap` | 0.2203 | 0.6463 | 0 / 219 |
+| bm25 | `cite_all` | 0.2938 | 0.5968 | 0 / 324 |
+| bm25 | `cite_all_guarded` | 0.2743 | 0.6177 | 0 / 295 |
+| m2v | `sentence_cap` | 0.1820 | 0.5575 | 0 / 202 |
+| m2v | `cite_all` | 0.2038 | 0.5203 | 0 / 273 |
+| m2v | `cite_all_guarded` | 0.1971 | 0.5138 | 0 / 268 |
 
 Closed-book abstention returns to **106/106** with **0/0** citations. Both guards
 are confirmed on the failure each was written for — rule 5 (zero documents ⇒
 abstain) on closed-book, rule 6 (cite only labels present) on dense, which is the
-only arm that ever produced phantoms.
+only arm that ever produced phantoms under any variant.
 
-**The benefit survives**: `cite_all_guarded` beats the `sentence_cap` baseline
-significantly on both regenerated arms (dense **+0.1123**, Holm p = 0.0000; hybrid
-**+0.0706**, Holm p = 0.0234), so the prompt-ablation headline does not depend on
-the unguarded wording. **The apparent cost relative to unguarded `cite_all` is not
-a finding**: neither arm is significant (Holm p = 1.0000 dense, 0.1168 hybrid) and
-the two point estimates point in **opposite directions** (dense +0.0117, hybrid
-−0.0475). A real constraint-induced dampening would push the same way on both;
-this is what the measured generator noise floor predicts (14/24 identical citation
-sets at temperature 0). As bounds rather than nulls: on hybrid the interval rules
-out the guard being *better* than `cite_all` and admits a loss of ~0.01-0.09; on
-dense it rules out a loss greater than ~0.017. No precision comparison is
-significant anywhere (all Holm p = 1.0000).
+**The benefit survives**: `cite_all_guarded` beats the `sentence_cap` baseline by
+**+0.1123 on dense** (Holm p = 0.0000 in every family — the figure no correction
+choice can touch) and **+0.0706 on hybrid** (Holm p = 0.0144 in family 2, the
+family built for this question; see the family-size warning below), so the
+prompt-ablation headline does not depend on the unguarded wording. On bm25 the
+guarded gain (+0.0539) does not reach significance where the unguarded one
+(+0.0734) did, and on m2v neither variant moves. **The apparent cost relative to
+unguarded `cite_all` is not a finding**: no arm is significant and the four point
+estimates **do not agree on a direction** (dense +0.0117 against hybrid −0.0475,
+bm25 −0.0195, m2v −0.0067). A real constraint-induced dampening would push the
+same way on all four; this is what the measured generator noise floor predicts
+(14/24 identical citation sets at temperature 0). As bounds rather than nulls: on
+hybrid the interval rules out the guard being *better* than `cite_all` and admits
+a loss of ~0.01-0.09; on dense it rules out a loss greater than ~0.017; bm25 and
+m2v straddle zero. No precision comparison is significant anywhere (all 12 at
+Holm p = 1.0000, smallest raw p 0.1536).
 
-Every Holm figure in this section comes from **family 3** of
-`data/results/rq4_score_guarded.md` — all 12 variant-pair × metric tests in one
-family. The two guarded-vs-baseline pairs also appear in that report's family 2,
-corrected across 5 tests, where hybrid reads Holm 0.0160 rather than 0.0234.
-Neither is wrong and both are significant; **cite the family size with the
-number**, since the same test legitimately carries two adjusted p-values.
+**The guard is not a free repair.** Rule 5 was written for the zero-document case
+but applies to every arm, and it shifts the weak ones toward abstention: m2v
+correctly-abstained 13 → **19** and hallucinations 16 → **10**, but "missed"
+(gold present, abstained anyway) rose 11 → **18**; bm25 hallucinations 12 → **10**,
+missed 14 → **11**. The strong arms barely move. Report this trade rather than
+only the closed-book repair.
 
-**Not yet done**: `bm25_semantic` and `hybrid_m2v_semantic` have not been
-regenerated under the guard, so a full 4-arm ordering table under
-`cite_all_guarded` does not exist yet. Report:
-`data/results/rq4_score_guarded.md`.
+**Arm ordering is prompt-dependent — and the sharpening belongs to `cite_all`,
+not to the guard.** Direction holds under every variant (`hybrid > dense > bm25 >
+m2v`, m2v significantly worst), but the number of separated pairs in family 1's
+12 tests goes `sentence_cap` **2/12** → `cite_all` **9/12** → `cite_all_guarded`
+**3/12**. The guard compresses the spread the tests need: it pulls the strong
+arms down (hybrid 0.3962 → 0.3487, bm25 0.2938 → 0.2743) while dense rises
+(0.3206 → 0.3323). Several guarded cells miss narrowly (bm25 vs m2v recall Holm
+0.0576, hybrid vs bm25 0.0896), so read it as smaller separation, not lost
+separation. **Cite the 4c sharpening claim as a property of `cite_all`, with the
+guarded 3/12 stated alongside.**
+
+**Family sizes, and why they must be quoted.** Family 3 of
+`data/results/rq4_score_guarded.md` now holds **24** variant-pair × metric tests
+(4 arms, up from 12 with 2); family 2 holds **9** (up from 5). On 2026-08-08 they
+stopped agreeing: `hybrid: guarded vs baseline`, identical data, point estimate
++0.0706 either way, reads **Holm 0.0144 (significant) in family 2** and **0.0600
+(not significant) in family 3**. Neither is wrong. Family 2 exists to answer
+"does this prompt beat the baseline", so quote it there — as family 2, of 9
+tests. An unqualified "Holm p = 0.02" is now demonstrably ambiguous in this
+report.
 
 ### Two caveats a reviewer will raise
 
