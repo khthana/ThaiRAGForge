@@ -837,6 +837,59 @@ see `docs/adr/`.
      measurement the way the other two were.
   Also covered there: single-annotator labelling (defended by the labels being
   *rule-derived and re-derivable*, not judged), query provenance, external validity.
+- **Oracle-union ceiling (`tools/eval/oracle_union_ceiling.py` →
+  `data/results/oracle_union_ceiling.md`, 2026-08-08)** — union the persisted
+  top-10 of all 36 live combos: a pair no system finds is unreachable by any
+  reranker/ensemble/fine-tune while the index family and k are fixed. Rewritten
+  from an outside analysis in `road-to-wow-demo/`. Its numbers are superseded —
+  best single **0.6281** (was 0.6935), hybrid ceiling **0.8948** (was 0.9201),
+  pairs **1,046** (was 644) — but **the cause is the query set, not a bug in it,
+  and getting that attribution right took a second look**: it ran on a checkout
+  whose gold set still had **73** entries (`REPO` is hardcoded to another user's
+  OneDrive path), and the 33 `course` queries are the harder ones. Holding this
+  script's combo set fixed and scoring only the 73 non-course queries reproduces
+  its shape — best 0.6728, union 0.9125. The first draft of this bullet accused
+  it of unioning 44 combos; **its own header says 36**, so that was wrong. What
+  *is* true is a portability defect: it selects combos by bare `glob`, so re-run
+  here it takes 44 (the 8 in `_EXCLUDED_COMBO_DIRS`, indices deleted, results
+  pre-rebuild-#3) and the ceiling reads 0.9046 instead of 0.8948 — measured in
+  §1, not asserted. Note it moves the *ceiling* only; the retired combos are the
+  weak `sct`/`congen` and never the argmax. Derive the combo set from which
+  index dirs *exist* and cross-check against the exclusion list — either half
+  alone goes stale. See [[feedback_external_analysis_reads_a_stale_slice]]:
+  verify what an outside analysis actually ran on before critiquing it. Findings: (a) **at a fixed 10-doc budget, diversity is negative**
+  — 2 systems × 5 = **0.5913** vs 1 system × 10 = **0.6281** (**−0.0368**),
+  while doubling the budget is **+0.1158**; the original's "ensemble wins" read
+  20 docs against 10, and both arms here are greedy-fitted on the test set so
+  the bias favours diversity and it still loses; (b) **69.3% of the misses are
+  ranking, not absence** (best single 512 pairs, union 882 of 1,046) — but that
+  headroom's own ceiling *at 10 docs sent* is 0.7771 (oracle picks the combo) to
+  0.8355 (perfect rerank over all 360), **never 0.8948**; (c) unioning the dense
+  and BM25 result sets too lifts it to **0.9443 macro / 0.9197 micro**, so
+  **80 of the 164 "nothing found it" pairs were a retriever-choice artifact** and
+  the structural floor is **84 pairs (8.0%)**, of which 8 are a labelling
+  artifact → cite **76 (7.3%)**. Splitting the rest into "rank 11-50" vs "never
+  retrieved" still needs a k=50 run (results store rank ≤ 10 only). The §1d
+  router was **dropped, not recomputed** — `routing_eval.py` is its tested
+  descendant and reports `routed (loo)` 0.6780 (+0.0499, **ns**), so recomputing
+  an untested +0.0465 here would have manufactured a conflict. **S5 pins this
+  report against the other ceiling the project publishes**: every row that sends
+  only 10 docs must stay under `paper-results-summary.md`'s structural
+  0.8856 = `mean(min(1, 10/n_relevant))` (it recomputes that constant and gates
+  on it); the union rows exceed it legitimately because they send 360, and that
+  is the one way to misread these two tables together.
+  **A qrels defect fell out of it, and the rejected hypothesis is worth as much
+  as the accepted one.** The single 0.000 query (`รายวิชา CONTROL SYSTEMS`) is
+  unanswerable *by construction*: the Gold set also holds `รายวิชา CONTROL
+  SYSTEM`, one character apart, and exact-token matching gave them **disjoint**
+  qrels — the union pulls 103 docs for the plural query, **0** of its own gold
+  and **9** of the singular's. Detect the shape (one course name a token-prefix
+  of another), don't hard-code the pair. The hypothesis that **failed** was the
+  attractive one: 38 of 401 `course` pairs (9.5%) are relevant only via another
+  course's `PREREQUISITE:` line, which reads like an unretrievable needle — but
+  `SIGNALS AND SYSTEMS` is 9/10 prerequisite-only at union recall **1.000** and
+  `ELECTRONICS ENGINEERING 1` is 10/10 at 0.900. Cite 9.5% as a category that
+  exists, never as a cause.
 - **Candidate next axis, written up but not started**:
   `docs/colbert-late-interaction-notes.md` (ColBERT: motivated by *our own*
   results — the cross-encoder reranker hurt hybrid MRR, and BM25/dense split

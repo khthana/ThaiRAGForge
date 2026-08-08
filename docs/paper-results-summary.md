@@ -1676,6 +1676,81 @@ category's ceiling toward 1.0. This has **not been tested or built** — it's
 a plausible, well-motivated candidate for a future research direction, not
 a validated finding.
 
+### Oracle-union ceiling: how much of the Gold set is reachable at all (new, 2026-08-08)
+
+The ceiling above is imposed by the **qrels** (a system sending 10 documents
+cannot recall 43 relevant ones). A second, independent ceiling is imposed by
+the **index family**: union the persisted top-10 of all 36 live
+chunker × embedder combos and any pair no system finds is out of reach of every
+reranker, ensemble or fine-tune while the indices and k stay fixed. Script
+`tools/eval/oracle_union_ceiling.py` → `data/results/oracle_union_ceiling.md`;
+106 queries, 1,046 (query, resolution) pairs, hybrid retriever, read-only over
+persisted results.
+
+**The two ceilings do not conflict, and the way they meet is the check.** Every
+row that *sends* 10 documents sits under 0.8856 (highest: 0.8355, a perfect
+reranker over the full 360-document pool); the union rows exceed it only because
+they send 360. The script recomputes 0.8856 from the qrels and gates on this
+(check S5), so the two tables cannot drift apart.
+
+| arm | docs sent | docs fetched | recall@10 macro | micro |
+|---|---|---|---|---|
+| best single combo (`sentence` × `qwen3_0.6b`) | 10 | 10 | 0.6281 | 0.4895 |
+| oracle picks the best combo per query | 10 | 10 | 0.7771 | 0.6233 |
+| union of all 36 + a perfect reranker | 10 | 360 | 0.8355 | 0.6931 |
+| union of all 36 (no budget cap) | 360 | 360 | 0.8948 | 0.8432 |
+| + dense results too (72 systems) | 720 | 720 | 0.9375 | 0.9120 |
+| + BM25 as well (76 systems) | 760 | 760 | **0.9443** | 0.9197 |
+
+Three results worth citing, and one retraction.
+
+1. **Diversity is not free, and at a fixed budget it is negative.** Splitting
+   the same 10 document slots across 2 systems (5 each) scores **0.5913** against
+   a single system's **0.6281** — **−0.0368**. Doubling the budget instead (2
+   systems × 10 = 20 documents) gives **+0.1158**. The earlier reading that an
+   ensemble beat a single model compared 20 documents against 10. Both arms here
+   are chosen greedily *on the test set*, so the comparison is biased toward
+   diversity and it still loses. See [[feedback_state_the_retrieval_budget_in_every_comparison]].
+2. **The misses are mostly ranking, not absence.** Of 1,046 pairs the best single
+   combo finds 512 (48.9%) and the 36-way union finds 882 (84.3%): **370 pairs
+   (69.3% of the misses) are found by *some* system**. That is the headroom a
+   per-query router or a reranker over a merged pool is aiming at — but at the
+   real 10-document budget its ceiling is 0.7771–0.8355, **not** 0.8948.
+3. **The structural floor is 76 pairs (7.3%)**, not the 164 the hybrid-only union
+   suggests. Adding the dense and BM25 result sets recovers 80 further pairs, so
+   most of "no system found it" was a *retriever-choice* artifact. Of the 84 that
+   survive all three retrieval paths, 8 are unanswerable by construction (below),
+   leaving 76 genuinely unaccounted for — still unsplit between "ranked 11–50" and
+   "never retrieved", which needs a k=50 run.
+
+**Retracted from the earlier version of this analysis**: its best single of
+0.6935 is superseded by the 0.6281 above, and its ceiling of 0.9201 is retired
+in favour of the 0.8948 above — do not cite either. The cause is the query set:
+that analysis ran against a checkout whose Gold set still held **73** entries,
+and the 33 `course` queries added on 2026-07-25 are the harder ones. Scoring
+only those 73 non-course queries with the combo set used here reproduces its
+shape (best 0.6728, union 0.9125), so the difference is coverage, not method. Its leave-one-out router
+(+0.0465) is withdrawn in favour of `routing_eval.md`'s tested `routed (loo)`
+= 0.6780 (+0.0499), which does **not** reach significance.
+
+#### A qrels defect this surfaced: two course names, one a prefix of the other
+
+One query — `รายวิชา CONTROL SYSTEMS` — scores **0.000** under the union of all
+36 systems. The cause is not retrieval. The Gold set also contains
+`รายวิชา CONTROL SYSTEM` (singular), the two names differ by one character, and
+because the qrels were built by exact-token match their relevant sets are
+**disjoint — 0 documents in common**. The union retrieves 103 documents for the
+plural query: 0 of its own gold, 9 of the *other* query's. No system that cannot
+tell the two questions apart can score above zero on one of them, so those 8
+pairs are a labelling artifact and are excluded from the structural floor above.
+
+A second hypothesis was tested here and **rejected by the data**: 38 of the 401
+`course` gold pairs (9.5%) are relevant only because the course name appears in
+another course's `PREREQUISITE:` line, which looked like an unretrievable
+needle. It is not — `SIGNALS AND SYSTEMS` is 9/10 prerequisite-only and the
+union recalls **1.000**, `ELECTRONICS ENGINEERING 1` is 10/10 and scores 0.900.
+Report the 9.5% as a category that exists, not as an explanation of anything.
+
 ## BM25 lexical baseline
 
 `src/rag_lab/retrievers/bm25.py` (`rank_bm25.BM25Okapi` over PyThaiNLP
