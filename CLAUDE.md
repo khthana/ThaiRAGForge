@@ -252,7 +252,14 @@ see `docs/adr/`.
   **hard** (per-route index, 5 indices) 0.6382 > **neither** 0.6281. **Only `soft vs
   none` on nDCG@10 is significant** (+0.0360, Holm-adj 0.0216, m=12); soft-vs-hard is
   +0.0249 recall@10, ns, CI bounding hard-better-than-soft at ≤0.0147. So the claim is
-  **"soft matches hard at one fifth the index cost"**, never "soft beats hard".
+  **"soft matches hard at one fifth the index cost"**, never "soft beats hard" — and
+  **"hard" here means hard routing *at its shipped targets***, not the best hard router
+  obtainable: `routing_eval.md`'s `routed (loo)` arm, which re-picks each route's target
+  per held-out query, reaches **0.6780** recall@10 under hybrid, *above* soft's 0.6631
+  (though only **0.7938** MRR, far below soft's 0.8705 and below no-routing's 0.8430).
+  Untested against each other — two scripts, never one Holm family. Read it as: soft
+  beats the *current* targets, and a target refresh would likely close the recall gap
+  while leaving MRR to soft. Don't retire index routing on this table alone.
   **The two are substitutes, not complements**: doing both (0.6415) is *worse* than
   soft alone, still worse at the oracle bound (0.6611 < 0.6710). The per-route table
   gives the mechanism — on `person` the optimal alpha is **0.15** on the generic index

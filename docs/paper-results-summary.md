@@ -1117,6 +1117,18 @@ the gold label.
 hard".** Soft leads on all three metrics but no gap survives Holm; the CI bounds
 hard being better than soft by more than **0.0147** recall@10.
 
+**And read "hard" as *hard routing at its shipped targets*, which is the arm that
+exists, not the best hard router obtainable.** `routing_eval.md`'s `routed (loo)`
+arm re-picks each route's target per held-out query and reaches **0.6780** recall@10
+under hybrid — above soft's 0.6631. The comparison is mixed rather than a reversal:
+on MRR that same arm scores **0.7938**, well below soft's 0.8705 and below even the
+no-routing baseline's 0.8430. Neither pair has been significance-tested against the
+other (they come from two scripts and were never in one Holm family), so treat this
+as: **soft's advantage over hard is an advantage over the *current* targets, and a
+target refresh would likely close it on recall@10 while leaving MRR to soft.** That
+is one more reason the ROUTE_COMBO refresh below is the next thing to do, and a
+reason not to retire index routing on the strength of this table alone.
+
 **Combining them buys nothing — and the per-route table says why.** D trails B on
 recall@10 and nDCG@10, and still does at the oracle bound (0.6611 < 0.6710):
 
