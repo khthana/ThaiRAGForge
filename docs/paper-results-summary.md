@@ -896,6 +896,84 @@ non-comparable side result, they stay useful. Reported next to the dense/lexical
 numbers without this paragraph, they would be the easiest thing in the paper for a
 reviewer to attack.
 
+## Resolved 2026-08-08: Query routing — the router now covers the whole Gold set, and it ties the best single combo
+
+Report: `data/results/routing_eval.md` (`tools/eval/routing_eval.py`, rewritten
+2026-08-08). Reuses persisted rebuild-#3 results; no new retrieval. **Every arm
+fetches k=10 from exactly one index and sends 10** — equal retrieval budget, so no
+arm is winning by spending more.
+
+**The coverage gap that motivated it.** `classify_query` shipped with three routes
+(person / program / unmatched). The Gold set gained 33 `course` queries eight days
+later and 13 `faculty_adjunct_aggregate` queries were never covered either, so
+**46/106 = 43% of the set fell to the `unmatched` default** and nothing ever failed
+— a route with no branch is silent, not loud. Course was also the entity type
+furthest from its structural ceiling (65.6%). Adding the two routes takes unrouted
+to **0/106**, with classification exact and no cross-firing in either direction
+(33/33 course, 13/13 faculty, 30/30 person, 30/30 program).
+
+**What routing is worth (dense, recall@10, n=106, paired bootstrap + Holm, m=18):**
+
+| arm | recall@10 | MRR | nDCG@10 |
+|---|---|---|---|
+| shipped `unmatched` default alone (fixed_size+bge-m3) | 0.4129 | 0.5487 | 0.4342 |
+| routed, 3 routes (the router as it stood) | 0.4831 | 0.6652 | 0.5192 |
+| best single combo over all 106 (semantic+qwen3_0.6b) | 0.5707 | 0.8335 | 0.6574 |
+| **routed, 5 routes (shipped)** | **0.5789** | 0.8251 | 0.6540 |
+| routed, 5 routes (leave-one-out targets) | 0.6057 | 0.8701 | 0.6747 |
+| routed, 5 routes (oracle targets — upper bound, not a system) | 0.6293 | 0.8976 | 0.7275 |
+
+Two claims, and they must be kept apart:
+
+1. **The 5-route router significantly beats the 3-route one it replaces**:
+   **+0.0958 recall@10** (Holm-adj p=0.0000), +0.1599 MRR, +0.1349 nDCG@10, all
+   p=0.0000. That is the delivered improvement.
+2. **Routing does *not* significantly beat simply using the best single combo for
+   everything.** Shipped routing is +0.0082 recall@10 over it (Holm-adj p=1.0000)
+   and slightly *behind* on MRR and nDCG@10. Even the oracle upper bound is only
+   +0.0586 (p=0.0462), and the honest LOO estimate +0.0349 is not significant
+   (p=0.5352). **Do not claim routing beats a well-chosen single index on this
+   query set** — claim that it *matches* one without having to know in advance
+   which one that is, and that it fixes a 43% coverage hole.
+
+Under **hybrid** the case for routing is weaker still, and for an interpretable
+reason: BM25 partially rescues the misrouted course/faculty queries, so the 3-route
+baseline starts higher (0.5974) and the 5-route gain shrinks to +0.0408
+(Holm-adj p=0.1152, not significant). The LOO arm reaches +0.0499 over its matched
+baseline with a CI excluding zero, [+0.0137, +0.0884], but Holm-adj p=0.0624 at
+m=18 — report it as suggestive, not established. Hybrid MRR moves the *other* way
+under LOO (−0.0492, CI [−0.0978, −0.0033]), i.e. per-route target selection is
+reliable for recall@10 and overfits on MRR.
+
+**Two structural findings worth citing on their own.**
+
+- **The best combo per route is retriever-dependent**, which the single
+  retriever-agnostic `ROUTE_COMBO` dict cannot express: `person` peaks at
+  semantic+qwen3 under dense but sentence+bge_m3 under hybrid; `program` at
+  fixed_size+qwen3_0.6b vs semantic+qwen3_0.6b. Any "specialist per route" framing
+  (see the Embedder × entity_type section) has to name the retriever it holds for.
+- **The `person` and `program` targets in `ROUTE_COMBO` are stale and are known to
+  be**, picked 2026-07-17 from the retired 252-query set: person is beaten by
+  +0.0598 and program by +0.0813 (dense), each stable across **30/30**
+  leave-one-out folds — so refreshing them would be a refresh, not a fit. They are
+  deliberately left unchanged because of the retriever-dependence above; that is a
+  decision about the structure of `ROUTE_COMBO`, not a config edit.
+
+**Method note on honesty of the `shipped` arm.** The `course` target was chosen
+from this same 106-query scan, so `routed (shipped)` is partly fitted on the set it
+is scored on. That is exactly what the `loo` arm exists to bound, and it is why
+every routed arm is compared against a baseline fitted the *same* way (`oracle` vs
+argmax-over-106, `loo` vs a per-held-out-query re-picked single combo). Comparing a
+LOO arm against an oracle baseline would understate routing; the reverse would
+overstate it.
+
+**Not measured:** the `unmatched_strategy="rrf"` fan-out in `query_service.route_query`.
+With 0/106 unrouted it is now unexercised by any eval, and its target list is
+hardcoded to person/program/unmatched — never extended to course/faculty. The
+figures once quoted for it ("indistinguishable on recall@10, t=0.59; RRF +15% MRR")
+came from the retired 252-query/3-route eval and no script reproduces them; they
+are withdrawn.
+
 ## Methodology
 
 - **Metrics**: recall@k, precision@k, nDCG@k, MRR, MAP, all resolution-level
@@ -1216,6 +1294,14 @@ conclusion in this subsection changed.
   lower inference cost. Without reliable routing, **qwen3(4B) specifically**
   — not its 0.6B sibling — is the safer unrouted choice, since it alone
   lacks a provable weak spot across both main categories.
+  **Two qualifications added 2026-08-08** (see the Query routing section):
+  classification is now reliable — 0/106 unrouted, exact on all four types —
+  but (a) an end-to-end routed system does **not** significantly beat simply
+  using the best single combo for everything (+0.0082 recall@10, Holm-adj
+  p=1.0000), so this framing is about cost and coverage, not about accuracy;
+  and (b) **which specialist wins is retriever-dependent** — person peaks at
+  semantic+qwen3 under dense but sentence+bge_m3 under hybrid — so name the
+  retriever whenever citing a per-route specialist.
 
 ### Structural recall@10 ceiling by entity_type (new, 2026-07-22)
 

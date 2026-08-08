@@ -180,6 +180,37 @@ see `docs/adr/`.
   `entity_lookup`/`entity_boost` in the UI — both fixes above are reflected
   as of the 2026-07-28 rebuild (refreshed again 2026-08-05 to pick up the
   `resolution_id` fix below, since that index predated it).
+- **Query routing** (`src/rag_lab/router.py`'s `classify_query` + `ROUTE_COMBO`,
+  driven by `query_service.route_query`): classify a query by shape and retrieve
+  against that route's index only. Validated offline by `tools/eval/routing_eval.py`
+  against the 106-query 73det set on persisted results (no retrieval) →
+  `data/results/routing_eval.md`. **Add a route whenever the Gold set gains an
+  entity_type** — the failure mode here is silent: the router shipped 2026-07-17
+  with 3 routes (person/program/unmatched), the set gained 33 `course` queries eight
+  days later, and nothing broke, they just fell to the `unmatched` default; together
+  with the 13 never-covered `faculty` queries that was **46/106 = 43% of the set
+  silently unrouted for three weeks**. `tests/test_router.py` now pins the structural
+  invariant (`set(ROUTE_COMBO)` == the set of routes `classify_query` can return), so
+  a route with no target is a test failure rather than a query-time `KeyError`.
+  Closed 2026-08-08: 5 routes, 0/106 unrouted, classification exact per type with no
+  cross-firing. **Cite the two results separately**: the 5-route router significantly
+  beats the 3-route one (**+0.0958** dense recall@10, Holm-adj p=0.0000, m=18), but
+  routing does **not** significantly beat just using the best single combo for
+  everything (+0.0082, p=1.0000; even the oracle upper bound is only +0.0586 and the
+  honest LOO estimate +0.0349 is ns) — the claim is *matches a well-chosen single
+  index without knowing which one, and closes a 43% coverage hole*, not *beats it*.
+  Under hybrid the gain shrinks to ns (+0.0408, p=0.1152) because BM25 partly rescues
+  the misrouted queries. Ordering inside `classify_query` is load-bearing: course is
+  checked **ahead of both program branches** because the program route's ConGen
+  embedder scores **0.0000** recall@10 on course queries. Two open structural facts,
+  both recorded in the `ROUTE_COMBO` comment: the best target per route is
+  **retriever-dependent** (person = semantic+qwen3 dense, sentence+bge_m3 hybrid),
+  which one retriever-agnostic dict can't express; and `person`/`program` are
+  **knowingly stale** (beaten by +0.0598/+0.0813 dense, each stable across 30/30 LOO
+  folds) and left alone pending that structural decision. The
+  `unmatched_strategy="rrf"` branch is now unexercised by any eval (0/106 unrouted)
+  and its old numbers (`t=0.59`, "+15% MRR") came from the retired 252-query/3-route
+  eval — withdrawn, don't cite them.
 - `strip_course_comparison_tables` (`src/rag_lab/loaders/common.py`, commit
   `71764a8`) compacts old/new course-comparison tables (code + credit-tuple
   + English description, the corpus's single largest chunks — 17,077 chars

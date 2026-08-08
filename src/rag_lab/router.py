@@ -1,12 +1,12 @@
-"""Query-time routing: classify an incoming query by shape (person-history,
-program-history, or unmatched) and pick which (chunker, embedder) combo to
+"""Query-time routing: classify an incoming query by shape (person, course,
+program, faculty, or unmatched) and pick which (chunker, embedder) combo to
 query against, informed by the Gold-eval finding that no single combo wins
 universally -- program-history favors one combo, person-history favors
 another (see docs/chunker-embedder-comparison-log.md and the embedder-axis
 follow-up).
 
-Classification deliberately reuses two *different* strategies per axis,
-because the two entity types have different staleness properties:
+Classification deliberately reuses *different* strategies per axis, because
+the entity types have different staleness properties:
 
 - Person: `match_people` (loaders/person_loader.py) is a live regex over
   academic rank + name, not a dictionary lookup -- applying it to the query
@@ -21,9 +21,18 @@ because the two entity types have different staleness properties:
   every canonical program's full name template) still routes a
   not-yet-catalogued program correctly rather than falling through to
   "unmatched".
+- Course: half live pattern, half dictionary -- `match_courses` reads the
+  8-digit code straight out of the text (no staleness at all), and
+  `match_courses_by_name` covers the far commoner case of a user naming the
+  course by its title, which does need `courses.json`. A brand-new course
+  with neither its code nor a catalogued name falls to "unmatched", which is
+  the right failure: there is nothing to anchor on.
+- Faculty: dictionary-only. Acceptable here in a way it would not be
+  elsewhere, because faculties are ~20 stable institutional units that change
+  on a timescale of years, not a growing list.
 
 Everything here is pure classification/fusion logic (no I/O beyond reading
-the already-loaded program dictionary) -- Streamlit-free per ADR-0001.
+the already-loaded dictionaries) -- Streamlit-free per ADR-0001.
 """
 from __future__ import annotations
 
@@ -58,6 +67,8 @@ def _collapse_title_spacing(query: str) -> str:
 
 ROUTE_PERSON = "person"
 ROUTE_PROGRAM = "program"
+ROUTE_COURSE = "course"
+ROUTE_FACULTY = "faculty"
 ROUTE_UNMATCHED = "unmatched"
 
 
@@ -79,27 +90,42 @@ class RouteTarget:
 # sentence+phayathaibert-congen (0.6081). "unmatched" has no clear winner in
 # the per-category data, so it defaults to bge-m3 (the most balanced embedder
 # across every chunker) on fixed_size (a reasonable, cheap default chunker).
+#
+# course (added 2026-08-08, see routing_eval.py's per-entity_type scan on the
+# 106-query 73det set): qwen3-0.6B is not merely the argmax cell, it leads
+# course under *all four* chunkers (0.5105-0.5759) while the next embedder
+# tops out at 0.5114 and the shipped unmatched default (bge-m3) reaches only
+# 0.2681 -- an embedder-level effect, not a single lucky cell. The chunker
+# within qwen3-0.6B is a near-tie (0.5105-0.5759), so it is settled by the
+# project's one significance-backed chunker result rather than by argmax:
+# recursive is the only chunker ever shown to beat another (fixed_size, on
+# aggregate nDCG@10). It happens to be the argmax here too.
+#
+# faculty deliberately points at the SAME target as unmatched: the scan found
+# no combo demonstrably better for it (best 0.5146 vs this default's 0.4294,
+# on n=13, well inside the embedder family's own MDE ~0.05-0.10 -- and the
+# nine embedders span just 0.2362-0.4729 in mean, versus 0.0000-0.5514 on
+# course). The route exists anyway because classification is 13/13 exact and a
+# named route records "checked, nothing better" in code rather than in a doc,
+# and because the per-entity_type weighted-RRF sweep needs the label.
+#
+# person and program are KNOWN STALE and deliberately left alone here. They
+# were picked 2026-07-17 from the 252-query set, and the same scan finds both
+# beaten on the 106-query 73det set (person by semantic+qwen3, +0.0598 dense;
+# program by fixed_size+qwen3_0.6b, +0.0813), each stable across 30/30
+# leave-one-out folds -- so refreshing them would be a refresh, not a fit.
+# What blocks it is that the better target is *retriever-dependent* (person
+# peaks at semantic+qwen3 under dense but sentence+bge_m3 under hybrid, and
+# program at fixed_size+qwen3_0.6b vs semantic+qwen3_0.6b), which one
+# retriever-agnostic dict cannot express. Changing it is a separate decision
+# about that structure, not a config edit; see data/results/routing_eval.md.
 ROUTE_COMBO: dict[str, RouteTarget] = {
     ROUTE_PERSON: RouteTarget("semantic", "local", "BAAI/bge-m3"),
     ROUTE_PROGRAM: RouteTarget("sentence", "local", "kornwtp/ConGen-BGE_M3-model-phayathaibert"),
+    ROUTE_COURSE: RouteTarget("recursive", "qwen3", "Qwen/Qwen3-Embedding-0.6B"),
+    ROUTE_FACULTY: RouteTarget("fixed_size", "local", "BAAI/bge-m3"),
     ROUTE_UNMATCHED: RouteTarget("fixed_size", "local", "BAAI/bge-m3"),
 }
-
-
-def classify_query(query: str) -> str:
-    """Classify `query` as person-shaped, program-shaped, or unmatched.
-
-    Person is checked first: a query naming a titled person almost never
-    also happens to name a specific program, and the person pattern is the
-    more precise signal (rank + name is a strong anchor; the program
-    fallback is a single common substring)."""
-    if match_people(_collapse_title_spacing(query)):
-        return ROUTE_PERSON
-    if match_programs(query, dictionary=load_dictionary()):
-        return ROUTE_PROGRAM
-    if _PROGRAM_FALLBACK.search(query):
-        return ROUTE_PROGRAM
-    return ROUTE_UNMATCHED
 
 
 def _default_program_matcher(text: str) -> list[str]:
@@ -108,6 +134,41 @@ def _default_program_matcher(text: str) -> list[str]:
 
 def _default_course_matcher(text: str) -> list[str]:
     return sorted(set(match_courses(text)) | set(match_courses_by_name(text)))
+
+
+def classify_query(query: str) -> str:
+    """Classify `query` as person-, course-, program- or faculty-shaped, else
+    unmatched.
+
+    Order is most-precise-signal-first, so a query carrying two signals lands
+    on the better-anchored one:
+
+    - Person leads: a query naming a titled person almost never also names a
+      specific program, and rank+name is a strong anchor.
+    - Course next, ahead of *both* program branches. An 8-digit course code
+      (or an exact unique course title) is a far tighter match than the
+      program fallback's bare `สาขาวิชา` substring, and misrouting a course
+      query into the program route is the single most expensive mistake this
+      classifier can make: the program route's ConGen embedder scores
+      **0.0000** recall@10 on course queries (it never saw Latin-script
+      course titles), versus 0.5759 on the course route.
+    - Faculty last, since its dictionary entries ("คณะ..."/"วิทยาลัย...") are
+      common enough to appear incidentally inside a program or course query.
+
+    Verified on the 106-query 73det Gold set: 30/30 person, 30/30 program,
+    33/33 course, 13/13 faculty, with zero cross-firing in either direction
+    (no non-course query matches a course, no non-faculty query a faculty)."""
+    if match_people(_collapse_title_spacing(query)):
+        return ROUTE_PERSON
+    if _default_course_matcher(query):
+        return ROUTE_COURSE
+    if match_programs(query, dictionary=load_dictionary()):
+        return ROUTE_PROGRAM
+    if _PROGRAM_FALLBACK.search(query):
+        return ROUTE_PROGRAM
+    if match_faculties(query):
+        return ROUTE_FACULTY
+    return ROUTE_UNMATCHED
 
 
 def detect_entities(

@@ -214,17 +214,24 @@ def route_query(
     matching route's index only -- rather than every built combo like
     query_indices, which is for side-by-side comparison, not routing.
 
-    unmatched_strategy controls what happens when the query doesn't match
-    the person or program pattern:
-    - "default" (recommended default; see tools/eval/routing_eval.py):
-      query just the unmatched route's index. Offline validation against the
-      Gold set found this statistically indistinguishable from RRF-merging
-      on recall@10 (t=0.59), so the extra cost of querying 3 indices isn't
-      justified unless top-of-list ranking quality specifically matters.
-    - "rrf": query the unmatched, person, and program routes' indices and
-      combine with Reciprocal Rank Fusion (router.rrf_merge). The same
-      validation found this improves MRR (+15%) and ndcg@10 (+12%) -- worth
-      it for a UI that only surfaces the top few results.
+    `retriever_spec` is a parameter but `route_combo` is a single fixed dict,
+    so every route serves the same target whichever retriever is passed. The
+    2026-08-08 routing eval shows that is an approximation: the best combo
+    per route is retriever-dependent (person peaks at semantic+qwen3 under
+    dense but sentence+bge_m3 under hybrid). Living with it is deliberate --
+    see data/results/routing_eval.md, section 2.
+
+    unmatched_strategy controls what happens when the query matches no route
+    pattern at all. Since the 2026-08-08 course/faculty routes, that is
+    **0/106 queries** on the Gold set, so neither branch below is exercised
+    by any current eval and both are unmeasured:
+    - "default" (recommended): query just the unmatched route's index.
+    - "rrf": fan out to the unmatched, person and program routes and combine
+      with Reciprocal Rank Fusion (router.rrf_merge). Note the target list is
+      hardcoded and was never extended to course/faculty.
+    The earlier numbers quoted here ("indistinguishable on recall@10, t=0.59;
+    RRF +15% MRR") came from the retired 252-query/3-route routing_eval and
+    no longer have a script that reproduces them -- do not cite them.
     """
     route = classify_query(query)
 

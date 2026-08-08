@@ -1,8 +1,11 @@
-"""router.py: query-shape classification (person/program/unmatched) and RRF
-merge of already-ranked RetrievalResults."""
+"""router.py: query-shape classification (person/course/program/faculty/
+unmatched) and RRF merge of already-ranked RetrievalResults."""
 from __future__ import annotations
 
 from rag_lab.router import (
+    ROUTE_COMBO,
+    ROUTE_COURSE,
+    ROUTE_FACULTY,
     ROUTE_PERSON,
     ROUTE_PROGRAM,
     ROUTE_UNMATCHED,
@@ -60,6 +63,61 @@ def test_classify_program_query_via_fallback_marker():
 def test_classify_unmatched_query():
     query = "ในการประชุมครั้งนี้ มีการพิจารณาเรื่องค่าธรรมเนียมการศึกษาในกรณีใดบ้าง"
     assert classify_query(query) == ROUTE_UNMATCHED
+
+
+def test_classify_course_query_by_name():
+    # Real shape from the Gold set's `course` entity_type (33 queries, all
+    # of which fell to `unmatched` until this route existed).
+    query = "รายวิชา MACHINE LEARNING IN PRACTICE ถูกกล่าวถึงในการประชุมสภาสถาบันครั้งใดบ้าง"
+    assert classify_query(query) == ROUTE_COURSE
+
+
+def test_classify_course_query_by_code_when_the_title_follows_it():
+    # The code path needs no dictionary, so a brand-new course still routes --
+    # but only in the corpus's own "code TITLE" shape, because match_courses
+    # requires an uppercase Latin title after the digits to tell a course code
+    # from a student ID (also 8 digits; see course_loader.py's docstring).
+    assert classify_query("รายวิชา 01276764 AUGMENTED REALITY อยู่ในหลักสูตรใด") == ROUTE_COURSE
+
+
+def test_a_bare_course_code_with_no_title_does_not_route_to_course():
+    # Documents the cost of that anchor rather than pretending it isn't there:
+    # a user typing only the digits falls through to unmatched. Acceptable
+    # because all 33 course queries in the Gold set name the course by title,
+    # and relaxing the anchor would let any 8-digit number (student IDs,
+    # phone numbers) claim the course route.
+    assert classify_query("รายวิชา 01276764 อยู่ในหลักสูตรใด") == ROUTE_UNMATCHED
+
+
+def test_course_is_checked_before_the_program_fallback():
+    # The expensive misroute this ordering exists to prevent: the program
+    # route's embedder (ConGen) scores 0.0000 recall@10 on course queries,
+    # so a course query carrying the bare "สาขาวิชา" marker must NOT be
+    # handed to the program fallback.
+    query = "รายวิชา MACHINE LEARNING IN PRACTICE ของสาขาวิชาวิศวกรรมคอมพิวเตอร์ สอนเมื่อใด"
+    assert classify_query(query) == ROUTE_COURSE
+
+
+def test_classify_faculty_query():
+    query = "หลักสูตรไหนของคณะบริหารธุรกิจที่ใช้อาจารย์พิเศษสอนเกินร้อยละ 50 มากที่สุด"
+    assert classify_query(query) == ROUTE_FACULTY
+
+
+def test_faculty_is_checked_after_program_since_a_faculty_name_appears_incidentally():
+    # A faculty name inside a program-shaped query is context, not the
+    # subject -- program wins, so the faculty check sits last.
+    query = "หลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาการทดสอบระบบขั้นสูง ของคณะวิศวกรรมศาสตร์ เปลี่ยนแปลงอย่างไร"
+    assert classify_query(query) == ROUTE_PROGRAM
+
+
+def test_every_route_classify_query_can_return_has_a_combo():
+    # The structural invariant that the original 3-route gap violated in
+    # silence: the Gold set gained 33 `course` queries eight days after the
+    # router shipped and nothing failed -- they just fell to `unmatched`.
+    # route_query does ROUTE_COMBO[route], so a route with no combo is a
+    # KeyError at query time; a route never returned is dead config.
+    routes = {ROUTE_PERSON, ROUTE_COURSE, ROUTE_PROGRAM, ROUTE_FACULTY, ROUTE_UNMATCHED}
+    assert set(ROUTE_COMBO) == routes
 
 
 def test_detect_entities_person_via_titled_regex():
