@@ -330,7 +330,17 @@ def combos() -> list[Path]:
 
 
 def audit_indexes(corpus_ids: set[str], quick: bool) -> dict[Path, set[str]]:
-    newest_corpus = max(p.stat().st_mtime for p in iter_corpus_files(CORPUS))
+    # Manifests count as corpus edits, not just the .md files. A `resolution_id`
+    # is `<year>/<session>/<title>` and the title comes from meeting_manifest.json
+    # (ADR-0003), so repairing a manifest title moves an id without touching a
+    # single .md -- exactly what the 2026-08-08 mispairing repair did. Reading
+    # only *.md here made that edit invisible to I6, which would then report an
+    # index as current while it still held the pre-repair ids: a stale index
+    # passing the check written to catch stale indexes.
+    newest_corpus = max(
+        p.stat().st_mtime
+        for p in [*iter_corpus_files(CORPUS), *CORPUS.rglob("meeting_manifest.json")]
+    )
     misaligned, dup_chunk_ids, contaminated, bad_vectors = [], [], [], []
     stale_vs_corpus, manifest_drift, coverage = [], [], []
     ids_by_combo: dict[Path, set[str]] = {}
@@ -380,6 +390,16 @@ def audit_indexes(corpus_ids: set[str], quick: bool) -> dict[Path, set[str]]:
         if mpath.exists():
             man = json.loads(mpath.read_text(encoding="utf-8"))
             built = datetime.fromisoformat(man["timestamp"]).timestamp()
+            # A relabel brings an index current with respect to a title-only
+            # corpus edit without rebuilding it: chunk text is unchanged and
+            # embeddings are a function of text alone, so only the id columns
+            # move. Without counting it, adding manifests to `newest_corpus`
+            # above would leave every index permanently warned after any title
+            # repair -- a check that is always red is one nobody reads.
+            for marker in ("relabeled_mispairings", "relabeled"):
+                at = (man.get(marker) or {}).get("at")
+                if at:
+                    built = max(built, datetime.fromisoformat(at).timestamp())
             if not toy and built < newest_corpus:
                 stale_vs_corpus.append(
                     f"{d.parent.name}/{d.name}: built "

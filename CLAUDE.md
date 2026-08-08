@@ -66,7 +66,17 @@ see `docs/adr/`.
   still means a *live* result set has drifted. Because 0 is ambiguous between
   "examined and clean" and "nothing left to examine", the E3 checks now print their
   denominator — `E3a 0 of 23,156 live result files` is a real pass, `E3d 0 of 0` says
-  so out loud. Current state (**re-run 2026-08-07 against rebuild #3**): **24 pass /
+  so out loud. **`I6` was sharpened 2026-08-08 after it was caught unable to see a
+  whole class of corpus change**: it derived "the corpus's last edit" from `*.md`
+  mtimes alone, but a `resolution_id` is built from the manifest title (ADR-0003),
+  so the title repair that day moved 4 ids without touching a single `.md` — I6
+  would have called all 41 affected indices current while they still held
+  pre-repair ids. It now reads `meeting_manifest.json` mtimes too, and counts a
+  recorded relabel (`relabeled_mispairings.at` in an index manifest) as bringing
+  an index current without a rebuild — without that second half it would sit
+  permanently red after any title repair, and an always-red check is one nobody
+  reads. Current state (**re-run 2026-08-08 after the title repair**, and
+  unchanged from the 08-07 run against rebuild #3): **24 pass /
   0 warn / 1 fail**, the single FAIL being the
   `BuildCombo.id` caveat above. That headline was written here before it was true —
   the report on disk at the time said **21 pass / 3 warn / 1 fail**, the 3 warns
@@ -842,8 +852,37 @@ see `docs/adr/`.
   supports, so a truncated title scores 1.0). Result: median **1.000**, **7 flagged,
   7/7 genuine**. Report + per-case verdicts: `docs/title-body-agreement.md`. Two
   causes: 4 mispairings (metadata-only, incl. one A↔B swap) and 2 never-fetched
-  documents (the CHECO shape). **Not applied** — mispairings change `resolution_id`s,
-  so it is a decision; both should ride the rebuild already owed.
+  documents (the CHECO shape). **The 4 mispairings are APPLIED (2026-08-08);
+  flag count 7 → 3**, the remaining 3 being the 2 never-fetched documents and the
+  1 generic-title judgement call, all deliberately kept.
+  `fix_manifest_title_mispairings.py --apply` (titles only — for the `2565/8`
+  A↔B swap every field is internally consistent and it is the *content* that
+  landed in the other entry's file, so swapping titles is the one edit that
+  re-aligns title, body **and** url) then
+  `relabel_renamed_resolution_ids.py` (41/55 indices, 2,021 rows; 302/24,217
+  result files, 323 rows). **The premise this waited a week on was wrong: it is
+  a relabel, not a rebuild.** A title change moves an id but not chunk *text*,
+  and embeddings are a function of text alone — minutes, no GPU, and rewriting a
+  persisted result is exactly equivalent to re-running retrieval. No metric can
+  have moved: 0 of 358 gold `resolution_id` entries reference any old or new id.
+  Three things worth reusing. (1) The mapping was **derived, not typed** —
+  loader-computed id snapshots either side of the manifest edit, diffed — because
+  a typo in a 90-character Thai title would silently mint a third id. (2) **A
+  swap is not idempotent**: re-running reverts it, so the relabeller refuses when
+  an incoming id already sits on rows it isn't relabelling (this fired on the
+  verification re-run, as designed). (3) **`I6` was blind to this whole class of
+  change** — it derived "the corpus's last edit" from `*.md` mtimes, but a
+  `resolution_id` comes from `meeting_manifest.json` (ADR-0003), so a title
+  repair would have left 41 stale indices passing the staleness check. I6 now
+  reads manifest mtimes too, and treats a recorded relabel
+  (`relabeled_mispairings.at`) as bringing an index current without a rebuild,
+  so it doesn't go permanently red after every title repair. Verified by text,
+  not by counting: a wrong-way swap gives the right ids in the right row counts,
+  so all 4 new ids were checked against the full text of the file that now
+  carries them (9/9, 12/12, 16/16, 12/12 chunks). Post-repair gates:
+  `audit_resolution_ids.py` unchanged, invariants **24/0/1** (same known
+  `BuildCombo.id` FAIL), `E3a` 0 of 23,156, doc-claims 3/2/0. The CHECO
+  re-download now owes **3 URLs, not 1** (these 2 are the same shape).
 - Narrative overview of the whole project (what was done in what order, what each step
   found, which conclusions have since been retracted): `docs/project-journey.html` — the
   tracked source; render to PDF with headless Chrome (`--headless --no-pdf-header-footer
