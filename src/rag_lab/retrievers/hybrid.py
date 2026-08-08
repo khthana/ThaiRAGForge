@@ -18,7 +18,15 @@ def _normalize(scores: dict[str, float]) -> dict[str, float]:
 class HybridRetriever(BaseRetriever):
     """Fuse Dense and BM25 rankings. Default `rrf` fuses *ranks* (Reciprocal Rank
     Fusion), sidestepping the incomparable dense-cosine vs BM25 score scales;
-    `weighted` fuses max-normalized scores with configurable weights."""
+    `weighted` fuses max-normalized scores with configurable weights.
+
+    `dense_weight`/`bm25_weight` apply to BOTH methods. Under `rrf` each arm's
+    reciprocal-rank contribution is scaled by its weight, so the default 0.5/0.5
+    is rank-order-identical to plain unweighted RRF (a uniform 0.5x factor does
+    not reorder anything) -- which means every hybrid number this project has
+    published is reproduced exactly at 0.5, and an alpha sweep isolates the
+    weight rather than confounding it with a switch from rank fusion to score
+    fusion. See tools/eval/hybrid_alpha_sweep.py."""
 
     def __init__(
         self,
@@ -47,9 +55,9 @@ class HybridRetriever(BaseRetriever):
 
         if self.method == "rrf":
             fused: dict[str, float] = {}
-            for ranking in (dense, bm25):
+            for ranking, weight in ((dense, self.dense_weight), (bm25, self.bm25_weight)):
                 for r in ranking:
-                    fused[r.chunk_id] = fused.get(r.chunk_id, 0.0) + 1.0 / (
+                    fused[r.chunk_id] = fused.get(r.chunk_id, 0.0) + weight / (
                         self.rrf_k + r.rank
                     )
         elif self.method == "weighted":

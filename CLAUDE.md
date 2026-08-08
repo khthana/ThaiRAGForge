@@ -211,6 +211,38 @@ see `docs/adr/`.
   `unmatched_strategy="rrf"` branch is now unexercised by any eval (0/106 unrouted)
   and its old numbers (`t=0.59`, "+15% MRR") came from the retired 252-query/3-route
   eval — withdrawn, don't cite them.
+- **Hybrid fusion weight (`alpha`)** — swept 2026-08-08 at last
+  (`tools/eval/hybrid_alpha_sweep.py` → `data/results/hybrid_alpha_sweep.md`;
+  21-point grid × 106 queries × 3 combos). Every hybrid number before this date was
+  at an implicit, unswept 50:50. **`alpha` is applied to the `rrf` branch**
+  (`Σ wᵢ/(k+rankᵢ)`, weighted RRF), *not* to the separate `weighted` score-fusion
+  branch — sweeping that one would confound the weight with a switch from rank
+  fusion to score fusion. The payoff of that choice: a uniform 0.5× factor cannot
+  reorder, so **alpha=0.50 is rank-order-identical to plain RRF** and every
+  published number is reproduced exactly at the grid's midpoint
+  (`tests/retrievers/test_hybrid_retriever.py` pins this as a regression guard).
+  Findings: (a) **a single global alpha is worth nothing** where 0.50 was already
+  sane (+0.0016 / +0.0189 recall@10, both ns, and both are *oracle* values fitted on
+  the test set); (b) **a per-`entity_type` alpha is worth +0.0350 recall@10 /
+  +0.0360 nDCG@10 and survives leave-one-out** (Holm-adj 0.0252 / 0.0210, m=9, on
+  `sentence+qwen3_0.6b`) — **MRR is ns, don't include it**; (c) the per-type optima
+  are so far apart that `person` (best 0.15, plateau 0.00-0.35) and `program` (best
+  0.75, plateau 0.40-1.00) have **disjoint** non-degrading ranges and the shipped
+  0.50 sits *outside* `person`'s; (d) **the gain is conditional** — it needs the two
+  arms' relative strength to *invert* across query types, so `semantic+bge_m3` gains
+  nothing (ns everywhere; it is the `person` specialist, its dense arm has no
+  per-type weak spot) and `fixed_size+m2v` wants alpha=0.00 outright (drop the
+  broken arm; per-type adds only +0.0105 over global). Report **ranges, not a single
+  best value** — tuning alpha on the 106 queries it is reported on is overfitting,
+  which is what the LOO arm exists to bound. Nothing is changed in shipped defaults;
+  `HybridRetriever` still ships 0.5/0.5. Two things worth reusing: the sweep caches
+  each arm's rank vector once and re-fuses in numpy (21 alphas for the cost of 1
+  retrieval pass, since the ~1.9s/query `BM25Okapi` rebuild dominates), and its
+  self-check pins the vectorised fusion against the **real** retrievers at all three
+  anchored grid points (0.00=BM25-alone, 0.50=hybrid, 1.00=dense-alone) — that check
+  caught a genuine tie-break bug (`HybridRetriever` settles exact score ties by dense
+  rank, via stable `sorted` over a dense-first dict; a naive `argsort` settles them
+  by chunk index).
 - `strip_course_comparison_tables` (`src/rag_lab/loaders/common.py`, commit
   `71764a8`) compacts old/new course-comparison tables (code + credit-tuple
   + English description, the corpus's single largest chunks — 17,077 chars

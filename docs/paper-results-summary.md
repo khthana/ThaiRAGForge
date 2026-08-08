@@ -974,6 +974,110 @@ figures once quoted for it ("indistinguishable on recall@10, t=0.59; RRF +15% MR
 came from the retired 252-query/3-route eval and no script reproduces them; they
 are withdrawn.
 
+## Resolved 2026-08-08: The hybrid fusion weight — one global alpha is worth nothing, a per-`entity_type` alpha is worth +0.0350
+
+Report: `data/results/hybrid_alpha_sweep.md` (`tools/eval/hybrid_alpha_sweep.py`).
+21-point grid (step 0.05) × 106 queries × 3 combos, live re-retrieval against
+rebuild #3. `alpha` is the **dense** weight, BM25 gets `1-alpha`.
+
+**Why this was worth doing.** Every hybrid number this project has published was
+produced at an implicit, unswept 50:50 — `dense_weight`/`bm25_weight` existed on
+`HybridRetriever` but a full-repo scan found them used in no config and no eval
+script. That would be a minor omission if the two arms were uniformly matched. They
+are not: BM25 alone scores **0.8147** recall@10 on `person` and **0.3497** on
+`program`, a 0.465 swing wider than any embedder-to-embedder gap in the study.
+
+**Method — alpha is applied to RRF, not to the separate score-fusion branch.** Each
+arm's reciprocal-rank contribution is scaled by its weight (`Σ wᵢ/(k+rankᵢ)`, the
+weighted-RRF of the literature, previously not implemented here). This matters for
+interpretation: a uniform 0.5× factor cannot reorder anything, so **alpha=0.50 is
+rank-order-identical to the plain unweighted RRF behind every published number**.
+The sweep therefore isolates the weight instead of confounding it with a switch
+from rank fusion to score fusion, and the grid has a true no-op control at its
+midpoint. Verified, not assumed: the vectorised fusion is checked against the real
+retrievers at all three grid points where an independent ground truth exists —
+alpha=0.00 vs `BM25Retriever`, 0.50 vs `HybridRetriever`, 1.00 vs `DenseRetriever`
+— identical top-10 in every case, so every alpha in between interpolates between
+verified anchors.
+
+**Result 1 — a single global alpha buys nothing, on any combo where 0.50 was
+already sane.** For `sentence+qwen3_0.6b` the best global alpha is +0.0016
+recall@10 over the shipped 0.50 (Holm-adj p=1.0000); for `semantic+bge_m3`,
++0.0189 (p=0.5530). On both, the *oracle* global alpha — fitted directly on the
+test set — is not significant. The shipped 50:50 is a good global compromise.
+
+**Result 2 — the per-type optima diverge so far that no single alpha serves them
+(`sentence+qwen3_0.6b`, recall@10):**
+
+| scope | n | best alpha | recall@10 at best | at alpha=0.50 | non-degrading plateau |
+|---|---|---|---|---|---|
+| person | 30 | **0.15** | 0.8446 | 0.7487 | 0.00–0.35 |
+| program | 30 | **0.75** | 0.6377 | 0.6105 | 0.40–1.00 |
+| course | 33 | 0.65 | 0.6162 | 0.5946 | 0.25–0.80 |
+| faculty_adjunct_aggregate | 13 | 0.45 | 0.4865 | 0.4755 | 0.20–1.00 |
+| all | 106 | 0.45 | 0.6297 | 0.6281 | 0.30–0.50 |
+
+The `person` and `program` plateaus are **disjoint** — there is no alpha that is
+non-degrading for both — and the shipped 0.50 lies *outside* the `person` plateau.
+Per the pre-registered reporting rule, these are ranges, not a recommended value.
+
+**Result 3 — per-type alpha is worth a real, constructible gain.** Same combo,
+paired bootstrap, Holm family m=9:
+
+| arm | recall@10 | vs 0.50 | Holm-adj p | nDCG@10 | vs 0.50 | Holm-adj p |
+|---|---|---|---|---|---|---|
+| `alpha=0.50` (shipped) | 0.6281 | — | — | 0.6951 | — | — |
+| global best (oracle) | 0.6297 | +0.0016 | 1.0000 | 0.6951 | +0.0000 | 1.0000 |
+| per-type best (oracle) | 0.6710 | +0.0429 | **0.0016** | 0.7510 | +0.0559 | **0.0000** |
+| **per-type (LOO — the citable one)** | **0.6631** | **+0.0350** | **0.0252** | **0.7311** | **+0.0360** | **0.0210** |
+
+The gain survives leave-one-out, so it is not an artifact of fitting on the scored
+queries. **MRR is not significant** (+0.0275, p=0.9912) — cite this as recall@10
+and nDCG@10 only.
+
+**Result 4 — but the gain is conditional, and two of the three combos show why.**
+Per-type alpha pays off only where the two arms' relative strength *inverts* across
+query types:
+
+- `semantic+bge_m3` — **nothing significant on any metric** (per-type LOO +0.0110,
+  p=1.0000). Its per-type optima all cluster in 0.40–0.60. The mechanism is already
+  in this document: `bge_m3` is the `person` specialist, so its dense arm has no
+  per-type weak spot for BM25 to rescue. No inversion, no gain.
+- `fixed_size+m2v` — the known RRF failure case. The optimum is **alpha=0.00**,
+  i.e. switch the dense arm off entirely, and the gains are enormous (+0.2264
+  recall@10 per-type LOO, p=0.0000). But per-type adds only +0.0105 over a single
+  global alpha: the fix here is *drop the broken arm*, not *tune per type*. This
+  also quantifies the failure case for the first time — on `person`, RRF at 50:50
+  takes BM25's 0.8281 down to **0.1969**, destroying 76% of it by fusing with a
+  broken partner.
+
+**What this refines in the fusion rule.** "RRF helps the weaker arm and taxes the
+stronger one" was established *across systems*; this measures it *within* one
+system, across query types, and adds the payoff condition: **a per-type weight is
+worth having exactly when arm strength inverts across types — not when the dense
+arm is uniformly competent (`bge_m3`), nor when it is uniformly broken (`m2v`).**
+
+**The aggregate is blind to the effect, demonstrably.** On `sentence+qwen3_0.6b`,
+pure BM25 (alpha=0.00) and pure dense (alpha=1.00) score **identically at 0.5034**
+aggregate recall@10 — while differing by **+0.4650 on `person`** and **−0.2682 on
+`program`**. Two systems that invert completely per type are indistinguishable in
+the mean. Any single-number comparison of a lexical and a dense arm on this corpus
+can hide a total inversion; this is the strongest argument in the study for
+reporting the per-`entity_type` breakdown alongside every aggregate.
+
+**Constructibility.** A per-type alpha needs no new classifier: `classify_query`
+already labels `entity_type` at query time and, since the 2026-08-08 route
+expansion, covers 106/106 with no cross-firing. It is also the *soft* form of
+routing — a misclassification costs a slightly wrong blend rather than the wrong
+index.
+
+**Caveats.** (1) `per-type best` is an oracle; only the LOO arm is citable. (2) LOO
+holds out the scored query but still picks alpha from same-type peers in this
+corpus, so it bounds fitting-to-the-query, not fitting-to-this-corpus. (3)
+`faculty_adjunct_aggregate` (n=13) has a 17-of-21-point plateau — underpowered,
+no per-type conclusion for it. (4) Classification is exact on this set, so the
+real-world cost of misrouting is not measured here.
+
 ## Methodology
 
 - **Metrics**: recall@k, precision@k, nDCG@k, MRR, MAP, all resolution-level
@@ -2490,6 +2594,11 @@ holds as stated.
   significance test among the top 5 hybrid combos, semantic chunker only, no cross-chunker
   averaging (imports `build_combo_to_chunker_embedder`/`bootstrap_pvalue`/`holm_correct` from
   `embedder_matrix_9way.py`); resolved Open item #8's "crown neither" question
+- `tools/eval/hybrid_alpha_sweep.py` — sweeps the RRF fusion weight (`alpha` = dense
+  weight) globally and per `entity_type`, 21-point grid × 3 combos, live re-retrieval.
+  Caches each arm's rank vector once and re-fuses in numpy, so 21 alphas cost one
+  retrieval pass. `--self-check` pins the vectorised fusion against the real
+  `BM25Retriever`/`HybridRetriever`/`DenseRetriever` at alpha 0.00/0.50/1.00
 - `tools/eval/map_precision_significance_test.py` — MAP + precision@1 pairwise significance,
   run at **both** scopes (cross-chunker aggregate, and `semantic`-only to match the existing
   tie test) × both retrievers (dense, hybrid); closed Open item #9's untested-metric half
