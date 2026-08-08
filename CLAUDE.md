@@ -258,7 +258,19 @@ see `docs/adr/`.
   broken arm; per-type adds only +0.0105 over global). Report **ranges, not a single
   best value** — tuning alpha on the 106 queries it is reported on is overfitting,
   which is what the LOO arm exists to bound. Nothing is changed in shipped defaults;
-  `HybridRetriever` still ships 0.5/0.5. Two things worth reusing: the sweep caches
+  `HybridRetriever` still ships 0.5/0.5. **Decided 2026-08-08 not to wire a
+  per-`entity_type` alpha into `query_service` at all**, and the reason is a
+  wrong-pair trap worth remembering: the motivating +0.0350 is measured against *no
+  routing*, which stopped being the shipped configuration the same day. Against the
+  hard router that now ships it shows **no gain on any metric** (recall@10 −0.0202,
+  MRR +0.0182, nDCG@10 +0.0066, all ns, m=12) and the entire remaining headroom is
+  the oracle gap **+0.0071**. Mechanism, so this isn't read as a power problem:
+  per-type alpha repairs a per-type weak dense arm, and hard routing already hands
+  each route a specialist index that doesn't have one (`person` alpha* moves
+  0.15 → 0.30, *toward* neutral, once routed). **The one branch that flips it** is
+  deployment cost: if 5 indices is too many, the move is to *replace* hard routing
+  with soft (arm B, one index, 0.6631, ns vs hard) — a cost decision, not an
+  accuracy one. Never both. Two things worth reusing: the sweep caches
   each arm's rank vector once and re-fuses in numpy (21 alphas for the cost of 1
   retrieval pass, since the ~1.9s/query `BM25Okapi` rebuild dominates), and its
   self-check pins the vectorised fusion against the **real** retrievers at all three

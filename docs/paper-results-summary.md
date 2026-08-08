@@ -1188,6 +1188,25 @@ person specialist, it rises to **0.30**, i.e. toward neutral. **Both forms of
 routing repair the same defect, a per-type weak dense arm, by different means**,
 which is why applying the second after the first adds nothing.
 
+**Decision taken 2026-08-08: do NOT wire a per-`entity_type` alpha into
+`query_service`.** The +0.0350 that motivated the idea is arm **B vs A** — measured
+against *no routing at all*, which stopped being the shipped configuration the same
+day. The decision-relevant comparison is **D vs C**, per-route alpha on top of the
+router that now ships, and it shows no gain on any metric: recall@10 −0.0202,
+MRR +0.0182, nDCG@10 +0.0066, none significant. Total remaining headroom is the
+oracle gap **+0.0071** (D′ 0.6901 vs C 0.6831), which LOO fitting costs more than.
+The mechanism says this is not merely a power problem: a per-type alpha exists to
+repair a per-type weak dense arm, and hard routing hands each route a specialist
+index that by construction does not have one — hence the `person` alpha\* moving
+0.15 → 0.30, toward neutral, once the index is already the person specialist. This
+matches the sweep's own precondition (the gain needs the two arms' relative strength
+to *invert* across types; `semantic+bge_m3` gains nothing).
+
+**The one branch that flips it:** if 5 indices becomes a deployment constraint, the
+question is not "add alpha" but "**replace** hard routing with soft" — arm B reaches
+0.6631 on **one** index, is ns against arm C, and is significant against no routing
+on nDCG@10. That is a cost decision, not an accuracy one. Never ship both.
+
 **Caveats.** (1) Arm A's index is the argmax over 36 combos on this same test set;
 its defence is that `routing_eval`'s LOO selector re-picks it in every fold (best
 single = best single (LOO) = 0.6281), not that it was chosen blind. (2) Arm C's
