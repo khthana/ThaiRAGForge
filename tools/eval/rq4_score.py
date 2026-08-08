@@ -2,7 +2,7 @@
 (abstention correctness), and significance-test the arm/prompt comparisons
 docs/rq4-design.md calls for -- the deliverable that section left open.
 
-Two independent comparisons, each its own Holm family (they test different
+Three independent comparisons, each its own Holm family (they test different
 hypotheses, so pooling them would just dilute both):
 
 1. **Arm ordering** (docs/rq4-design.md 4c): with the prompt held fixed at the
@@ -20,6 +20,14 @@ hypotheses, so pooling them would just dilute both):
    (hybrid_qwen3_0.6b_semantic, bm25_semantic). Recall rising => prompt
    artifact; recall staying ~0.41 => a real generator ceiling (then the
    deferred gemma4:e4b check is the right next step, not before).
+3. **Variant-vs-variant** (family 3, added 2026-08-08): every pairwise prompt
+   variant comparison per arm, in one family. Family 2 only ever compares a
+   treatment against the baseline, so the question "does `cite_all_guarded`'s
+   zero-document guard cost recall relative to unguarded `cite_all`?" has no
+   row there. It was answered ad hoc once and written into rq4-design.md, which
+   left the doc quoting Holm figures no script reproduced. Note the same pair
+   appears in families 2 and 3 with different Holm-adjusted p (different family
+   sizes) -- always quote the family size with the number.
 
 Citation parsing: every `[n]` in the answer text is a citation, deduped per
 query (rq4-design.md's scoring caveat -- models sometimes cite a label twice,
@@ -340,6 +348,65 @@ def main() -> int:
         lines.append(
             f"## Significance family 2: skipped (no arm has both {base_variant} and "
             f"{cite_all_variant} answers on disk yet)\n"
+        )
+
+    # ---- family 3: every pairwise variant comparison, per arm, in ONE Holm
+    # family. Family 2 answers "does the treatment beat the baseline"; it cannot
+    # answer "does the guarded rewrite cost anything relative to unguarded
+    # cite_all", because that pair is not in it. That comparison was first
+    # computed ad hoc in a session and written into docs/rq4-design.md, which
+    # left the doc's Holm figures unreproducible by any script and disagreeing
+    # with family 2's (same test, different family size: 12 vs 5). This family
+    # exists so the doc table has a generating command.
+    #
+    # Only runs when some arm has >=3 variants on disk; with 2 it would just be
+    # family 2 under another heading.
+    variants_by_arm = {
+        arm: [v for v in variants if (v, arm) in scores]
+        for arm in ARM_ORDER
+    }
+    family3_arms = [a for a, vs in variants_by_arm.items() if len(vs) >= 3 and a != "closed_book"]
+    if family3_arms:
+        pairs_data = []
+        mean_of = {}
+        for arm in family3_arms:
+            vs = variants_by_arm[arm]
+            for v_a, v_b in combinations(vs, 2):
+                sa, sb = scores[(v_a, arm)], scores[(v_b, arm)]
+                for metric in ("recall", "precision"):
+                    va, vb, n = paired_arrays(sa, sb, metric)
+                    if n > 0:
+                        pairs_data.append((f"{arm}[{metric}]:{v_a}", f"{arm}[{metric}]:{v_b}", va, vb))
+            for v in vs:
+                s = scores[(v, arm)]
+                mean_of[f"{arm}[recall]:{v}"] = s.mean_recall()
+                mean_of[f"{arm}[precision]:{v}"] = s.mean_precision()[0]
+        rows = run_family(pairs_data, rng, args.n_boot, args.alpha)
+        lines += [
+            "## Significance family 3: all pairwise prompt-variant comparisons, per arm",
+            "",
+            "Family 2 compares each treatment against the `sentence_cap` baseline only. "
+            "This family adds the treatment-vs-treatment pairs (e.g. `cite_all_guarded` "
+            "vs `cite_all`: does the zero-document guard cost recall?), so a claim about "
+            "one variant relative to another has a generating command instead of an ad "
+            "hoc computation. **Corrected across a larger family than family 2** "
+            "(every variant pair x both metrics x every arm carrying all variants), so a "
+            "comparison appearing in both will show a larger Holm-adjusted p here -- "
+            "quote the family size alongside the number.",
+            "",
+            f"Arms with >=3 variants on disk: {', '.join(family3_arms)}. Paired bootstrap "
+            f"(n_boot={args.n_boot}, seed={args.seed}), Holm-corrected across all "
+            f"{len(rows)} tests in this family.",
+            "",
+            "| comparison | mean(a) | mean(b) | diff(b-a) | 95% CI | raw p | Holm-adj p | significant |",
+            "|---|---|---|---|---|---|---|---|",
+        ]
+        lines += fmt_rows(rows, lambda k: mean_of[k])
+        lines.append("")
+    else:
+        lines.append(
+            "## Significance family 3: skipped (no arm has >=3 prompt variants on disk; "
+            "with 2 it would duplicate family 2)\n"
         )
 
     out_path = Path(args.out)

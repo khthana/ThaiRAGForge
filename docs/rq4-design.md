@@ -506,8 +506,24 @@ flag; it enumerates whatever variants are on disk.
 
 `hybrid_qwen3_0.6b_semantic` and `dense_qwen3_0.6b_semantic` were regenerated
 under `cite_all_guarded` (212 queries, ~1 h 30 m). Report:
-`data/results/rq4_score_guarded.md`; the three-way table below is from
-`rq4_score.py`'s own `ArmScore`, Holm-corrected across all 12 tests.
+`data/results/rq4_score_guarded.md`, regenerated with:
+
+```
+PYTHONPATH=src .venv/Scripts/python.exe tools/eval/rq4_score.py \
+    --treatment-variant cite_all_guarded --out data/results/rq4_score_guarded.md
+```
+
+The three-way table below is that report's **significance family 3**
+(every prompt-variant pair × both metrics × both arms = 12 tests, one Holm
+family). It was first computed ad hoc in a session, which left these figures
+unreproducible; family 3 was added to `rq4_score.py` on 2026-08-08 so the table
+has a generating command, and the numbers below are now its output.
+
+**Quote the family size with any Holm p from here.** The guarded-vs-baseline
+pairs appear in family 2 as well, corrected across 5 tests instead of 12, so the
+same test reads Holm 0.0160 there and 0.0234 here. Neither is wrong; an
+unqualified "Holm p = 0.02" is. The 95% CIs also jitter in the fourth decimal
+between families because the bootstrap RNG is consumed in a different order.
 
 | arm | variant | recall | precision | phantom / total |
 |---|---|---|---|---|
@@ -520,14 +536,15 @@ under `cite_all_guarded` (212 queries, ~1 h 30 m). Report:
 
 | comparison | n | diff (recall) | 95% CI | Holm p | sig |
 |---|---|---|---|---|---|
-| dense: `cite_all` vs base | 106 | +0.1005 | [+0.0560, +0.1502] | 0.0000 | **yes** |
-| dense: `guarded` vs base | 106 | **+0.1123** | [+0.0606, +0.1683] | 0.0000 | **yes** |
-| dense: `guarded` vs `cite_all` | 106 | +0.0117 | [−0.0161, +0.0432] | 1.0000 | no |
-| hybrid: `cite_all` vs base | 106 | +0.1181 | [+0.0736, +0.1654] | 0.0000 | **yes** |
-| hybrid: `guarded` vs base | 106 | **+0.0706** | [+0.0237, +0.1196] | 0.0252 | **yes** |
-| hybrid: `guarded` vs `cite_all` | 106 | −0.0475 | [−0.0887, −0.0087] | 0.1344 | no |
+| dense: `cite_all` vs base | 106 | +0.1005 | [+0.0560, +0.1486] | 0.0000 | **yes** |
+| dense: `guarded` vs base | 106 | **+0.1123** | [+0.0609, +0.1689] | 0.0000 | **yes** |
+| dense: `guarded` vs `cite_all` | 106 | +0.0117 | [−0.0171, +0.0429] | 1.0000 | no |
+| hybrid: `cite_all` vs base | 106 | +0.1181 | [+0.0732, +0.1653] | 0.0000 | **yes** |
+| hybrid: `guarded` vs base | 106 | **+0.0706** | [+0.0228, +0.1191] | 0.0234 | **yes** |
+| hybrid: `guarded` vs `cite_all` | 106 | −0.0475 | [−0.0874, −0.0100] | 0.1168 | no |
 
-No precision comparison is significant (all Holm p = 1.0000).
+No precision comparison is significant — all 6 sit at Holm p = 1.0000, the
+largest raw p among them being 0.1944.
 
 **Three things this establishes.**
 
@@ -537,7 +554,8 @@ No precision comparison is significant (all Holm p = 1.0000).
    under either variant (0/421, 0/369), so dense was the only arm that could
    test rule 6 at all.
 2. **The benefit survives.** `cite_all_guarded` beats the `sentence_cap`
-   baseline significantly on *both* arms (+0.1123 dense, +0.0706 hybrid). The
+   baseline significantly on *both* arms (+0.1123 dense, Holm 0.0000; +0.0706
+   hybrid, Holm 0.0234 in this 12-test family / 0.0160 in family 2's 5). The
    ablation's headline — the flat ~0.41 recall was a prompt artifact, not a
    generator ceiling — does not depend on the unguarded wording.
 3. **The apparent cost relative to unguarded `cite_all` is not a finding.**
@@ -550,7 +568,7 @@ No precision comparison is significant (all Holm p = 1.0000).
    inside the noise. Stated as a bound rather than a null: on hybrid the
    interval rules out the guard being *better* than `cite_all` and is
    consistent with a loss of ~0.01-0.09; on dense it rules out a loss greater
-   than ~0.016.
+   than ~0.017.
 
 **Recommendation: adopt `cite_all_guarded` as the paper's reported prompt.** It
 keeps a significant recall gain over the baseline on both arms, and it removes

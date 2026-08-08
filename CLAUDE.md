@@ -548,16 +548,24 @@ see `docs/adr/`.
   **4/359 → 0/353** (hybrid never had phantoms under either variant, 0/421 vs 0/369,
   so dense was the only arm that could test it). **The benefit survives**: guarded
   beats the `sentence_cap` baseline significantly on both regenerated arms
-  (dense +0.1123 Holm 0.0000, hybrid +0.0706 Holm 0.0252), so the ablation's
+  (dense +0.1123 Holm 0.0000, hybrid +0.0706 Holm 0.0234), so the ablation's
   headline doesn't depend on the unguarded wording. **The apparent cost vs unguarded
   `cite_all` is not a finding** — neither arm significant and the point estimates
   point in **opposite directions** (dense +0.0117, hybrid −0.0475), which is what
   the measured noise floor predicts (14/24 identical citation sets at temperature 0,
   [[feedback_temperature_zero_is_not_reproducible]]); as a bound, hybrid rules out
-  the guard being *better* than `cite_all`, dense rules out a loss > ~0.016.
+  the guard being *better* than `cite_all`, dense rules out a loss > ~0.017.
   `rq4_score.py` gained `--treatment-variant` and `--out` so a variant is scored
   against the same baseline without clobbering the published `rq4_score.md`
-  (guarded report: `data/results/rq4_score_guarded.md`). **Still owed before a final
+  (guarded report: `data/results/rq4_score_guarded.md`). **Every Holm figure above
+  is family 3** (all 12 variant-pair × metric tests); the guarded-vs-baseline pairs
+  also sit in family 2, corrected across 5, where hybrid reads 0.0160 — both correct,
+  so **always quote the family size with a Holm p from this report**. Family 3 was
+  added 2026-08-08 for exactly that reason: the variant-vs-variant pairs
+  (`guarded` vs `cite_all`) exist in no other family, so they had been computed ad
+  hoc and the doc quoted numbers no script could reproduce — the
+  [[feedback_recompute_derived_stats_from_the_table]] failure mode, caught by
+  re-reading the report against the prose. **Still owed before a final
   paper table uses it**: `bm25_semantic` and `hybrid_m2v_semantic` have not been
   regenerated under the guard (~1h30m), so the 4-arm ordering families cannot yet be
   rerun under it.

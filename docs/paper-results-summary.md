@@ -762,16 +762,23 @@ only arm that ever produced phantoms.
 
 **The benefit survives**: `cite_all_guarded` beats the `sentence_cap` baseline
 significantly on both regenerated arms (dense **+0.1123**, Holm p = 0.0000; hybrid
-**+0.0706**, Holm p = 0.0252), so the prompt-ablation headline does not depend on
+**+0.0706**, Holm p = 0.0234), so the prompt-ablation headline does not depend on
 the unguarded wording. **The apparent cost relative to unguarded `cite_all` is not
-a finding**: neither arm is significant (Holm p = 1.0000 dense, 0.1344 hybrid) and
+a finding**: neither arm is significant (Holm p = 1.0000 dense, 0.1168 hybrid) and
 the two point estimates point in **opposite directions** (dense +0.0117, hybrid
 −0.0475). A real constraint-induced dampening would push the same way on both;
 this is what the measured generator noise floor predicts (14/24 identical citation
 sets at temperature 0). As bounds rather than nulls: on hybrid the interval rules
 out the guard being *better* than `cite_all` and admits a loss of ~0.01-0.09; on
-dense it rules out a loss greater than ~0.016. No precision comparison is
+dense it rules out a loss greater than ~0.017. No precision comparison is
 significant anywhere (all Holm p = 1.0000).
+
+Every Holm figure in this section comes from **family 3** of
+`data/results/rq4_score_guarded.md` — all 12 variant-pair × metric tests in one
+family. The two guarded-vs-baseline pairs also appear in that report's family 2,
+corrected across 5 tests, where hybrid reads Holm 0.0160 rather than 0.0234.
+Neither is wrong and both are significant; **cite the family size with the
+number**, since the same test legitimately carries two adjusted p-values.
 
 **Not yet done**: `bm25_semantic` and `hybrid_m2v_semantic` have not been
 regenerated under the guard, so a full 4-arm ordering table under
