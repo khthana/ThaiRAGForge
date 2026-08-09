@@ -535,3 +535,61 @@ a descriptive column, not a pre-registered measurement.
 routing is what has shipped since 2026-08-08 — the same wrong-pair trap that stopped the
 per-`entity_type` alpha from being wired. The honest next question is whether +0.0379 survives on top
 of the hard router, measured against it rather than against no routing.
+
+## Answered 2026-08-09: it does not survive the hard router (`reranker_rrf_routed_test.py`)
+
+The question the section above ended on, measured the same day. Report:
+`data/results/reranker_rrf_routed_test.md` (106 queries, 10,600 cross-encoder pairs over the four
+routed indices, 878 s).
+
+Measured as a 2x2 rather than a single cell, because "does it still help" and "do these two
+mechanisms substitute or complement" are the same experiment. Every arm **sends k=10**; B and D
+additionally **fetch 50** and pay the cross-encoder on them, which is a cost difference, not a
+difference in what is scored.
+
+| arm | routing | rrf4 | recall@10 | MRR | nDCG@10 | fetched / sent |
+|---|---|---|---|---|---|---|
+| A | none | none | 0.6281 | 0.8430 | 0.6951 | 10 / 10 |
+| B | none | yes | 0.6660 | 0.8404 | 0.7223 | 50 / 10 |
+| C | hard | none | 0.6831 | 0.8686 | 0.7502 | 10 / 10 |
+| **D** | hard | yes | **0.6847** | 0.8801 | 0.7497 | 50 / 10 |
+| D' (oracle w) | hard | yes | 0.6895 | 0.8806 | 0.7519 | 50 / 10 |
+
+**Pre-registered family (m=6): all six tests are not significant.** `D vs C` (the reranker on top of
+routing) is **+0.0017 recall@10, Holm-adj 1.0000**, +0.0116 MRR (1.0000), -0.0005 nDCG@10 (1.0000).
+`D vs B` (routing on top of the reranker) is +0.0188 / +0.0398 / +0.0274, Holm-adj 0.8244 throughout.
+
+**+0.0379 becomes +0.0017.** The gain measured against no routing is gone when measured against the
+configuration that actually ships. This is the second intervention on this project to die in exactly
+this way — the per-`entity_type` alpha was the first — and the mechanism is the same one both times:
+**both interventions repair a per-type weak dense arm, and hard routing has already handed each route
+a specialist index that does not have one.** There is nothing left for the reranker to fix. State it
+as a bound, not a null: the CI rules out the reranker adding more than **+0.0212** recall@10 on top
+of the router, against a cost of ~1.2 s/query and 50 extra fetches.
+
+**The per-route table shows it directly, and shows why the total barely moves.**
+
+| route | n | C (router) | D (both) | D - C |
+|---|---|---|---|---|
+| person | 30 | 0.8531 | 0.8672 | +0.0140 |
+| program | 30 | 0.6545 | 0.5912 | **-0.0633** |
+| course | 33 | 0.6262 | 0.6758 | +0.0496 |
+| faculty | 13 | 0.5008 | 0.5024 | +0.0016 |
+
+`course` still gains and `program` still loses — the same cross-encoder personality documented in the
+section above — but routing has already collected most of the person gain that made the unrouted
+number large (`person` was 0.7487 unrouted, 0.8531 routed *before* any reranking), so what is left is
+a near-cancellation. **The two mechanisms are substitutes, not complements**, the same verdict soft
+vs hard routing reached about itself.
+
+**There is no fitted signal to speak of either.** The w grid at P=50 wanders between 0.6784 and
+0.6895 with no shape — a jagged plateau, not the broad single peak the unrouted sweep had — and LOO
+lands at 0.6847 against an oracle 0.6895, so unlike the unrouted case there *is* a small fitting
+premium. Truncate-and-replace on the routed pool is worse still (0.6000 at P=50, 0.6637 at P=20),
+i.e. replacing the ranking hurts a routed index just as it hurt an unrouted one.
+
+**Practical reading.** If the router is deployed, the reranker is not worth its cost on this query
+set. Note also, descriptively (this pair was not pre-registered), that **B (0.6660) sits below C
+(0.6831)**: routing alone, which costs no extra fetches and no GPU at query time, outperforms the
+reranker path that costs both. Neither is wired into `query_service`, and this measurement is the
+reason the reranker one stays unwired.

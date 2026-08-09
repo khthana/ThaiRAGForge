@@ -728,11 +728,35 @@ see `docs/adr/`.
      only −0.0165 of the person gain. Also: **once the reranker is only a vote, pool depth
      stops mattering** (P=20 peaks 0.6662 vs P=50's 0.6660, at 487 ms/query instead of
      1,218) — a cost observation from a descriptive column, not a pre-registered result.
-     **Not wired into `query_service`, and not yet appropriate to**: this is one combo
-     measured *without* routing, and routing is what has shipped since 2026-08-08 — the same
-     wrong-pair trap that stopped per-`entity_type` alpha from being wired. The open question
-     is whether +0.0379 survives on top of the hard router. Follow-up (a), a reranker trained
-     on hybrid-fused candidates, remains untouched.
+     **That +0.0379 was measured without routing, and it does NOT survive the hard router
+     (2026-08-09, `tools/eval/reranker_rrf_routed_test.py` →
+     `data/results/reranker_rrf_routed_test.md`, 878 s, 10,600 pairs over the 4 routed
+     indices).** Measured as a 2×2 because "does it still help" and "substitutes or
+     complements" are one experiment: **A** no routing/no rrf4 **0.6281**, **B** rrf4 only
+     **0.6660**, **C** routing only **0.6831**, **D** both **0.6847**; every arm sends k=10,
+     B and D additionally *fetch* 50. **All six pre-registered tests (m=6) are ns**: `D vs C`
+     (the reranker on top of routing) **+0.0017 recall@10, Holm-adj 1.0000** (MRR +0.0116,
+     nDCG −0.0005, both 1.0000); `D vs B` +0.0188/+0.0398/+0.0274, all 0.8244. **State it as
+     a bound**: the CI rules out the reranker adding more than **+0.0212** on top of the
+     router, for ~1.2 s/query and 50 extra fetches. **This is the second intervention to die
+     against the router in exactly this way** (per-`entity_type` alpha was the first) and the
+     mechanism is identical both times — both repair a per-type weak dense arm, and hard
+     routing already hands each route a specialist index that hasn't got one. The per-route
+     table shows the near-cancellation: `course` **+0.0496** and `person` +0.0140 against
+     `program` **−0.0633** (the same cross-encoder personality as above), because routing had
+     already collected the person gain that made the unrouted number large (person 0.7487
+     unrouted → 0.8531 routed *before* any reranking). **Substitutes, not complements** — the
+     same verdict soft-vs-hard routing reached. Two supporting details: there is no fitted
+     signal left either (the P=50 w grid wanders 0.6784-0.6895 with no shape, a jagged plateau
+     not a peak, and LOO 0.6847 vs oracle 0.6895 is a real fitting premium where the unrouted
+     sweep had none), and truncate-and-replace on a *routed* pool is worse still (0.6000 at
+     P=50, 0.6637 at P=20). Descriptively (not pre-registered): **B 0.6660 < C 0.6831**, i.e.
+     routing alone beats the reranker path while costing no extra fetch and no query-time GPU.
+     Three of the four cells are already-published numbers and the script **checks all three
+     rather than assuming them** — S4 reproduces `routing_eval.md`'s 0.6831 from a *third*
+     independent code path, S5 reproduces 0.6281/0.6660, S1/S2 reproduce 106/106 persisted
+     top-10s. **Neither rrf4 nor per-type alpha is wired into `query_service`, and this is
+     why.** Follow-up (a), a reranker trained on hybrid-fused candidates, remains untouched.
   2. **RQ3 preprocessing ablations: normalization and word-aware segmentation do nothing;
      only chunk size matters, and only at 1024.** Configs `config/experiments/rq3_*.yaml`,
      scripts `tools/eval/rq3_*`. Thai normalization (Thai digits + `pythainlp.util.normalize()`)
