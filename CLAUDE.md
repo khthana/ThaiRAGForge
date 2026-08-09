@@ -51,10 +51,41 @@ see `docs/adr/`.
   (id uniqueness, row alignment of chunks↔vectors↔lexical, index-vs-corpus
   membership, embedding sanity, gold-id resolution, results-vs-index freshness)
   and exits 1 on any FAIL. Latest report: `docs/pipeline-invariant-audit.md`.
-  Known caveat it surfaced: `BuildCombo.id` hashes loader+chunker+embedder but
+  **The caveat it surfaced is CLOSED (2026-08-09, check `E0`), and the way it was
+  closed is the reusable part.** `BuildCombo.id` hashes loader+chunker+embedder but
   **not the corpus**, so a smoke-subset combo and a full-corpus combo share an id
-  and a persisted result cannot be attributed to one index — this is *why* the
-  stale-cache incident was invisible. Check the index root by hand when it matters.
+  and a persisted result could not be attributed to one index — this is *why* the
+  stale-cache incident was invisible (12 of 43 combo ids really do exist under >1
+  index root). **Hashing the corpus into the id was the obvious fix and is
+  disqualified**: the id *is* the on-disk directory name and the prefix of every
+  result filename, so it would rename 55 index dirs on every corpus edit, orphan
+  ~24k results, and break the combo names hardcoded in eval scripts
+  (`plain__fixed_size__local__ceea7536`). **Attributability, not renaming**: the
+  disambiguating data already existed but never left the index —
+  `build_manifest` writes `docset_hash`/`n_resolutions`, and `ArtifactStore.load`
+  simply never read it. It now stamps `Index.provenance`, `pipeline.retrieve`
+  copies it onto `RetrievalResult.index_dir`/`docset_hash`, and E0 attributes every
+  result by three rules, strongest first: **recorded** (the result names its index),
+  **unique name** (the combo id exists under one root), **elimination** (exactly one
+  candidate index holds every `resolution_id` the result cites — sound because the
+  result *did* come from one of them). Only >1 survivor at rule 3 is a FAIL; "no
+  built index" (the 8 deleted superseded combos) and "no candidate fits" (drift,
+  which is E3a's finding) are classified, not failed — the
+  [[feedback_cleanup_can_break_an_audit]] lesson. **Elimination alone resolves
+  100% of the live ambiguity**, which is why no backfill was needed: 0 of 23,156
+  unattributable today (15,038 by unique name, 7,268 by elimination, 850 no built
+  index). Two things it *sharpens* rather than merely turning green: E3a now checks
+  ids against the **attributed** index instead of the union over every root sharing
+  the name (a union is a superset, so it would accept an id only the smoke fixture
+  holds), and E4 keys staleness on the attributed dir, so a rebuilt smoke fixture
+  can no longer make full-corpus results look stale. `provenance` is deliberately
+  kept **out of `meta`** (which is what `save` writes back, so a load-time field
+  must not round-trip) and the new result fields are optional (the ~24k legacy
+  results must keep validating); `select()` carries it because a filtered view is
+  still the same build, unlike `lexical_scorer`. Rule 1 currently fires on **zero**
+  files on disk — nothing has been re-run since the fields landed — so
+  `tests/tools/test_audit_pipeline_invariants.py` pins all six outcomes, or it
+  would be exactly the vacuous PASS the next bullet warns about.
   Two lessons about the audit itself, both learned by breaking it the same day it was
   written: (a) **a check whose subject matter moves becomes a vacuous PASS** — C4
   (orphaned `.md.dup`) went 24→0 the moment those archives were moved off-repo, so it
@@ -75,10 +106,17 @@ see `docs/adr/`.
   recorded relabel (`relabeled_mispairings.at` in an index manifest) as bringing
   an index current without a rebuild — without that second half it would sit
   permanently red after any title repair, and an always-red check is one nobody
-  reads. Current state (**re-run 2026-08-08 after the title repair**, and
-  unchanged from the 08-07 run against rebuild #3): **24 pass /
-  0 warn / 1 fail**, the single FAIL being the
-  `BuildCombo.id` caveat above. That headline was written here before it was true —
+  reads. Current state (**re-run 2026-08-09 after E0 landed**): **24 pass /
+  1 warn / 0 fail** — the gate is green for the first time. **The warn is real and
+  is not E0's doing**: it is that same `I6`, 41 indexes built 2026-08-08 19:33
+  against a corpus last edited 2026-08-09 09:53, i.e. the `2566/ครั้งที่ 3`
+  re-download + re-OCR earlier that day. **Unlike the title repair, that one is a
+  text change, so a relabel cannot discharge it** — those indices genuinely hold
+  the old OCR of that file. It is left standing rather than waived because a
+  16.4h rebuild is not worth it here: 0 gold entries in either gold set cite any
+  resolution from that meeting, so no published metric can have moved. The
+  previous state was **24 pass / 0 warn / 1 fail** (that lone FAIL being the
+  `BuildCombo.id` caveat, now closed above). That headline was written here before it was true —
   the report on disk at the time said **21 pass / 3 warn / 1 fail**, the 3 warns
   being index-staleness ones nobody had chased (`I3b` coverage 2853/2854, `I5` 41
   manifests drifted, `I6` 41 indexes built before the corpus's last edit). Rebuild
@@ -1182,8 +1220,9 @@ see `docs/adr/`.
   not by counting: a wrong-way swap gives the right ids in the right row counts,
   so all 4 new ids were checked against the full text of the file that now
   carries them (9/9, 12/12, 16/16, 12/12 chunks). Post-repair gates:
-  `audit_resolution_ids.py` unchanged, invariants **24/0/1** (same known
-  `BuildCombo.id` FAIL), `E3a` 0 of 23,156, doc-claims 3/2/0. This section used to
+  `audit_resolution_ids.py` unchanged, invariants **24/0/1** (the then-known
+  `BuildCombo.id` FAIL, closed 2026-08-09 by `E0`), `E3a` 0 of 23,156,
+  doc-claims 3/2/0. This section used to
   end "the CHECO re-download now owes **3 URLs, not 1**"; **that was wrong in both
   directions and is withdrawn** — see the next bullet.
 - **Agenda items with no document of their own

@@ -166,6 +166,11 @@ def retrieve(
         combination_id = (
             f"{index.meta.get('chunker')}|{index.meta.get('embedder')}|{retriever.name}"
         )
+    # combination_id names a *combo*, which is not an index: BuildCombo.id omits the
+    # corpus, so the same name exists under several index roots. Carry through
+    # whichever index actually answered (ArtifactStore.load stamps it) so the
+    # persisted result is attributable to one build without having to guess.
+    provenance = index.provenance or {}
     return RetrievalResult(
         query=query,
         combination_id=combination_id,
@@ -173,4 +178,6 @@ def retrieve(
         top_k=len(ranked) if exhaustive else k,
         retriever=retriever.name,
         reranker=reranker.name if reranker is not None else None,
+        index_dir=provenance.get("index_dir"),
+        docset_hash=provenance.get("docset_hash"),
     )

@@ -57,6 +57,16 @@ class RetrievalResult(BaseModel):
     top_k: int
     retriever: str
     reranker: str | None = None
+    # Which index actually answered, and which corpus state it held. `combination_id`
+    # is prefixed by BuildCombo.id, which hashes loader x chunker x embedder and *not*
+    # the corpus -- so the same name exists under several index roots (a 10-file smoke
+    # fixture and the 2,854-file corpus) and the id alone cannot say which one produced
+    # this result. That ambiguity is why the 2026-07-29 stale-cache incident was
+    # invisible. Optional because ~24k results predate these fields; the invariant
+    # audit's E0 attributes those by elimination instead (see
+    # tools/eval/audit_pipeline_invariants.py).
+    index_dir: str | None = None
+    docset_hash: str | None = None
 
 
 @dataclass
@@ -93,6 +103,14 @@ class Index:
     # defaults this to None), and nothing has to guess when to evict.
     lexical_scorer: Any = field(default=None, compare=False, repr=False)
 
+    # Where this Index came from, filled in by ArtifactStore.load: the index
+    # directory and the `docset_hash` of the corpus it was built on. Deliberately
+    # *not* folded into `meta`, because `meta` is what ArtifactStore writes back to
+    # disk and a field derived at load time must never round-trip into the artifact.
+    # This is what lets a RetrievalResult name the index that produced it rather
+    # than only the combo id, which does not identify one (see RetrievalResult).
+    provenance: dict[str, Any] | None = field(default=None, compare=False, repr=False)
+
     def select(self, row_indices: list[int]) -> "Index":
         """Return a sub-Index of the given rows, slicing chunks, embeddings and
         lexical tokens by the *same* indices so all arrays stay aligned."""
@@ -102,4 +120,8 @@ class Index:
             embeddings=self.embeddings[rows] if len(self.embeddings) else self.embeddings,
             meta=self.meta,
             lexical=None if self.lexical is None else [self.lexical[i] for i in rows],
+            # unlike lexical_scorer, provenance stays true of a narrowed view: the
+            # rows still came from that build, so a filtered query's result must
+            # still name the index it was filtered from.
+            provenance=self.provenance,
         )

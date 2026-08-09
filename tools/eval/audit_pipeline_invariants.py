@@ -27,11 +27,16 @@ Checks, grouped by layer (C = corpus, I = index, E = eval):
     I4  embeddings sane: no NaN/inf, no all-zero rows (sampled), dim consistent
     I5  manifest n_resolutions/docset_hash vs the corpus as it is now
     I6  index built before the corpus it indexes was last modified
+    E0  every persisted result attributes to exactly one built index -- by its
+        recorded `index_dir`, by a combo id unique across index roots, or by
+        elimination on the resolution_ids it cites (BuildCombo.id omits the
+        corpus, so the id alone names a combo, not an index)
     E1  every gold relevant_resolution_id resolves against the corpus
     E2  no duplicate query text within a gold set
-    E3  persisted results reference resolution_ids their index actually holds,
-        separating ids left over from the corpus-discovery contamination bug
-        (expected in a retired result set) from a genuine index mismatch
+    E3  persisted results reference resolution_ids the index E0 attributed them
+        to actually holds, separating ids left over from the corpus-discovery
+        contamination bug (expected in a retired result set) from a genuine
+        index mismatch
     E4  persisted results older than the index they were computed from
 
 Read-only. Exits 1 if any check FAILs.
@@ -442,6 +447,78 @@ def audit_indexes(corpus_ids: set[str], quick: bool) -> dict[Path, set[str]]:
 
 
 # ----------------------------------------------------------------- eval layer
+class IndexAttributor:
+    """Which built index produced a persisted result (E0).
+
+    `BuildCombo.id` hashes loader+chunker+embedder but NOT the corpus (see
+    combos.py), so one name is the directory name of several different indices --
+    a 10-file smoke fixture and the 2,854-file corpus are indistinguishable by
+    name. A result file naming only that combo therefore does not say which index
+    produced it, and that is exactly why the 2026-07-29 stale-cache incident was
+    invisible in the data.
+
+    Renaming the indices was the wrong fix: the id *is* the directory name, so
+    hashing the corpus into it would rename every index on every corpus edit and
+    orphan ~24k persisted results. Attribution is the fix instead -- strongest
+    evidence first:
+
+      1. `recorded`     -- the result records `index_dir` outright (written since
+                           2026-08-09; schema.RetrievalResult)
+      2. `unique name`  -- the combo id exists under exactly one index root
+      3. `elimination`  -- exactly one candidate index holds every resolution_id
+                           the result cites. Sound because the result *did* come
+                           from one of the candidates, so a candidate missing an
+                           id it cites is ruled out; and this is the only rule of
+                           the three that can fail to decide.
+
+    Two further outcomes are classified rather than folded into a verdict, because
+    neither is an ambiguity: `no built index` (nothing by that name exists -- its
+    index was deleted, e.g. the 8 superseded combos) and `no candidate fits` (the
+    result cites ids none of them holds, which is drift and belongs to E3a).
+    Only `ambiguous` -- rule 3 leaving more than one survivor -- is a result that
+    genuinely cannot be attributed.
+
+    Note rule 1 does not always apply even to results written after 2026-08-09:
+    `router.rrf_merge` leaves `index_dir` unset on purpose, because a merged
+    ranking spans several indices and there is no single index to attribute it
+    to. Rules 2/3 read that absence correctly -- they attribute by the ids a
+    result cites rather than by a field claiming one index answered it.
+    """
+
+    def __init__(self, ids_by_combo: dict[Path, set[str]]) -> None:
+        self.ids_by_combo = ids_by_combo
+        self.dirs_by_name: dict[str, list[Path]] = defaultdict(list)
+        self.ids_by_name: dict[str, set[str]] = defaultdict(set)
+        for d, v in ids_by_combo.items():
+            self.dirs_by_name[d.name].append(d)
+            self.ids_by_name[d.name] |= v
+        # A result records whatever path its writer was handed, which may be
+        # absolute while the scan here is relative -- so match on the resolved
+        # path, or every recorded provenance silently degrades to rule 2/3 and
+        # rule 1 quietly stops being exercised.
+        self.by_resolved = {d.resolve(): d for d in ids_by_combo}
+
+    @property
+    def ambiguous_names(self) -> dict[str, list[Path]]:
+        return {n: v for n, v in self.dirs_by_name.items() if len(v) > 1}
+
+    def attribute(self, data: dict, name: str) -> tuple[Path | None, str]:
+        """The one index that produced this result, and how we know."""
+        recorded = data.get("index_dir")
+        if recorded and (known := self.by_resolved.get(Path(recorded).resolve())):
+            return known, "recorded"
+        candidates = self.dirs_by_name.get(name) or []
+        if not candidates:
+            return None, "no built index"
+        if len(candidates) == 1:
+            return candidates[0], "unique name"
+        cited = {r.get("resolution_id") for r in data.get("results") or []}
+        fits = [d for d in candidates if cited <= self.ids_by_combo[d]]
+        if len(fits) == 1:
+            return fits[0], "elimination"
+        return (None, "ambiguous") if fits else (None, "no candidate fits")
+
+
 def audit_eval(corpus_ids: set[str], ids_by_combo: dict[Path, set[str]], quick: bool) -> None:
     all_queries: set[str] = set()
     for path in GOLD:
@@ -467,37 +544,17 @@ def audit_eval(corpus_ids: set[str], ids_by_combo: dict[Path, set[str]], quick: 
             print(f"        {q[:100]}")
         all_queries |= set(queries)
 
-    # index mtime per combo id, for E3/E4
-    # toy roots excluded: a freshly rebuilt smoke fixture must not make
-    # full-corpus results look stale (same id-ambiguity caveat as above)
+    # index mtime per index dir, for E4
     built_at = {
-        d.name: json.loads((d / "manifest.json").read_text(encoding="utf-8"))["timestamp"]
+        d: json.loads((d / "manifest.json").read_text(encoding="utf-8"))["timestamp"]
         for d in ids_by_combo
-        if (d / "manifest.json").exists() and d.parent.name not in TOY_INDEXES
+        if (d / "manifest.json").exists()
     }
-    # A combo id hashes loader+chunker+embedder but NOT the corpus (see
-    # combos.py::BuildCombo.id), so the same name exists under several index
-    # roots -- a 12-file smoke subset and the 2,853-file corpus are
-    # indistinguishable by id alone, and a result file records only the id.
-    # Union the ids across roots: attributing a result to the wrong root is what
-    # produces a false "unknown id" here, and there is no signal in the data to
-    # do better. Reported as its own finding rather than papered over.
-    ids_by_name: dict[str, set[str]] = defaultdict(set)
-    roots_by_name: dict[str, set[str]] = defaultdict(set)
-    for d, v in ids_by_combo.items():
-        ids_by_name[d.name] |= v
-        roots_by_name[d.name].add(d.parent.name)
-    ambiguous = {n: r for n, r in roots_by_name.items() if len(r) > 1}
-    record(
-        "E0 combo id identifies its index unambiguously",
-        not ambiguous,
-        f"{len(ambiguous)} combo ids exist under >1 index root "
-        "(BuildCombo.id omits the corpus, so results cannot be attributed to one index)",
-    )
-    for n, r in list(ambiguous.items())[:5]:
-        print(f"        {n} -> {sorted(r)}")
-
+    attributor = IndexAttributor(ids_by_combo)
+    ids_by_name = attributor.ids_by_name
     result_dirs = [p for p in RESULTS_ROOT.iterdir() if p.is_dir()]
+    attribution = Counter()
+    unattributable: list[str] = []
     stale_dirs, unknown_ids, unknown_queries = [], [], []
     stale_contaminated: list[str] = []
     retired_drift: list[str] = []
@@ -512,7 +569,7 @@ def audit_eval(corpus_ids: set[str], ids_by_combo: dict[Path, set[str]], quick: 
         if not files:
             continue
         newest_result = max(f.stat().st_mtime for f in files)
-        combo_names = set()
+        index_dirs: set[Path] = set()
         checked = 0
         for f in files if not quick else files[:40]:
             data = json.loads(f.read_text(encoding="utf-8"))
@@ -525,8 +582,24 @@ def audit_eval(corpus_ids: set[str], ids_by_combo: dict[Path, set[str]], quick: 
             combo = (data.get("combination_id") or "").split("__")
             # combination_id is <loader>__<chunker>__<embedder>__<hash>[__<retriever>...]
             name = "__".join(combo[:4]) if len(combo) >= 4 else ""
-            combo_names.add(name)
-            known = ids_by_name.get(name) or None
+            index_dir, how = attributor.attribute(data, name)
+            attribution[how] += 1
+            if how == "ambiguous":
+                unattributable.append(
+                    f"{rdir.name}/{f.name}: {name} fits >1 of "
+                    f"{sorted(d.parent.name for d in attributor.dirs_by_name[name])}"
+                )
+            if index_dir is not None:
+                index_dirs.add(index_dir)
+            # Check the ids against the *attributed* index, not the union over every
+            # root sharing the name: the union is a superset, so it would accept an
+            # id only the smoke fixture holds. Fall back to the union only when
+            # attribution could not decide, which never makes this weaker than the
+            # pre-2026-08-09 behaviour.
+            known = (
+                ids_by_combo[index_dir] if index_dir is not None
+                else (ids_by_name.get(name) or None)
+            )
             if known is not None:
                 bad = {r["resolution_id"] for r in data["results"] if r.get("resolution_id") not in known}
                 # A well-formed id is '<year>/<session>/<title>'; make_resolution_id falls
@@ -547,17 +620,37 @@ def audit_eval(corpus_ids: set[str], ids_by_combo: dict[Path, set[str]], quick: 
             if (data.get("query") and data["query"] not in all_queries
                     and rdir.name not in UI_RESULT_DIRS):
                 unknown_queries.append(f"{rdir.name}: {data['query'][:60]}")
-        # E4: results older than the index they name
-        for name in combo_names:
-            ts = built_at.get(name)
-            if rdir.name in RETIRED_RESULT_DIRS:
+        # E4: results older than the index that produced them. Keyed on the
+        # attributed index dir rather than the combo name, so a rebuilt smoke
+        # fixture can no longer make full-corpus results look stale by sharing a
+        # name -- toy roots are skipped because they are subsets, not because the
+        # name was ambiguous.
+        for d in index_dirs:
+            ts = built_at.get(d)
+            if rdir.name in RETIRED_RESULT_DIRS or d.parent.name in TOY_INDEXES:
                 continue
             if ts and datetime.fromisoformat(ts).timestamp() > newest_result:
                 stale_dirs.append(
                     f"{rdir.name}: results {datetime.fromtimestamp(newest_result):%Y-%m-%d %H:%M}"
-                    f" < index {name[:38]} {datetime.fromisoformat(ts).astimezone():%Y-%m-%d %H:%M}"
+                    f" < index {d.parent.name}/{d.name[:38]} "
+                    f"{datetime.fromisoformat(ts).astimezone():%Y-%m-%d %H:%M}"
                 )
                 break
+
+    record(
+        "E0 every result attributes to exactly one index",
+        not unattributable,
+        f"{len(unattributable)} of {n_examined} result files cannot be attributed to one "
+        f"built index ({len(attributor.ambiguous_names)} of {len(attributor.dirs_by_name)} "
+        f"combo ids exist under >1 index root, since BuildCombo.id omits the corpus; "
+        f"attributed "
+        + ", ".join(f"{v} by {k}" for k, v in sorted(attribution.items()))
+        + ")",
+    )
+    for n, v in list(attributor.ambiguous_names.items())[:5]:
+        print(f"        {n} -> {sorted(d.parent.name for d in v)}")
+    for m in unattributable[:8]:
+        print(f"        {m}")
 
     record("E3a results reference ids their index holds", not unknown_ids,
            f"{len(unknown_ids)} of {n_examined - n_examined_retired} live result files "

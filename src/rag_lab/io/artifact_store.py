@@ -4,6 +4,10 @@ Layout under one directory (per ADR-0001, this is the serialized index output):
 - ``chunks.parquet``   — chunk rows (metadata JSON-encoded per row)
 - ``embeddings.npy``   — the (n, dim) float matrix, aligned to chunk order
 - ``meta.json``        — how the index was built (chunker params, embedder id)
+
+``manifest.json`` sits in the same directory but is written by the runner
+(``manifest.py``), not here. ``load`` reads it when present, purely to stamp the
+returned Index with where it came from — see ``Index.provenance``.
 """
 from __future__ import annotations
 
@@ -20,6 +24,7 @@ _CHUNKS = "chunks.parquet"
 _EMBEDDINGS = "embeddings.npy"
 _META = "meta.json"
 _LEXICAL = "lexical.json"
+_MANIFEST = "manifest.json"
 
 
 class ArtifactStore:
@@ -71,4 +76,23 @@ class ArtifactStore:
             if lexical_path.exists()
             else None
         )
-        return Index(chunks=chunks, embeddings=embeddings, meta=meta, lexical=lexical)
+        # Stamp the Index with where it was loaded from, so a result computed
+        # against it can name the index rather than only the combo id (which does
+        # not identify one -- BuildCombo.id omits the corpus). Absent for a build
+        # cache directory, which has no manifest; None then propagates and the
+        # result simply carries no provenance, as every pre-2026-08-09 result does.
+        manifest_path = d / _MANIFEST
+        provenance = None
+        if manifest_path.exists():
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            provenance = {
+                "index_dir": str(d),
+                "docset_hash": manifest.get("docset_hash"),
+            }
+        return Index(
+            chunks=chunks,
+            embeddings=embeddings,
+            meta=meta,
+            lexical=lexical,
+            provenance=provenance,
+        )

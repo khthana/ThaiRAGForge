@@ -1,6 +1,6 @@
 # Pipeline invariant audit
 
-Run 2026-08-08 14:50 UTC. 24 pass / 0 warn / 1 fail.
+Run 2026-08-09 08:45 UTC. 24 pass / 1 warn / 0 fail.
 
 | check | status | detail |
 |---|---|---|
@@ -18,12 +18,12 @@ Run 2026-08-08 14:50 UTC. 24 pass / 0 warn / 1 fail.
 | I3b corpus coverage | PASS | lowest: chunker_compare_full 2854/2854, chunker_compare_full 2854/2854, chunker_compare_full 2854/2854, chunker_compare_full 2854/2854, chunker_compare_full 2854/2854 |
 | I4 embeddings finite and non-zero (sampled) | PASS | 0 indexes with bad vectors |
 | I5 manifest n_resolutions matches corpus | PASS | 0 drifted |
-| I6 index newer than corpus | PASS | 0 indexes built before the corpus's last edit |
+| I6 index newer than corpus | WARN | 41 indexes built before the corpus's last edit |
 | E1 gold ids resolve (gold_query_set_73det.yaml) | PASS | 1046 refs, 0 dangling |
 | E2 no duplicate query (gold_query_set_73det.yaml) | PASS | 106 queries, 0 duplicated |
 | E1 gold ids resolve (gold_query_set.yaml) | PASS | 1219 refs, 0 dangling |
 | E2 no duplicate query (gold_query_set.yaml) | PASS | 252 queries, 0 duplicated |
-| E0 combo id identifies its index unambiguously | FAIL | 12 combo ids exist under >1 index root (BuildCombo.id omits the corpus, so results cannot be attributed to one index) |
+| E0 every result attributes to exactly one index | PASS | 0 of 23156 result files cannot be attributed to one built index (12 of 43 combo ids exist under >1 index root, since BuildCombo.id omits the corpus; attributed 7268 by elimination, 850 by no built index, 15038 by unique name) |
 | E3a results reference ids their index holds | PASS | 0 of 23156 live result files reference an id their index does not hold |
 | E3d retired result sets name ids no index holds | PASS | 0 of 0 retired result files carry titles from an earlier corpus state (retired sets, read by no current script; 0 of 0 means they have been archived off-repo, not that they were checked) |
 | E3c retired result sets cite pre-fix contamination ids | PASS | 0 of 23156 result files cite an id from the corpus-discovery contamination bug -- expected for sets computed before its fix; do not reuse them |
