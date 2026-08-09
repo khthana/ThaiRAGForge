@@ -776,6 +776,53 @@ see `docs/adr/`.
      *without* dedup understates the ceiling (0.7790 instead of 0.8249 unrouted at P=50);
      S9, which reproduces `reranker_pool_source_test.md`'s published `delivered/holds` pair
      from an independent code path, is what caught it.
+     **"This cross-encoder is weak" is now CONFIRMED by a second route (2026-08-09,
+     `tools/eval/reranker_model_comparison.py` → `data/results/reranker_model_comparison.md`,
+     112 s from cached scores): swap the model, change nothing else.** Same routed hybrid
+     P=50 pool for every arm, same k=10 sent, same LOO-fitted `w`. **The model is a real
+     variable and the anchor is a bad one**: over 4 qualified models the spread is
+     **0.0355** recall@10 (mmarco-mMiniLM 0.6671 → bge-reranker-**v1**-large 0.7027) against
+     the anchor's entire effect of +0.0017, i.e. ~20x. So the null belongs to
+     `bge-reranker-v2-m3`, not to cross-encoder reranking on this corpus — the same verdict
+     the oracle column reached, from independent evidence. **Cite the recall@10 family as
+     inconclusive, not as a win**: 0 of 3 clear the bar (best `bge-v1-large` +0.0196, raw
+     0.0282, **Holm 0.0612**, m=3), and the one significant cell is nDCG@10 **+0.0275**
+     (Holm 0.0228, m=6, family 2). **The counter-intuitive part is the strongest part**: the
+     best model is the *older* v1 lineage that v2-m3 supersedes, so reranker choice here does
+     not track general benchmark strength and has to be measured on this corpus;
+     `mmarco-mMiniLM` actively **hurts** (−0.0159), which is the project's RRF rule again —
+     fuse only when the arms are comparable. **Selection caveat**: the winner is an argmax
+     over 4 models on the same 106 queries (`w` is LOO, the *model* is not), so the citable
+     claim is *at least one qualified model does materially better*, never *use bge-v1-large*
+     — that needs a fresh query set. **The bound is unchanged**: the best model captures 13%
+     of +0.1500, so 87% is still untouched and follow-up (a) keeps its motivation. Nothing is
+     wired. Confounds measured rather than assumed: `ctx` is the one thing not equal across
+     arms (anchor 8192, the rest 512 — each at its own max, since forcing 512 on the anchor
+     would stop it reproducing its published number), but only **1.9%** of pairs exceed 512
+     and the longest is **2,755** tokens; and S6 pins that the models genuinely disagree
+     (Kendall τ +0.344 to +0.546, same top-1 on 17–44 of 106), because two models that rank
+     the pool identically would give identical arms and a null would then only be saying the
+     swap never happened. **Before measuring a reranker, qualify it —
+     `tools/eval/qualify_reranker_model.py` → `data/results/reranker_model_qualification.md`,
+     and this is the reusable part.** 2 of 6 candidates are broken under `transformers` 5.x,
+     which materialises non-persistent buffers from the meta device as *uninitialised memory*
+     rather than re-running `__init__`. `jina-reranker-v2` dies at import (safe).
+     `gte-multilingual-reranker-base` **loads, runs, and ranks a hand-written Thai example
+     correctly while being completely position-blind** — its RoPE `cos_cached`/`sin_cached`
+     came back all zeros, and a sentence and its reversal score **bit-identically**. A
+     plausible number from a bag-of-words model is the danger, not a crash: measured
+     unchecked it would have scored low and "a second cross-encoder also fails" would have
+     been published as a family-level claim. Five gates (G1 buffers, **G2 position
+     sensitivity** — the load-bearing one, G3 relevance direction, G4 determinism, G5 padding
+     independence), one model per **subprocess** (a CUDA device-side assert poisons the whole
+     process, so a single-process loop rejects healthy models by ordering), and the gate is
+     **exercised in both directions** — the anchor must PASS and the 2 known-broken must
+     FAIL, checked in the report and in the exit code, because a PASS-only gate is not
+     evidence. Two rules learned by getting them wrong: G1's integer test is *index out of
+     range*, **not** *equals `arange`* (the first version rejected the anchor — XLM-R's
+     `token_type_ids` is legitimately all zeros), and every gate but G5 scores its pair
+     **alone**, so batch composition can't be mistaken for the effect under test.
+     `tests/tools/test_qualify_reranker_model.py` pins both directions of every rule.
   2. **RQ3 preprocessing ablations: normalization and word-aware segmentation do nothing;
      only chunk size matters, and only at 1024.** Configs `config/experiments/rq3_*.yaml`,
      scripts `tools/eval/rq3_*`. Thai normalization (Thai digits + `pythainlp.util.normalize()`)

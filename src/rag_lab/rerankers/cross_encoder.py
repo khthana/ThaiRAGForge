@@ -27,12 +27,18 @@ class CrossEncoderReranker(BaseReranker):
         model=None,
         batch_size: int = 8,
         max_length: int | None = None,
+        trust_remote_code: bool = False,
     ) -> None:
         self._model_name = model_name
         self._device = device
         self._model = model
         self._batch_size = batch_size
         self._max_length = max_length
+        # Off by default: it executes code from the model repo. Needed by the
+        # multilingual rerankers this project compares against the default
+        # (gte-multilingual-reranker-base, jina-reranker-v2), which ship custom
+        # architectures rather than a stock `AutoModelForSequenceClassification`.
+        self._trust_remote_code = trust_remote_code
 
     @property
     def name(self) -> str:
@@ -43,7 +49,10 @@ class CrossEncoderReranker(BaseReranker):
             from sentence_transformers import CrossEncoder
 
             self._model = CrossEncoder(
-                self._model_name, device=self._device, max_length=self._max_length
+                self._model_name,
+                device=self._device,
+                max_length=self._max_length,
+                trust_remote_code=self._trust_remote_code,
             )
         return self._model
 

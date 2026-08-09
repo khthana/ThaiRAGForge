@@ -631,3 +631,77 @@ One implementation note, because it cost a failing self-check to find. The oracl
 10 slots on a document it has already returned. Sorting the pool relevant-first *without* dedup
 understates the ceiling (0.7790 instead of 0.8249 on the unrouted pool at P=50); S9, which reproduces
 `reranker_pool_source_test.md`'s published pair from an independent code path, caught exactly that.
+
+## Confirmed 2026-08-09 from the other side: swap the model (`reranker_model_comparison.py`)
+
+The oracle above is an argument that the *model* is the weak link. It is an indirect one — an oracle is
+not a model, so it bounds what a perfect selector could do without showing that any real selector does
+better. The direct test is to change the model and nothing else: same routed hybrid P=50 pool, same
+k=10 sent, same LOO-fitted `w`, same 106 queries. Report: `data/results/reranker_model_comparison.md`
+(112 s, because the scores are cached and only re-fused).
+
+| arm | size (M) | recall@10 | vs C | MRR | nDCG@10 | w (LOO) | of the +0.1500 |
+|---|---|---|---|---|---|---|---|
+| C — routing only | – | 0.6831 | – | 0.8686 | 0.7502 | – | – |
+| D(`bge-reranker-v2-m3`, anchor) | 568 | 0.6847 | +0.0017 | 0.8801 | 0.7497 | 0.40 | 1% |
+| D(`bge-reranker-large`, v1) | 560 | **0.7027** | **+0.0196** | 0.8868 | **0.7777** | 0.35 | 13% |
+| D(`bge-reranker-base`, v1) | 278 | 0.6926 | +0.0095 | 0.8564 | 0.7564 | 0.20 | 6% |
+| D(`mmarco-mMiniLMv2-L12`) | 118 | 0.6671 | −0.0159 | 0.8651 | 0.7497 | 0.30 | −11% |
+| oracle (P=50) | – | 0.8331 | +0.1500 | 0.9811 | 0.9566 | – | 100% |
+
+**The model is a real variable, and the anchor is a bad one.** The spread across four qualified models
+on an identical pool is **0.0355** recall@10, roughly 20x the anchor's entire effect. So the +0.0017
+null is a property of `bge-reranker-v2-m3`, not of cross-encoder reranking on this corpus — the same
+conclusion the oracle reached, now from independent evidence.
+
+**But state it as inconclusive, not as a win.** The pre-registered recall@10 family separates **0 of
+3**: the best, `bge-reranker-large`, is +0.0196 with raw p 0.0282 and **Holm-adj 0.0612** (m=3). The
+one significant cell is nDCG@10 **+0.0275** (Holm 0.0228) in the m=6 MRR/nDCG family. And the winner is
+an argmax over four models measured on the same 106 queries — `w` is leave-one-out, the *model* is not
+— so the claim is *at least one qualified model does materially better*, never *use bge-reranker-large*.
+
+**The counter-intuitive part is the strongest evidence.** The best model is the **older v1 lineage**
+that v2-m3 was released to supersede, and it is better on every metric. Reranker choice on this corpus
+therefore does not track general benchmark strength and has to be measured here. In the other
+direction, `mmarco-mMiniLM` actively **hurts** (−0.0159, raw p 0.0204), which is this project's RRF
+rule appearing a third time: fuse only when the two arms are comparable.
+
+Two confounds were measured rather than assumed. `ctx` is the only quantity not equal across arms (the
+anchor takes 8192 tokens, the other three 512; each runs at its own maximum, since forcing 512 on the
+anchor would stop it reproducing its published number) — but only **1.9%** of pairs exceed 512 and the
+longest pair in the pool is **2,755** tokens, far too little to explain any gap in the table. And the
+models genuinely disagree (Kendall τ +0.344 to +0.546, same top-1 on 17–44 of 106): two models that
+ranked the pool identically would produce identical arms, and the null would then be saying only that
+the swap never happened.
+
+**The bound does not move.** The best of four captures 13% of the +0.1500; 87% is untouched by any
+off-the-shelf swap. Follow-up (a) — a reranker trained on hybrid-fused candidates — keeps its
+motivation, and nothing here is wired into `query_service`.
+
+### Qualify the model before measuring it
+
+Two of the six candidates are broken under `transformers` 5.x, which materialises a model's
+**non-persistent buffers** from the meta device as *uninitialised memory* instead of re-running the
+`__init__` that built them. `jinaai/jina-reranker-v2-base-multilingual` dies at import (its remote code
+wants a private helper deleted in 5.x) — the safe failure.
+`Alibaba-NLP/gte-multilingual-reranker-base` is the dangerous one: it **loads, runs, and ranks a
+hand-written Thai relevance example correctly while being completely position-blind**. Its RoPE
+`cos_cached`/`sin_cached` tables came back all zeros — rotary position encoding multiplying by zero —
+and a sentence and its word-order reversal score **bit-identically**. Measured unchecked it would have
+returned a low number, and "a second, independent cross-encoder also fails to beat the router" would
+have been published as a family-level claim on the strength of a bag-of-words model. **A crash is safe;
+a plausible number is not.**
+
+`tools/eval/qualify_reranker_model.py` → `data/results/reranker_model_qualification.md` gates every
+model on five checks — G1 buffers sane, **G2 position sensitivity** (the load-bearing one; G1 only
+catches a dead RoPE table if you already know which buffer to look at), G3 relevance direction on Thai,
+G4 determinism, G5 padding independence — one model per **subprocess**, because gte's garbage buffers
+raise a CUDA device-side assert that poisons the whole process and would make a single-process loop
+reject healthy models purely by their position in the loop. The gate is **exercised in both
+directions** — the published anchor must qualify and both known-broken models must be rejected,
+asserted in the report and in the exit code, because a gate that only ever says PASS is not evidence.
+Two of its rules were learned by getting them wrong: G1's integer test is *index out of range*, **not**
+*equals `arange`* (the first version rejected the anchor, since XLM-R's `token_type_ids` is legitimately
+all zeros), and every gate but G5 scores its pair **alone**, so batch composition can never be mistaken
+for the effect under test. `tests/tools/test_qualify_reranker_model.py` pins both directions of each
+rule without downloading a model.
