@@ -93,14 +93,17 @@ see `docs/adr/`.
   closed (nothing was lost: 21 tail fragments of a wrapped title, 1 rename, 2
   misfiled-but-live); the verdicts are encoded as rules, and the same-document
   test compares page-1 `เรื่อง` headings because whole-file similarity decays
-  across the re-OCR boundary. That review surfaced the corpus's one known
-  title↔content defect: `2568/ครั้งที่ 7`'s CHECO-titled file actually holds
-  รับรองรายงานการประชุม and the CHECO text is absent. Cause is the download stage
-  fetching the wrong Drive id (two byte-identical PDFs, same SHA-256); the manifest,
-  `_LINK.txt` and `master_list.csv` all already hold the correct id
-  (`1d4iz1dpnPweAn7pxBfxlvJf9IJZwIJFJ`), which has never been fetched — so the fix
-  is a re-download + re-OCR of that one URL, no metadata change (0 gold queries in
-  the 73det set cite it). A general title-vs-body check was prototyped and **rejected on
+  across the re-OCR boundary. That review surfaced what was then the corpus's one
+  known title↔content defect: `2568/ครั้งที่ 7`'s CHECO-titled file held
+  รับรองรายงานการประชุม instead. Cause was the download stage fetching the wrong
+  Drive id (two byte-identical PDFs, same SHA-256) while the manifest, `_LINK.txt`
+  and `master_list.csv` all already held the correct one
+  (`1d4iz1dpnPweAn7pxBfxlvJf9IJZwIJFJ`) — so the fix was a re-download + re-OCR of
+  that one URL, no metadata change (0 gold queries in the 73det set cite it).
+  **Done (`restore_minutes_2568_7.py`); verified 2026-08-09 by reading both files —
+  the CHECO file holds CHECO text, the minutes file holds the minutes.** Its
+  mechanism recurs: see the orphaned-agenda-items bullet below.
+  A general title-vs-body check was prototyped and **rejected on
   measurement**: median agreement is 0.660 over 2,820 files with 544 below 0.5,
   nearly all false alarms from agenda-number prefixes.
 - **Run `tools/eval/audit_doc_claims.py` after editing `CLAUDE.md` or
@@ -956,10 +959,12 @@ see `docs/adr/`.
   **asymmetrically** (what fraction of the *title's* words the subject line
   supports, so a truncated title scores 1.0). Result: median **1.000**, **7 flagged,
   7/7 genuine**. Report + per-case verdicts: `docs/title-body-agreement.md`. Two
-  causes: 4 mispairings (metadata-only, incl. one A↔B swap) and 2 never-fetched
-  documents (the CHECO shape). **The 4 mispairings are APPLIED (2026-08-08);
-  flag count 7 → 3**, the remaining 3 being the 2 never-fetched documents and the
-  1 generic-title judgement call, all deliberately kept.
+  causes: 4 mispairings (metadata-only, incl. one A↔B swap) and 2 items in
+  `2564/ครั้งที่ 12` with no document of their own (recorded here as "the CHECO
+  shape" until 2026-08-09 disproved it — see the orphaned-agenda-items bullet
+  below). **The 4 mispairings are APPLIED (2026-08-08); flag count 7 → 3**, the
+  remaining 3 being those 2 and the 1 generic-title judgement call, all
+  deliberately kept.
   `fix_manifest_title_mispairings.py --apply` (titles only — for the `2565/8`
   A↔B swap every field is internally consistent and it is the *content* that
   landed in the other entry's file, so swapping titles is the one edit that
@@ -986,8 +991,55 @@ see `docs/adr/`.
   so all 4 new ids were checked against the full text of the file that now
   carries them (9/9, 12/12, 16/16, 12/12 chunks). Post-repair gates:
   `audit_resolution_ids.py` unchanged, invariants **24/0/1** (same known
-  `BuildCombo.id` FAIL), `E3a` 0 of 23,156, doc-claims 3/2/0. The CHECO
-  re-download now owes **3 URLs, not 1** (these 2 are the same shape).
+  `BuildCombo.id` FAIL), `E3a` 0 of 23,156, doc-claims 3/2/0. This section used to
+  end "the CHECO re-download now owes **3 URLs, not 1**"; **that was wrong in both
+  directions and is withdrawn** — see the next bullet.
+- **Agenda items with no document of their own
+  (`tools/corpus_prep/scan_duplicate_bodies.py` →
+  `docs/orphaned-agenda-items.md`, 2026-08-09)** — the class the title-body audit
+  is *structurally* unable to see: it scores each title against **its own** body,
+  so when two items in a meeting share one document both score against that one
+  subject line and both pass (`2564/ครั้งที่ 5` items 20 and 21 score 0.692/0.583
+  against a subject line naming a third faculty). Compare items **to each other**
+  instead. Two signals, because the obvious one undercounts: (A) identical OCR
+  text — exact, but only fires when the *same* PDF was fetched twice; (B) a shared
+  page-1 `เรื่อง` subject line within a meeting, which catches the case where the
+  source holds two separate exports of one document and the OCR differs by a few
+  characters. **Compare the subject at full length, and that was calibrated, not
+  guessed**: a 60-char prefix reports 1,255 orphans (44% of the corpus) because
+  the faculty that distinguishes two curriculum items falls past the cut; the
+  count collapses 229 → 28 groups between 60 and 80 and is flat from 100 to full
+  length. Strip `__N` (ADR-0004 piece index) *and* ` (N)` (the download stage's
+  re-fetch suffix) before asking whether two files are different items — adding
+  the second one alone moved the headline from 11 groups/16 items to 9/11.
+  **The ticket's premise ("re-download the 3 never-fetched documents") was wrong
+  on every count.** Result: 8 groups, 10 items flagged, **9 genuine orphans**, of
+  which **exactly 1 was repairable** — and CHECO, the one it named, was already
+  fixed. **The deciding question is not what the corpus holds (that only shows a
+  duplicate) but what the recorded Drive id serves *now*** — so page 1 of all 21
+  ids was fetched and rasterised. Three mechanisms, only the second fixable:
+  (a) *the source lists one document under N ids* (7 orphans across 6 groups;
+  `2564/ครั้งที่ 5` does it under **four**) — no fetch can produce the missing
+  document, and the manifest title is simply unsupported; (b) *wrong blob
+  attached* — the CHECO mechanism, **`2566/ครั้งที่ 3`, REPAIRED 2026-08-09** via
+  `refetch_mispaired_document.py` (re-download from the id the manifest already
+  held + re-OCR through `ocr_pdf_to_md.process_pdf`); (c) *dead id* —
+  `2568/ครั้งที่ 11`'s recorded id 404s at every endpoint. `2565/ครั้งที่ 7` is a
+  signal-B **false positive**: one *combined* page-1 heading printed on two
+  genuinely distinct resolutions. All 21 ids are distinct and the manifest,
+  `_LINK.txt` and `master_list.csv` agree throughout — the defect is always
+  downstream of the metadata, so there is no alternative id to try anywhere.
+  **Unlike the title repair above this is a text change, so it stales every index
+  holding that file** — free here only because 0 gold entries in either gold set
+  cite any resolution from `2566/ครั้งที่ 3` (checked by exact meeting match; a
+  loose substring test gave 2/5 false hits from that college's *curriculum*
+  documents in other meetings). Two traps, both hit while doing this: **a 404 is
+  not a different document** (Drive answers a missing id with a 1,652-byte HTML
+  page, and an early probe reported that as "two distinct documents" — check the
+  `%PDF` magic, not the status code); and **pixel-hash equality proves sameness,
+  inequality proves nothing** (two exports of one Word print differ by ~178 bytes
+  and render to visibly identical but non-identical PNGs, which called
+  `2565/ครั้งที่ 6` "distinct" — every "distinct" verdict was confirmed by eye).
 - Narrative overview of the whole project (what was done in what order, what each step
   found, which conclusions have since been retracted): `docs/project-journey.html` — the
   tracked source; render to PDF with headless Chrome (`--headless --no-pdf-header-footer

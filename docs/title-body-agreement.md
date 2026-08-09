@@ -67,17 +67,20 @@ meeting better than its own, which split the original 7 into two different defec
 | 2565/ครั้งที่ 8 | 0.18 | **0.91** | mispaired — the other half of that swap — **REPAIRED 2026-08-08** |
 | 2568/ครั้งที่ 2 | 0.00 | **0.86** | mispaired — **REPAIRED 2026-08-08** |
 | 2568/ครั้งที่ 6 | 0.00 | 0.60 | *judgement call* — `ฝ่ายเลขานุการแจ้งให้ที่ประชุมทราบ` is a generic container item, so its body legitimately shows one sub-item — **kept as-is** |
-| 2564/ครั้งที่ 12 | 0.17 | 0.33 | **no better home** — the titled document is absent from the corpus — needs re-download |
+| 2564/ครั้งที่ 12 | 0.17 | 0.33 | **no better home** — the titled document does not exist at its own Drive id either — **not repairable (2026-08-09)** |
 | 2564/ครั้งที่ 12 | 0.00 | 0.17 | **no better home** — same |
 
 Two distinct causes, needing different fixes:
 
 * **4 mispairings** (incl. one clean A↔B swap) — metadata-only. The right document
   is present; the manifest pointed the wrong title at it. **Applied 2026-08-08.**
-* **2 missing documents** (2564/ครั้งที่ 12) — the CHECO shape from
-  `2568/ครั้งที่ 7`: the titled document was never fetched and the file under that
-  title duplicates another item. Needs a re-download + re-OCR, like CHECO does.
-  **Still open** — this is why the audit still flags 3, not 1.
+* **2 items with no document of their own** (2564/ครั้งที่ 12). Recorded here as
+  "the CHECO shape — needs a re-download", which **2026-08-09 disproved**: both
+  ids serve byte-identical PDFs from three endpoints, so the *source* lists one
+  document under two agenda items and no fetch can produce the missing one. Kept
+  as permanent flags, not as owed work. See `docs/orphaned-agenda-items.md`, which
+  found 7 more of these that this audit is structurally unable to see (it scores
+  each title against its *own* body, so two items sharing a body both pass).
 * **1 generic-title case** — arguably not a defect; a container agenda item.
 
 ## Status 2026-08-08 — the 4 mispairings are APPLIED; flag count 7 → 3
@@ -138,8 +141,9 @@ Verification, in the order it was run:
    result files is the mechanical confirmation that index and results were
    relabelled consistently.
 6. `audit_title_body_agreement.py` — **7 flagged → 3**, and the 3 are exactly the
-   ones deliberately kept (2 never-fetched, 1 generic container title). Median
-   1.000 unchanged, mean 0.896 → 0.898.
+   ones deliberately kept (2 items in `2564/ครั้งที่ 12` with no document of their
+   own — called "never-fetched" here on 08-08, corrected 08-09 — and 1 generic
+   container title). Median 1.000 unchanged, mean 0.896 → 0.898.
 7. `audit_doc_claims.py` — 3 pass / 2 warn / 0 fail, both warns the known
    by-design ones.
 
@@ -160,11 +164,15 @@ Verification, in the order it was run:
   index would stay permanently warned after any title repair, and a check that is
   always red is one nobody reads.
 
-Still open, tracked separately: the **2 never-fetched documents** in
-`2564/ครั้งที่ 12`, which are the same shape as `2568/ครั้งที่ 7`'s CHECO defect
-(correct Drive id `1d4iz1dpnPweAn7pxBfxlvJf9IJZwIJFJ`, never fetched). That makes
-**3 URLs** owed to one re-download + re-OCR pass, not 1. 0 gold queries cite any
-of them.
+**The "3 URLs owed" this section used to end on was wrong in both directions, and
+2026-08-09 settled it** — see `docs/orphaned-agenda-items.md`. The 2 remaining
+`2564/ครั้งที่ 12` flags are **not** the CHECO shape and owe no download: both
+recorded ids serve the same PDF, so the source itself lists one document under two
+items. CHECO (`2568/ครั้งที่ 7`) was already repaired before that check ran. What
+the ticket did *not* know is that 7 further agenda items elsewhere in the corpus
+have no document of their own — invisible to this audit by construction — of which
+exactly one (`2566/ครั้งที่ 3`) was a genuine wrong-blob defect, now repaired.
+0 gold queries cite any of them, here or there.
 
 Run `tools/corpus_prep/audit_title_body_agreement.py` again after any corpus or
 manifest change — the flag set is small enough that a regression would be easy to
