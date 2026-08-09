@@ -643,7 +643,12 @@ see `docs/adr/`.
   Both were built and run for real, and both were refreshed 2026-07-29 against the
   OCR-remediation-rebuilt indices (they had gone stale like everything else, see the
   staleness lesson above).
-  1. **Cross-encoder reranking hurts hybrid.** `CrossEncoderReranker`
+  1. **Cross-encoder reranking hurts hybrid — but the finding belongs to
+     *truncate-and-replace*, not to the reranker.** Read the last paragraph of this item
+     before citing this as a negative result: fusing the same model's scores in as a fourth
+     RRF signal (2026-08-09) **beats the shipped hybrid on recall@10**, so what is settled
+     is "don't let a cross-encoder replace the ranking", not "a cross-encoder is useless
+     here". `CrossEncoderReranker`
      (`BAAI/bge-reranker-v2-m3`, `rerank_pool_size=50` → truncate to k=10) is wired as a
      query-time stage; `tools/eval/reranker_significance_test.py` re-retrieves live against
      `chunker_compare_full/plain__fixed_size__local__ceea7536` (so it goes stale on every
@@ -677,10 +682,13 @@ see `docs/adr/`.
      column a null cannot be told apart from "the evidence was never reachable"; it was.
      (2) **Depth and harm point opposite ways, which is what closes the axis**: the misses
      sit at ranks 11-50 but captured headroom goes **−6% / −22% / −33%** at P=50/100/200, so
-     it cannot reach them without destroying more than it recovers. Damage concentrates on
-     `person` (**−0.2668** vs `course` −0.0205) — the type BM25 carries by exact name match
-     (0.8147) and the one RRF's rank-based fusion protects by construction, which is direct
-     empirical support for a mechanism that doc had only *derived*. The one improving cell
+     it cannot reach them without destroying more than it recovers. Its per-type table shows
+     damage concentrated on `person` (**−0.2668** vs `course` −0.0205) — **but do not read
+     that as a truncate-and-replace effect; it is a POOL-SOURCE effect, corrected the same
+     day** (see the next paragraph). It is the *dense*-pool arm, i.e. what happens when the
+     candidates come from the retriever that scores 0.5735 on `person` rather than the one
+     BM25 carries to 0.8147. On the hybrid pool, truncate-and-replace *improves* `person`
+     (+0.1195) and collapses `program` (−0.1688). The one improving cell
      (hybrid P=20, 0.6535 vs 0.6281) was **not pre-registered** — cite it as a hypothesis for
      a fresh query set, never as a result. Cost is real too: P=50 adds ~1.2 s/query on a
      1.21-1.86 s base. Method worth reusing: a cross-encoder score depends on neither P nor
@@ -690,10 +698,41 @@ see `docs/adr/`.
      Its S6 rebuilds `miss_depth_profile.md` §2's five delivered figures to 4 decimals from
      an independent path, and S4 pins the structural anchor that at P=k reranking may change
      the *order* but never the *set*, so recall@10 must equal baseline exactly.
-     Untested follow-ups (a reranker trained on hybrid-fused candidates; blending its score
-     into RRF as a 4th signal instead of truncate-and-replace) are hypotheses, not results —
-     though (b) is now the better-motivated one, since the failure lands exactly where
-     truncate-and-replace throws away RRF's rank protection.
+     **The 4th-RRF-signal follow-up is now MEASURED, and it is this item's one positive
+     result (2026-08-09, `tools/eval/reranker_rrf_signal_test.py` →
+     `data/results/reranker_rrf_signal_test.md`, 68 s, no GPU — it re-fuses the *same*
+     29,743 cached scores).** Keep shipped hybrid fusion and add the reranker as a third
+     ranked system: `fused = (1-w)·[0.5/(60+dense_rank) + 0.5/(60+bm25_rank)] +
+     w·[1/(60+rerank_rank)]`, **a document outside the pool contributing 0 from the third
+     term** — not penalised, just unvoted-on, with its hybrid rank intact. That asymmetry is
+     the whole idea: it is what lets an exact-name BM25 hit survive a reranker that dislikes
+     it. **Both ends of the w grid are already-published arms**, so it interpolates between
+     known points rather than introducing a scale: w=0.00 is shipped hybrid and **w=1.00 is
+     truncate-and-replace exactly** (hybrid term gone; every pool doc scores >0, every
+     non-pool doc 0, so the top-10 is the pool's top-10 by cross-encoder score) — S3/S4 pin
+     both, S4 reproducing all six published figures to 4 decimals from an independent code
+     path. Same discipline as `hybrid_alpha_sweep.py`'s alpha=0.50 anchor. Pre-registered at
+     pool=hybrid, P=50, w chosen **leave-one-out** on recall@10 (Family 1, m=6):
+     **`rrf4 (loo)` 0.6660 recall@10 vs shipped hybrid 0.6281, +0.0379, Holm-adj 0.0216 —
+     significant**, and it beats truncate-and-replace on all three metrics (+0.0497 /
+     +0.1171 / +0.0776, all 0.0000). **Cite MRR as REPAIRED, not improved**: the published
+     harm reproduces at w=1.00 (−0.1197) and vanishes under fusion but does not become a
+     gain (−0.0026, ns; CI rules out a loss worse than 0.0420 or a gain better than 0.0368),
+     and nDCG@10 +0.0272 is ns too — **recall@10 is the only claim that clears
+     significance.** No fitting premium: all 106 folds pick the same w, so LOO equals the
+     oracle to 4 decimals, and the peak is broad — **report the range 0.40–0.55, not a
+     point.** **The mechanism, corrected**: the prediction (fuse > replace) survived, the
+     stated reason did not. The cross-encoder is *not* uniformly destructive — on the right
+     pool it is a `person` specialist that wrecks `program`, and what RRF buys is **keeping
+     both sides**, recovering `program` +0.1275 over truncate-and-replace while giving back
+     only −0.0165 of the person gain. Also: **once the reranker is only a vote, pool depth
+     stops mattering** (P=20 peaks 0.6662 vs P=50's 0.6660, at 487 ms/query instead of
+     1,218) — a cost observation from a descriptive column, not a pre-registered result.
+     **Not wired into `query_service`, and not yet appropriate to**: this is one combo
+     measured *without* routing, and routing is what has shipped since 2026-08-08 — the same
+     wrong-pair trap that stopped per-`entity_type` alpha from being wired. The open question
+     is whether +0.0379 survives on top of the hard router. Follow-up (a), a reranker trained
+     on hybrid-fused candidates, remains untouched.
   2. **RQ3 preprocessing ablations: normalization and word-aware segmentation do nothing;
      only chunk size matters, and only at 1024.** Configs `config/experiments/rq3_*.yaml`,
      scripts `tools/eval/rq3_*`. Thai normalization (Thai digits + `pythainlp.util.normalize()`)

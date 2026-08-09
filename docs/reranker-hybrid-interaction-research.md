@@ -458,7 +458,80 @@ protects by construction and a cross-encoder — blind to which arm surfaced a d
 overwrite. The prediction was that RRF's rank-based protection is what the reranker removes; the
 measurement is that the loss lands on the one query type whose ranking that protection was holding up.
 
-**What this does *not* close.** Interventions (a) and (b) above are untouched — nothing here trains a
-reranker on hybrid-fused candidates, and nothing here blends the reranker's score into RRF as a
-fourth signal instead of truncate-and-replace. If anything, (b) is now the better-motivated of the
-two: the failure is concentrated exactly where truncate-and-replace discards rank-based protection.
+> **CORRECTION (2026-08-09, same day, by the follow-up below).** The paragraph above reads a
+> **pool-source** effect as a **truncate-and-replace** effect. That -0.2668 is the `person` row of
+> the *dense-pool* arm — i.e. what happens when the candidates come from the retriever that scores
+> 0.5735 on `person` instead of the one BM25 carries to 0.8147. Run truncate-and-replace on the
+> **hybrid** pool and `person` **improves** (+0.1195); the type that collapses is `program`
+> (-0.1688). So the cross-encoder is not uniformly destructive: it is good at `person` and bad at
+> `program`, and the dense pool was starving it of person evidence. The §7 mechanism is not thereby
+> refuted — see the follow-up, where it is supported by a different and better-controlled
+> observation — but this paragraph's evidence for it does not hold, and the claim it licensed
+> ("the failure is concentrated exactly where truncate-and-replace discards rank-based protection")
+> is withdrawn.
+
+**What this does *not* close.** Intervention (a) is untouched — nothing here trains a reranker on
+hybrid-fused candidates. Intervention **(b) is measured next**, and it is the one that works.
+
+## Follow-up measured 2026-08-09: the reranker as a fourth RRF signal (`reranker_rrf_signal_test.py`)
+
+Intervention (b), finally built: **keep shipped hybrid fusion and add the reranker as a third ranked
+system** rather than letting it replace the ranking.
+
+```
+fused = (1-w) * [0.5/(60+dense_rank) + 0.5/(60+bm25_rank)]
+      +   w   * [    1/(60+rerank_rank)                  ]     # outside the pool: 0
+```
+
+A document outside the candidate pool contributes **0** from the third term. It is not penalised — it
+simply receives no vote from a judge that never saw it, and its hybrid rank still stands. That
+asymmetry is the entire idea: it is what lets an exact-name BM25 hit survive a reranker that dislikes
+it. Costs no GPU — it re-uses the 29,743 cached `(query, chunk)` cross-encoder scores from the run
+above, so it fuses the *same* scores that produced the published truncate-and-replace table.
+
+**Both ends of the w grid are arms that were already published**, which is what makes this an
+interpolation between known points rather than a new scale. At **w=0.00** the reranker term vanishes:
+shipped hybrid. At **w=1.00** the hybrid term vanishes, every pool document scores `1/(60+rank) > 0`
+and every non-pool document scores 0, so the top-10 *is* the pool's top-10 by cross-encoder score —
+truncate-and-replace, exactly. Self-checks S3 and S4 verify both endpoints (S4 reproduces all six
+published figures to 4 decimals from an independent code path). Same discipline as
+`hybrid_alpha_sweep.py`, where alpha=0.50 is rank-identical to plain RRF.
+
+**Result: this is the first reranker arm in the project that beats its own baseline.** Pre-registered
+at pool=hybrid, P=50, w selected leave-one-out on recall@10 (Family 1, m=6):
+
+| arm | recall@10 | MRR | nDCG@10 |
+|---|---|---|---|
+| hybrid (shipped) | 0.6281 | 0.8430 | 0.6951 |
+| truncate-and-replace (w=1.00) | 0.6162 | 0.7233 | 0.6447 |
+| **rrf4 (loo)** | **0.6660** | 0.8404 | 0.7223 |
+
+vs shipped hybrid: recall@10 **+0.0379** (Holm-adj **0.0216**, significant), nDCG@10 +0.0272
+(0.1240, ns), MRR -0.0026 (0.8816, ns). vs truncate-and-replace: **all three significant**
+(+0.0497 / +0.1171 / +0.0776, Holm-adj 0.0000).
+
+**State MRR as repaired, not improved.** The project's published negative result reproduces at
+w=1.00 (-0.1197 vs hybrid) and *disappears* under fusion, but it does not become a gain — cite it as
+a bound: the CI rules out an MRR loss worse than 0.0420 and a gain better than 0.0368. **recall@10 is
+the only claim that clears significance.**
+
+**w is not carrying a fitting premium.** All 106 folds select the same w, so `rrf4 (loo)` equals
+`rrf4 (oracle)` to four decimals, and the curve is broadly single-peaked — **report the range
+0.40-0.55, not a point**.
+
+**The mechanism, corrected.** The prediction (fusing beats replacing) survives; the reason given for
+it does not. On the hybrid pool, truncate-and-replace *gains* `person` (+0.1195) and destroys
+`program` (-0.1688). What fusion buys is **keeping both sides**: it recovers `program` (+0.1275 over
+truncate-and-replace) while giving back only -0.0165 of the person gain. The §7 rank-protection
+argument is supported, but by a sharper observation than the one first offered — RRF's value here is
+not that it blocks a bad component, it is that it lets a component that is right about one query type
+contribute without letting it be wrong about another.
+
+**Once the reranker is only a vote, pool depth stops mattering.** P=20 peaks at 0.6662 against P=50's
+0.6660 — a difference of 0.0002, at 487 ms/query instead of 1,218 ms. That is a cost observation from
+a descriptive column, not a pre-registered measurement.
+
+**Not wired into `query_service`, and it should not be yet.** This is one combo without routing, and
+routing is what has shipped since 2026-08-08 — the same wrong-pair trap that stopped the
+per-`entity_type` alpha from being wired. The honest next question is whether +0.0379 survives on top
+of the hard router, measured against it rather than against no routing.
