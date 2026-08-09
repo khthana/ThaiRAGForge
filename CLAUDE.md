@@ -508,6 +508,20 @@ see `docs/adr/`.
   roughly **fixed ~1.9-2.0s of overhead to every hybrid query, nearly independent of embedder**
   (it scales with corpus size, not embedding dim) — the ~2.1-2.7s measured figure is mostly this
   avoidable per-query overhead on top of a ~116-668ms intrinsic cost, not RRF fusion itself.
+  **Half of that overhead is now gone, and the measurement that removed it split the two causes
+  the sentence above had bundled (2026-08-09).** `BM25Retriever` memoises its `BM25Okapi` on the
+  `Index` (`Index.lexical_scorer`) instead of rebuilding it per query; the build is **26.2x** a
+  single `get_scores` (1.073s vs 0.041s over 74,816 chunks), so **BM25-alone `retrieve()` goes
+  1.094s → 0.050s p50, ~22x**. **Hybrid only goes 2.269s → 1.361s (1.7x, −0.907s)** — measured
+  paired, both arms in one process against one loaded index, because
+  [[feedback_check_benchmark_position_drift]]. That gap is the finding: the **remaining ~1.36s is
+  the `k=n` over-fetch**, i.e. materialising ~75k `RankedChunk` objects per arm and fusing them in
+  Python, which is a *separate* and still-open cost. Do not read "the rebuild is fixed" as "the
+  hybrid overhead is fixed". The over-fetch is **not** free to remove either: `HybridRetriever`
+  fetches k=n so RRF sees complete rankings, so truncating it would change results, unlike this
+  change which cannot. **Consequence to honour before citing latency: `cost_latency_pareto.md`'s
+  BM25/hybrid latency columns (and the copies in `docs/paper-results-summary.md`) predate this and
+  are now high by ~0.9s per hybrid query** — re-run on an idle machine per the note below.
   **Refreshed 2026-07-29** against the OCR-remediation-rebuilt indices: latency/cost mechanics
   came back essentially unchanged (confirms these measure model/index/corpus-size mechanics, not
   corpus content), but the recall@10 columns in the report dropped substantially like every other

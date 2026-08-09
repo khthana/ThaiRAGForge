@@ -82,6 +82,17 @@ class Index:
     meta: dict[str, Any] = field(default_factory=dict)
     lexical: list[list[str]] | None = None  # per-chunk tokens, row-aligned to chunks
 
+    # A memo slot for whoever turns `lexical` into a scorer (today: BM25Retriever,
+    # which parks a BM25Okapi here rather than rebuilding it on every query). Kept
+    # opaque -- schema must not import a retriever's dependency -- and deliberately
+    # excluded from equality/repr so it stays invisible to everything but its owner.
+    # Attaching it to the Index rather than to the retriever or a module-level dict
+    # is what makes its lifetime correct by construction: a derived scorer lives
+    # exactly as long as the rows it was derived from, so `select()` below cannot
+    # carry a full-corpus scorer into a sub-index (it builds a fresh Index, which
+    # defaults this to None), and nothing has to guess when to evict.
+    lexical_scorer: Any = field(default=None, compare=False, repr=False)
+
     def select(self, row_indices: list[int]) -> "Index":
         """Return a sub-Index of the given rows, slicing chunks, embeddings and
         lexical tokens by the *same* indices so all arrays stay aligned."""
