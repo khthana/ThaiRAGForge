@@ -178,10 +178,35 @@ see `docs/adr/`.
   pins those exemptions in both directions so the next one added can't quietly
   make the check vacuous. D3 is a **WARN by design** (irreducible false
   positives: a parenthetical can attribute its p to one arm and its verdict word
-  to another), and D1b warns on the 18 reports with no identifiable generator so
+  to another), and D1b warns on reports with no identifiable generator so
   D1a's denominator stays honest. Uses filesystem mtimes, not git dates — reports
   are gitignored and a script's commit lands *after* the run, which flagged all
   10 pairs as false positives on the first run.
+  **D1b closed 2026-08-09 (18 → 0), and the naive way to close it would have
+  traded one benign WARN for 8 FAILs.** The line belongs in the *generator*, not
+  the report — a hand-added line is erased by the next run — so 9 live reports
+  got it from their emitting script (`embedder_matrix_9way`, `run_gold_bm25_eval`,
+  `run_gold_hybrid_eval`, `run_gold_entity_{boost,lookup}_eval`,
+  `residual_relevance_sample`, `rq4_score`, `hybrid_significance_test_9way`).
+  **That edit moves the script's mtime, which is exactly what D1a watches**, so
+  the 4 seconds-level ones were **re-run** rather than hand-patched (every
+  published figure reproduced identically: rq4 +0.1181/+0.1005/+0.0734 and the
+  guarded +0.0706, residual 0.191/0.224/0.224, thematic −0.0449/−0.0516) and the
+  6 hours-level ones got the byte-identical string the script now emits, so the
+  next real run is a no-op. The other **8 are superseded snapshots** whose
+  generators are live scripts that have moved on (four `run_gold_chunker_eval.py`
+  rollups, the Silver one, the ConGen/SCT truncation fix, the 2026-07-30
+  `pipeline_invariant_audit.md`) — they declare their generator *and* say they are
+  superseded, and `RETIRED_REPORTS` classifies them so D1a is not permanently red,
+  the same rule `RETIRED_RESULT_DIRS`/`RETIRED_RESULTS` already apply one layer
+  down. `person_cross_cell_fix_review.md` is the 9th entry and the only report
+  that can name **no** generator honestly (a one-off diff from `e1523b3`; the
+  throwaway script was not kept). New **D1c** warns if a `RETIRED_REPORTS` entry
+  names a missing file, because an exemption list is the easiest way to make a
+  check vacuous — the [[feedback_cleanup_can_break_an_audit]] shape again — and
+  the tests pin that no current report (`routing_eval`, `rq4_score`,
+  `oracle_union_ceiling`, `power_analysis`, the three 9-way tables) is exempt.
+  Now **5 pass / 1 warn / 0 fail**, the warn being D3's 3 known false positives.
 - The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;
   corpus-prep tooling in `tools/corpus_prep/` needs Poppler + Ollama.
 - **Superseded backups live off-repo** (2026-07-30): 2,389 `*.dup` / `*.bak` files
