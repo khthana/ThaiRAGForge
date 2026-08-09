@@ -513,18 +513,26 @@ see `docs/adr/`.
   avoidable per-query overhead on top of a ~116-668ms intrinsic cost, not RRF fusion itself.
   **Half of that overhead is now gone, and the measurement that removed it split the two causes
   the sentence above had bundled (2026-08-09).** `BM25Retriever` memoises its `BM25Okapi` on the
-  `Index` (`Index.lexical_scorer`) instead of rebuilding it per query; the build is **26.2x** a
-  single `get_scores` (1.073s vs 0.041s over 74,816 chunks), so **BM25-alone `retrieve()` goes
-  1.094s → 0.050s p50, ~22x**. **Hybrid only goes 2.269s → 1.361s (1.7x, −0.907s)** — measured
-  paired, both arms in one process against one loaded index, because
+  `Index` (`Index.lexical_scorer`) instead of rebuilding it per query. **Quote that saving in
+  seconds, not as a multiple of `get_scores`** — `rank_bm25` loops over query *terms* in Python,
+  so scoring is linear in query length (~12 ms/token over 74,816 chunks) while the build is not.
+  The **26.2x / 1.073s vs 0.041s** first published here was measured on a **3-token synthetic**
+  query and is withdrawn as a headline; re-measured 2026-08-09 on the **real 20-token-median
+  Gold queries** the project evaluates (n=106, min 13 max 30): build **1035.89 ms** vs
+  `get_scores` **253.50 ms** = **4.1x**, and **BM25-alone `retrieve()` p50 is 234.45 ms**
+  (p95 332.78). The ~**1.0s** removed from every query is the part that does *not* depend on
+  query shape, and that is the number that transfers. **Hybrid goes 2.269s → 1.361s
+  (1.7x, −0.907s)** — measured paired, both arms in one process against one loaded index, because
   [[feedback_check_benchmark_position_drift]]. That gap is the finding: the **remaining ~1.36s is
   the `k=n` over-fetch**, i.e. materialising ~75k `RankedChunk` objects per arm and fusing them in
   Python, which is a *separate* and still-open cost. Do not read "the rebuild is fixed" as "the
   hybrid overhead is fixed". The over-fetch is **not** free to remove either: `HybridRetriever`
   fetches k=n so RRF sees complete rankings, so truncating it would change results, unlike this
-  change which cannot. **Consequence to honour before citing latency: `cost_latency_pareto.md`'s
-  BM25/hybrid latency columns (and the copies in `docs/paper-results-summary.md`) predate this and
-  are now high by ~0.9s per hybrid query** — re-run on an idle machine per the note below.
+  change which cannot. **The stale-latency consequence is DISCHARGED (2026-08-09): the whole
+  script was re-run on an idle machine** and `cost_latency_pareto.md`'s BM25/hybrid columns are
+  current (dense p50 120-840 ms, hybrid p50 1.21-1.86s). `docs/paper-results-summary.md` was
+  updated with it, so its old split provenance (07-29 latency / 08-07 quality) no longer applies
+  to the latency half.
   **Refreshed 2026-07-29** against the OCR-remediation-rebuilt indices: latency/cost mechanics
   came back essentially unchanged (confirms these measure model/index/corpus-size mechanics, not
   corpus content), but the recall@10 columns in the report dropped substantially like every other
@@ -544,13 +552,35 @@ see `docs/adr/`.
   re-running a standalone numpy benchmark on an idle machine afterwards (129ms,
   matching this run, not 07-29's 97ms). The tell was `m2v` appearing to cost more per
   hybrid query than `bge_m3` despite a 4ms encode. `docs/paper-results-summary.md`
-  therefore carries **deliberately split provenance** there — 07-29 latency, 08-07
-  quality — which is sound because latency measures corpus-*size* mechanics a rebuild
-  doesn't change. Two things from the rejected run survive, since both terms of each
-  ratio saw the same conditions: BM25 rebuild = 22x scoring-only (07-29: 24x), and the
-  k=n over-fetch tax is 66% of dense k=n cost in **both** runs. **When re-running this
-  script: idle machine, and check same-dim embedders at different loop positions before
-  trusting any timing.** **Refreshed 2026-08-06** against rebuild #3
+  carried **deliberately split provenance** there — 07-29 latency, 08-07 quality —
+  which was sound because latency measures corpus-*size* mechanics a rebuild doesn't
+  change; **that split is now retired by the 08-09 re-run below.** One thing from the
+  rejected run survives, since both terms of the ratio saw the same conditions: the
+  BM25 build-vs-scoring ratio (22x there, 24x on 07-29) — but read it with the token
+  count above, because those were 3-token queries and the honest figure on real
+  queries is 4.1x. **The claim that "the k=n over-fetch tax is 66% of dense k=n cost
+  in both runs" is WITHDRAWN**: on 08-09 it is **54%** (dense k=10 262.46 ms vs k=n
+  575.58 ms, so 313 ms of over-fetch). It is not a constant of the implementation —
+  quote it from the current run.
+  **Re-run 2026-08-09 on an idle machine (task #28), and this run is the citable one.**
+  Every embedder is timed in **its own subprocess** now, which removes the 74.2%
+  position effect at its root (the 4B model's memory can't leak into the next
+  embedder's timings if the process is gone). Three controls ship *in the report*,
+  and the reason there are three is that the first one alone was not enough: (1) a
+  **reference probe** — an identical numpy workload run in every child, which catches
+  the CPU floor moving (median 156.6 ms, spread 13.5%); (2) a **repeat control** —
+  the first embedder re-measured last, which caught what the probe could not, namely
+  `bge_m3`'s own `search p50` rising **245.5 → 257.9 ms (+5.1%)** across a 45-minute
+  run while the probe moved **−0.4 ms (0.3%)**; (3) **same-dim consistency** — the 7
+  dim-1024 embedders do the same numpy op on the same-shaped array, so their spread
+  (**10.3%**) *is* the noise floor, not a difference between models. Treat ~5-10% as
+  this rig's resolution and don't read a smaller gap as real. The intrinsic-cost phase
+  is now **cached** in `cost_latency_raw.json` alongside the per-embedder parts,
+  because it wobbled ~15% between renders and a published figure has to be
+  reproducible from the artifact that published it (`audit_doc_claims.py` D2 checks
+  exactly that); two consecutive renders were verified byte-identical.
+  **When re-running this script: idle machine, and check same-dim embedders at
+  different loop positions before trusting any timing.** **Refreshed 2026-08-06** against rebuild #3
   (2026-08-05T07:56): `run_gold_bm25_eval.py`/`run_gold_hybrid_eval.py` turned out to
   have *already* been re-run the day before (2026-08-05, retrieval results in
   `data/results/gold_bm25_73det/`/`gold_hybrid_73det/` dated 08-05, discovered by

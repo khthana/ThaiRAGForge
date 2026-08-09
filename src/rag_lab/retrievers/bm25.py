@@ -28,10 +28,18 @@ class BM25Retriever(BaseRetriever):
         """The index's BM25Okapi, built once and memoised on the Index itself.
 
         Constructing it walks every chunk to build the term frequencies and IDF
-        table, which costs ~26x a single `get_scores` call on the full corpus
-        (measured: 1.07s vs 0.041s over 74,816 chunks) -- so rebuilding it per
-        query, as this did until 2026-08-08, put a fixed corpus-sized cost on
-        every BM25 and hybrid retrieval regardless of embedder.
+        table, costing ~1.01s over 74,816 chunks -- so rebuilding it per query,
+        as this did until 2026-08-08, put a fixed corpus-sized cost on every
+        BM25 and hybrid retrieval regardless of embedder.
+
+        **Quote that saving in seconds, not as a multiple of `get_scores`.**
+        `rank_bm25` loops over query *terms* in Python, so scoring is linear in
+        query length (~12 ms/token here) while the build is not: the ratio is
+        ~26x for a 3-token query but ~4x for the 20-token Gold queries this
+        project evaluates. This docstring quoted the 26x on 2026-08-08 without
+        naming its token count; re-measured 2026-08-09 (`cost_latency_pareto.py`,
+        1007ms build vs 252ms scoring at 20 tokens median). The ~1s removed from
+        every query is the part that does not depend on query shape.
 
         The memo is validated by *identity of the token list*, not by presence:
         `Index.lexical` is a mutable field, and serving a scorer built from a

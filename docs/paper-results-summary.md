@@ -182,10 +182,13 @@ which held every conclusion) — see the "Hybrid retrieval" and "BM25 lexical
 baseline" sections below for the updated numbers, and in particular the "Top
 single-combo across the entire study" claim, which no longer holds as
 previously stated. Nothing in this document still cites pre-2026-07-29
-BM25/hybrid numbers. `cost_latency_pareto.py` was long the one exception; it
-was re-run 2026-08-07 against rebuild #3, and now carries a **split**
-provenance by design — quality columns from that run, latency columns still
-from 2026-07-29 because the new run's timings were rejected as contaminated.
+BM25/hybrid numbers. `cost_latency_pareto.py` was long the one exception — its
+08-07 re-run against rebuild #3 had its timings rejected as contaminated, so it
+carried a split provenance (08-07 quality, 07-29 latency) for two days. **That
+split is retired: re-measured 2026-08-09 on an idle machine, one subprocess per
+embedder, with three timing controls, so both halves are now one run.** Note
+its BM25/hybrid latency columns are *not* comparable with any run dated
+2026-07-29 or earlier, which predate `5cc71a1` and are high by ~1s per query.
 Both the reason and the evidence are in that section's currency banner.
 
 ## Resolved 2026-07-23: RQ3 ablation results (normalization / segmentation / chunk-size)
@@ -1471,9 +1474,9 @@ behind qwen3(4B) but by a smaller margin and clearly ahead of every other
 embedder's semantic-chunker dense score. `qwen3` still keeps its
 dense-alone per-chunker lead over `qwen3_0.6b`, unlike the hybrid case
 (above) where `qwen3_0.6b` numerically overtakes it. ("Cost / latency
-characterization" below used to lag this section by a refresh; its quality
-columns are current as of 2026-08-07 and agree — `qwen3` 0.5396 vs
-`qwen3_0.6b` 0.5707 dense on the `semantic` combo.)
+characterization" below used to lag this section by a refresh; it is current
+as of 2026-08-09 and agrees — `qwen3` 0.5396 vs `qwen3_0.6b` 0.5707 dense on
+the `semantic` combo.)
 
 ## Embedder × entity_type profile (the "specialist vs generalist" finding)
 
@@ -2150,25 +2153,56 @@ embedders.
 
 ## Cost / latency characterization
 
-> **SUPERSEDED IN ONE DIRECTION (2026-08-09): every BM25 and hybrid latency
-> figure in this section is now high, because the overhead it measures was
-> half removed.** `BM25Retriever` memoises its `BM25Okapi` on the `Index`
-> instead of rebuilding it per query (commit `5cc71a1`), so BM25-alone
-> `retrieve()` went 1.094s → 0.050s p50 (~22×) and hybrid went 2.269s →
-> 1.361s (1.7×, −0.907s) on `plain__semantic__local__834c4336`, measured
-> paired in one process. Two consequences for citing this table. (1) The
-> **dense-alone columns are unaffected** — they never touched BM25. (2) The
-> mechanism paragraph below is *sharpened, not invalidated*: it attributes a
-> ~1.92–2.03s fixed overhead jointly to "BM25Okapi rebuilt per query" **and**
-> "hybrid k=n over-fetch", and the 1.7× hybrid speedup now splits that into
-> ~0.91s of rebuild (gone) and ~1.36s of over-fetch + Python fusion (still
-> there, and *not* free to remove — `HybridRetriever` fetches k=n
-> deliberately so RRF sees full rankings). **Owed: a re-run on an idle
-> machine** per the next paragraph's own warning; until then quote the BM25
-> and hybrid latency columns only with this note attached.
+> **CURRENT AS OF 2026-08-09 — the whole table was re-measured on an idle
+> machine and the mixed provenance below is retired.** Both the latency and
+> the quality columns now come from one run. What changed, and why the older
+> numbers in this section are still worth reading: `BM25Retriever` memoises
+> its `BM25Okapi` on the `Index` instead of rebuilding it per query (commit
+> `5cc71a1`), which removes ~1.0s from every BM25 and hybrid query, so **every
+> BM25/hybrid latency figure dated 2026-07-29 or earlier is high by roughly
+> that much**. Dense-alone columns never touched BM25 and are unaffected.
 >
-> **Currency (2026-08-07): quality columns are current against rebuild #3;
-> latency columns are deliberately still the 2026-07-29 measurement.** The
+> **The headline speedup figure this project first published for `5cc71a1`
+> was measured on the wrong query shape, and is corrected here.** The
+> "26.2× / 1.073s vs 0.041s / BM25 `retrieve()` 1.094s → 0.050s p50, ~22×"
+> figures came from feeding `get_scores` an 8-word slice of a chunk, which
+> tokenizes to **3 terms**. `rank_bm25` loops over query *terms* in Python
+> (touching all 74,816 doc-frequency dicts per term), so scoring is linear in
+> query length at ~12 ms/token while the build is not — and the real Gold
+> queries tokenize to **20 terms at the median** (min 13, max 30, n=106).
+> Re-measured on those: build **1035.89 ms** vs `get_scores` **253.50 ms** =
+> **4.1×**, and BM25-alone `retrieve()` p50 is **234.45 ms** (p95 332.78).
+> **State the token count with any BM25 timing; the absolute saving (~1.0 s)
+> transfers between query shapes, the multiplier does not.**
+>
+> The mechanism paragraph further down is *sharpened, not invalidated*: it
+> attributed a ~1.92–2.03s fixed hybrid overhead jointly to "BM25Okapi
+> rebuilt per query" **and** "hybrid k=n over-fetch", and that now splits into
+> ~1.0s of rebuild (gone) and the over-fetch + Python fusion (still there, and
+> *not* free to remove — `HybridRetriever` fetches k=n deliberately so RRF
+> sees full rankings). Hybrid totals accordingly land at **1.21–1.86 s** here
+> rather than the 2.08–2.68 s below.
+>
+> **Three timing controls ship in the report, because one was not enough.**
+> Each embedder is now measured in **its own subprocess**, which removes the
+> 08-07 position effect at its root. (1) A **reference probe** — an identical
+> numpy workload in every child — held to **13.5%** spread (median 156.6 ms),
+> confirming the machine's floor was steady. (2) A **repeat control** — the
+> first embedder measured again last — caught what the probe could not:
+> `bge_m3`'s own `search p50` rose **245.5 → 257.9 ms (+5.1%)** across the
+> 45-minute run while its probe moved −0.4 ms. (3) **Same-dim consistency** —
+> the seven dim-1024 embedders run the identical numpy op on identically
+> shaped arrays, so their **10.3%** spread *is* the noise floor. **Treat
+> ~5–10% as this rig's resolution**; a smaller cross-embedder gap is not real.
+>
+> One earlier claim is **withdrawn on this evidence**: "the k=n over-fetch tax
+> is 66% of dense k=n cost in both runs" is **54%** here (dense k=10
+> 262.46 ms vs k=n 575.58 ms). It is not a constant of the implementation —
+> quote it from the current run.
+>
+> **Superseded history (2026-08-07): quality columns were current against
+> rebuild #3; latency columns were deliberately still the 2026-07-29
+> measurement.** Kept because it is the case that produced control 3. The
 > re-run against rebuild #3 confirmed what this section already predicted — that
 > the quality columns barely move (max |Δ| recall@10 = **0.0034** across all 18
 > embedder cells, plus +0.0022 for BM25 alone; ordering identical on both dense
@@ -2190,17 +2224,14 @@ embedders.
 >
 > The visible symptom is `m2v` appearing to cost *more* per hybrid query
 > (4315 ms) than `bge_m3` (3325 ms) despite encoding in 4 ms — mechanically
-> impossible, and the tell that made the run worth checking. Since latency here
-> measures corpus-size mechanics that a rebuild does not change (established
-> across two previous refreshes), the clean 07-29 numbers remain the right ones
-> to cite and are kept below. **Two things survive from the 08-07 run because
-> both terms were measured under the same conditions**: the BM25
-> rebuild-vs-scoring ratio (22×, vs 24× on 07-29) and the k=n over-fetch tax,
-> which is **66% of dense k=n cost in both runs** (558/847 vs 460/699) —
-> independent confirmation of the mechanism below. Rejected report, with the
-> full evidence: the banner at the top of `data/results/cost_latency_pareto.md`.
-> Next run: measure on an idle machine, and check same-dim embedders at
-> different loop positions before trusting any of it.
+> impossible, and the tell that made the run worth checking. **Both of the
+> "two things that survive the rejected run" have since failed on re-measure**,
+> and that is the lesson of this paragraph: the BM25 rebuild-vs-scoring ratio
+> (22×, vs 24× on 07-29) held only because both runs used the same 3-token
+> synthetic query, and the k=n over-fetch tax "66% in both runs" (558/847 vs
+> 460/699) is 54% on 08-09. A quantity reproducing across two runs of the
+> *same script* is weak evidence that it is a property of the system rather
+> than of the script's own choices.
 
 **Refreshed 2026-07-29** against the OCR-remediation-rebuilt indices —
 `cost_latency_pareto.py` was skipped in both the 2026-07-25 and the
@@ -2235,44 +2266,46 @@ one.
 
 **Two current-implementation costs are not floors on what dense/hybrid
 retrieval must cost. For hybrid specifically, they add a roughly fixed
-~2.1-2.3s of overhead to *every* query, almost independent of which
-embedder is in the loop** — because the overhead comes from re-touching the
-whole corpus (BM25 rebuild, full-corpus fetch), which scales with corpus
-size, not embedding dimension. Found while building this table, worth
-stating explicitly rather than silently working around:
+~0.9-1.0s of overhead to *every* query, almost independent of which embedder
+is in the loop** (it was ~2.1-2.3s before `5cc71a1` removed the BM25 rebuild)
+— because the overhead comes from re-touching the whole corpus (full-corpus
+fetch), which scales with corpus size, not embedding dimension. Found while
+building this table, worth stating explicitly rather than silently working
+around. **A third cost listed here until 2026-08-08 is now gone** — the
+per-query `BM25Okapi` rebuild — and its removal is what splits the old
+bundled figure into the two items below:
 
 1. `DenseRetriever.retrieve()` (`src/rag_lab/retrievers/dense.py`)
    recomputes `np.linalg.norm(embeddings, axis=1)` — the corpus's row norms
    — from scratch on **every query**, even though the corpus (and hence its
-   norms) doesn't change between queries. Measured cost (2026-07-29, 74,819
-   chunks): 35ms (dim=384) / 97ms (dim=1024) / 246ms (dim=2560), out of a
-   ~250-670ms total dense search — roughly a third of dense search time is
-   this one avoidable recomputation. (Essentially unchanged from the
-   pre-rebuild measurement — this is corpus-size-dependent mechanics, not
-   corpus-content-dependent.)
+   norms) doesn't change between queries. Measured cost (2026-08-09, 74,816
+   chunks): 40.90ms (dim=384) / 107.40ms (dim=1024) / 264.17ms (dim=2560),
+   against an intrinsic dot-product-and-sort of 62.91 / 158.04 / 386.56ms —
+   roughly **40% of dense search time is this one avoidable recomputation**,
+   and it is free to remove because caching a row norm cannot change a
+   ranking. (Essentially unchanged across every refresh — this is
+   corpus-size-dependent mechanics, not corpus-content-dependent.)
 2. `HybridRetriever.retrieve()` (`src/rag_lab/retrievers/hybrid.py`) asks
-   **both** sub-retrievers for `k=n` (the entire 74,819-chunk corpus, not a
+   **both** sub-retrievers for `k=n` (the entire 74,816-chunk corpus, not a
    bounded candidate pool) before RRF-fusing and truncating to the caller's
-   actual k=10 — and `BM25Retriever.retrieve()` (`src/rag_lab/retrievers/bm25.py`)
-   separately rebuilds a fresh `BM25Okapi` index from the tokenized corpus
-   on **every single query** instead of caching it once per loaded index.
-   Measured 2026-07-29: BM25 rebuild-from-scratch = ~872ms vs.
-   `get_scores`-only on an already-built index = ~36ms (24x);
-   `DenseRetriever.retrieve(k=n)` = ~699ms vs. `retrieve(k=10)` = ~239ms,
-   with the ~460ms gap being `RankedChunk` construction (full chunk text
-   included) for tens of thousands of chunks nobody will ever look at.
-   Together these two effects — not RRF fusion itself — explain most of the
-   measured ~2.1-2.7s hybrid query latency. Comparing measured hybrid total
-   to intrinsic hybrid estimate directly: the *additive* gap is
-   ~1.92-2.03s for every one of the 9 embedders (the tightest-clustered
-   number in this whole table) — confirming the overhead is corpus-scanning
-   cost, constant regardless of embedder, not an embedder-dependent effect.
-   As a *ratio* the same fixed overhead looks very different depending on
-   the embedder's own baseline cost — ~4.0x for `qwen3` (2685ms measured vs.
-   668ms intrinsic, the most expensive embedder) up to ~17.9x for
-   `e5_small` (2083ms vs. 116ms, the cheapest) — so lead with the additive
-   number; the ratio is an artifact of which embedder you divide by, not a
-   real difference in how much overhead hybrid retrieval carries.
+   actual k=10. Measured 2026-08-09: `DenseRetriever.retrieve(k=n)` =
+   575.58ms vs. `retrieve(k=10)` = 262.46ms, the **313ms** gap being
+   `RankedChunk` construction (full chunk text included) for tens of
+   thousands of chunks nobody will ever look at; `BM25Retriever` pays the
+   same tax on its side of the fuse. **Unlike (1) this is not free to
+   remove** — `HybridRetriever` requests complete rankings precisely so RRF
+   fuses full orderings, so a bounded pool is a *different retrieval method*,
+   not the same one made faster. This effect — not RRF fusion itself — is now
+   the whole of the gap between the intrinsic estimates and the measured
+   1.21-1.86s hybrid totals. That *additive* gap is **0.87-1.03s** across all
+   9 embedders (the tightest-clustered number in this whole table),
+   confirming it is corpus-scanning cost, constant regardless of embedder.
+   As a *ratio* the same fixed overhead looks very different depending on the
+   embedder's own baseline cost — ~2.2× for `qwen3` (1863ms measured vs.
+   839ms intrinsic, the most expensive embedder) up to ~3.5× for `e5_small`
+   (1208ms vs. 341ms, the cheapest) — so lead with the additive number; the
+   ratio is an artifact of which embedder you divide by, not a real
+   difference in how much overhead hybrid retrieval carries.
 
 **Because of this, the honest cost signal for a quality-vs-cost comparison
 is query-*encode* time (the one component that's genuinely embedder-
@@ -2281,24 +2314,33 @@ measured search/hybrid totals.** The table below reports both:
 
 | embedder | dim | encode p50 (ms) | intrinsic dense¹ (ms) | measured dense total p50 (ms) | intrinsic hybrid² (ms) | measured hybrid total p50 (ms) | recall@10 dense (semantic) | recall@10 hybrid (semantic) |
 |---|---|---|---|---|---|---|---|---|
-| qwen3 | 2560 | 264.66 | 631.97 | 874.72 | 668.34 | 2684.71 | 0.5396 | 0.6020 |
-| qwen3_0.6b | 1024 | 177.61 | 320.59 | 421.06 | 356.96 | 2325.41 | **0.5707** | **0.6141** |
-| jina_v5 | 1024 | 166.39 | 309.38 | 408.69 | 345.74 | 2294.54 | 0.4699 | 0.6003 |
-| bge_m3 | 1024 | 181.58 | 324.56 | 425.03 | 360.93 | 2316.29 | 0.4154 | 0.5445 |
-| e5_small | 384 | 24.68 | **79.83** | **120.43** | **116.20** | 2083.14 | 0.3829 | 0.5843 |
-| congen | 1024 | 62.18 | 205.16 | 307.30 | 241.53 | 2276.49 | 0.2976 | 0.4655 |
-| e5 | 1024 | 183.61 | 326.59 | 424.34 | 362.96 | 2286.53 | 0.3606 | 0.5442 |
-| sct | 1024 | 61.82 | 204.81 | 304.81 | 241.18 | 2274.26 | 0.1273 | 0.3963 |
-| m2v | 1024 | **2.02** | 145.00 | 247.80 | 181.37 | 2170.54 | 0.1318 | 0.3214 |
-| bm25 | — | 0 | — | — | — | 1067.63 (measured; 36.37 intrinsic) | — | 0.4642 (recall@10 alone) |
+| qwen3 | 2560 | 198.64 | 585.20 | 839.78 | 838.70 | 1862.64 | 0.5396 | 0.6020 |
+| qwen3_0.6b | 1024 | 90.09 | 248.13 | 359.44 | 501.63 | 1495.58 | **0.5707** | **0.6141** |
+| jina_v5 | 1024 | 86.40 | 244.44 | 369.76 | 497.94 | 1506.91 | 0.4699 | 0.6003 |
+| bge_m3 | 1024 | 82.94 | 240.98 | 334.66 | 494.48 | 1387.23 | 0.4154 | 0.5445 |
+| e5_small | 384 | 24.91 | **87.83** | **120.56** | **341.33** | **1208.47** | 0.3829 | 0.5843 |
+| congen | 1024 | 65.51 | 223.55 | 325.41 | 477.06 | 1433.87 | 0.2976 | 0.4655 |
+| e5 | 1024 | 83.82 | 241.86 | 335.71 | 495.36 | 1391.24 | 0.3606 | 0.5442 |
+| sct | 1024 | 66.07 | 224.11 | 322.01 | 477.61 | 1445.72 | 0.1273 | 0.3963 |
+| m2v | 1024 | **2.38** | 160.42 | 273.43 | 413.92 | 1440.41 | 0.1318 | 0.3214 |
+| bm25 | — | 0 | — | — | — | 234.45 (measured; 253.50 intrinsic) | — | 0.4642 (recall@10 alone) |
 
-**Mixed provenance, stated deliberately**: the latency columns are the
-2026-07-29 measurement and the two `recall@10` columns are 2026-08-07 against
-rebuild #3, for the reasons in the currency banner at the top of this section.
-This is safe in the one direction that matters — latency measures corpus-*size*
-mechanics that a rebuild does not change, and scoring is unaffected by machine
-state — and both runs use the same nine `semantic`-chunker combos, so the
-apples-to-apples property the paragraph above is careful about still holds.
+**Single provenance, 2026-08-09**: latency and `recall@10` columns now come
+from one run against rebuild #3, retiring the deliberate 07-29-latency /
+08-07-quality split the banner above describes. Read cross-embedder
+differences against this rig's ~5-10% resolution (the three controls in the
+banner) — the four dim-1024 rows between 322 and 370ms measured dense total,
+for instance, are **not** separable.
+
+**The `bm25` row is the one that changed shape, not just value**: at 234.45ms
+measured against 253.50ms intrinsic it now sits *below* its own intrinsic
+estimate, where it used to sit ~1s above. That is not a contradiction — the
+intrinsic phase runs in the parent process after several `BM25Okapi` builds
+and three full `embeddings.npy` loads, while the measured figure comes from a
+fresh child; the 8% gap is the same process-state drift control 2 quantifies
+at +5.1%, pointing the other way. The honest reading is that with the rebuild
+memoised, **BM25-alone retrieval is now essentially its scoring cost**, and
+the two figures are not comparable to better than ~10%.
 
 ¹ intrinsic dense = encode p50 + dot-product-and-sort at that dim (norms
 cached, not recomputed). ² intrinsic hybrid = encode p50 + dot-product-and
@@ -2306,16 +2348,15 @@ cached, not recomputed). ² intrinsic hybrid = encode p50 + dot-product-and
 either side; bounded-pool RRF fuse is <5ms, not separately measured). Build
 cost (`embed_seconds`, `chunks_per_sec`, index size on disk) and the full
 p50/p95 breakdowns for every number above: `data/results/cost_latency_pareto.md`.
-Latency/cost columns: **2026-07-29** against the OCR-remediation-rebuilt
-indices — essentially unchanged from the measurement before that, which is the
-basis for treating them as corpus-size mechanics and keeping them through the
-rebuild-#3 refresh. Quality columns: **2026-08-07** against rebuild #3.
+Latency/cost **and** quality columns: **2026-08-09** against rebuild #3, one
+run, idle machine, one subprocess per embedder, with the three timing controls
+in the banner at the top of this section.
 
 **Reading this table**: `m2v` (Model2Vec static embedding) is by far the
-cheapest to encode (2ms) but also the weakest embedder in the whole matrix
+cheapest to encode (2.4ms) but also the weakest embedder in the whole matrix
 (see Embedders compared above) — not a real Pareto contender. Among
 genuinely competitive embedders, `e5_small` is the standout: intrinsic
-dense cost of 80ms (2-8x cheaper than every other option in the top two
+dense cost of 88ms (2-7x cheaper than every other option in the top two
 quality tiers) for recall@10=0.3829 dense / 0.5843 hybrid — now noticeably
 below the hybrid headline number (a 0.030 gap, wider than the pre-rebuild
 0.02) but still the cheapest intrinsic cost by far in that tier. `qwen3`
@@ -2425,12 +2466,15 @@ holds as stated.
    section above + `data/results/cost_latency_pareto.md` +
    `tools/eval/cost_latency_pareto.py`. Also surfaced two current-
    implementation overheads (BM25Okapi rebuilt per query, hybrid over-
-   fetching the full corpus before fusing) that add a roughly fixed
-   ~2.1-2.3s of latency to every hybrid query regardless of embedder
-   (expressed as a ratio this is ~4x for the most expensive embedder up to
-   ~18x for the cheapest, purely because the same fixed overhead is divided
-   by very different intrinsic baselines — the additive number is the real
-   story) — reported as implementation characteristics, not silently fixed.
+   fetching the full corpus before fusing) that added a roughly fixed
+   ~2.1-2.3s of latency to every hybrid query regardless of embedder —
+   reported as implementation characteristics, not silently fixed.
+   **The first of the two has since been fixed** (`5cc71a1`, 2026-08-08:
+   the scorer is memoised on the `Index`), leaving ~0.87-1.03s of over-fetch
+   overhead as measured 2026-08-09. Expressed as a ratio that residue is
+   ~2.2x for the most expensive embedder up to ~3.5x for the cheapest,
+   purely because the same fixed overhead is divided by very different
+   intrinsic baselines — the additive number is the real story.
 4. ~~MAP + Precision@k + multi-k (1/3/5/10)~~ — DONE 2026-07-21:
    `precision_at_k` and `average_precision_at_k` added to
    `src/rag_lab/metrics.py`, `evaluate()` now accepts a list of k's and
