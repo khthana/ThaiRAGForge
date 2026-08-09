@@ -1153,8 +1153,10 @@ see `docs/adr/`.
   0.8355 (perfect rerank over all 360), **never 0.8948**; (c) unioning the dense
   and BM25 result sets too lifts it to **0.9443 macro / 0.9197 micro**, so
   **80 of the 164 "nothing found it" pairs were a retriever-choice artifact** and
-  the floor is **84 pairs (8.0%)**, of which 8 are a labelling
-  artifact → cite **76 (7.3%)**. **Do not call that floor *structural* — the word
+  the floor is **84 pairs (8.0%)** — **cite 84, not the 76 this bullet used to
+  publish**: the subtracted 8 were called a labelling artifact, and that premise
+  was measured and refuted 2026-08-09 (see the anchor-ambiguity bullet below), so
+  the subtraction is withdrawn in the script and the report. **Do not call that floor *structural* — the word
   was withdrawn 2026-08-08 by `tools/eval/miss_depth_profile.py` (next bullet).** The §1d
   router was **dropped, not recomputed** — `routing_eval.py` is its tested
   descendant and reports `routed (loo)` 0.6780 (+0.0499, **ns**), so recomputing
@@ -1165,17 +1167,75 @@ see `docs/adr/`.
   on it); the union rows exceed it legitimately because they send 360, and that
   is the one way to misread these two tables together.
   **A qrels defect fell out of it, and the rejected hypothesis is worth as much
-  as the accepted one.** The single 0.000 query (`รายวิชา CONTROL SYSTEMS`) is
-  unanswerable *by construction*: the Gold set also holds `รายวิชา CONTROL
-  SYSTEM`, one character apart, and exact-token matching gave them **disjoint**
-  qrels — the union pulls 103 docs for the plural query, **0** of its own gold
-  and **9** of the singular's. Detect the shape (one course name a token-prefix
-  of another), don't hard-code the pair. The hypothesis that **failed** was the
+  as the accepted one.** The single 0.000 query (`รายวิชา CONTROL SYSTEMS`): the
+  Gold set also holds `รายวิชา CONTROL SYSTEM`, one character apart, and
+  exact-token matching gave them **disjoint** qrels — the union pulls 103 docs
+  for the plural query, **0** of its own gold and **9** of the singular's. This
+  bullet used to call it **unanswerable *by construction***; **that is withdrawn
+  2026-08-09** — see the anchor-ambiguity bullet below, which measured it. Detect
+  the shape (one course name a token-prefix of another), don't hard-code the
+  pair. The hypothesis that **failed** was the
   attractive one: 38 of 401 `course` pairs (9.5%) are relevant only via another
   course's `PREREQUISITE:` line, which reads like an unretrievable needle — but
   `SIGNALS AND SYSTEMS` is 9/10 prerequisite-only at union recall **1.000** and
   `ELECTRONICS ENGINEERING 1` is 10/10 at 0.900. Cite 9.5% as a category that
   exists, never as a cause.
+- **Gold anchor ambiguity (`tools/eval/audit_gold_anchor_ambiguity.py` →
+  `data/results/gold_anchor_ambiguity.md`, 2026-08-09)** — the CONTROL SYSTEM(S)
+  pair above, chased to its shape instead of its instance. **The reported defect
+  does not exist: the qrels are not self-contradicting.** S3 rebuilds every
+  course query's qrels from the code tags and reproduces them **33 of 33**; the
+  two courses (`01046707`, `01306023`) are genuinely different. **What is real is
+  a key mismatch**: `course` is the *only* entity type whose qrels key (the
+  8-digit **code**, via `courses_by_file.json`) differs from what its query
+  supplies (the **name**) — `program`/`person`/`faculty_adjunct_aggregate` judge
+  relevance on exactly the string the query gives, so **73 of 106 queries are
+  unexposed by construction**, a denominator rather than an estimate. **Two
+  claims are withdrawn by measurement.** (1) "unanswerable *by construction*" is
+  **false** — all **8 of 8** of the plural query's gold documents literally
+  contain the phrase `CONTROL SYSTEMS` (`gold ที่ไม่เอ่ยชื่อ` = 0); it is
+  answerable in principle, just not *by name matching alone*, which is weaker and
+  true. (2) Consequently the 8 pairs are **not** a labelling artifact and the
+  oracle-union floor is **84 (8.0%), not 76** — corrected in
+  `oracle_union_ceiling.py` and its report the same day. **Keep the two mechanisms
+  apart** — *ambiguous name* (other courses' documents show the query's anchor
+  text: the evidence is all present but competes, `CONTROL SYSTEMS` 8 gold among
+  **65** naming documents) versus *silent name* (gold tagged by code that never
+  spells the name, 4 of 33 queries) — because dropping queries fixes neither, and
+  only the first is what the 0.000 row is. Metric: **anchor precision** =
+  `gold ∩ naming / naming`, flagged below 0.5 as a *statement* ("most documents
+  showing the query's own anchor text are judged irrelevant") with the full
+  distribution printed so the cut isn't load-bearing → **3 of 33 flagged**
+  (0.123 / 0.200 / 0.421). **Read `เพดานเห็นแต่ชื่อ` = `min(1, k/naming)` and
+  `เพดาน qrels` = `min(1, k/gold)` as a pair, never alone** — the `Δ เพดาน`
+  column is what separates the defect from the benign "more than 10 relevant
+  documents" case (−0.846 for `CONTROL SYSTEMS`, +0.000 for `CALCULUS 2`). Two
+  further findings: **5 of 33** gold course names are sub-phrases of another
+  course's name, but sub-phrase ≠ broken (`SIGNALS AND SYSTEMS` union 1.000,
+  `INDUSTRIAL AUTOMATION` anchor precision 0.824); and §3b finds the *opposite*
+  direction — a shorter dictionary name inside the query's own name adds extra
+  codes for **3 of 33** (`ENGLISH FOR`, `INVESTMENT PROJECT ANALYSIS`), which does
+  **not** touch `classify_query` (it only asks whether *any* course matched, so
+  the route stays 33/33 per `tests/test_router.py`) but does touch
+  `detect_entities`/`entity_lookup`. **`courses.json` is deliberately not
+  shrunk** — `router._default_course_matcher` reads it, so the gate belongs in
+  `build_gold_candidates.py`, which now annotates each course candidate with
+  `anchor_status` ∈ `ok`/`ambiguous`/`no_name_evidence` (**414 / 66 / 198** of 678).
+  **That third bucket is why the classification is three-way, not a number**: with
+  zero naming documents the ratio is *undefined*, not zero, and collapsing them
+  reported 264 flags of which 198 were OCR-garbled dictionary names, burying the
+  66 real ones. **Whitespace must be collapsed before matching** (OCR'd minutes
+  wrap long course names across lines) and that is the conservative direction — an
+  inflated `gold_not_naming` would invent a second mechanism that isn't there; the
+  contract is that the caller collapses each document **once** (33 names × 2,853
+  documents), and `tests/tools/test_gold_anchor_ambiguity.py` pins it in the
+  negative along with the boundary rule both scripts share. **The repair by
+  deletion was priced before being declined (§4): dropping the 0.000 query moves
+  macro recall@10 +0.0050 and dropping all 3 flagged +0.0113 — *upward*, because
+  the dropped queries are the low-scoring ones**, so the cost isn't the Δ, it is
+  re-running and re-copying every table and every "106 queries" claim. Nothing was
+  dropped; the outcome is documentation + the build-time gate + the two
+  corrections above.
 - **Miss-depth profile (`tools/eval/miss_depth_profile.py` →
   `data/results/miss_depth_profile.md`, 2026-08-08)** — the split the ceiling
   bullet above left open. **The ticket said "run k=50"; that is the wrong

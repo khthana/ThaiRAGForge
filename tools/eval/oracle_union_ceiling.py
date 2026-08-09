@@ -628,7 +628,18 @@ def main() -> int:
     # course names where one is a token-prefix of the other are one edit apart
     # in query space but were labelled by exact-token match, so their qrels can
     # be disjoint. Detect the shape rather than hard-coding the pair.
-    w("### คำถามที่ union ได้ 0.000: ตอบถูกไม่ได้ตั้งแต่ต้น")
+    #
+    # CORRECTED 2026-08-09. This block used to call the disjoint qrels a
+    # "labelling artifact" and subtract those pairs from the structural floor,
+    # citing 76 rather than 84. tools/eval/audit_gold_anchor_ambiguity.py
+    # measured the premise and refuted it: 01046707 and 01306023 are genuinely
+    # different courses, every one of the plural query's 8 relevant documents
+    # really does contain the phrase `CONTROL SYSTEMS`, and the qrels reproduce
+    # exactly from the code tags. Nothing is mislabelled. The query is simply
+    # under-specified -- its name competes with 57 documents naming other
+    # courses -- so the pairs are unreachable by name matching, not unreachable
+    # by mistake, and they belong IN the floor. The subtraction is withdrawn.
+    w("### คำถามที่ union ได้ 0.000: ชื่อไม่พอจะระบุตัววิชา")
     w()
     prefix_pairs = [
         (a, b) for a in course_name.values() for b in course_name.values()
@@ -644,15 +655,23 @@ def main() -> int:
           f"| **{len(ub & qrels[qb])}** | {len(ub & qrels[qa])} |")
     w()
     w("อ่านตามตาราง: ชื่อวิชาสองอันนี้ต่างกันแค่ตัว `S` ตัวเดียว ระบบทุกตัวจึงดึงเอกสาร ")
-    w("ย่านเดียวกันมาให้ทั้งคู่ — แต่ qrels ที่สร้างด้วยการจับ token แบบตรงตัวแบ่งย่านนั้น ")
-    w("ให้คำถาม 'สั้น' ไปทั้งหมด **โดยไม่ซ้อนกันเลยแม้แต่ใบเดียว** คำถาม 'ยาว' จึงตอบถูก ")
-    w("ไม่ได้ด้วยระบบใด ๆ ที่ยังแยกสองคำถามนี้ไม่ออก และ recall 0.000 ของมันไม่ใช่เพดานของ ")
-    w("การค้นคืน แต่เป็นผลของการติดป้าย")
+    w("ย่านเดียวกันมาให้ทั้งคู่ — แต่ qrels แบ่งย่านนั้นให้คำถาม 'สั้น' ไปทั้งหมด ")
+    w("**โดยไม่ซ้อนกันเลยแม้แต่ใบเดียว** คำถาม 'ยาว' จึงตอบถูกไม่ได้ด้วยระบบใด ๆ ")
+    w("ที่ยังแยกสองคำถามนี้ไม่ออก")
     w()
     lost = sum(len(qrels[q_of[b]]) for _, b in prefix_pairs)
-    w(f"**หักออกจากก้อน B**: {lost} คู่จาก {struct_floor} คู่ที่ 'ไม่มี retriever ใดดึงเจอ' ")
-    w(f"มาจากกรณีนี้ เพดานเชิงโครงสร้างที่ควรอ้างจึงเป็น **{struct_floor - lost} คู่ "
-      f"({(struct_floor - lost)/n_pairs:.1%})** ไม่ใช่ {struct_floor} คู่ ")
+    w(f"**แก้ไข 2026-08-09 — เดิมที่นี่เคยเรียกสิ่งนี้ว่า 'ผลของการติดป้าย' แล้วหัก {lost} คู่ ")
+    w(f"ออกจาก {struct_floor} คู่ เหลือ {struct_floor - lost} ")
+    w("คู่ ข้อสมมตินั้นถูกวัดแล้วและผิด** — `tools/eval/audit_gold_anchor_ambiguity.py` ")
+    w("พบว่า `01046707` กับ `01306023` เป็นคนละวิชากันจริง qrels สร้างขึ้นใหม่จาก tag รหัส ")
+    w("ได้ตรงเป๊ะทั้ง 33 ข้อ และเอกสาร gold ของคำถาม 'ยาว' **มีข้อความชื่อวิชาอยู่ครบทุกใบ** ")
+    w("จึงไม่มีอะไรติดป้ายผิดเลย สิ่งที่เกิดขึ้นคือ*ตัวคำถามระบุตัววิชาไม่พอ* — ชื่อของมัน ")
+    w("ปรากฏในเอกสารของวิชาอื่นอีก 57 ใบ คู่เหล่านี้จึงเข้าไม่ถึงด้วย *การจับคู่ชื่อ* ")
+    w("ไม่ใช่เข้าไม่ถึงเพราะความผิดพลาด และต้อง**นับรวมอยู่ในพื้น**")
+    w()
+    w(f"**เพดานเชิงโครงสร้างที่ควรอ้างจึงเป็น {struct_floor} คู่ "
+      f"({struct_floor/n_pairs:.1%}) ไม่ใช่ {struct_floor - lost} คู่** ")
+    w(f"โดยในนั้น {lost} คู่เป็นชนิด 'ชื่อกำกวม' ซึ่งวัดแยกไว้ใน `gold_anchor_ambiguity.md` ")
     w("ที่เหลือยังไม่ได้แยกว่าเป็น OCR, chunk หรือแค่อันดับเกิน 10 (ต้องรัน k=50)")
     w()
 

@@ -49,6 +49,24 @@ relevance risk of asking a model to read resolutions and guess what's relevant:
   subject) -- most candidates have hit_count 1-3; don't expect person/
   program-sized sets here.
 
+  COURSE IS THE ONLY TYPE WHOSE QRELS KEY DIFFERS FROM ITS QUERY ANCHOR.
+  Program/person/faculty all judge relevance on exactly the string the query
+  supplies; course judges on the code while the query names the course. That
+  gap is invisible to the dictionary's own gate -- which requires a name to
+  resolve to one code, not that no *other* course's name contains it -- and
+  it minted `รายวิชา CONTROL SYSTEMS`, the single query in the shipped
+  106-entry set that scores 0.000 even when the top-10 of all 36 combos are
+  unioned: its 8 relevant documents compete with 57 others carrying the same
+  phrase, mostly `DIGITAL CONTROL SYSTEMS` and the like. Each course
+  candidate therefore carries `anchor_precision` (what share of the
+  documents naming it the qrels actually credit), `naming_count`,
+  `gold_not_naming` and an `anchor_ambiguous` flag. They ANNOTATE rather than
+  exclude: being a sub-phrase is not disqualifying on its own (`SIGNALS AND
+  SYSTEMS` is one and still reaches union recall 1.000), and a low score can
+  mean either "ambiguous name" or "gold documents that never spell the name"
+  -- two different problems, told apart by `gold_not_naming`. Measurement of
+  the already-shipped set: tools/eval/audit_gold_anchor_ambiguity.py.
+
 Output is a CANDIDATE pool, not a finished gold set: it still needs human
 review before use (person hits may include incidental mentions -- e.g. an
 attendee list -- not just committee-membership; program windows are not
@@ -81,6 +99,13 @@ DICT_DIR = REPO / "data" / "entity_dictionaries"
 # path-parsing helpers instead of duplicating them here.
 sys.path.insert(0, str(REPO / "src"))
 from rag_lab.loaders.common import make_resolution_id, parse_path  # noqa: E402
+
+_ALNUM = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+_WS = re.compile(r"\s+")
+
+# A course candidate is flagged when most of the documents showing the query's
+# own anchor text are judged irrelevant -- a statement, not a tuned threshold.
+ANCHOR_PRECISION_FLOOR = 0.5
 
 _RID_YEAR_SESSION = re.compile(r"^(\d+)/(\d+)s?/")
 
@@ -290,15 +315,55 @@ def faculty_adjunct_candidates(min_hits: int) -> list[dict]:
     return candidates
 
 
+def _contains_phrase(haystack: str, needle: str) -> bool:
+    """Case-insensitive containment of `needle` as a standalone phrase, using
+    course_loader.match_courses_by_name's immediate-neighbour boundary rule
+    (regex \\b never fires at a Thai/Latin seam).
+
+    `haystack` must already be whitespace-collapsed -- the caller collapses
+    each document once instead of once per course name. Collapsing matters:
+    OCR'd minutes wrap a long course name across a line, and matching raw text
+    reports genuine mentions as absent.
+    """
+    needle = _WS.sub(" ", needle)
+    for m in re.finditer(re.escape(needle), haystack, re.IGNORECASE):
+        before = haystack[m.start() - 1] if m.start() > 0 else ""
+        after = haystack[m.end()] if m.end() < len(haystack) else ""
+        if before not in _ALNUM and after not in _ALNUM:
+            return True
+    return False
+
+
 def course_candidates(min_hits: int) -> list[dict]:
     courses = _load_json(DICT_DIR / "courses.json")  # already unique-name-gated
     by_file = _load_json(TAGS_DIR / "courses_by_file.json")
 
     code_to_rids: dict[str, set[str]] = {}
+    rid_of: dict[str, str] = {}
     for relpath, codes in by_file.items():
         rid = _resolution_id_for(relpath)
+        rid_of[relpath] = rid
         for code in codes:
             code_to_rids.setdefault(code, set()).add(rid)
+
+    # ANCHOR PRECISION. Course is the only entity type whose qrels key (the
+    # 8-digit code) differs from what its query text supplies (the name), so a
+    # different course whose name *contains* this one's puts the query's own
+    # anchor text into documents the qrels call irrelevant. Left unmeasured
+    # this minted `รายวิชา CONTROL SYSTEMS`, whose 8 relevant documents compete
+    # with 57 that show the same phrase -- the one query in the 106-entry set
+    # that scores 0.000 even when the top-10 of all 36 combos are unioned.
+    #
+    # Annotate, don't drop: this is a candidate pool for human curation, and
+    # being a sub-phrase is not by itself disqualifying (`SIGNALS AND SYSTEMS`
+    # is one and still reaches union recall 1.000). Full measurement of the
+    # shipped set lives in tools/eval/audit_gold_anchor_ambiguity.py.
+    texts = {
+        relpath: _WS.sub(
+            " ", (CORPUS_ROOT / relpath).read_text(encoding="utf-8", errors="replace")
+        )
+        for relpath in by_file
+    }
 
     candidates = []
     for course in courses:
@@ -307,6 +372,21 @@ def course_candidates(min_hits: int) -> list[dict]:
         rids = code_to_rids.get(code, set())
         if len(rids) < min_hits:
             continue
+        naming = {rid_of[rp] for rp, t in texts.items() if _contains_phrase(t, canonical)}
+        # Three distinct outcomes, kept apart rather than collapsed into one
+        # number: with no naming document at all the ratio is undefined, not
+        # zero, and that case is a different defect -- a garbled dictionary
+        # name (`CALCULUS 1 -6`, `COOPERATIVE OR 006301 CED EDUCATION ...`)
+        # that no document can contain. Reporting it as anchor_precision=0.000
+        # buried the genuinely ambiguous names among hundreds of OCR artifacts.
+        if not naming:
+            status, anchor_precision = "no_name_evidence", None
+        elif len(rids & naming) / len(naming) < ANCHOR_PRECISION_FLOOR:
+            status = "ambiguous"
+            anchor_precision = round(len(rids & naming) / len(naming), 3)
+        else:
+            status = "ok"
+            anchor_precision = round(len(rids & naming) / len(naming), 3)
         candidates.append(
             {
                 "entity_type": "course",
@@ -315,6 +395,10 @@ def course_candidates(min_hits: int) -> list[dict]:
                 "query": f"รายวิชา {canonical} ถูกกล่าวถึงในการประชุมสภาสถาบันครั้งใดบ้าง ให้แสดงรายละเอียดทั้งหมด",
                 "relevant_resolution_ids": sorted(rids, key=_sort_key),
                 "hit_count": len(rids),
+                "anchor_status": status,
+                "anchor_precision": anchor_precision,
+                "naming_count": len(naming),
+                "gold_not_naming": len(rids - naming),
             }
         )
     return candidates
@@ -360,7 +444,52 @@ def render_report(
         lines.append(f"- (hit_count={c['hit_count']}) {c['entity']}")
     lines += ["", "## Top course candidates by hit_count", ""]
     for c in sorted(course_hits, key=lambda c: -c["hit_count"])[:20]:
-        lines.append(f"- (hit_count={c['hit_count']}) {c['code']} {c['entity']}")
+        ap = "n/a" if c["anchor_precision"] is None else f"{c['anchor_precision']:.3f}"
+        flag = "" if c["anchor_status"] == "ok" else f" [{c['anchor_status'].upper()}]"
+        lines.append(
+            f"- (hit_count={c['hit_count']}, anchor_precision={ap})"
+            f" {c['code']} {c['entity']}{flag}"
+        )
+    ambiguous = sorted(
+        (c for c in course_hits if c["anchor_status"] == "ambiguous"),
+        key=lambda c: c["anchor_precision"],
+    )
+    no_evidence = [c for c in course_hits if c["anchor_status"] == "no_name_evidence"]
+    lines += [
+        "",
+        f"## Anchor-ambiguous course candidates ({len(ambiguous)} of {len(course_hits)})",
+        "",
+        "The query names the course; the qrels are keyed on its 8-digit code.",
+        "These are the candidates where most documents showing the query's own",
+        "name are judged irrelevant -- usually because a different course's name",
+        "contains this one's. Review before curating any of them into a gold",
+        "set: they are answerable in principle but not by name matching alone,",
+        "so they measure disambiguation rather than retrieval.",
+        "",
+    ]
+    for c in ambiguous:
+        lines.append(
+            f"- anchor_precision={c['anchor_precision']:.3f}"
+            f" (gold {c['hit_count']}, {c['naming_count']} documents name it,"
+            f" {c['gold_not_naming']} gold never name it)"
+            f" {c['code']} {c['entity']}"
+        )
+    lines += [
+        "",
+        f"## Course candidates with no name evidence ({len(no_evidence)} of {len(course_hits)})",
+        "",
+        "Not the same defect: no document contains the name at all, so anchor",
+        "precision is undefined rather than zero. Nearly all are OCR-garbled",
+        "dictionary entries whose code is tagged correctly while the name never",
+        "existed as written -- a courses.json quality issue, not a qrels one.",
+        "Listed so they cannot be mistaken for ambiguity; the human curation",
+        "step is what has kept them out of the shipped gold sets so far.",
+        "",
+    ]
+    for c in sorted(no_evidence, key=lambda c: -c["hit_count"])[:20]:
+        lines.append(f"- (gold {c['hit_count']}) {c['code']} {c['entity']}")
+    if len(no_evidence) > 20:
+        lines.append(f"- ... and {len(no_evidence) - 20} more")
     return "\n".join(lines) + "\n"
 
 

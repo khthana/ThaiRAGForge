@@ -1719,13 +1719,14 @@ Three results worth citing, and one retraction.
    (69.3% of the misses) are found by *some* system**. That is the headroom a
    per-query router or a reranker over a merged pool is aiming at — but at the
    real 10-document budget its ceiling is 0.7771–0.8355, **not** 0.8948.
-3. **The floor is 76 pairs (7.3%)**, not the 164 the hybrid-only union
+3. **The floor is 84 pairs (8.0%)**, not the 164 the hybrid-only union
    suggests. Adding the dense and BM25 result sets recovers 80 further pairs, so
-   most of "no system found it" was a *retriever-choice* artifact. Of the 84 that
-   survive all three retrieval paths, 8 are unanswerable by construction (below),
-   leaving 76 genuinely unaccounted for. **These were called a *structural* floor
-   until 2026-08-08; that word is now withdrawn** — the depth profile below shows
-   they are ranked, not absent.
+   most of "no system found it" was a *retriever-choice* artifact. **This line
+   read 76 (7.3%) until 2026-08-09**, subtracting 8 pairs called unanswerable by
+   construction; that premise was measured and refuted (below), so the
+   subtraction is withdrawn and those 8 belong in the floor. **These were also
+   called a *structural* floor until 2026-08-08; that word is withdrawn too** —
+   the depth profile below shows they are ranked, not absent.
 
 **Retracted from the earlier version of this analysis**: its best single of
 0.6935 is superseded by the 0.6281 above, and its ceiling of 0.9201 is retired
@@ -1819,8 +1820,33 @@ One query — `รายวิชา CONTROL SYSTEMS` — scores **0.000** under
 because the qrels were built by exact-token match their relevant sets are
 **disjoint — 0 documents in common**. The union retrieves 103 documents for the
 plural query: 0 of its own gold, 9 of the *other* query's. No system that cannot
-tell the two questions apart can score above zero on one of them, so those 8
-pairs are a labelling artifact and are excluded from the structural floor above.
+tell the two questions apart can score above zero on one of them.
+
+**Corrected 2026-08-09.** This paragraph used to end "so those 8 pairs are a
+labelling artifact and are excluded from the structural floor above", and both
+halves of that were wrong. `tools/eval/audit_gold_anchor_ambiguity.py` measured
+the premise: the course qrels reproduce **exactly** from the code tags (33 of 33
+queries), the two codes are genuinely different courses, and **all 8 of the
+plural query's relevant documents literally contain the phrase `CONTROL
+SYSTEMS`**. Nothing is mislabelled, and the query is *not* unanswerable by
+construction — a system that could tell which `CONTROL SYSTEMS` is course
+`01306023` would find all 8. What it is not is answerable **by name matching
+alone**, because 65 documents in the corpus show that phrase and only 8 are
+judged relevant (anchor precision 0.123). Those 8 pairs are therefore counted in
+the floor of 84, not subtracted from it.
+
+The general defect is a **key mismatch**, not a bug: `course` is the only entity
+type whose qrels are keyed on something the query never supplies — the 8-digit
+code, against a query that gives the name. The other three types
+(`program`, `person`, `faculty_adjunct_aggregate`, 73 of 106 queries) judge
+relevance on exactly the string the query provides and are unexposed by
+construction. Across the 33 exposed queries, 3 have anchor precision below 0.5
+and 4 have gold documents that never spell the course name at all — a separate
+mechanism that no word-matching system can reach and that dropping queries would
+not fix. Full measurement: `data/results/gold_anchor_ambiguity.md`. Nothing was
+dropped from the Gold set; the price of doing so was measured first and it
+*raises* every published number (+0.0050 for the one query, +0.0113 for all
+three), because the queries in question are the low-scoring ones.
 
 A second hypothesis was tested here and **rejected by the data**: 38 of the 401
 `course` gold pairs (9.5%) are relevant only because the course name appears in
