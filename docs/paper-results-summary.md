@@ -2150,6 +2150,23 @@ embedders.
 
 ## Cost / latency characterization
 
+> **SUPERSEDED IN ONE DIRECTION (2026-08-09): every BM25 and hybrid latency
+> figure in this section is now high, because the overhead it measures was
+> half removed.** `BM25Retriever` memoises its `BM25Okapi` on the `Index`
+> instead of rebuilding it per query (commit `5cc71a1`), so BM25-alone
+> `retrieve()` went 1.094s → 0.050s p50 (~22×) and hybrid went 2.269s →
+> 1.361s (1.7×, −0.907s) on `plain__semantic__local__834c4336`, measured
+> paired in one process. Two consequences for citing this table. (1) The
+> **dense-alone columns are unaffected** — they never touched BM25. (2) The
+> mechanism paragraph below is *sharpened, not invalidated*: it attributes a
+> ~1.92–2.03s fixed overhead jointly to "BM25Okapi rebuilt per query" **and**
+> "hybrid k=n over-fetch", and the 1.7× hybrid speedup now splits that into
+> ~0.91s of rebuild (gone) and ~1.36s of over-fetch + Python fusion (still
+> there, and *not* free to remove — `HybridRetriever` fetches k=n
+> deliberately so RRF sees full rankings). **Owed: a re-run on an idle
+> machine** per the next paragraph's own warning; until then quote the BM25
+> and hybrid latency columns only with this note attached.
+>
 > **Currency (2026-08-07): quality columns are current against rebuild #3;
 > latency columns are deliberately still the 2026-07-29 measurement.** The
 > re-run against rebuild #3 confirmed what this section already predicted — that
