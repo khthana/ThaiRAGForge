@@ -411,3 +411,54 @@ from the fact that it did, empirically, tip negative in our own eval.
   something we found directly tested in the literature for this exact situation — both are
   extrapolations from the mechanisms above, not citations of a paper that already ran this
   experiment — so treat them as testable hypotheses for a follow-up ablation, not settled fixes.
+
+---
+
+## Follow-up measured 2026-08-09: pool source and pool depth (`reranker_pool_source_test.py`)
+
+The recommendation above left the axis open in one specific way — it said don't rerank *the hybrid
+path as currently wired*, and it said reranking a weaker single-retriever path stays
+literature-supported. `miss_depth_profile.py` (2026-08-08) then made that concrete and testable:
+on the 84 (query, resolution) pairs no arm of any combo finds at k=10, **76.2% sit at ranks 11-50**
+(so a reranker fetching 50 candidates can see them), **0 are absent from the index**, and **dense**
+is the arm closest to them — median best rank 26, closest on 70 of 84, vs hybrid 43 (9) and BM25
+210 (6). That is a concrete hypothesis: *the published result may have reranked the wrong pool.*
+
+Tested directly, on the **best single combo** (`sentence x qwen3_0.6b`, not the weaker
+`fixed_size x bge-m3` of the original test), pool source in {dense, hybrid} x
+P in {10, 20, 50, 100, 200}, every arm sending the same 10 documents, with an **oracle rerank of the
+same pool** reported beside every real arm. Report: `data/results/reranker_pool_source_test.md`.
+
+**The hypothesis is rejected, and rejected in the opposite direction.** A dense pool is not better,
+it is significantly **worse** — recall@10 **-0.1085** vs a hybrid pool (Holm-adj 0.0000, m=3), and it
+loses to the shipped hybrid on all three metrics. The reasoning error is worth naming: "closest on
+the pairs everyone misses" is a statement about 84 pairs, but the pool has to serve all **1,046**.
+Dense's baseline is **0.5034** against hybrid's **0.6281**, so a dense pool starts a tenth of a point
+behind to chase pairs worth far less than that.
+
+**Two things this run establishes that the original test could not.**
+
+1. **The evidence is in the pool; the reranker does not find it.** At P=50 the hybrid pool contains
+   **0.8869** of the gold and a perfect rerank of that same pool would deliver **0.8249** — the real
+   reranker delivers **0.6162**, *below its own 0.6281 baseline*. Without the oracle column, a null
+   here would be indistinguishable from "the evidence was never reachable". It was reachable.
+2. **Depth and harm point in opposite directions, which is what closes the axis.** The misses live at
+   ranks 11-50, but the reranker's damage grows monotonically with P — the fraction of the
+   baseline-to-oracle gap it captures is **-6% / -22% / -33%** at P=50/100/200. It cannot reach far
+   enough to see the missing evidence without destroying more than it recovers. The one arm that
+   improves anything is hybrid at P=20 (recall@10 0.6535 vs 0.6281) and it was **not pre-registered**,
+   so it is a hypothesis for a fresh query set, not a result.
+
+**The per-entity_type breakdown is direct empirical support for the mechanism in §7 above** — the
+one this document derived from Cormack et al.'s rank-based fusion argument rather than from any paper
+that measured it. Damage concentrates almost entirely on `person` (**-0.2668**) against `course`
+(-0.0205) and `faculty_adjunct_aggregate` (-0.0061). `person` is precisely the query type BM25
+carries by exact name match (0.8147, the per-entity_type breakdown), and precisely the signal RRF
+protects by construction and a cross-encoder — blind to which arm surfaced a document — is free to
+overwrite. The prediction was that RRF's rank-based protection is what the reranker removes; the
+measurement is that the loss lands on the one query type whose ranking that protection was holding up.
+
+**What this does *not* close.** Interventions (a) and (b) above are untouched — nothing here trains a
+reranker on hybrid-fused candidates, and nothing here blends the reranker's score into RRF as a
+fourth signal instead of truncate-and-replace. If anything, (b) is now the better-motivated of the
+two: the failure is concentrated exactly where truncate-and-replace discards rank-based protection.

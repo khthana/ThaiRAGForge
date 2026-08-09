@@ -659,8 +659,41 @@ see `docs/adr/`.
      literature's "phantom hits" mechanism (early-rank disruption without evicting relevant
      docs from the top-10). Literature grounding — including a paper naming
      `bge-reranker-v2-m3` by name — is in `docs/reranker-hybrid-interaction-research.md`.
+     **The "wrong pool" escape hatch is now CLOSED (2026-08-09,
+     `tools/eval/reranker_pool_source_test.py` → `data/results/reranker_pool_source_test.md`)**,
+     on the *best* combo (`sentence × qwen3_0.6b`, not the original test's weaker
+     `fixed_size × bge-m3` — say so when citing, the two tables are not comparable):
+     pool source ∈ {dense, hybrid} × P ∈ {10,20,50,100,200}, equal 10-doc budget, with an
+     **oracle rerank of the same pool beside every real arm**. `miss_depth_profile.md`'s
+     "dense is closest on 70 of 84" motivated it; **the hypothesis is rejected in the
+     opposite direction** — a dense pool is significantly *worse* (recall@10 **−0.1085**,
+     Holm-adj 0.0000, m=3) and loses to shipped hybrid on all three metrics. **The reasoning
+     error is the reusable part: "closest on the pairs everyone misses" is about 84 pairs,
+     but a pool serves all 1,046** — dense's 0.5034 baseline starts too far behind hybrid's
+     0.6281 for the hard pairs to repay. Two things the original test could not show. (1)
+     **The evidence is in the pool and the reranker does not find it**: at P=50 the hybrid
+     pool holds **0.8869** of the gold and a perfect rerank of it delivers **0.8249**, but
+     the real reranker delivers **0.6162** — *below its own baseline*. Without the oracle
+     column a null cannot be told apart from "the evidence was never reachable"; it was.
+     (2) **Depth and harm point opposite ways, which is what closes the axis**: the misses
+     sit at ranks 11-50 but captured headroom goes **−6% / −22% / −33%** at P=50/100/200, so
+     it cannot reach them without destroying more than it recovers. Damage concentrates on
+     `person` (**−0.2668** vs `course` −0.0205) — the type BM25 carries by exact name match
+     (0.8147) and the one RRF's rank-based fusion protects by construction, which is direct
+     empirical support for a mechanism that doc had only *derived*. The one improving cell
+     (hybrid P=20, 0.6535 vs 0.6281) was **not pre-registered** — cite it as a hypothesis for
+     a fresh query set, never as a result. Cost is real too: P=50 adds ~1.2 s/query on a
+     1.21-1.86 s base. Method worth reusing: a cross-encoder score depends on neither P nor
+     the pool's source, so **score each (query, chunk) pair once and derive all 10 arms from
+     the cache** (~1.3 arms' cost, and two arms can't disagree about one pair); it is
+     persisted so a GPU-free re-render reproduces the report line for line (784 s → 53 s).
+     Its S6 rebuilds `miss_depth_profile.md` §2's five delivered figures to 4 decimals from
+     an independent path, and S4 pins the structural anchor that at P=k reranking may change
+     the *order* but never the *set*, so recall@10 must equal baseline exactly.
      Untested follow-ups (a reranker trained on hybrid-fused candidates; blending its score
-     into RRF as a 4th signal instead of truncate-and-replace) are hypotheses, not results.
+     into RRF as a 4th signal instead of truncate-and-replace) are hypotheses, not results —
+     though (b) is now the better-motivated one, since the failure lands exactly where
+     truncate-and-replace throws away RRF's rank protection.
   2. **RQ3 preprocessing ablations: normalization and word-aware segmentation do nothing;
      only chunk size matters, and only at 1024.** Configs `config/experiments/rq3_*.yaml`,
      scripts `tools/eval/rq3_*`. Thai normalization (Thai digits + `pythainlp.util.normalize()`)
