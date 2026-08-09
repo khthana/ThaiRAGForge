@@ -593,3 +593,41 @@ set. Note also, descriptively (this pair was not pre-registered), that **B (0.66
 (0.6831)**: routing alone, which costs no extra fetches and no GPU at query time, outperforms the
 reranker path that costs both. Neither is wired into `query_service`, and this measurement is the
 reason the reranker one stays unwired.
+
+### But the axis is not dead: the routed pool still holds a large oracle gap
+
+The null above cannot, on its own, tell **"this reranker is weak"** apart from **"there is nothing
+left to win"** — the distinction that `reranker_pool_source_test.py` was built to make, and the same
+one that matters here before deciding whether follow-up (a) (a reranker *trained* on hybrid-fused
+candidates) is worth building. So the same oracle column was computed over the routed pool.
+
+Read the two columns apart, because confusing them is a mistake this project has already made once
+(`miss_depth_profile.md` §2 published a pool figure as a reranker ceiling, above the qrels ceiling
+0.8856 and therefore impossible for anything that sends 10 documents). `pool holds` is what is *in*
+the pool — it sends P documents and is **not deliverable**. `oracle delivered` is the best 10 that
+could be selected *from* it, which is deliverable and must stay under 0.8856.
+
+| P | routed: pool holds | routed: oracle delivered | over arm C | unrouted: oracle delivered |
+|---|---|---|---|---|
+| 10 | 0.6831 | **0.6831** (= arm C by construction) | +0.0000 | 0.6281 |
+| 20 | 0.8136 | **0.7895** | +0.1064 | 0.7534 |
+| 50 | 0.9054 | **0.8331** | +0.1500 | 0.8249 |
+| 100 | 0.9383 | **0.8560** | +0.1729 | 0.8356 |
+
+**At P=50 a perfect reranker would gain +0.1500 over the router; the real one gained +0.0017 — about
+1% of its own ceiling.** So the answer is (a) *this cross-encoder is weak*, not (b) *nothing is left*.
+Two things sharpen it. **Routing does not shrink the reranking headroom, it enlarges it**: the routed
+pool holds more gold than the unrouted one (0.9054 vs 0.8869 at P=50) and its delivered oracle is
+higher too (0.8331 vs 0.8249), so the specialist indices supply *better* candidates — the reranker
+simply cannot select among them. And the shape is identical to the unrouted diagnosis: the evidence
+sits in the pool, the model does not reach it. This is a **bound on the axis, not a plan** — an oracle
+is not a system, and closing even a fraction of +0.1500 requires a reranker qualitatively better than
+`bge-reranker-v2-m3` on this corpus, not a re-tuning of the fusion. Follow-up (a) keeps its
+motivation; the shipped-model version of this axis is closed.
+
+One implementation note, because it cost a failing self-check to find. The oracle must be
+`min(#relevant resolutions with a chunk in the pool, K) / #relevant` — **chunks sharing a
+`resolution_id` have to be deduplicated first**, since a perfect reranker would never spend one of its
+10 slots on a document it has already returned. Sorting the pool relevant-first *without* dedup
+understates the ceiling (0.7790 instead of 0.8249 on the unrouted pool at P=50); S9, which reproduces
+`reranker_pool_source_test.md`'s published pair from an independent code path, caught exactly that.

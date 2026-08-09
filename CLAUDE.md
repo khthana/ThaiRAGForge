@@ -756,7 +756,26 @@ see `docs/adr/`.
      rather than assuming them** — S4 reproduces `routing_eval.md`'s 0.6831 from a *third*
      independent code path, S5 reproduces 0.6281/0.6660, S1/S2 reproduce 106/106 persisted
      top-10s. **Neither rrf4 nor per-type alpha is wired into `query_service`, and this is
-     why.** Follow-up (a), a reranker trained on hybrid-fused candidates, remains untouched.
+     why.** **But the axis is NOT dead, and the oracle column is what says so**: a null alone
+     cannot separate "this reranker is weak" from "nothing is left to win", so the same
+     oracle was computed over the *routed* pool. At P=50 the routed pool **holds** 0.9054 of
+     the gold and a perfect selection of 10 from it **delivers 0.8331** — **+0.1500 over arm
+     C, against the real reranker's +0.0017, i.e. about 1% of its own ceiling.** So the
+     verdict is *this cross-encoder is weak*, not *the headroom is gone*, and **routing
+     enlarges the headroom rather than shrinking it** (routed 0.9054 holds / 0.8331
+     delivered vs unrouted 0.8869 / 0.8249 — the specialist indices supply *better*
+     candidates and the model still cannot select among them, the same shape as the
+     unrouted diagnosis). Cite it as a **bound on the axis, not a plan**: an oracle is not a
+     system, and closing any of +0.1500 needs a reranker qualitatively better than
+     `bge-reranker-v2-m3` here, not a re-tuned fusion. Follow-up (a), a reranker trained on
+     hybrid-fused candidates, keeps its motivation and remains untouched. **One trap, found
+     by a failing self-check rather than by reasoning**: the delivered oracle is
+     `min(#relevant resolutions with a chunk in the pool, K) / #relevant`, so chunks sharing
+     a `resolution_id` **must be deduplicated first** — a perfect reranker never spends one
+     of its 10 slots on a document it already returned. Sorting the pool relevant-first
+     *without* dedup understates the ceiling (0.7790 instead of 0.8249 unrouted at P=50);
+     S9, which reproduces `reranker_pool_source_test.md`'s published `delivered/holds` pair
+     from an independent code path, is what caught it.
   2. **RQ3 preprocessing ablations: normalization and word-aware segmentation do nothing;
      only chunk size matters, and only at 1024.** Configs `config/experiments/rq3_*.yaml`,
      scripts `tools/eval/rq3_*`. Thai normalization (Thai digits + `pythainlp.util.normalize()`)

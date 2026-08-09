@@ -99,6 +99,9 @@ CE_MODEL = "BAAI/bge-reranker-v2-m3"
 CE_BATCH = 8
 # routing_eval.md, hybrid, `routed (shipped)`; and reranker_rrf_signal_test.md
 PUBLISHED = {"C_recall": 0.6831, "A_recall": 0.6281, "B_recall": 0.6660}
+# reranker_pool_source_test.md, hybrid pool P=50 on the same unrouted combo
+PUBLISHED_ORACLE = {"unrouted_p50_delivered": 0.8249, "unrouted_p50_holds": 0.8869}
+ORACLE_POOLS = (10, 20, 50, 100)
 N_BOOT = 10_000
 SEED = 42
 
@@ -190,6 +193,42 @@ def fuse_grid(top, hterm, cache, cid, rid, page, grid, pools, queries, qrels):
                 for m, fn in _METRICS.items():
                     out[P][m][wi, j] = fn(res, qrels[q])
     return out
+
+
+def oracle_rerank(top, cid, rid, page, queries, qrels, P):
+    """The best any reranker could do over the top-P pool while still sending K.
+
+    Returns **two different numbers, and conflating them is a known trap on this
+    project** (`miss_depth_profile.md` §2 first published a pool figure as a
+    reranker ceiling, and it exceeded the qrels ceiling, which is impossible for
+    anything sending 10 documents): `holds` is what is *in* the pool -- P
+    documents, not deliverable -- while the metrics dict is a perfect selection
+    of K *from* it, which is deliverable and must stay under the qrels ceiling.
+    Cite the delivered one."""
+    holds = np.zeros(len(queries))
+    out = {m: np.zeros(len(queries)) for m in _METRICS}
+    for j, q in enumerate(queries):
+        pool, ids, rids, pages = top[q][:P], cid[q], rid[q], page[q]
+        rel = set(qrels[q])
+        holds[j] = recall_at_k(as_result(q, pool, ids, rids, pages, "pool"), qrels[q], P)
+        # A perfect reranker sends K chunks but is judged on *resolutions*, so it
+        # would never spend a slot on a resolution it already covers: take one
+        # chunk per distinct relevant resolution first, then fill. Sorting
+        # relevant-first WITHOUT this dedup understates the ceiling, which is what
+        # S9 caught -- it must equal min(hits_in_pool, K) / n_relevant.
+        picked, seen = [], set()
+        for pref in (True, False):
+            for i in pool:
+                if len(picked) >= K:
+                    break
+                if rids[i] not in seen and ((rids[i] in rel) == pref):
+                    seen.add(rids[i])
+                    picked.append(i)
+        best = np.array(picked, dtype=np.int64)
+        res = as_result(q, best, ids, rids, pages, "oracle")
+        for m, fn in _METRICS.items():
+            out[m][j] = fn(res, qrels[q])
+    return out, holds
 
 
 def loo_select(scores_P, grid, n_q):
@@ -350,9 +389,45 @@ def main() -> int:
         f"(modal {max(set(picks_B), key=picks_B.count):.2f})",
     ))
 
+    # ---- how much was there to win at all? ---------------------------------
+    # A null cannot be told apart from "the evidence was never reachable"
+    # without this column -- the lesson reranker_pool_source_test.py was built
+    # on. Costs no GPU: pool membership and qrels are all it needs.
+    u_cid_d = {q: u_cid for q in queries}
+    u_rid_d = {q: u_rid for q in queries}
+    u_page_d = {q: u_page for q in queries}
+    orc_r, hold_r, orc_u, hold_u = {}, {}, {}, {}
+    for P in ORACLE_POOLS:
+        orc_r[P], hold_r[P] = oracle_rerank(r_top, r_cid, r_rid, r_page, queries, qrels, P)
+        orc_u[P], hold_u[P] = oracle_rerank(u_top, u_cid_d, u_rid_d, u_page_d, queries, qrels, P)
+
+    checks.append((
+        "S8 at P=K a perfect rerank changes the order but never the set",
+        abs(orc_r[K]["recall@10"].mean() - arm_C["recall@10"].mean()) < 1e-12,
+        f"oracle@P={K} {orc_r[K]['recall@10'].mean():.4f} vs arm C {arm_C['recall@10'].mean():.4f}",
+    ))
+    checks.append((
+        "S9 unrouted oracle reproduces reranker_pool_source_test.md (both columns)",
+        (abs(orc_u[50]["recall@10"].mean() - PUBLISHED_ORACLE["unrouted_p50_delivered"]) < 5e-5
+         and abs(hold_u[50].mean() - PUBLISHED_ORACLE["unrouted_p50_holds"]) < 5e-5) or args.smoke,
+        f"delivered {orc_u[50]['recall@10'].mean():.4f} vs "
+        f"{PUBLISHED_ORACLE['unrouted_p50_delivered']:.4f}; holds {hold_u[50].mean():.4f} vs "
+        f"{PUBLISHED_ORACLE['unrouted_p50_holds']:.4f}" + ("  [smoke: subset]" if args.smoke else ""),
+    ))
+    worst = max(orc_r[P]["recall@10"].mean() for P in ORACLE_POOLS)
+    checks.append((
+        "S10 every DELIVERED oracle row stays under the qrels ceiling",
+        worst <= QRELS_CEILING + 1e-9 or args.smoke,
+        f"ceiling {QRELS_CEILING:.4f}; highest delivered {worst:.4f} "
+        f"(pool-holds rows legitimately exceed it -- they send P, not {K})",
+    ))
+
     if args.smoke:
         for name, ok, detail in checks:
             print(f"[{'PASS' if ok else 'FAIL'}] {name} -- {detail}")
+        for P in ORACLE_POOLS:
+            print(f"  P={P:>3}  routed holds {hold_r[P].mean():.4f}  "
+                  f"delivered {orc_r[P]['recall@10'].mean():.4f}")
         for wi, w in enumerate(grid):
             print(f"  w={w:.2f}  routed {routed_scores[P_REGISTERED]['recall@10'][wi].mean():.4f}"
                   f"  unrouted {unrouted_scores[P_REGISTERED]['recall@10'][wi].mean():.4f}")
@@ -428,6 +503,38 @@ def main() -> int:
                f"{routed_scores[P]['mrr'][wi].mean():.4f} | "
                f"{routed_scores[P]['ndcg@10'][wi].mean():.4f} | {tag} |")
         w_()
+
+    w_("## มีอะไรให้ได้อยู่จริงมั้ย — เพดานของการ rerank บน routed pool")
+    w_()
+    w_("ผลไม่มีนัยสำคัญข้างบนยังแยกไม่ออกระหว่าง **“reranker ตัวนี้อ่อน”** กับ ")
+    w_("**“ไม่เหลืออะไรให้ได้แล้ว”** — คอลัมน์ oracle คือสิ่งที่แยกสองอย่างนี้ออกจากกัน ")
+    w_("(บทเรียนจาก `reranker_pool_source_test.py`)")
+    w_()
+    w_(f"**สองคอลัมน์นี้ต่างกัน และการสับสนคือกับดักที่เคยเกิดแล้ว**: `pool มี` คือของที่ "
+       f"*อยู่ใน* pool (ส่ง P ใบ — **ส่งมอบไม่ได้**) ส่วน `oracle ส่งมอบ` คือการเลือก {K} ใบ "
+       f"ที่ดีที่สุด*จาก* pool (ส่งมอบได้ และต้องอยู่ใต้เพดาน qrels {QRELS_CEILING:.4f}) — "
+       f"**อ้างอิงตัวส่งมอบเท่านั้น**")
+    w_()
+    w_(f"นิยาม oracle ที่ส่งมอบ = `min(จำนวน resolution ที่เกี่ยวข้องซึ่งมี chunk อยู่ใน pool, {K}) / "
+       f"จำนวน resolution ที่เกี่ยวข้องทั้งหมด` — **ต้องตัด chunk ซ้ำ resolution ออกก่อน** เพราะ "
+       f"หลาย chunk มาจากเอกสารเดียวกัน และ reranker ที่สมบูรณ์แบบจะไม่เปลืองช่องให้เอกสารที่หยิบไปแล้ว "
+       f"(เรียงตามความเกี่ยวข้องเฉย ๆ โดยไม่ตัดซ้ำ จะได้เพดาน**ต่ำกว่าจริง** — S9 จับข้อผิดพลาดนี้ได้)")
+    w_()
+    w_(f"| P | routed: pool มี | routed: oracle ส่งมอบ | เหนือ arm C | unrouted: oracle ส่งมอบ |")
+    w_("|---|---|---|---|---|")
+    for P in ORACLE_POOLS:
+        d = orc_r[P]["recall@10"].mean()
+        tag = " (= arm C ตามโครงสร้าง)" if P == K else ""
+        w_(f"| {P} | {hold_r[P].mean():.4f} | **{d:.4f}**{tag} | "
+           f"{d - arm_C['recall@10'].mean():+.4f} | {orc_u[P]['recall@10'].mean():.4f} |")
+    w_()
+    gap50 = orc_r[P_REGISTERED]["recall@10"].mean() - arm_C["recall@10"].mean()
+    got = arm_D["recall@10"].mean() - arm_C["recall@10"].mean()
+    w_(f"ที่ P={P_REGISTERED}: reranker ที่สมบูรณ์แบบจะได้ **{gap50:+.4f}** เหนือ router "
+       f"ขณะที่ตัวจริงได้ **{got:+.4f}** — คิดเป็น **{100*got/gap50:.0f}%** ของเพดาน "
+       f"(เทียบกับฝั่งไม่มี routing ที่ oracle ได้ "
+       f"{orc_u[P_REGISTERED]['recall@10'].mean() - arm_A['recall@10'].mean():+.4f})")
+    w_()
 
     w_(f"## แยกตาม route (P={P_REGISTERED}, recall@{K})")
     w_()
