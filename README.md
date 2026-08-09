@@ -95,6 +95,7 @@ chunker ที่เลือก แต่ `resolution_id` คงที่เส
 │   ├── eval-validity-threats.md              # power / pooling bias / circularity
 │   ├── rq4-design.md                         # การออกแบบ + build log ของ RQ4
 │   ├── pipeline-invariant-audit.md           # รายงาน 25 invariant ล่าสุด
+│   ├── doc-claims-audit.md                   # รายงานการตรวจ prose เทียบรายงาน (ตระกูล D)
 │   ├── llm-ocr-scan-log.md                   # การตรวจ + ซ่อม OCR ทั้งสองกลไก
 │   ├── entity-extraction-and-gold-eval-log.md  # tagger 4 ชนิด + การสร้าง Gold set
 │   ├── PRD-indexing-retrieval-framework.md   # แผนเดิม (ไทย) — เอกสารประวัติศาสตร์
@@ -137,6 +138,11 @@ Google Drive (ใช้เพื่อ provenance ไม่ใช่เนื้
 คอร์ปัสผ่านการซ่อม OCR มาแล้วสองกลไก (รวม ~2,750 หน้าที่เขียนกลับ) และผ่านการตรวจ
 invariant 25 ข้อด้วย `tools/eval/audit_pipeline_invariants.py` — รันสคริปต์นี้ก่อนเชื่อ
 ตัวเลข eval ใดๆ หลังแตะคอร์ปัสหรือ manifest
+
+ชั้นถัดขึ้นมาคือ **prose**: `tools/eval/audit_doc_claims.py` ตรวจว่าทุกตัวเลข 4 ตำแหน่ง
+ใน `CLAUDE.md`/`docs/paper-results-summary.md` หาเจอในรายงานสักฉบับ, รายงานไม่เก่ากว่า
+สคริปต์ที่สร้างมัน และรายงานทุกฉบับประกาศว่าใครสร้าง — รันหลังแก้สองเอกสารนั้น
+และหลัง eval refresh ทุกครั้ง (รายงาน: `docs/doc-claims-audit.md`)
 
 ## เริ่มต้นใช้งาน
 

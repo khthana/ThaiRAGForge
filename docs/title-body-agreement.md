@@ -145,7 +145,9 @@ Verification, in the order it was run:
    own — called "never-fetched" here on 08-08, corrected 08-09 — and 1 generic
    container title). Median 1.000 unchanged, mean 0.896 → 0.898.
 7. `audit_doc_claims.py` — 3 pass / 2 warn / 0 fail, both warns the known
-   by-design ones.
+   by-design ones. (A gate reading *as of this repair*, 2026-08-08. It is
+   **5 pass / 1 warn / 0 fail** since 2026-08-09, when `D1b` was closed and
+   `D1c` added — nothing about this repair moved, the check family grew.)
 
 **Two lessons this repair produced, both now encoded in code rather than prose.**
 

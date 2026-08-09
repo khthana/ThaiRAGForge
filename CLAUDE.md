@@ -1346,7 +1346,8 @@ see `docs/adr/`.
   carries them (9/9, 12/12, 16/16, 12/12 chunks). Post-repair gates:
   `audit_resolution_ids.py` unchanged, invariants **24/0/1** (the then-known
   `BuildCombo.id` FAIL, closed 2026-08-09 by `E0`), `E3a` 0 of 23,156,
-  doc-claims 3/2/0. This section used to
+  doc-claims 3/2/0 (**5/1/0** since `D1b` closed and `D1c` landed 2026-08-09 —
+  the family grew, nothing here moved). This section used to
   end "the CHECO re-download now owes **3 URLs, not 1**"; **that was wrong in both
   directions and is withdrawn** — see the next bullet.
 - **Agenda items with no document of their own
