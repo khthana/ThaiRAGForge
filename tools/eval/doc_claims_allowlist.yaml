@@ -35,3 +35,24 @@ inputs:
       pinned as a regression guard by
       tests/retrievers/test_hybrid_retriever.py. The report's numbers are
       therefore unchanged by construction, not merely unaffected in practice.
+
+  - src: src/rag_lab/retrievers/hybrid.py
+    report: hybrid_alpha_sweep.md
+    checked: 2026-08-09
+    reason: >-
+      The 2026-08-09 edit added the `fetch_depth` knob. Its default is None,
+      which computes `depth = len(index.chunks)` -- literally the k=n expression
+      the old code passed -- so the shipped path is unchanged by construction,
+      and tests/retrievers/test_hybrid_retriever.py::
+      test_fetch_depth_none_is_identical_to_fetching_the_whole_corpus pins it.
+      No script outside tools/eval/hybrid_fetch_depth_sweep.py ever sets the
+      parameter (grepped 2026-08-09), so no other report can read a truncated
+      fusion.
+
+  - src: src/rag_lab/retrievers/hybrid.py
+    report: soft_vs_hard_routing.md
+    checked: 2026-08-09
+    reason: >-
+      Same 2026-08-09 `fetch_depth` edit as the entry above; same reason. This
+      report re-fuses through HybridRetriever at the default, so it sees the
+      k=n path unchanged.

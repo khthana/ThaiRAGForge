@@ -2412,6 +2412,54 @@ section above for the current numbers and the full explanation, including
 why the "top single combo" claim this section originally resolved no longer
 holds as stated.
 
+### Hybrid fetch depth — how much of the over-fetch is removable, and at what cost
+
+*(2026-08-09, `tools/eval/hybrid_fetch_depth_sweep.py` →
+`data/results/hybrid_fetch_depth_sweep.md`; 36 combos × 106 queries = 3,816
+(combo, query) pairs, n = 57,174–74,816 chunks, k = 10.)*
+
+`HybridRetriever` asks both arms for a ranking over the whole corpus and keeps
+10. With the `BM25Okapi` rebuild memoised away (see the cost/latency section
+above), that over-fetch is what remains of the per-query overhead. **It is not
+free to cut**: a chunk inside dense's top-F but past BM25's cut loses its BM25
+term outright rather than earning a small one, so truncation changes the
+ranking rather than approximating it.
+
+| F | top-10 identical (order) | identical as a set | recall@10 | Δ vs k=n |
+|---|---|---|---|---|
+| 50 | 31.16% | 34.75% | 0.5104 | −0.0100 |
+| 100 | 46.78% | 51.62% | 0.5167 | −0.0037 |
+| 200 | 56.29% | 62.71% | 0.5171 | −0.0033 |
+| 500 | 64.26% | 74.19% | 0.5185 | −0.0018 |
+| 1,000 | 70.02% | 82.86% | 0.5177 | −0.0026 |
+| 10,000 | 88.00% | 96.67% | 0.5199 | −0.0005 |
+| n | 100% | 100% | 0.5204 | — |
+
+**The two questions have opposite answers.** *Is the ranking preserved?* — only
+at F=n; even fetching 10,000 candidates reproduces just 88.00% of top-10s in
+order. *Does it cost anything?* — almost nothing from F=100 up, and the loss is
+**non-monotonic** (F=500's −0.0018 beats F=1,000's −0.0026), because a larger F
+raises different chunks' fused scores at different rates. Note this recall@10 is
+a **macro average over all 36 combos** — a damage-size indicator, not a system
+result.
+
+Damage lands where this project's RRF rule predicts: the worst-hit combos are
+the weak arms (`semantic × e5_small` −0.0595 at F=50, `recursive × bge_m3`
+−0.0224 at F=200, `sentence × sct` −0.0145 at F=1,000). Per entity type,
+**`person` is the only one that *gains* from truncation** (+0.0212 at F=50),
+consistent with BM25 carrying `person` (0.8147) while the cut removes a weak
+dense arm's long tail.
+
+**Latency** (paired, one process, one loaded index, arms alternated per query,
+BM25 scorer pre-warmed; `plain__sentence__qwen3__ff8f6c49`, 106 queries):
+k=n p50 **1089.5 ms** → F=1,000 **421.0 ms** → F=200 **417.9 ms**. So the
+over-fetch is ~62% of hybrid query time, and the ~0.42 s that remains is real
+scoring work (dense encode + gemv + BM25 `get_scores`) that no depth cut
+touches. The trade on offer is ≈0.67 s/query for −0.0033 macro recall@10 at
+F=200. **Nothing is wired — the shipped default is still k=n**, and the knob's
+default (`fetch_depth=None`) computes `depth = len(index.chunks)`, i.e. the
+old expression exactly, so no published number moves.
+
 ## Open items (not yet done, needed before the numbers above are "final")
 
 1. ~~Per-chunker point comparison of BM25 vs. embedder (not averaged across
@@ -2475,6 +2523,11 @@ holds as stated.
    ~2.2x for the most expensive embedder up to ~3.5x for the cheapest,
    purely because the same fixed overhead is divided by very different
    intrinsic baselines — the additive number is the real story.
+   **The second is now measured but deliberately not fixed** (2026-08-09,
+   see "Hybrid fetch depth" above): capping the fetch at F=200 removes
+   ≈0.67s/query but costs −0.0033 macro recall@10 and changes 43% of
+   top-10 orderings, so it is a cost/quality trade for the deployer, not a
+   defect to silently repair. The shipped default remains k=n.
 4. ~~MAP + Precision@k + multi-k (1/3/5/10)~~ — DONE 2026-07-21:
    `precision_at_k` and `average_precision_at_k` added to
    `src/rag_lab/metrics.py`, `evaluate()` now accepts a list of k's and

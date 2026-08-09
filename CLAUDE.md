@@ -571,6 +571,45 @@ see `docs/adr/`.
   current (dense p50 120-840 ms, hybrid p50 1.21-1.86s). `docs/paper-results-summary.md` was
   updated with it, so its old split provenance (07-29 latency / 08-07 quality) no longer applies
   to the latency half.
+  **The over-fetch is now MEASURED, and it is a quality/latency trade rather than an
+  optimisation (2026-08-09, `tools/eval/hybrid_fetch_depth_sweep.py` →
+  `data/results/hybrid_fetch_depth_sweep.md`).** `HybridRetriever` gained a `fetch_depth`
+  knob whose default `None` computes `depth = len(index.chunks)` — literally the old k=n
+  expression, so every published hybrid number is reproduced *by construction* and
+  `tests/retrievers/test_hybrid_retriever.py` pins it; the sweep runs F ∈ {10 … 10,000, n}
+  over 36 combos × 106 queries = 3,816 pairs. **The two questions have opposite answers, and
+  that is the finding.** *Is the ranking the same?* — only at F=n: **F=10,000 reproduces just
+  88.00%** of top-10s in order (96.67% as a set) and F=1,000 only 70.02%. The pre-registered
+  guess "F=1000 will be identical" was **wrong**, recorded as such. *Does it matter?* —
+  barely: macro recall@10 across the 36 combos is 0.5204 at k=n, **0.5167 at F=100
+  (−0.0037)** and **0.5171 at F=200 (−0.0033)**, and it is **non-monotonic** (F=500's −0.0018
+  is better than F=1,000's −0.0026) because truncation lifts different chunks' scores at
+  different rates as F grows. Mechanism worth keeping: a chunk inside dense's top-F but past
+  BM25's cut loses its BM25 term **outright**, not by a little — that is why this is not an
+  approximation that merely loses precision. Damage concentrates exactly where this project's
+  RRF rule predicts (worst combo at F=50 `semantic × e5_small` −0.0595, at F=200
+  `recursive × bge_m3` −0.0224, at F=1,000 `sentence × sct` −0.0145), and **`person` queries
+  *gain* at F=50 (+0.0212)** — the only entity_type that does, consistent with BM25 carrying
+  `person` (0.8147) while the cut deletes a weak dense arm's tail. **Timing (paired, one
+  process, one loaded index, arms alternated per query, BM25 scorer pre-warmed so its one-off
+  build lands in neither arm, `plain__sentence__qwen3__ff8f6c49`): k=n p50 1089.5 ms → F=200
+  **417.9 ms** (−0.672 s, 2.6x), F=1,000 421.0 ms.** So the over-fetch is **~62% of hybrid
+  query time**, and the ~0.42 s left is real scoring work (dense encode + gemv + `get_scores`)
+  that no depth cut can touch — **do not read the earlier "the remaining ~1.36s is the k=n
+  over-fetch" as all removable**; that sentence bundled the residual in. **Nothing is wired:
+  the shipped default stays k=n.** The trade on the table is ~0.67 s/query for −0.0033 macro
+  recall@10 at F=200 — a *cost* decision of the same shape as soft-vs-hard routing, and it
+  would need re-measuring against the hard router (which now ships) before adoption, since
+  that macro figure is an average over a whole combo family, not a system result. Two method
+  notes: the sweep replicates the **truncated** tie-break (the fusion dict is filled
+  `dense[:F]` first, then the BM25-only remainder in BM25 rank order, so equal RRF scores stay
+  dense-first — the same trap `miss_depth_profile.py` documents at full depth), and **S5
+  checks the numpy fusion against a real `HybridRetriever(fetch_depth=F)`**, added because the
+  first version anchored only F=n, where the mechanism under test is inert and the check would
+  have passed identically had `fuse_at_depth` ignored F. The `weighted` branch truncates too
+  (a cut chunk's normalised score reads 0, a harsher approximation) and is **unmeasured**.
+  Everything the report renders is cached in `hybrid_fetch_depth_raw.json`, so `--render`
+  reproduces it without a GPU.
   **Refreshed 2026-07-29** against the OCR-remediation-rebuilt indices: latency/cost mechanics
   came back essentially unchanged (confirms these measure model/index/corpus-size mechanics, not
   corpus content), but the recall@10 columns in the report dropped substantially like every other

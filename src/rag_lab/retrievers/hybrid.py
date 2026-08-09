@@ -26,7 +26,16 @@ class HybridRetriever(BaseRetriever):
     not reorder anything) -- which means every hybrid number this project has
     published is reproduced exactly at 0.5, and an alpha sweep isolates the
     weight rather than confounding it with a switch from rank fusion to score
-    fusion. See tools/eval/hybrid_alpha_sweep.py."""
+    fusion. See tools/eval/hybrid_alpha_sweep.py.
+
+    `fetch_depth` caps how many chunks each arm returns before fusion. The
+    default `None` means the whole corpus, so RRF sees complete rankings and
+    every published hybrid number is reproduced exactly. Setting it is a real
+    change to the result, not an optimisation: a chunk inside dense's top-F but
+    past BM25's cut loses its BM25 term outright rather than earning a small
+    one. tools/eval/hybrid_fetch_depth_sweep.py measures how deep is deep enough
+    (rrf method only -- under `weighted` a truncated chunk's score is likewise
+    read as 0, which is a harsher approximation and is unmeasured)."""
 
     def __init__(
         self,
@@ -34,11 +43,13 @@ class HybridRetriever(BaseRetriever):
         rrf_k: int = 60,
         dense_weight: float = 0.5,
         bm25_weight: float = 0.5,
+        fetch_depth: int | None = None,
     ) -> None:
         self.method = method
         self.rrf_k = rrf_k
         self.dense_weight = dense_weight
         self.bm25_weight = bm25_weight
+        self.fetch_depth = fetch_depth
         self._dense = DenseRetriever()
         self._bm25 = BM25Retriever()
 
@@ -48,8 +59,9 @@ class HybridRetriever(BaseRetriever):
 
     def retrieve(self, query: Query, index: Index, k: int) -> list[RankedChunk]:
         n = len(index.chunks)
-        dense = self._dense.retrieve(query, index, n)
-        bm25 = self._bm25.retrieve(query, index, n)
+        depth = n if self.fetch_depth is None else min(self.fetch_depth, n)
+        dense = self._dense.retrieve(query, index, depth)
+        bm25 = self._bm25.retrieve(query, index, depth)
         by_id = {r.chunk_id: r for r in dense}
         by_id.update({r.chunk_id: r for r in bm25})
 
