@@ -330,6 +330,63 @@ direction. This is the mirror image of §2: there, ties were only citable once
 the MDE was known; here, *differences* are only citable once the reproducibility
 floor is known.
 
+## 9. Query anchor vs qrels key — measured 2026-08-09, confined to `course`
+
+Added after `data/results/oracle_union_ceiling.md` surfaced the one query in the
+set scoring 0.000 under the union of all 36 systems.
+
+**The threat, correctly stated.** It arrived as "self-contradicting qrels" and
+that is not what it is. `tools/eval/audit_gold_anchor_ambiguity.py` rebuilds
+every `course` query's qrels from the code tags and reproduces them **33 of 33**;
+the two courses involved (`01046707` `CONTROL SYSTEM`, `01306023` `CONTROL
+SYSTEMS`) are genuinely different courses. Nothing is mislabelled. The real
+threat is that **`course` is the only entity type whose qrels key is not the
+thing its query supplies**: relevance is judged on the 8-digit code (via
+`courses_by_file.json`) while the query gives the course *name*. `program`,
+`person` and `faculty_adjunct_aggregate` judge on exactly the string the query
+provides, so **73 of the 106 queries are unexposed by construction** — a
+denominator, not an estimate.
+
+**Measured.** *Anchor precision* = `gold ∩ naming / naming`, where `naming` is
+every corpus file containing the query's course name as a standalone phrase
+(same boundary rule as `match_courses_by_name`):
+
+| | queries |
+|---|---|
+| exposed to this threat (`course`) | 33 of 106 |
+| anchor precision < 0.5 | **3 of 33** (0.123 / 0.200 / 0.421) |
+| gold documents that never spell the name | 4 of 33 queries |
+| gold name is a sub-phrase of another course's name | 5 of 33 |
+
+**Two mechanisms, deliberately not merged.** *Ambiguous name*: other courses'
+documents show the query's anchor text, so the evidence is all present in the
+right documents but competes with many wrong ones (`CONTROL SYSTEMS`: 8 relevant
+among 65 naming documents). *Silent name*: a gold document tagged by code that
+never spells the name, which no word-matching system can reach at any depth.
+Dropping queries fixes neither, and only the first is what the 0.000 row is.
+
+**Two earlier claims are withdrawn by this measurement**, both of which had
+already been published: that the query is *unanswerable by construction* (false —
+all 8 of its gold documents literally contain the phrase, so it is answerable in
+principle, just not by name matching alone), and consequently that those 8 pairs
+are a labelling artifact to be subtracted from the oracle-union floor (so the
+floor is **84, not 76**).
+
+**What was done, and what was declined.** Repair by deletion was priced before
+being rejected: dropping the 0.000 query moves macro recall@10 **+0.0050** and
+dropping all three flagged queries **+0.0113** — *upward*, because the dropped
+queries are the low-scoring ones. The cost is therefore not the size of the delta
+but re-running and re-copying every table and every "106 queries" claim in the
+project. Nothing was dropped. Instead `tools/corpus_prep/build_gold_candidates.py`
+now annotates every course candidate with `anchor_status` ∈
+`ok` / `ambiguous` / `no_name_evidence` (414 / 66 / 198 of 678), so a future gold
+set is built with the flag visible rather than discovered afterwards.
+
+**What is owed in the paper.** State the key-mismatch as a scoped limitation of
+the `course` subset (33 of 106), report that 3 of those 33 have most of their
+anchor-naming documents judged irrelevant, and do not describe any query in this
+set as unanswerable.
+
 ## Summary of what changes in the paper
 
 | threat | status | action |
@@ -342,3 +399,4 @@ floor is known.
 | query provenance | fine, needs stating | describe the chain; keep thematic separate |
 | external validity | inherent | declare as scope |
 | generator non-determinism (RQ4) | **measured 2026-08-07** | report the reproducibility floor (88% / 58% identical citation sets at temperature 0) alongside RQ4's numbers; call the 4 borderline `sentence_cap` flips inconclusive rather than reversed |
+| query anchor vs qrels key | **measured 2026-08-09**, scoped to `course` (33 of 106) | state the key mismatch and the 3 flagged queries as a scoped limitation; never call a query unanswerable; cite the oracle-union floor as 84, not 76 |

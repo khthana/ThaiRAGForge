@@ -2,8 +2,12 @@
 
 `oracle_union_ceiling.py` (task #16) established that unioning the top-10 of
 every live combo across all three retrieval paths still leaves 84 (query,
-resolution) pairs unfound -- 76 after removing the CONTROL SYSTEM(S) labelling
-artifact. That report could not say *why*, because persisted results store rank
+resolution) pairs unfound. (This line used to read "76 after removing the
+CONTROL SYSTEM(S) labelling artifact"; `audit_gold_anchor_ambiguity.py`
+refuted that premise on 2026-08-09 -- the qrels reproduce exactly and every one
+of those 8 pairs' gold documents does contain the queried phrase -- so the
+subtraction is withdrawn and the floor is 84. This script always counted all
+84; only the docstring was wrong.) That report could not say *why*, because persisted results store rank
 <= 10 only: a pair sitting at rank 11 and a pair no system ranks at all look
 identical from there. The distinction decides what is worth building. Rank 11-50
 is a **reranking** problem (the evidence is in the candidate pool, just ordered
