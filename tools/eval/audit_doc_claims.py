@@ -75,6 +75,7 @@ ARTIFACT_GLOBS = ["data/results/**/*.md"]
 ARTIFACT_FILES = [
     Path("docs/pipeline-invariant-audit.md"),
     Path("docs/title-body-agreement.md"),
+    Path("docs/relation-graph.md"),
 ]
 
 # A 4-decimal figure is this project's universal format for a metric, an effect

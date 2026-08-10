@@ -151,27 +151,49 @@ def _normalize_title(raw: str) -> str:
     return f"{abbr_rank}ดร." if has_dr else abbr_rank
 
 
-def match_people(text: str) -> list[dict[str, str]]:
-    """Every titled academic person mentioned in `text`: rank normalized to
-    its abbreviated form, given name, and surname -- deduped (the same
-    person is routinely mentioned more than once: a committee list, then
-    again in prose) and sorted for determinism."""
-    found: set[tuple[str, str, str]] = set()
+def _person(title: str, given: str, surname: str) -> dict[str, str]:
+    return {
+        "title": title,
+        "given_name": given,
+        "surname": surname,
+        "full_name": f"{title}{given} {surname}",
+    }
+
+
+def find_people(text: str) -> list[tuple[int, int, dict[str, str]]]:
+    """Every person *occurrence* in `text` as (start, end, person), in the
+    order they appear -- the same matches match_people reports, before it
+    dedupes and sorts them away.
+
+    Exists because a relation needs position: "the person named immediately
+    before this สังกัด marker" (tools/corpus_prep/build_relation_graph.py)
+    cannot be answered from a deduped, alphabetically sorted set. Kept as the
+    one implementation both callers share rather than letting the graph
+    builder re-derive the patterns -- two copies of _TITLE would drift, and
+    the fixes those patterns carry (the bare "อ." rank, the cross-cell split
+    name) were each found the hard way.
+    """
+    hits: list[tuple[int, int, dict[str, str]]] = []
     for pattern in (_TITLED_NAME, _TITLED_NAME_CROSS_CELL):
         for m in pattern.finditer(text):
             given = m.group(2)
             if given in _NOT_A_NAME:
                 continue
-            found.add((_normalize_title(m.group(1)), given, m.group(3)))
-    return [
-        {
-            "title": title,
-            "given_name": given,
-            "surname": surname,
-            "full_name": f"{title}{given} {surname}",
-        }
-        for title, given, surname in sorted(found)
-    ]
+            hits.append(
+                (m.start(), m.end(), _person(_normalize_title(m.group(1)), given, m.group(3)))
+            )
+    return sorted(hits, key=lambda h: h[0])
+
+
+def match_people(text: str) -> list[dict[str, str]]:
+    """Every titled academic person mentioned in `text`: rank normalized to
+    its abbreviated form, given name, and surname -- deduped (the same
+    person is routinely mentioned more than once: a committee list, then
+    again in prose) and sorted for determinism."""
+    found = {
+        (p["title"], p["given_name"], p["surname"]) for _, _, p in find_people(text)
+    }
+    return [_person(*key) for key in sorted(found)]
 
 
 @lru_cache(maxsize=1)

@@ -5,7 +5,11 @@ from __future__ import annotations
 
 from rag_lab.config import StrategySpec
 from rag_lab.factory import build_loader
-from rag_lab.loaders.person_loader import match_people, match_people_by_dictionary
+from rag_lab.loaders.person_loader import (
+    find_people,
+    match_people,
+    match_people_by_dictionary,
+)
 
 _PEOPLE_DICT = [
     {
@@ -287,3 +291,42 @@ class TestPersonLoaderIntegration:
         res = build_loader(StrategySpec(type="person")).load(str(doc))
 
         assert res.metadata["people"] == []
+
+
+class TestFindPeopleSpans:
+    """find_people is what match_people is now built on: the same matches,
+    with position, before the dedupe/sort. The relation graph needs position
+    (person->faculty is 'the name immediately before this สังกัด marker'),
+    and a second copy of the rank patterns would drift away from this one."""
+
+    _TEXT = (
+        "ที่ประชุมรับทราบ ผศ.ดร.สมชาย ใจดี (สังกัดคณะวิทยาศาสตร์) และ "
+        "อ.สมหญิง รักเรียน (สังกัดคณะครุศาสตร์อุตสาหกรรมและเทคโนโลยี) "
+        "โดย ผศ.ดร.สมชาย ใจดี เป็นประธาน"
+    )
+
+    def test_reports_every_occurrence_in_text_order(self):
+        hits = find_people(self._TEXT)
+        assert [p["full_name"] for _, _, p in hits] == [
+            "ผศ.ดร.สมชาย ใจดี",
+            "อ.สมหญิง รักเรียน",
+            "ผศ.ดร.สมชาย ใจดี",
+        ]
+        # strictly increasing starts -- callers pick "the nearest one before
+        # position X", which is only meaningful if the order is positional
+        starts = [s for s, _, _ in hits]
+        assert starts == sorted(starts)
+
+    def test_spans_point_at_the_name_itself(self):
+        start, end, person = find_people(self._TEXT)[0]
+        assert self._TEXT[start:end] == "ผศ.ดร.สมชาย ใจดี"
+        assert person["full_name"] == "ผศ.ดร.สมชาย ใจดี"
+
+    def test_match_people_is_the_deduped_sorted_view_of_it(self):
+        # Pins the refactor: match_people's contract (deduped, sorted, no
+        # positions) is unchanged, and the two can never disagree about who
+        # is in a document because one is derived from the other.
+        assert match_people(self._TEXT) == sorted(
+            {p["full_name"]: p for _, _, p in find_people(self._TEXT)}.values(),
+            key=lambda p: (p["title"], p["given_name"], p["surname"]),
+        )

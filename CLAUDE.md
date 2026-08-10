@@ -294,6 +294,65 @@ see `docs/adr/`.
   `entity_lookup`/`entity_boost` in the UI — both fixes above are reflected
   as of the 2026-07-28 rebuild (refreshed again 2026-08-05 to pick up the
   `resolution_id` fix below, since that index predated it).
+- **Simple relation graph (`tools/corpus_prep/build_relation_graph.py` →
+  `data/graph/relations.json` + `docs/relation-graph.md`, 2026-08-10)** — the two
+  edges that need no new model, no GPU and no new dictionary: **A**
+  `program —belongs_to→ faculty` and **A′** `person —affiliated_with→ faculty`
+  (the inline `(สังกัดคณะX)` shape). Edges B (`person→responsible_for→program`)
+  and C (`person→replaces→person`) are deliberately out of scope. **No gold query
+  in either set is multi-hop, so this is a capability the current eval is
+  structurally unable to score — no retrieval gain may be claimed**, and every
+  denominator is an entity *dictionary*, itself a curated subset, so read the
+  coverage as "of what was found". Tags are recomputed from the tested matchers
+  rather than read from `academic_resolutions/entity_tags/*_by_file.json`, which
+  are dated 2026-07-17..25 and predate the person-loader fixes, the 07-28 OCR
+  remediation, the 08-08 title repair and the 08-09 re-OCR — building on them
+  would be this project's signature two-artifacts-from-different-days failure.
+  One corpus walk (~22 min, 2,854 files) caches its evidence to
+  `data/results/relation_graph_raw.json` so `--render` re-derives graph and report
+  free. **Edge A: 170 of 253 programs resolved, 60 ambiguous, 23 no_evidence**
+  — and the `ambiguous` bucket is **not one thing**: only **9** have two faculties
+  genuinely pointing at each other, the other **51** have a single faculty with
+  fewer witnesses than `min_votes=2`. Two distinct causes underneath, and the
+  first is the important one: **`program → faculty` is not a function** —
+  `วิศวกรรมเครื่องกล` really is offered by both `คณะวิศวกรรมศาสตร์` and
+  `วิทยาเขตชุมพรเขตรอุดมศักดิ์` (23 vs 20 votes), so any graph forcing one faculty
+  per program is wrong for that group by construction. The second is a matcher
+  finding worth its own ticket: **`match_programs` has no "matches nothing" exit
+  for a near-miss**, so a corpus name absent from the dictionary is absorbed by
+  its nearest neighbour — `หลักสูตรทันตแพทยศาสตรบัณฑิต` *and*
+  `หลักสูตรพยาบาลศาสตรบัณฑิต` both match `หลักสูตรแพทยศาสตรบัณฑิต`, which accounts
+  for that whole ambiguous row. Scope was **measured, not guessed**: 0 of 253
+  dictionary names collide with each other, so the collision is only with names
+  outside it. **Not fixed here** — `match_programs` is also read by
+  `build_gold_candidates.py` and `router`, so moving the threshold would move
+  published numbers. **Edge A′ is ~7x smaller than the scan note claimed and the
+  note is corrected**: `สังกัดคณะ` was recorded as appearing in "1,465 files
+  (51%)"; direct counting over the 2,854 live files gives `สังกัด` in **209**
+  files and `สังกัดคณะ` in **73**, and no alternative anchor supplies a larger
+  person→faculty source (`จากคณะ` 1,083 is `คณะกรรมการ` boilerplate). Anchored
+  extraction accepts 206 of 435 marker occurrences, attaches a person to 71, and
+  yields **66 people with an edge across 86 files (3.0%)**. **Read its
+  `resolved` 100% as "nothing contradicts it", not as quality** — 62 of 66 rest
+  on a single witness. **The finding that matters more than the count is what the
+  marker *means*, and it was measured rather than assumed**: the parenthetical is
+  written **100% of the time (64 of 64 determinable) for a person from a
+  *different* faculty than the document's own**, i.e. it is a cross-appointment
+  disambiguator. So A′ is a **biased** sample of people, and deriving
+  person→faculty from plain document co-occurrence the way edge A does would be
+  wrong *with a direction*, not merely noisy. Two independent cross-checks on A,
+  reported and never gated: manifest title vs OCR'd body agree on 158 of 169
+  programs both can name (two independent text sources — typed vs scanned), and a
+  split-half over disjoint document sets agrees on 103 of 112. Four self-checks
+  (S1 every faculty node is canonical, S2 `no_evidence` stays *undefined* rather
+  than a low score, S3 a window-extracted faculty must also appear in the
+  document's own tags, S4 every A′ name must be one `find_people` found in that
+  same file) all pass; **S1 first reported a false FAIL from operator precedence**
+  (`{a} | {b} - dict` parses as `{a} | ({b} - dict)`), and **S2's first version was
+  vacuous** because the graph is built by iterating the dictionary, so "the buckets
+  add up" was true by construction — it now gates on the buckets staying
+  *distinguishable*. `docs/relation-graph.md` is in `audit_doc_claims.py`'s
+  `ARTIFACT_FILES` so its figures can be cited in prose.
 - **Query routing** (`src/rag_lab/router.py`'s `classify_query` + `ROUTE_COMBO`,
   driven by `query_service.route_query`): classify a query by shape and retrieve
   against that route's index only. Validated offline by `tools/eval/routing_eval.py`
