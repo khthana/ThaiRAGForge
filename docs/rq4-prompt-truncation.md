@@ -122,7 +122,19 @@ prose, the phi4 tokenizer's worst case) to **3.151** (English course-code compar
 tables). One 15,915-character `entity_boost` prompt is only 5,051 tokens.
 
 So: screen with the **minimum** ratio (which can only over-select), then measure everything
-above the line **exactly** with ollama's own `prompt_eval_count`. 742 (arm, query) pairs
+above the line **exactly** with ollama's own `prompt_eval_count`.
+
+**The first `preflight()` got this wrong, and the entity arms are what exposed it
+(2026-08-10).** It measured the single longest prompt *in characters* and cleared the whole
+run on that one reading. But the longest-by-characters prompt need not be the longest in
+tokens, and on these arms it is not close: `entity_boost/q090` is 15,689 chars / **4,860
+tokens**, while the arm's true worst is **14,721 tokens**. At `num_ctx=8192` the old screen
+would have measured 4,860, declared "fits", and started a run in which ~45-50% of prompts
+were truncated -- the exact failure the pre-flight exists to prevent, passed by its own
+check. It now screens on the **upper bound** `chars / 1.046`: every prompt whose bound fits
+is provably safe and is never probed, and only prompts that *could* exceed `num_ctx` get a
+forward pass, largest first. When nothing can exceed it the run clears without touching the
+GPU. `tests/tools/test_rq4_prompt_truncation.py` pins the bound in both directions. 742 (arm, query) pairs
 reduce to 199 candidates that way, and one measurement per pair suffices because the three
 variants differ only in the rules block — borderline pairs get all three measured.
 

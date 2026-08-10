@@ -156,40 +156,75 @@ def truncated_to(num_ctx: int) -> int:
     return num_ctx // 2 + 2
 
 
-def preflight(model: str, arms: list[str], variant: str, num_ctx: int) -> None:
-    """Refuse to start if the longest prompt does not fit `num_ctx`.
+# Lowest chars/token seen across this corpus's prompts (Thai prose; English
+# course tables run to 3.151). Dividing a character count by this can only
+# OVER-estimate a prompt's token count, which is the direction a safety screen
+# needs. Measured, see docs/rq4-prompt-truncation.md section 5.
+MIN_CHARS_PER_TOKEN = 1.046
+
+
+def token_upper_bound(n_chars: int) -> int:
+    """Most tokens a prompt of `n_chars` characters can possibly tokenize to."""
+    return int(n_chars / MIN_CHARS_PER_TOKEN) + 1
+
+
+def preflight(model: str, arms: list[str], variant: str, num_ctx: int,
+              max_probes: int = 5) -> None:
+    """Refuse to start if any prompt does not fit `num_ctx`.
 
     The old `--num-ctx` help already *said* it must exceed the longest prompt.
     Nothing checked, and the default 8192 was in fact exceeded by prompts up to
     ~14.7k tokens, so every long prompt lost its highest-ranked documents (the
-    cut keeps the tail, and blocks are laid out best-first). One forward pass
-    on the single longest prompt turns that assertion into a measurement, and
-    it costs one query out of ~530.
+    cut keeps the tail, and blocks are laid out best-first).
+
+    **Screen by an upper bound, not by picking the longest prompt.** The first
+    version measured the single longest prompt *in characters* and cleared the
+    run on that one result. That is unsound in a way this corpus actually
+    exhibits: chars/token spans 1.046 (Thai) to 3.151 (English course tables),
+    so the longest-in-characters prompt need not be the longest in tokens. On
+    the two entity arms it is not even close -- the longest by characters is
+    15,689 chars / 4,860 tokens, while the true worst is 14,721 tokens. At
+    num_ctx=8192 the old screen would have measured 4,860, declared "fits", and
+    started a run in which ~45-50% of prompts were silently truncated.
+
+    So: every prompt whose *upper bound* fits is provably safe and needs no
+    forward pass; only prompts that could exceed `num_ctx` are probed, largest
+    first. When nothing can exceed it, the run is cleared without touching the
+    GPU at all.
     """
-    worst, worst_arm = "", ""
+    prompts = []  # (n_chars, label, text)
     for arm in arms:
         for path in sorted((_CONTEXTS / arm).glob("q*.json")):
             p = build_prompt(json.loads(path.read_text(encoding="utf-8")), variant)
-            if len(p) > len(worst):
-                worst, worst_arm = p, f"{arm}/{path.name}"
-    if not worst:
+            prompts.append((len(p), f"{arm}/{path.name}", p))
+    if not prompts:
         return
-    # The longest prompt in CHARACTERS need not be the longest in tokens (Thai
-    # runs ~1.0 chars/token here, English course tables ~3.2), so this is a
-    # necessary check, not a sufficient one -- the per-answer guard below
-    # catches whatever it misses.
-    n = ollama.chat(model=model, messages=[{"role": "user", "content": worst}],
-                    options={"temperature": 0.0, "num_ctx": num_ctx,
-                             "num_predict": 1})["prompt_eval_count"]
-    print(f"preflight: longest prompt {worst_arm} = {len(worst):,} chars -> "
-          f"{n:,} prompt tokens at num_ctx={num_ctx}")
-    if n == truncated_to(num_ctx):
-        raise SystemExit(
-            f"refusing to start: prompt_eval_count {n:,} is exactly "
-            f"num_ctx//2+2, the truncation signature. Raise --num-ctx "
-            f"(try {num_ctx * 2:,}) or lower --k / --max-chars in "
-            f"rq4_build_contexts.py."
-        )
+
+    candidates = [t for t in prompts if token_upper_bound(t[0]) > num_ctx]
+    candidates.sort(reverse=True)
+    biggest = max(prompts)[0]
+    print(f"preflight: {len(prompts)} prompts, longest {biggest:,} chars "
+          f"(<= {token_upper_bound(biggest):,} tokens); {len(candidates)} could "
+          f"exceed num_ctx={num_ctx:,}")
+    if not candidates:
+        print("preflight: no prompt can exceed num_ctx -- cleared without probing")
+        return
+
+    for n_chars, label, text in candidates[:max_probes]:
+        n = ollama.chat(model=model, messages=[{"role": "user", "content": text}],
+                        options={"temperature": 0.0, "num_ctx": num_ctx,
+                                 "num_predict": 1})["prompt_eval_count"]
+        print(f"preflight: {label} = {n_chars:,} chars -> {n:,} prompt tokens")
+        if n == truncated_to(num_ctx):
+            raise SystemExit(
+                f"refusing to start: {label} reported prompt_eval_count {n:,}, "
+                f"exactly num_ctx//2+2, the truncation signature. Raise "
+                f"--num-ctx (try {num_ctx * 2:,}) or lower --k / --max-chars in "
+                f"rq4_build_contexts.py."
+            )
+    if len(candidates) > max_probes:
+        print(f"preflight: {len(candidates) - max_probes} further candidate(s) "
+              f"left to the per-answer guard")
 
 
 def main() -> int:
