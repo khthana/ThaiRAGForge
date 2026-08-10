@@ -1,7 +1,7 @@
 """RQ4 step 1: assemble generation contexts from already-persisted retrieval results.
 
 Deterministic and CPU-only -- no index load, no GPU, no model. Persisted
-RetrievalResults already carry each hit's `text`, so all five arms can be built
+RetrievalResults already carry each hit's `text`, so every arm can be built
 from what RQ1-RQ2 already produced; nothing needs re-retrieving.
 
 Arms (docs/rq4-design.md 4c) vary *only* retrieval, holding generator and prompt
@@ -13,6 +13,24 @@ significance-tested rather than assumed:
     bm25_semantic                free baseline; carries `person` outright
     hybrid_m2v_semantic          known RRF failure case
     closed_book                  floor: no context at all
+
+Two entity arms were added 2026-08-10 as the pre-registered *upper bound* on the
+relation-graph axis: both read the entity dictionaries the qrels were derived
+from, so both are circular by construction and neither is a deployable result.
+If a structurally advantaged arm cannot lift citation recall, a richer graph
+built on the same dictionaries will not either.
+
+    entity_lookup_semantic       exhaustive + circular, but UNRANKED
+    entity_boost_semantic        the same candidate set, ordered by hybrid
+
+**Read `entity_lookup_semantic` with its ordering caveat.** `EntityLookup` scores
+every hit 1.0, so `rank` is corpus order, not relevance -- taking the first k is
+an arbitrary slice wherever the arm returns more than k documents (49 of 106
+queries; median 10, max 768). At k=10 that slice still carries >=1 gold document
+for 97 of 106 queries, so the arm is not gutted, but a null from it alone would
+be ambiguous between "the dictionary adds nothing" and "the slice threw the
+evidence away". `entity_boost_semantic` is the disambiguator: same candidates,
+ordered, 104 of 106 and macro recall@10 0.7646 vs 0.6578. Cite the pair.
 
 **Citations are numbered, not spelled out.** The design doc left the citation
 format open; numeric labels win on the only criterion that matters here, which is
@@ -66,6 +84,12 @@ ARMS: dict[str, tuple[str, str] | None] = {
     # either serves -- pinned explicitly so the arm can't silently change.
     "bm25_semantic": ("gold_bm25_73det", "plain__semantic__e5__35b906c6__bm25"),
     "hybrid_m2v_semantic": ("gold_hybrid_73det", "plain__semantic__local__834c4336__hybrid"),
+    # circular by construction -- see the module docstring. Both read
+    # `entity_tags_full`, rebuilt 2026-08-05.
+    "entity_lookup_semantic": (
+        "gold_entity_lookup_73det", "entity_tags__semantic__local__e4fe19d6__entity_lookup"),
+    "entity_boost_semantic": (
+        "gold_entity_boost_73det", "entity_tags__semantic__local__e4fe19d6__hybrid__entity_boost"),
     "closed_book": None,
 }
 
@@ -75,7 +99,15 @@ def main() -> int:
     ap.add_argument("--k", type=int, default=10, help="context blocks (documents) per query")
     ap.add_argument("--max-chars", type=int, default=1500, help="cap per document block")
     ap.add_argument("--out", type=str, default=str(_OUT))
+    ap.add_argument("--arms", default="", help="comma-separated; default all. Building a "
+                    "subset leaves the other arms' context files untouched, which is how "
+                    "an arm is added without rewriting the ones 530 answers are keyed to.")
     args = ap.parse_args()
+
+    wanted = [a for a in args.arms.split(",") if a] or list(ARMS)
+    unknown = [a for a in wanted if a not in ARMS]
+    if unknown:
+        raise SystemExit(f"unknown arm(s): {unknown}; known: {sorted(ARMS)}")
 
     gold = yaml.safe_load(_GOLD.read_text(encoding="utf-8"))
     qrels = {e["query"]: e["relevant_resolution_ids"] for e in gold}
@@ -87,7 +119,8 @@ def main() -> int:
     stats: dict[str, list[int]] = defaultdict(list)
     gold_present: dict[str, int] = defaultdict(int)
 
-    for arm, source in ARMS.items():
+    for arm in wanted:
+        source = ARMS[arm]
         arm_dir = out_root / arm
         arm_dir.mkdir(exist_ok=True)
         by_query: dict[str, list] = {}
@@ -134,7 +167,7 @@ def main() -> int:
     print(f"\nwritten to {out_root}\n")
     print("| arm | queries | mean ctx chars | max | context has >=1 gold doc |")
     print("|---|---|---|---|---|")
-    for arm in ARMS:
+    for arm in wanted:
         s = stats[arm]
         print(f"| {arm} | {len(s)} | {statistics.fmean(s):,.0f} | {max(s):,} | "
               f"{gold_present[arm]}/{len(s)} ({gold_present[arm] / len(s):.0%}) |")

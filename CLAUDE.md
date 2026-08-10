@@ -206,7 +206,16 @@ see `docs/adr/`.
   check vacuous — the [[feedback_cleanup_can_break_an_audit]] shape again — and
   the tests pin that no current report (`routing_eval`, `rq4_score`,
   `oracle_union_ceiling`, `power_analysis`, the three 9-way tables) is exempt.
-  Now **5 pass / 1 warn / 0 fail**, the warn being D3's 3 known false positives.
+  Was **5 pass / 1 warn / 0 fail**, the warn being D3's 3 known false positives.
+  **Now 4 pass / 1 warn / 1 fail (2026-08-10), and the FAIL is a TRUE POSITIVE —
+  do not allowlist it.** D4 reports that `rq4_score.md` and
+  `rq4_score_guarded.md` predate a change to `tools/eval/rq4_generate.py`, which
+  is exactly right: that change is the truncation repair (see the RQ4 bullet),
+  so those two reports really do describe answers produced by a generator that
+  no longer exists. It clears when the 80 truncated cells are regenerated, and
+  until then a red D4 is the correct reading of the world. This is the one case
+  where the "don't let a known-retired artifact keep the gate red" rule does
+  **not** apply — nothing here is retired, the work is simply outstanding.
 - The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;
   corpus-prep tooling in `tools/corpus_prep/` needs Poppler + Ollama.
 - **Superseded backups live off-repo** (2026-07-30): 2,389 `*.dup` / `*.bak` files
@@ -326,7 +335,31 @@ see `docs/adr/`.
   dictionary names collide with each other, so the collision is only with names
   outside it. **Not fixed here** — `match_programs` is also read by
   `build_gold_candidates.py` and `router`, so moving the threshold would move
-  published numbers. **Edge A′ is ~7x smaller than the scan note claimed and the
+  published numbers. **That blast radius is now MEASURED and it is zero on both
+  call sites (2026-08-10, `tools/eval/audit_program_matcher_absorption.py` →
+  `docs/program-matcher-absorption.md`, ~23 min walk cached so `--render` is
+  free).** Corpus-wide the defect is large — 9,141 accepted matches over 1,710
+  files, **23.1% (2,114) absorb a genuinely different name**, 210 of 249 matched
+  canonicals absorb at least one — and its dominant shape is the one worth
+  naming: **35.7% of absorptions swap the degree level** (บัณฑิต ↔ มหาบัณฑิต ↔
+  ดุษฎีบัณฑิต), one token apart so the ratio stays far above 0.82 while a
+  master's programme is tagged as the bachelor's of the same subject. **But it
+  reaches neither published path, and both were verified rather than assumed**:
+  `program_candidates()` never calls `match_programs` for membership — it seeds
+  from tagged files then gates on `canonical in resolution_id`, an exact
+  substring of the manifest title, and **0 of 30** program queries' gold pairs
+  have a `resolution_id` failing to contain the program; and `classify_query`
+  asks only whether *any* program matched, never which one, so a name-for-name
+  swap **cannot** change a route (33/13/30/30 exact, 0 program queries routed
+  elsewhere). So the ticket closes as *documented, not repaired* — and if it is
+  ever repaired, the degree-level swap is the shape to fix first. **Its first
+  run was wrong in a way worth remembering**: it reported "99.3% absorb a
+  foreign name" with the inserted-character distribution's mode at exactly
+  **4** — which is `_WINDOW_SLACK`, i.e. it was counting the matcher's own
+  read-ahead window as absorbed text
+  ([[feedback_a_mode_on_a_constant_is_your_instrument]]). `S5` now pins that a
+  pure window tail scores 0 (6,333 such spans) while a longer tail still
+  registers its excess. **Edge A′ is ~7x smaller than the scan note claimed and the
   note is corrected**: `สังกัดคณะ` was recorded as appearing in "1,465 files
   (51%)"; direct counting over the 2,854 live files gives `สังกัด` in **209**
   files and `สังกัดคณะ` in **73**, and no alternative anchor supplies a larger
@@ -1054,7 +1087,48 @@ see `docs/adr/`.
   significance test here). Report: `data/results/rq4_score.md`; narrative + both
   build phases: `docs/rq4-design.md`. **Refreshed against `chunker_compare_full`
   rebuild #3 on 2026-08-07** — see the currency paragraph at the end of this bullet
-  before citing anything here; two findings below are corrected there. Findings, in
+  before citing anything here; two findings below are corrected there.
+  **READ THIS BEFORE CITING ANY RQ4 NUMBER: every answer on disk was generated at
+  `num_ctx=8192`, and 80 of the 1,590 published (query, arm, variant) cells had
+  their prompt silently TRUNCATED (2026-08-10, `docs/rq4-prompt-truncation.md`).**
+  Found by the mandatory pre-run check before adding the entity arms, not by any
+  symptom — there is no symptom. **The rule was measured, not read from the docs**
+  (ollama 0.32.6 / phi4): a prompt that *fits* `num_ctx` is fed whole; one that
+  *exceeds* it is cut to **`num_ctx // 2 + 2` tokens, keeping the tail**. So the
+  threshold is 8,192 tokens, not 4,098 — the tempting "never more than num_ctx/2"
+  reading is refuted by its own control (5,651 / 6,885 / 7,508-token prompts are
+  fed whole at 8192), and `prompt_eval_count == num_ctx//2 + 2` is an exact
+  truncation signature. **The direction is what makes it bad**: `build_prompt`
+  lays documents out best-first and puts the rules last, so a cut deletes the
+  *highest-ranked evidence* and always spares the instructions — the answer comes
+  back fluent, correctly formatted, correctly citing, and evidence-poor. The
+  2026-08-03 "instructions after context" fix
+  ([[feedback_llm_prompt_truncates_from_front]]) is precisely what made this
+  invisible rather than harmless, which is the reusable lesson
+  ([[feedback_an_asserted_invariant_is_not_a_check]]: the `--num-ctx` help string
+  already asserted "MUST exceed the longest prompt" in capitals, and nothing
+  measured it). **Blast radius, exact token counts:** `hybrid` **0/106** in all
+  three variants (worst 7,999 — 193 tokens short of the line, by luck, and
+  `cite_all_guarded` came within 2.4% of losing it), `closed_book` 0/106 by
+  construction, `dense` **16/106**, `bm25` 5/106, `m2v` 7/106; the entity arms
+  would have been ~45-50%. **So the confound pushes in the same direction as the
+  published `hybrid > {dense, bm25}` ordering — that finding is neither confirmed
+  nor refuted by this, it is measured under a confound that flatters it.** The
+  prompt ablation (the headline) is a within-arm comparison and survives.
+  **Repaired at source**: `rq4_generate.py` gained a `preflight()` that builds
+  every prompt, sends the longest with `num_predict=1` and refuses to start on the
+  signature; a per-answer guard that names each truncated prompt and exits
+  non-zero; `num_ctx`/`prompt_eval_count` recorded in every answer JSON (the
+  8192-era answers carry no such field, which is exactly why the damage had to be
+  reconstructed prompt by prompt); and default `--num-ctx` 8192 → **16384**.
+  Pinned by `tests/tools/test_rq4_prompt_truncation.py`. The 80 cells are **not
+  yet regenerated** — and note that a re-run must be *scored*, not eyeballed,
+  because the generator's own noise floor is 14/24 identical citation sets at
+  temperature 0 ([[feedback_temperature_zero_is_not_reproducible]]). Method note
+  for any future prompt-size work here: **chars/token is unusable as an
+  estimator** on this corpus — 1.046 (Thai prose) to 3.151 (English course tables)
+  within the same prompt family, so screen on the *minimum* ratio and measure
+  everything above the line exactly. Findings, in
   the order they were established:
   (a) **retrieval quality survives the generation stage — but state it as
   `hybrid > {dense, bm25} > m2v`, not as a strict 4-way ordering.** Post-refresh:

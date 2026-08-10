@@ -144,16 +144,68 @@ def unload(model: str) -> None:
         print(f"  [warn] unload {model}: {exc}")
 
 
+def truncated_to(num_ctx: int) -> int:
+    """The prompt-token count ollama reports when it HAS truncated.
+
+    Measured on 2026-08-10 against ollama 0.32.6, not read from the docs: one
+    14,721-token prompt reports 2050 / 4098 / 14721 at num_ctx 4096 / 8192 /
+    16384, and eight shorter prompts are fed whole at 8192. So the rule is
+    "fits => whole, exceeds => num_ctx/2, keeping the tail", and this exact
+    value in `prompt_eval_count` is the truncation signature.
+    """
+    return num_ctx // 2 + 2
+
+
+def preflight(model: str, arms: list[str], variant: str, num_ctx: int) -> None:
+    """Refuse to start if the longest prompt does not fit `num_ctx`.
+
+    The old `--num-ctx` help already *said* it must exceed the longest prompt.
+    Nothing checked, and the default 8192 was in fact exceeded by prompts up to
+    ~14.7k tokens, so every long prompt lost its highest-ranked documents (the
+    cut keeps the tail, and blocks are laid out best-first). One forward pass
+    on the single longest prompt turns that assertion into a measurement, and
+    it costs one query out of ~530.
+    """
+    worst, worst_arm = "", ""
+    for arm in arms:
+        for path in sorted((_CONTEXTS / arm).glob("q*.json")):
+            p = build_prompt(json.loads(path.read_text(encoding="utf-8")), variant)
+            if len(p) > len(worst):
+                worst, worst_arm = p, f"{arm}/{path.name}"
+    if not worst:
+        return
+    # The longest prompt in CHARACTERS need not be the longest in tokens (Thai
+    # runs ~1.0 chars/token here, English course tables ~3.2), so this is a
+    # necessary check, not a sufficient one -- the per-answer guard below
+    # catches whatever it misses.
+    n = ollama.chat(model=model, messages=[{"role": "user", "content": worst}],
+                    options={"temperature": 0.0, "num_ctx": num_ctx,
+                             "num_predict": 1})["prompt_eval_count"]
+    print(f"preflight: longest prompt {worst_arm} = {len(worst):,} chars -> "
+          f"{n:,} prompt tokens at num_ctx={num_ctx}")
+    if n == truncated_to(num_ctx):
+        raise SystemExit(
+            f"refusing to start: prompt_eval_count {n:,} is exactly "
+            f"num_ctx//2+2, the truncation signature. Raise --num-ctx "
+            f"(try {num_ctx * 2:,}) or lower --k / --max-chars in "
+            f"rq4_build_contexts.py."
+        )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--model", required=True)
     ap.add_argument("--arms", default="", help="comma-separated; default all")
     ap.add_argument("--limit", type=int, default=0, help="first N queries per arm (pilot)")
     ap.add_argument("--out", default=str(_OUT))
-    ap.add_argument("--num-ctx", type=int, default=8192,
-                    help="context window. MUST exceed the longest prompt: ollama "
-                    "truncates from the front, which silently removes the "
-                    "instructions and makes 4a unmeasurable (see build_prompt).")
+    ap.add_argument("--num-ctx", type=int, default=16384,
+                    help="context window. MUST exceed the longest prompt in TOKENS: "
+                    "ollama feeds a fitting prompt whole but cuts an over-long one "
+                    "to num_ctx/2, keeping the tail (see build_prompt and the "
+                    "pre-flight below). Raised 8192 -> 16384 on 2026-08-10, when "
+                    "the pre-flight measured the longest prompt at 14,721 tokens.")
+    ap.add_argument("--skip-preflight", action="store_true",
+                    help="do not measure the longest prompt first (do not use)")
     ap.add_argument("--allow-resident", action="store_true",
                     help="skip the resident-model guard (do not use on a 12 GB card)")
     ap.add_argument("--variant", default="sentence_cap", choices=sorted(_RULE4),
@@ -179,7 +231,10 @@ def main() -> int:
     if args.variant != "sentence_cap":
         model_dir += f"_{args.variant}"
 
-    t_start = time.time()
+    if not args.skip_preflight:
+        preflight(args.model, arms, args.variant, args.num_ctx)
+
+    t_start, truncated = time.time(), 0
     for arm in arms:
         files = sorted((_CONTEXTS / arm).glob("q*.json"))
         if args.limit:
@@ -203,8 +258,13 @@ def main() -> int:
                     options={"temperature": 0.0, "num_ctx": args.num_ctx},
                 )
                 answer, error = resp["message"]["content"].strip(), None
+                n_prompt = resp.get("prompt_eval_count")
             except Exception as exc:
-                answer, error = "", str(exc)
+                answer, error, n_prompt = "", str(exc), None
+            if n_prompt == truncated_to(args.num_ctx):
+                truncated += 1
+                print(f"  [truncated] {arm}/{path.name}: fed {n_prompt:,} tokens "
+                      f"(num_ctx//2+2) -- the front of this prompt was discarded")
 
             dst.write_text(json.dumps({
                 "query": ctx["query"],
@@ -219,6 +279,11 @@ def main() -> int:
                 "context_has_gold": ctx["context_has_gold"],
                 "answer": answer,
                 "error": error,
+                # recorded so truncation is auditable after the fact rather than
+                # only at run time -- the 8192 runs have no such field, which is
+                # why their damage had to be re-measured prompt by prompt
+                "num_ctx": args.num_ctx,
+                "prompt_eval_count": n_prompt,
                 "seconds": round(time.time() - t1, 2),
             }, ensure_ascii=False, indent=1), encoding="utf-8")
             done += 1
@@ -232,6 +297,11 @@ def main() -> int:
     unload(args.model)
     print(f"\nunloaded {args.model}; total {time.time() - t_start:.0f}s")
     print(f"answers -> {Path(args.out) / model_dir}")
+    if truncated:
+        print(f"\n!! {truncated} prompt(s) were TRUNCATED at num_ctx={args.num_ctx}: "
+              "each lost its front, i.e. its highest-ranked documents. Re-run those "
+              f"answers at --num-ctx {args.num_ctx * 2} before scoring.")
+        return 1
     return 0
 
 
