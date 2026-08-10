@@ -106,9 +106,13 @@ see `docs/adr/`.
   recorded relabel (`relabeled_mispairings.at` in an index manifest) as bringing
   an index current without a rebuild — without that second half it would sit
   permanently red after any title repair, and an always-red check is one nobody
-  reads. Current state (**re-run 2026-08-09 after E0 landed**): **24 pass /
-  1 warn / 0 fail** — the gate is green for the first time. **The warn is real and
-  is not E0's doing**: it is that same `I6`, 41 indexes built 2026-08-08 19:33
+  reads. Current state (**re-run 2026-08-10 after G1a/G1b landed**): **25 pass /
+  2 warn / 0 fail** over 27 checks (was 24/1/0 on 08-09, when E0 first made the
+  gate green). **The second warn is the new `G1b`** — 1,590 RQ4 answers predate
+  the `num_ctx` fix and record no context size, 80 of them known truncated; it
+  exists because `audit_doc_claims.py`'s D4 could be cleared without regenerating
+  them (see the doc-claims bullet). **The first warn is real and is not E0's
+  doing**: it is that same `I6`, 41 indexes built 2026-08-08 19:33
   against a corpus last edited 2026-08-09 09:53, i.e. the `2566/ครั้งที่ 3`
   re-download + re-OCR earlier that day. **Unlike the title repair, that one is a
   text change, so a relabel cannot discharge it** — those indices genuinely hold
@@ -207,15 +211,28 @@ see `docs/adr/`.
   the tests pin that no current report (`routing_eval`, `rq4_score`,
   `oracle_union_ceiling`, `power_analysis`, the three 9-way tables) is exempt.
   Was **5 pass / 1 warn / 0 fail**, the warn being D3's 3 known false positives.
-  **Now 4 pass / 1 warn / 1 fail (2026-08-10), and the FAIL is a TRUE POSITIVE —
-  do not allowlist it.** D4 reports that `rq4_score.md` and
-  `rq4_score_guarded.md` predate a change to `tools/eval/rq4_generate.py`, which
-  is exactly right: that change is the truncation repair (see the RQ4 bullet),
-  so those two reports really do describe answers produced by a generator that
-  no longer exists. It clears when the 80 truncated cells are regenerated, and
-  until then a red D4 is the correct reading of the world. This is the one case
-  where the "don't let a known-retired artifact keep the gate red" rule does
-  **not** apply — nothing here is retired, the work is simply outstanding.
+  It went **4 pass / 1 warn / 1 fail** on 2026-08-10 with D4 as a **true
+  positive** (`rq4_score.md`/`rq4_score_guarded.md` predating the truncation
+  repair in `tools/eval/rq4_generate.py`, i.e. describing answers from a
+  generator that no longer exists), and is **back to 5/1/0 the same day — but
+  read HOW it cleared, because that is the lesson, not the count.** D4 compares
+  an mtime against its generator's, so **re-running `rq4_score.py` (seconds, no
+  generation) flipped it to PASS while all 80 truncated answers sat untouched on
+  disk.** The re-run was itself legitimate — editing `rq4_score.py` for `--arms`
+  had bumped D1a red, and the fix for that is to re-run the cheap generator
+  ([[feedback_provenance_belongs_in_the_generator]]); both reports reproduced
+  byte-identically. The finding was nonetheless discharged by an unrelated
+  action, which is [[feedback_cleanup_can_break_an_audit]] one layer up.
+  **So the finding was moved somewhere an mtime can't clear it**:
+  `audit_pipeline_invariants.py` gained **G1a/G1b**, which read the *artifacts* —
+  `rq4_generate.py` now records `num_ctx`/`prompt_eval_count` in every answer and
+  `prompt_eval_count == num_ctx//2 + 2` is an exact truncation signature. G1a is
+  0 truncated of 212 verifiable; **G1b WARNs that 1,590 answers predate the fix
+  and carry no `num_ctx`, of which 80 are known truncated** — classified as
+  *unverifiable*, never as clean ([[feedback_undefined_is_not_zero]]), and
+  clearable only by regenerating. General rule: **a staleness check is a proxy;
+  when it is carrying a real finding, add the check that reads the thing
+  itself.**
 - The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;
   corpus-prep tooling in `tools/corpus_prep/` needs Poppler + Ollama.
 - **Superseded backups live off-repo** (2026-07-30): 2,389 `*.dup` / `*.bak` files
@@ -308,7 +325,9 @@ see `docs/adr/`.
   edges that need no new model, no GPU and no new dictionary: **A**
   `program —belongs_to→ faculty` and **A′** `person —affiliated_with→ faculty`
   (the inline `(สังกัดคณะX)` shape). Edges B (`person→responsible_for→program`)
-  and C (`person→replaces→person`) are deliberately out of scope. **No gold query
+  and C (`person→replaces→person`) were out of scope pending a decisive measurement;
+  **that measurement is done and they are NOT being built (2026-08-10 — see the RQ4
+  entity-arms paragraph below for the numbers and the bound).** **No gold query
   in either set is multi-hop, so this is a capability the current eval is
   structurally unable to score — no retrieval gain may be claimed**, and every
   denominator is an entity *dictionary*, itself a curated subset, so read the
@@ -1254,6 +1273,43 @@ see `docs/adr/`.
   hoc and the doc quoted numbers no script could reproduce — the
   [[feedback_recompute_derived_stats_from_the_table]] failure mode, caught by
   re-reading the report against the prose.
+  **The two entity arms ran 2026-08-10 as a pre-registered decisive upper bound, and
+  the answer is: do not build relation-graph edges B/C** (`rq4_score.py --arms ...`
+  → `data/results/rq4_score_entity.md`, family 1b **m=6**; 212 answers, 14,434 s,
+  0 errors, **0 truncated** — necessary, since `prompt_eval_count` peaks at 13,636 /
+  14,515, so at the old 8192 default about half would have been evidence-stripped).
+  The rule was fixed in `docs/rq4-design.md` before the number existed. **The primary
+  comparison failed in the *opposite* direction**: `entity_lookup` vs hybrid citation
+  recall **−0.2531**, CI [−0.3223, −0.1815], Holm **0.0000** (precision −0.1583,
+  Holm 0.0150) — decisively worse, not merely no better. **But the stated reason for
+  the inference does not survive, which matters more than the verdict**
+  (`tools/eval/rq4_entity_arm_diagnosis.py` → `data/results/rq4_entity_arm_diagnosis.md`,
+  descriptive, no GPU): `entity_lookup`'s contexts hold a **higher** gold density than
+  hybrid's (**0.6448 vs 0.5352**) and it still abstained on **40** gold-bearing queries
+  (hybrid 8, `entity_boost` 5) — a ranking failure, not an evidence failure.
+  **Two things fall out that are worth more than the gating decision.** (1) That
+  density is the **circularity made visible**: the qrels call a document relevant when
+  it *contains the entity* and this arm retrieves exactly those, so a near-pure-gold
+  context is true by construction — and the generator, handed ~8 documents all naming
+  the entity, judged on 40 queries that none answered the question. **An independent
+  judge saying string containment over-counts relevance for this query shape**, which
+  is the `docs/eval-validity-threats.md` §3 threat measured rather than argued. (2)
+  Same dictionaries, ranked vs unranked, is worth **0.4379 vs 0.1431** recall — far
+  more than the dictionaries' own margin. **So cite `entity_boost` as the arm that
+  answers the gating question**: it is the numerically best arm in the whole RQ4 table
+  (**precision 0.8048**, the highest ever measured here, recall **0.4379**, only 5
+  missed) and **neither metric clears Holm** (0.1192 / 0.1652). **State it as a
+  bound** — ranked dictionary use buys at most **+0.1001** citation recall / +0.1337
+  precision over shipped hybrid, the point estimate (+0.0417) sits inside the measured
+  generator noise floor ([[feedback_temperature_zero_is_not_reproducible]]), and the
+  bound is **optimistic** because of the circularity. Edges B/C are therefore not
+  built. Operational note: `ARM_ORDER` was hardcoded to the published five, so the
+  entity arms would have been **silently dropped** from the report; they are now in
+  `EXTRA_ARMS` behind `--arms`, and passing a non-default arm set **refuses to write
+  `rq4_score.md`** because family 1's Holm size *is* the number of arm pairs — a
+  different arm set re-adjusts every published p without touching an answer file
+  (`tests/tools/test_rq4_score_arms.py` pins both guards; the default path still
+  reproduces `rq4_score.md` byte-identically).
 - **Evaluation validity — read `docs/eval-validity-threats.md` before defending any
   number in this project.** Written 2026-07-30 against the question "is 106 queries too
   few for a reviewer". It is not (BEIR peers run 50-300 topics, and this set is unusually

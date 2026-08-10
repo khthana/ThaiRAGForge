@@ -677,6 +677,62 @@ def audit_eval(corpus_ids: set[str], ids_by_combo: dict[Path, set[str]], quick: 
         print(f"        {m}")
 
 
+def audit_generation() -> None:
+    """G1: no published RQ4 answer may have been generated from a truncated prompt.
+
+    Added 2026-08-10 because `audit_doc_claims.py`'s D4 -- the only thing that had
+    been flagging the 80 truncated cells -- turned out to be clearable *without
+    fixing them*. D4 compares a report's mtime against its generator's, so merely
+    re-running `rq4_score.py` (seconds, no generation) flipped it from FAIL to PASS
+    while every truncated answer sat untouched on disk. That is the
+    [[feedback_cleanup_can_break_an_audit]] shape one layer up: a real finding
+    silently discharged by an unrelated action.
+
+    So this check reads the *artifacts* instead of their timestamps, and nothing but
+    regeneration can clear it. `rq4_generate.py` records `num_ctx` and
+    `prompt_eval_count` in every answer it writes; ollama truncates an over-long
+    prompt to exactly `num_ctx // 2 + 2` tokens (docs/rq4-prompt-truncation.md), so
+    that equality is an exact signature. Answers predating the fix carry neither
+    field -- they are counted separately as *unverifiable*, not as clean, because
+    "no evidence of truncation" and "evidence of no truncation" are different
+    ([[feedback_undefined_is_not_zero]]).
+    """
+    root = Path("data/rq4/answers")
+    if not root.is_dir():
+        record("G1 no RQ4 answer generated from a truncated prompt", True,
+               "0 of 0 answers on disk", warn=True)
+        return
+
+    truncated, unverifiable, checked = [], 0, 0
+    for path in sorted(root.glob("*/*/q*.json")):
+        try:
+            rec = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        num_ctx, n_prompt = rec.get("num_ctx"), rec.get("prompt_eval_count")
+        if num_ctx is None or n_prompt is None:
+            unverifiable += 1
+            continue
+        checked += 1
+        if n_prompt == num_ctx // 2 + 2:
+            truncated.append(f"{path.relative_to(root)} ({n_prompt} tok at num_ctx={num_ctx})")
+
+    record("G1a no RQ4 answer generated from a truncated prompt", not truncated,
+           f"{len(truncated)} truncated of {checked} answers carrying num_ctx")
+    for m in truncated[:10]:
+        print(f"        {m}")
+    # Deliberately a WARN and deliberately not silent: docs/rq4-prompt-truncation.md
+    # reconstructed 80 of these prompt by prompt and found them truncated, so this is
+    # outstanding work, not merely unmeasured. It clears only by regenerating them --
+    # which is the point, since the timestamp check that used to carry this finding
+    # could be cleared by re-running the scorer.
+    record("G1b every RQ4 answer records the context it was generated at", unverifiable == 0,
+           f"{unverifiable} of {checked + unverifiable} answers predate the num_ctx fix "
+           f"and cannot be verified either way; 80 of them are KNOWN truncated "
+           f"(docs/rq4-prompt-truncation.md) and are still to be regenerated",
+           warn=True)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--quick", action="store_true", help="skip embedding sampling; cap result files per dir")
@@ -690,6 +746,8 @@ def main() -> int:
     ids_by_combo = audit_indexes(corpus_ids, args.quick)
     print("\n=== eval ===")
     audit_eval(corpus_ids, ids_by_combo, args.quick)
+    print("\n=== generation ===")
+    audit_generation()
 
     fails = [f for f in findings if f[1] == "FAIL"]
     warns = [f for f in findings if f[1] == "WARN"]

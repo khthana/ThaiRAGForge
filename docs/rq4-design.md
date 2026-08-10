@@ -812,3 +812,79 @@ until those 80 cells are regenerated.
 sets on byte-identical prompts under `cite_all`
 ([[feedback_temperature_zero_is_not_reproducible]]). A margin near that floor is not a
 result; this is why the run is *scored*, not read.
+
+## Result (2026-08-10): the entity arms, and the decision on edges B/C
+
+Run as pre-registered above: `cite_all`, `--num-ctx 16384`, 212 answers (14,434 s),
+0 generation errors, 0 empty answers, **0 truncated**. Report:
+`data/results/rq4_score_entity.md` (family 1b, **m=6**). The run was necessary rather
+than merely tidy: the recorded `prompt_eval_count` peaks at **13,636** (`entity_lookup`)
+and **14,515** (`entity_boost`), so at the old 8192 default roughly half of these answers
+would have been generated from evidence-stripped prompts.
+
+| arm (all `cite_all`) | precision | n w/ citations | recall | gold density in ctx | missed |
+|---|---|---|---|---|---|
+| `hybrid_qwen3_0.6b_semantic` | 0.7268 | 101 | 0.3962 | 0.5352 | 8 |
+| `entity_lookup_semantic` | 0.5918 | **65** | **0.1431** | 0.6448 | **40** |
+| `entity_boost_semantic` | **0.8048** | 104 | **0.4379** | 0.7814 | 5 |
+
+(`gold density` and `missed` from `tools/eval/rq4_entity_arm_diagnosis.py` →
+`data/results/rq4_entity_arm_diagnosis.md`; `missed` = gold was in the context and
+the model abstained anyway.)
+
+**The pre-registered primary comparison failed, and it failed in the opposite
+direction.** `entity_lookup` vs `hybrid` on citation recall is **−0.2531**, CI
+[−0.3223, −0.1815], **Holm-adj 0.0000** — not "fails to beat", but decisively worse;
+precision too (−0.1583, Holm 0.0150). By the letter of the pre-registration that
+settles it: **edges B and C are not built.**
+
+**But the stated reason for the inference does not survive, and that matters more than
+the verdict.** The argument was that `entity_lookup` is structurally advantaged, so its
+failure bounds anything built on the same dictionaries. What actually happened is a
+**ranking failure, not a knowledge failure**, and the 4b table says so exactly:
+`entity_lookup`'s contexts are **not** evidence-poor — they hold a *higher* share of
+gold than hybrid's (**0.6448 vs 0.5352**) — yet **40 of its 97 gold-bearing contexts
+produced an abstention** (hybrid 8, `entity_boost` 5).
+
+**That high density is the circularity itself, and the 40 abstentions are what it
+costs.** These qrels call a document relevant when it *contains the entity*, and
+`entity_lookup` retrieves exactly the documents containing the entity — so an
+almost-pure-gold context is true by construction rather than a sign of a good context.
+The generator was handed ~8 documents that all name the entity and, on 40 queries,
+judged that none of them answered the question. **That is an independent judge saying
+string containment over-counts relevance for this query shape** — the threat
+`docs/eval-validity-threats.md` §3 argues for the entity arms, here visible in a
+measurement instead.
+
+**And what separates the two entity arms is ranking, which is worth more here than the
+dictionaries are.** Both draw on the same dictionaries and both fill the budget with
+entity-bearing documents (density 0.6448 vs 0.7814); `entity_boost` orders them by
+hybrid relevance, so what it supplies also answers the question — citation recall
+**0.4379 vs 0.1431**, missed 5 vs 40. That gap dwarfs `entity_boost`'s entire
+non-significant margin over shipped hybrid. **An exhaustive retriever's advantage does
+not survive a fixed context budget it cannot rank into.** So `entity_lookup` bounds
+*unranked dictionary retrieval under a k≈10 budget*; it does not bound what the
+dictionaries know.
+
+**So cite `entity_boost` as the arm that actually answers the gating question**: same
+dictionaries, but ranked (hybrid ordering with an entity boost). It is the **numerically
+best arm in the whole RQ4 table on both metrics** — recall 0.4379 vs hybrid's 0.3962,
+precision 0.8048 vs 0.7268 — and **neither clears Holm** (0.1652 and 0.1192, m=6).
+**State it as a bound**: with the dictionaries ranked properly, and scored on qrels
+partly derived from those same dictionaries, the end-to-end gain over shipped hybrid is
+**at most +0.1001 citation recall / +0.1337 precision**, and the point estimate
+(+0.0417) sits inside the generator's own measured noise floor
+([[feedback_temperature_zero_is_not_reproducible]]: 14/24 identical citation sets at
+temperature 0 under this variant).
+
+**Decision: edges B and C are not built.** Both arms point the same way, the honest one
+(`entity_boost`) bounds the payoff below the noise floor, and the bound is **optimistic**
+because of the circularity — a name the dictionary lacks is invisible to the retriever
+*and* absent from the qrels at once (`docs/eval-validity-threats.md` §3). A graph over
+those dictionaries would be paying 5-7 days for a quantity measured at "no more than
++0.10, probably ~0.04, on a metric that flatters it".
+
+**One descriptive finding worth keeping, not pre-registered**: `entity_boost` has the
+highest citation precision of any arm ever measured here (0.8048, vs the previous best
+0.7268), and the lowest miss count (5). If the entity signal is ever used for anything,
+use it as a **boost on a ranked retriever**, never as a retriever.
