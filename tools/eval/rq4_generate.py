@@ -156,16 +156,26 @@ def truncated_to(num_ctx: int) -> int:
     return num_ctx // 2 + 2
 
 
-# Lowest chars/token seen across this corpus's prompts (Thai prose; English
-# course tables run to 3.151). Dividing a character count by this can only
-# OVER-estimate a prompt's token count, which is the direction a safety screen
-# needs. Measured, see docs/rq4-prompt-truncation.md section 5.
-MIN_CHARS_PER_TOKEN = 1.046
+def token_upper_bound(text: str) -> int:
+    """Most tokens `text` can possibly tokenize to: its length in UTF-8 bytes.
 
+    Every token of a byte-level BPE vocabulary consumes at least one byte, so
+    tokens <= bytes holds for any text and any such tokenizer. It is loose --
+    Thai is 3 bytes/char at ~1.0 chars/token, so ~3x -- and loose is the only
+    direction a safety screen may err in.
 
-def token_upper_bound(n_chars: int) -> int:
-    """Most tokens a prompt of `n_chars` characters can possibly tokenize to."""
-    return int(n_chars / MIN_CHARS_PER_TOKEN) + 1
+    **This replaced `int(n_chars / 1.046) + 1` on 2026-08-10, and the reason is
+    that 1.046 was not a bound.** It was documented as this corpus's lowest
+    chars/token, measured on the two entity arms; over the 228 prompts screened
+    by `rq4_find_truncated_answers.py` **15 fall below it**, the minimum being
+    **1.0098** (`bm25_semantic/q001`, 11,208 chars / 11,099 tokens). An unsound
+    "upper bound" does not merely mis-sort candidates for probing -- it removes
+    prompts from the candidate list entirely, which is exactly how two
+    reconstruction runs missed `hybrid_m2v_semantic/q025` (8,475 tokens).
+    An empirical extreme is a description of a sample, never a bound on the next
+    input ([[feedback_an_asserted_invariant_is_not_a_check]]).
+    """
+    return len(text.encode("utf-8"))
 
 
 def preflight(model: str, arms: list[str], variant: str, num_ctx: int,
@@ -191,30 +201,37 @@ def preflight(model: str, arms: list[str], variant: str, num_ctx: int,
     forward pass; only prompts that could exceed `num_ctx` are probed, largest
     first. When nothing can exceed it, the run is cleared without touching the
     GPU at all.
+
+    Ordering by the bound is a heuristic (an upper bound orders by its own
+    slack, not by truth), and only `max_probes` candidates are probed, so
+    preflight is a cheap early exit -- **the sound guard is the per-answer
+    `prompt_eval_count` check in `generate()`**, which sees every prompt as it
+    is actually sent.
     """
-    prompts = []  # (n_chars, label, text)
+    prompts = []  # (bound_tokens, label, text)
     for arm in arms:
         for path in sorted((_CONTEXTS / arm).glob("q*.json")):
             p = build_prompt(json.loads(path.read_text(encoding="utf-8")), variant)
-            prompts.append((len(p), f"{arm}/{path.name}", p))
+            prompts.append((token_upper_bound(p), f"{arm}/{path.name}", p))
     if not prompts:
         return
 
-    candidates = [t for t in prompts if token_upper_bound(t[0]) > num_ctx]
+    candidates = [t for t in prompts if t[0] > num_ctx]
     candidates.sort(reverse=True)
-    biggest = max(prompts)[0]
-    print(f"preflight: {len(prompts)} prompts, longest {biggest:,} chars "
-          f"(<= {token_upper_bound(biggest):,} tokens); {len(candidates)} could "
+    biggest = max(prompts)
+    print(f"preflight: {len(prompts)} prompts, longest {len(biggest[2]):,} chars "
+          f"(<= {biggest[0]:,} tokens); {len(candidates)} could "
           f"exceed num_ctx={num_ctx:,}")
     if not candidates:
         print("preflight: no prompt can exceed num_ctx -- cleared without probing")
         return
 
-    for n_chars, label, text in candidates[:max_probes]:
+    for n_bound, label, text in candidates[:max_probes]:
         n = ollama.chat(model=model, messages=[{"role": "user", "content": text}],
                         options={"temperature": 0.0, "num_ctx": num_ctx,
                                  "num_predict": 1})["prompt_eval_count"]
-        print(f"preflight: {label} = {n_chars:,} chars -> {n:,} prompt tokens")
+        print(f"preflight: {label} = {len(text):,} chars (<= {n_bound:,} tok) "
+              f"-> {n:,} prompt tokens")
         if n == truncated_to(num_ctx):
             raise SystemExit(
                 f"refusing to start: {label} reported prompt_eval_count {n:,}, "

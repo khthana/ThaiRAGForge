@@ -206,6 +206,16 @@ RETIRED_REPORTS = {
         "one-off before/after for the max_seq_length fix; both embedders are in the 9-way matrix since",
     "pipeline_invariant_audit.md":
         "2026-07-30 snapshot; the current report is docs/pipeline-invariant-audit.md",
+    # The one entry here that must NOT be cleared by re-running its generator.
+    # It is the record of which 81 cells were truncated at num_ctx=8192; those
+    # cells were regenerated 2026-08-10, so a re-run would legitimately report
+    # 0 and erase the only list of what was damaged. Its generator moved after
+    # it was written (the unsound chars/token screen was replaced with a
+    # provable UTF-8-byte bound), which is exactly the D1a shape -- but the
+    # right response is retirement, not regeneration.
+    "rq4_truncated_cells.md":
+        "pre-repair snapshot of the 81 truncated cells; regenerating them 2026-08-10 "
+        "is what makes it historical, and re-running the generator would erase it",
     # Not an eval report at all, and the only file here that declares no
     # generator: a one-off corpus diff from commit e1523b3 whose throwaway
     # script was not retained. It cannot be made to name a generator honestly,

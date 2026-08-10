@@ -68,34 +68,46 @@ def test_closed_book_prompt_cannot_overflow():
     assert len(prompt) < 2000
 
 
-def test_the_char_screen_can_only_over_estimate_tokens():
+def test_the_screen_can_only_over_estimate_tokens():
     """The screen must never call a prompt safe that isn't.
 
     `preflight` clears a prompt without a forward pass when its token *upper
-    bound* fits num_ctx, so the bound has to hold for the worst tokenizer case
-    this corpus produces (1.046 chars/token, Thai prose). The measured extremes
-    of docs/rq4-prompt-truncation.md section 5 are pinned in both directions.
-    """
-    from rq4_generate import MIN_CHARS_PER_TOKEN, token_upper_bound
+    bound* fits num_ctx, so the bound must hold for any input, not merely for
+    the samples measured so far. It is now UTF-8 byte length: a byte-level BPE
+    token consumes at least one byte, so tokens <= bytes always.
 
-    # Thai prose, the worst case: the bound must not fall below the real count.
-    assert token_upper_bound(int(14_721 * MIN_CHARS_PER_TOKEN)) >= 14_721
-    # English course tables at 3.151 chars/token: the bound over-estimates by ~3x,
-    # which is wasted probing, never a missed truncation.
-    assert token_upper_bound(15_915) >= 5_051
-    assert token_upper_bound(0) >= 0
+    The previous bound, `int(n_chars / 1.046) + 1`, was an empirical extreme
+    (docs/rq4-prompt-truncation.md section 5) and the data violates it -- 15 of
+    228 measured prompts realize fewer chars/token, minimum 1.0098. That is the
+    case pinned first here, because under the old rule it screened *out*.
+    """
+    from rq4_generate import token_upper_bound
+
+    # bm25_semantic/q001: 11,208 chars -> 11,099 real tokens, i.e. 1.0098
+    # chars/token. The old bound read 10,715 and would have called it safe at
+    # num_ctx=11_000; the byte bound (Thai prose, ~3 bytes/char) cannot.
+    thai = "ก" * 11_208
+    assert 11_208 / 1.046 < 11_099          # the old bound really did under-read
+    assert token_upper_bound(thai) >= 11_099
+
+    # English course tables at ~3.15 chars/token: the bound over-estimates
+    # heavily (1 byte/char, so ~3x the real count). Wasted probing, never a
+    # missed truncation -- the direction a screen must err in.
+    assert token_upper_bound("a" * 15_915) >= 5_051
+    assert token_upper_bound("") == 0
 
 
 def test_the_longest_prompt_in_chars_is_not_the_screen():
     """The regression that motivated the rewrite.
 
-    entity_boost's longest prompt by characters is 15,689 chars / 4,860 tokens,
-    while its true worst is 14,721 tokens. A screen that measured only the
-    longest-by-characters prompt would clear num_ctx=8192 on a 4,860-token
-    reading and then truncate ~half the run. The upper bound must flag the
-    15,689-char prompt as a candidate at 8192 regardless of how it tokenizes.
+    entity_boost's longest prompt by characters is 15,689 chars / 4,860 tokens
+    (English-heavy), while its true worst is 14,721 tokens. A screen that
+    measured only the longest-by-characters prompt would clear num_ctx=8192 on a
+    4,860-token reading and then truncate ~half the run. The upper bound must
+    flag it as a candidate at 8192 regardless of how it tokenizes -- and must
+    keep flagging a Thai prompt of the same length, whose real count is ~3x more.
     """
     from rq4_generate import token_upper_bound
 
-    assert token_upper_bound(15_689) > 8_192      # probed at 8192, as it must be
-    assert token_upper_bound(15_689) <= 16_384    # provably safe at 16384
+    assert token_upper_bound("a" * 15_689) > 8_192     # probed at 8192, as it must be
+    assert token_upper_bound("ก" * 15_689) > 8_192     # and the Thai case a fortiori

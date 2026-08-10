@@ -528,116 +528,128 @@ and the numbers below are now its output.
 being a caution and became a live disagreement.** The guarded-vs-baseline pairs
 appear in family 2 as well (now 9 tests, up from 5), and for `hybrid` the two
 families no longer agree on the verdict: the identical test on identical data,
-point estimate **+0.0706** either way, reads **Holm 0.0144 (significant) in
-family 2** and **Holm 0.0600 (not significant) in family 3**. Neither is wrong.
+point estimate **+0.0706** either way, reads **Holm 0.0192 (significant) in
+family 2** and **Holm 0.0720 (not significant) in family 3**. Neither is wrong.
 Family 2 is the family built to answer "does this prompt beat the baseline", so
 that is the one to cite for the ablation claim — but cite it *as* family 2, of
 9 tests. An unqualified "Holm p = 0.02" is now demonstrably ambiguous. The 95%
 CIs also jitter in the fourth decimal between families because the bootstrap RNG
 is consumed in a different order.
 
+**All numbers in this section are the 2026-08-10 re-score, after the 81
+truncated cells were regenerated** (`docs/rq4-prompt-truncation.md` §4b). `hybrid`
+had no truncated cell and is byte-identical to the pre-repair table; `dense`,
+`bm25` and `m2v` all moved, and three verdicts in family 1b flipped `no → yes`.
+
 | arm | variant | recall | precision | phantom / total |
 |---|---|---|---|---|
-| dense | `sentence_cap` | 0.2201 | 0.6413 | 0 / 264 |
-| dense | `cite_all` | 0.3206 | 0.6629 | **4 / 359** |
-| dense | `cite_all_guarded` | **0.3323** | 0.6530 | **0 / 353** |
+| dense | `sentence_cap` | 0.2261 | 0.6549 | 0 / 274 |
+| dense | `cite_all` | 0.3356 | 0.6798 | **4 / 391** |
+| dense | `cite_all_guarded` | **0.3460** | 0.6746 | **0 / 375** |
 | hybrid | `sentence_cap` | 0.2781 | 0.7016 | 0 / 269 |
 | hybrid | `cite_all` | 0.3962 | 0.7268 | 0 / 421 |
 | hybrid | `cite_all_guarded` | 0.3487 | 0.6900 | 0 / 369 |
-| bm25 | `sentence_cap` | 0.2203 | 0.6463 | 0 / 219 |
-| bm25 | `cite_all` | 0.2938 | 0.5968 | 0 / 324 |
-| bm25 | `cite_all_guarded` | 0.2743 | 0.6177 | 0 / 295 |
-| m2v | `sentence_cap` | 0.1820 | 0.5575 | 0 / 202 |
-| m2v | `cite_all` | 0.2038 | 0.5203 | 0 / 273 |
-| m2v | `cite_all_guarded` | 0.1971 | 0.5138 | 0 / 268 |
+| bm25 | `sentence_cap` | 0.2265 | 0.6607 | 0 / 229 |
+| bm25 | `cite_all` | 0.2961 | 0.6104 | 0 / 330 |
+| bm25 | `cite_all_guarded` | 0.2798 | 0.6217 | 0 / 303 |
+| m2v | `sentence_cap` | 0.1820 | 0.5508 | 0 / 209 |
+| m2v | `cite_all` | 0.2038 | 0.5278 | 0 / 287 |
+| m2v | `cite_all_guarded` | 0.1943 | 0.4817 | 0 / 280 |
 
 Recall comparisons, family 3 (24 tests):
 
 | comparison | n | diff (recall) | 95% CI | Holm p | sig |
 |---|---|---|---|---|---|
-| dense: `cite_all` vs base | 106 | +0.1005 | [+0.0558, +0.1479] | 0.0000 | **yes** |
-| dense: `guarded` vs base | 106 | **+0.1123** | [+0.0598, +0.1702] | 0.0000 | **yes** |
-| dense: `guarded` vs `cite_all` | 106 | +0.0117 | [−0.0165, +0.0432] | 1.0000 | no |
-| hybrid: `cite_all` vs base | 106 | +0.1181 | [+0.0732, +0.1656] | 0.0000 | **yes** |
-| hybrid: `guarded` vs base | 106 | **+0.0706** | [+0.0234, +0.1188] | 0.0600 | no *(0.0144 in family 2)* |
-| hybrid: `guarded` vs `cite_all` | 106 | −0.0475 | [−0.0883, −0.0092] | 0.2520 | no |
-| bm25: `cite_all` vs base | 106 | +0.0734 | [+0.0412, +0.1088] | 0.0000 | **yes** |
-| bm25: `guarded` vs base | 106 | +0.0539 | [+0.0123, +0.0952] | 0.2432 | no *(0.0966 in family 2)* |
-| bm25: `guarded` vs `cite_all` | 106 | −0.0195 | [−0.0569, +0.0147] | 1.0000 | no |
-| m2v: `cite_all` vs base | 106 | +0.0217 | [−0.0080, +0.0483] | 1.0000 | no |
-| m2v: `guarded` vs base | 106 | +0.0151 | [−0.0095, +0.0397] | 1.0000 | no |
-| m2v: `guarded` vs `cite_all` | 106 | −0.0067 | [−0.0391, +0.0273] | 1.0000 | no |
+| dense: `cite_all` vs base | 106 | +0.1095 | [+0.0643, +0.1586] | 0.0000 | **yes** |
+| dense: `guarded` vs base | 106 | **+0.1198** | [+0.0673, +0.1769] | 0.0000 | **yes** |
+| dense: `guarded` vs `cite_all` | 106 | +0.0104 | [−0.0179, +0.0418] | 1.0000 | no |
+| hybrid: `cite_all` vs base | 106 | +0.1181 | [+0.0734, +0.1643] | 0.0000 | **yes** |
+| hybrid: `guarded` vs base | 106 | **+0.0706** | [+0.0232, +0.1192] | 0.0720 | no *(0.0192 in family 2)* |
+| hybrid: `guarded` vs `cite_all` | 106 | −0.0475 | [−0.0884, −0.0096] | 0.2376 | no |
+| bm25: `cite_all` vs base | 106 | +0.0696 | [+0.0368, +0.1064] | 0.0000 | **yes** |
+| bm25: `guarded` vs base | 106 | +0.0533 | [+0.0116, +0.0951] | 0.1786 | no *(0.0938 in family 2)* |
+| bm25: `guarded` vs `cite_all` | 106 | −0.0163 | [−0.0539, +0.0183] | 1.0000 | no |
+| m2v: `cite_all` vs base | 106 | +0.0217 | [−0.0081, +0.0484] | 1.0000 | no |
+| m2v: `guarded` vs base | 106 | +0.0122 | [−0.0120, +0.0370] | 1.0000 | no |
+| m2v: `guarded` vs `cite_all` | 106 | −0.0095 | [−0.0427, +0.0251] | 1.0000 | no |
 
 No precision comparison is significant — all 12 sit at Holm p = 1.0000, the
-*smallest* raw p among them being 0.1536 (m2v, `sentence_cap` vs `cite_all`).
+*smallest* raw p among them being 0.1126 (bm25, `sentence_cap` vs
+`cite_all_guarded`).
 
 **Four things this establishes.**
 
 1. **Both guards work, and each is confirmed on the failure it was written for.**
    Rule 5: closed-book abstention 104/106 → **106/106**, phantom 5/5 → **0/0**.
-   Rule 6: dense phantom **4/359 → 0/353** — and note no other arm had phantoms
+   Rule 6: dense phantom **4/391 → 0/375** — and note no other arm had phantoms
    under any variant, so dense was the only arm that could test rule 6 at all.
-   Adding bm25 and m2v introduced no new phantoms (0/295, 0/268).
+   Adding bm25 and m2v introduced no new phantoms (0/303, 0/280).
 2. **The benefit survives, and the arm it survives on is dense.** `cite_all_guarded`
-   beats the `sentence_cap` baseline by **+0.1123 on dense** (Holm 0.0000 in both
+   beats the `sentence_cap` baseline by **+0.1198 on dense** (Holm 0.0000 in both
    families — the one result here that no family-size choice can touch) and by
-   **+0.0706 on hybrid** (family 2's 0.0144; see the family-size note above).
+   **+0.0706 on hybrid** (family 2's 0.0192; see the family-size note above).
    The ablation's headline — the flat ~0.41 recall was a prompt artifact, not a
    generator ceiling — does not depend on the unguarded wording. On bm25 the
-   guarded gain (+0.0539) does not reach significance in either family, where
-   the unguarded `cite_all` gain (+0.0734) did; on m2v neither variant moves,
+   guarded gain (+0.0533) does not reach significance in either family, where
+   the unguarded `cite_all` gain (+0.0696) did; on m2v neither variant moves,
    the same null the unguarded run found.
 3. **The apparent cost relative to unguarded `cite_all` is not a finding.**
    No arm is significant, and more tellingly **the point estimates do not agree
-   on a direction** (dense +0.0117 against hybrid −0.0475, bm25 −0.0195, m2v
-   −0.0067). A real constraint-induced dampening would push the same way on all
+   on a direction** (dense +0.0104 against hybrid −0.0475, bm25 −0.0163, m2v
+   −0.0095). A real constraint-induced dampening would push the same way on all
    four. This is what the measured generator noise floor predicts: at temperature
    0 this pipeline reproduces the citation set only 14/24 under `cite_all`
    (`tools/eval/rq4_determinism_check.py`), so differences of this size are
    inside the noise. Stated as bounds rather than nulls: on hybrid the interval
    rules out the guard being *better* than `cite_all` and is consistent with a
-   loss of ~0.01-0.09; on dense it rules out a loss greater than ~0.017; on bm25
+   loss of ~0.01-0.09; on dense it rules out a loss greater than ~0.018; on bm25
    and m2v the intervals straddle zero.
 4. **The guard makes the model more cautious on every arm, not only closed-book
    — and that has a price.** Rule 5 was written for the zero-document case, but
    it is in the prompt for all of them, and the 4b table shows it changing the
-   weak arms' behaviour: m2v correctly-abstained 13 → **19** and hallucinations
-   16 → **10**, but "missed" (gold present, abstained anyway) rose 11 → **18**;
-   bm25 hallucinations 12 → **10** with missed 14 → **11**. On the strong arms
-   the shift is small (hybrid missed 8 → 9, dense 13 → 9). This is a genuine
+   weak arms' behaviour: m2v correctly-abstained 13 → **16** and hallucinations
+   16 → **13**, but "missed" (gold present, abstained anyway) rose 10 → **18**;
+   bm25 hallucinations 11 → **10** with missed 14 → **11**. On the strong arms
+   the shift is small (hybrid missed 8 → 9, dense 14 → 9). This is a genuine
    trade the paper should state, not a free repair: the guard buys grounding
-   discipline partly with recall on arms whose context is poor.
+   discipline partly with recall on arms whose context is poor. (The m2v figures
+   were milder after the truncation repair — they read 13 → 19 / 16 → 10 before
+   it — so quote them from this table, not from a pre-2026-08-10 copy.)
 
 **Arm ordering under the guard (family 1b) — the deliverable that needed all
-four arms.** Direction is unchanged, `hybrid (0.3487) > dense (0.3323) >
-bm25 (0.2743) > m2v (0.1971)` on recall, and m2v is still significantly worst.
-But the *number of separated pairs* depends strongly on the prompt:
+four arms.** Direction is unchanged, `hybrid (0.3487) > dense (0.3460) >
+bm25 (0.2798) > m2v (0.1943)` on recall, and m2v is still significantly worst.
+But the *number of separated pairs* depends on the prompt:
 
 | prompt variant | significant pairs, family 1 (12 tests) |
 |---|---|
 | `sentence_cap` | 2 / 12 |
-| `cite_all` | **9 / 12** |
-| `cite_all_guarded` | **3 / 12** |
+| `cite_all` | **8 / 12** |
+| `cite_all_guarded` | **6 / 12** |
 
-So **"a better citation instruction sharpens the arm ordering" is a claim about
-`cite_all` specifically and does not transfer to the guarded wording.** The
-mechanism is visible in the descriptive table: the guard pulls the strong arms
-down (hybrid 0.3962 → 0.3487, bm25 0.2938 → 0.2743) while dense moves *up*
-(0.3206 → 0.3323), compressing the spread the significance tests need. Read this
-against the noise floor before treating 9/12 → 3/12 as a precise quantity —
-several 1b cells miss narrowly (bm25 vs m2v recall Holm 0.0576, hybrid vs bm25
-recall 0.0896), so the honest reading is "smaller separation", not "separation
-lost".
+**This table was the section's biggest casualty of the truncation repair
+(2026-08-10) and the conclusion it used to carry is withdrawn.** It read
+2/12 → 9/12 → 3/12, and the guarded column was explained as the guard
+"compressing the spread". With the truncated cells regenerated it is 2 → 8 → 6,
+and **the difference is not compression, it is a different set of separated
+pairs**: under `cite_all_guarded` all **six** m2v pairs separate (they did not
+before — the repair pushed dense and bm25 up while m2v's precision fell 0.5278 →
+0.4817), while `hybrid vs bm25` separates under `cite_all` (recall Holm 0.0032,
+precision 0.0180) and not under the guard (0.1056 / 0.2430). So the honest
+reading is: **`cite_all` is the only variant that separates the two strong arms
+from each other; the guard separates the weak arm from everything.** Read all of
+it against the noise floor before treating 8 vs 6 as a precise quantity.
 
-**Recommendation: adopt `cite_all_guarded` as the paper's reported prompt, and
-report the ordering claim from `cite_all`.** The guard keeps a significant recall
-gain over the baseline (unambiguously on dense, and on hybrid in the family built
-for that question) and removes both of `cite_all`'s measured costs outright —
-including the 106/106 closed-book abstention, which is the whole experiment's
-validity check and not merely two lost points. What it does *not* support is the
-4c sharpening claim, which should be cited as a property of the unguarded
-instruction with the guarded 3/12 reported alongside it. Both variants' answers
-are on disk, so both tables are reproducible.
+**Recommendation, unchanged in substance: adopt `cite_all_guarded` as the paper's
+reported prompt.** The guard keeps a significant recall gain over the baseline
+(unambiguously on dense, and on hybrid in the family built for that question) and
+removes both of `cite_all`'s measured costs outright — including the 106/106
+closed-book abstention, which is the whole experiment's validity check and not
+merely two lost points. What changed on 2026-08-10 is the caveat attached to it:
+the "the guard costs you the 4c sharpening" clause is **no longer supportable**
+at 6/12, and what should be reported alongside instead is *which* pairs each
+wording separates. Both variants' answers are on disk, so both tables are
+reproducible.
 
 ## Refresh against `chunker_compare_full` rebuild #3 (2026-08-07)
 
@@ -710,6 +722,14 @@ Family 1a is now 2/12 significant and family 1b 9/12 (was 6/12 and 8/12). The
 *direction* of finding 4c — arm ordering sharpens under `cite_all` — therefore
 holds and in fact strengthens; the counts change.
 
+> **Superseded 2026-08-10.** Every figure in this dated section is the state
+> *after* the 08-07 refresh and *before* the prompt-truncation repair. The 81
+> truncated cells were regenerated on 08-10 (`docs/rq4-prompt-truncation.md`
+> §4b) and this family-1b count moved 9/12 → **8/12**, family 1a staying 2/12.
+> The section is kept as the record of what that refresh found; cite the current
+> numbers from the guarded-section tables above or from
+> `data/results/rq4_score.md`.
+
 ### What survives untouched
 
 - **The prompt ablation, entirely.** Recall rises significantly under `cite_all`
@@ -777,7 +797,9 @@ graph axis closes on measurement rather than on taste.
 **Prompt variant: `cite_all`, pre-registered.** Three reasons, and the choice is
 deliberately the one most favourable to the entity arms, because this is an *upper*
 bound: (1) `cite_all` is the variant under which the arm-ordering result separates most
-(family 1 splits 9/12, vs 3/12 under `cite_all_guarded`); (2) it instructs the model to
+(family 1 splits 9/12, vs 3/12 under `cite_all_guarded` — the counts as they stood when
+this was pre-registered; after the 08-10 truncation repair they read 8/12 vs 6/12, which
+weakens the margin but not the choice); (2) it instructs the model to
 cite every relevant document, which is exactly what an exhaustive retriever needs to
 convert its recall into citation recall; (3) the `hybrid` baseline under `cite_all`
 is **uncontaminated by the truncation defect** — see below. `cite_all_guarded` remains

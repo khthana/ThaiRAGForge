@@ -681,7 +681,7 @@ def audit_generation() -> None:
     """G1: no published RQ4 answer may have been generated from a truncated prompt.
 
     Added 2026-08-10 because `audit_doc_claims.py`'s D4 -- the only thing that had
-    been flagging the 80 truncated cells -- turned out to be clearable *without
+    been flagging the 81 truncated cells -- turned out to be clearable *without
     fixing them*. D4 compares a report's mtime against its generator's, so merely
     re-running `rq4_score.py` (seconds, no generation) flipped it from FAIL to PASS
     while every truncated answer sat untouched on disk. That is the
@@ -722,14 +722,17 @@ def audit_generation() -> None:
     for m in truncated[:10]:
         print(f"        {m}")
     # Deliberately a WARN and deliberately not silent: docs/rq4-prompt-truncation.md
-    # reconstructed 80 of these prompt by prompt and found them truncated, so this is
-    # outstanding work, not merely unmeasured. It clears only by regenerating them --
-    # which is the point, since the timestamp check that used to carry this finding
-    # could be cleared by re-running the scorer.
+    # reconstructed 81 of these prompt by prompt and found them truncated (section 4
+    # published 80; re-deriving the list with a sound screen on 2026-08-10 found one
+    # more, `cite_all_guarded/dense/q001` at 8,258 tokens, and the doc was corrected),
+    # so this is outstanding work, not merely unmeasured. It clears only by
+    # regenerating them -- which is the point, since the timestamp check that used to
+    # carry this finding could be cleared by re-running the scorer.
     record("G1b every RQ4 answer records the context it was generated at", unverifiable == 0,
            f"{unverifiable} of {checked + unverifiable} answers predate the num_ctx fix "
-           f"and cannot be verified either way; 80 of them are KNOWN truncated "
-           f"(docs/rq4-prompt-truncation.md) and are still to be regenerated",
+           f"and cannot be verified either way; the 81 KNOWN truncated ones "
+           f"(docs/rq4-prompt-truncation.md) were regenerated 2026-08-10 and have left "
+           f"this count -- they are now among the {checked} G1a verifies",
            warn=True)
 
 

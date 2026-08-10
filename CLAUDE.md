@@ -1129,7 +1129,8 @@ see `docs/adr/`.
   measured it). **Blast radius, exact token counts:** `hybrid` **0/106** in all
   three variants (worst 7,999 — 193 tokens short of the line, by luck, and
   `cite_all_guarded` came within 2.4% of losing it), `closed_book` 0/106 by
-  construction, `dense` **16/106**, `bm25` 5/106, `m2v` 7/106; the entity arms
+  construction, `dense` **17/106** under `cite_all_guarded` (16 under the other
+  two), `bm25` 5/106, `m2v` 7/106; the entity arms
   would have been ~45-50%. **So the confound pushes in the same direction as the
   published `hybrid > {dense, bm25}` ordering — that finding is neither confirmed
   nor refuted by this, it is measured under a confound that flatters it.** The
@@ -1140,23 +1141,57 @@ see `docs/adr/`.
   non-zero; `num_ctx`/`prompt_eval_count` recorded in every answer JSON (the
   8192-era answers carry no such field, which is exactly why the damage had to be
   reconstructed prompt by prompt); and default `--num-ctx` 8192 → **16384**.
-  Pinned by `tests/tools/test_rq4_prompt_truncation.py`. The 80 cells are **not
-  yet regenerated** — and note that a re-run must be *scored*, not eyeballed,
-  because the generator's own noise floor is 14/24 identical citation sets at
-  temperature 0 ([[feedback_temperature_zero_is_not_reproducible]]). Method note
+  Pinned by `tests/tools/test_rq4_prompt_truncation.py`. **The 81 cells were
+  REGENERATED 2026-08-10** (`tools/eval/rq4_regenerate_truncated.py`, 9,501 s,
+  0 errors, post-check: every regenerated answer carries `num_ctx=16384` and no
+  truncation signature); the originals are **moved, not deleted**, to
+  `data/rq4/_truncated_backup_2026_08_10/` with a manifest, since they are the
+  only surviving record of what an evidence-stripped answer looked like. The run
+  is **paired by construction** — `rq4_generate.py` skips existing files, so
+  moving exactly the 81 bad ones regenerates exactly those and freezes the other
+  1,509 byte-for-byte, which matters because the generator's noise floor is 14/24
+  identical citation sets at temperature 0
+  ([[feedback_temperature_zero_is_not_reproducible]]) and an unpaired re-run
+  could not separate repair from drift. **The internal control worked**: `hybrid`
+  (0 truncated) and `closed_book` (0 by construction) come back with every figure
+  unchanged, while all three truncated arms improved. Verdicts were **diffed, not
+  eyeballed** — `rq4_score.md` **1 flip of 57** and `rq4_score_guarded.md`
+  **3 of 57**; §4b of `docs/rq4-prompt-truncation.md` lists every moved figure.
+  **The single lost verdict is the one the confound was predicted to flatter**:
+  `hybrid > dense` citation recall under `cite_all` goes −0.0756 (Holm 0.0132,
+  significant) → **−0.0606, CI [−0.1115, −0.0098], Holm 0.0760 — now a bound, not
+  a result**. The three gains are all guarded m2v pairs. The prompt ablation
+  (family 2, the headline) is **entirely intact**; its point estimates moved only
+  (dense +0.1005 → +0.1095, bm25 +0.0734 → +0.0696, hybrid +0.1181 unchanged).
+  Method note
   for any future prompt-size work here: **chars/token is unusable as an
-  estimator** on this corpus — 1.046 (Thai prose) to 3.151 (English course tables)
-  within the same prompt family, so screen on the *minimum* ratio and measure
-  everything above the line exactly. Findings, in
+  estimator** on this corpus — realized spread **1.0098 – 4.0175** within the
+  same prompt family — and **an observed minimum is not a bound either.** The
+  screen shipped with the repair divided characters by `MIN_CHARS_PER_TOKEN =
+  1.046`, documented as this corpus's floor from the two entity arms; **15 of
+  228 measured prompts fall below it** (min 1.0098, `bm25_semantic/q001`,
+  11,208 chars / 11,099 tokens). An unsound "upper bound" does not merely
+  mis-sort the probe queue, it **excludes prompts from being measured at all** —
+  which is how two reconstruction runs of the 80 cells came back with 78,
+  missing `sentence_cap/dense…/q009` (8,212 tokens) and one more. Both
+  `rq4_generate.token_upper_bound` and the reconstruction script now use the
+  only bound that is provable rather than sampled — **one token per UTF-8 byte**
+  (~3x loose on Thai, and loose is the one safe direction) — and the
+  reconstruction carries **S1**, which re-derives every probed prompt's realized
+  ratio and fails if any lands under the screen. Findings, in
   the order they were established:
-  (a) **retrieval quality survives the generation stage — but state it as
-  `hybrid > {dense, bm25} > m2v`, not as a strict 4-way ordering.** Post-refresh:
-  under `cite_all` hybrid 0.7268 > dense 0.6629 > bm25 0.5968 > m2v 0.5203, but
+  (a) **retrieval quality survives the generation stage — but after the
+  2026-08-10 truncation repair the only citable ordering is
+  `{hybrid, dense} > m2v`, with `hybrid > dense` a bound.** Post-repair: under
+  `cite_all` hybrid 0.7268 > dense 0.6798 > bm25 0.6104 > m2v 0.5278, but
   **dense vs bm25 is not significant in either prompt variant** (Holm-adj 1.0000
-  under `sentence_cap`, 0.2136 under `cite_all`) and under `sentence_cap` bm25
-  (0.6463) numerically *edges* dense (0.6413). The old wording "citation precision
-  orders exactly as recall@10 did (hybrid 0.742 > dense 0.670 > bm25 0.625 > m2v
-  0.562)" over-read a tie and is **corrected 2026-08-07**;
+  under `sentence_cap`, 0.1798 under `cite_all`) and **`hybrid > dense` citation
+  recall lost significance with the repair** (−0.0606, CI [−0.1115, −0.0098],
+  Holm 0.0760 — cite it as ruling out dense beating hybrid, not as hybrid
+  winning); under `sentence_cap` bm25 (0.6607) numerically *edges* dense
+  (0.6549). The old wording "citation precision orders exactly as recall@10 did
+  (hybrid 0.742 > dense 0.670 > bm25 0.625 > m2v 0.562)" over-read a tie and is
+  **corrected 2026-08-07**;
   (b) **the original run's flat ~0.41 citation recall across every arm was a PROMPT
   artifact, not a generator ceiling — confirmed, not just suspected.** Prompt rule 4
   said `ตอบสั้น ๆ ไม่เกิน 3 ประโยค` against a gold set dominated by aggregation queries
@@ -1172,17 +1207,20 @@ see `docs/adr/`.
   universal — m2v doesn't improve (+0.026, Holm p=0.657)**, consistent with retrieval
   quality (the RRF-failure arm likely lacks enough correct evidence in context to cite
   regardless of instruction), and **arm ordering (4c) sharpens under `cite_all`**
-  (post-refresh **9/12** pairwise tests significant vs **2/12** under the original
-  prompt — direction unchanged and stronger than the 8/12-vs-6/12 first measured;
-  m2v significantly worst on both precision and recall). One real cost surfaced:
+  (post-repair **8/12** pairwise tests significant vs **2/12** under the original
+  prompt — direction unchanged; m2v significantly worst on both precision and
+  recall). One real cost surfaced:
   **closed-book abstention dropped 106/106 → 104/106 under `cite_all`** (2
   hallucinations, 5 phantom citations) — `cite_all` has no zero-document guard, worth
   a tightened wording before adopting it as the paper's final prompt; (c) **0
-  fabricated citations across all 954 citations under the original prompt** — RAG's
+  fabricated citations across all 981 citations under the original prompt** — RAG's
   most-feared failure mode is absent here, the payoff for exactly-checkable numeric
   labels — but **this is prompt-specific, corrected 2026-08-07**: under `cite_all`
-  the dense arm now shows **4/359 phantoms** (previously 0/370), all from one query
-  citing labels `[6]`–`[9]` when only 5 documents were supplied. So `cite_all` shows
+  the dense arm now shows **4/391 phantoms** (previously 0/370), all from one query
+  citing labels `[6]`–`[9]` when only 5 documents were supplied. (Both denominators
+  grew with the 2026-08-10 regeneration — 954 and 359 before it — while no phantom
+  *count* moved in any cell, so restoring the evidence created no new fabrication.)
+  So `cite_all` shows
   fabrication in two arms, not closed-book alone. Caveat: citation precision is judged against the
   same qrels, so it inherits the pooling-bias threat — direction is conservative (see
   validity bullet below). **De-prioritized, not cancelled**: the `gemma4:e4b`
@@ -1212,7 +1250,9 @@ see `docs/adr/`.
   (`phi4 / hybrid_m2v` 0.4945→0.5575) narrowing three m2v comparisons at once —
   **report those four as inconclusive, not reversed.** Everything cited above
   survived: the whole prompt ablation (hybrid +0.1181 / dense +0.1005 / bm25
-  +0.0734 all Holm 0.0000, m2v +0.0217 ns), m2v-worst, and 106→104 abstention.
+  +0.0734 all Holm 0.0000, m2v +0.0217 ns — the dense/bm25 estimates are
+  +0.1095/+0.0696 after the 2026-08-10 truncation repair, same verdicts),
+  m2v-worst, and 106→104 abstention.
   One further lesson: the phantom-citation regression in (c) was **silently
   skipped by `diff_significance_reports.py`**, because that column is formatted
   `count/total` and matched neither its numeric nor its verdict branch — the differ
@@ -1232,40 +1272,46 @@ see `docs/adr/`.
   rule 4) and **rule 6** (cite only labels that literally appear above). Results,
   each confirmed on the failure it was written for: rule 5 → closed-book abstention
   **104/106 → 106/106**, phantom **5/5 → 0/0**; rule 6 → dense phantom
-  **4/359 → 0/353** (no other arm produced a phantom under any variant, so dense
+  **4/391 → 0/375** (no other arm produced a phantom under any variant, so dense
   was the only arm that could test it). **All 4 retrieval arms regenerated under
   the guard 2026-08-08** (bm25+m2v, 212 answers, 4678s, exit 0), so the variant
   now carries the full 530 answers and every family is rerunnable under it.
   **The benefit survives**: guarded beats the `sentence_cap` baseline by
-  **+0.1123 on dense** (Holm 0.0000 in every family) and **+0.0706 on hybrid**
-  (Holm 0.0144 in family 2), so the ablation's headline doesn't depend on the
-  unguarded wording; bm25's guarded gain (+0.0539) misses significance where the
-  unguarded +0.0734 made it, and m2v moves under neither. **The apparent cost vs
+  **+0.1198 on dense** (Holm 0.0000 in every family) and **+0.0706 on hybrid**
+  (Holm 0.0192 in family 2), so the ablation's headline doesn't depend on the
+  unguarded wording; bm25's guarded gain (+0.0533) misses significance where the
+  unguarded +0.0696 made it, and m2v moves under neither. **The apparent cost vs
   unguarded `cite_all` is not a finding** — no arm significant and the point
-  estimates **don't agree on a direction** (dense +0.0117 vs hybrid −0.0475,
-  bm25 −0.0195, m2v −0.0067), which is what the measured noise floor predicts
+  estimates **don't agree on a direction** (dense +0.0104 vs hybrid −0.0475,
+  bm25 −0.0163, m2v −0.0095), which is what the measured noise floor predicts
   (14/24 identical citation sets at temperature 0,
   [[feedback_temperature_zero_is_not_reproducible]]); as bounds, hybrid rules out
-  the guard being *better* than `cite_all`, dense rules out a loss > ~0.017.
+  the guard being *better* than `cite_all`, dense rules out a loss > ~0.02.
   **Two things the 4-arm run added that the 2-arm run could not show.** (1) The
   guard is **not free**: rule 5 applies to every arm, not just closed-book, and
-  it pushes the weak arms toward abstention — m2v correct-abstain 13→19 and
-  hallucination 16→10 but *missed* (gold present, abstained) 11→18; bm25
-  hallucination 12→10. Report the trade. (2) **The 4c "sharpening" claim belongs
-  to `cite_all`, not to the guard**: family 1's 12 pairwise tests separate
-  **2/12** under `sentence_cap`, **9/12** under `cite_all`, but only **3/12**
-  under `cite_all_guarded` — the guard pulls the strong arms down (hybrid
-  0.3962→0.3487) while dense rises (0.3206→0.3323), compressing the spread.
-  Direction is unchanged everywhere and several guarded cells miss narrowly
-  (0.0576, 0.0896), so it is smaller separation, not lost separation. **Recommendation:
-  report `cite_all_guarded` as the paper's prompt but cite the ordering result from
-  `cite_all` with the 3/12 stated alongside.**
+  it pushes the weak arms toward abstention — m2v correct-abstain 13→16 and
+  hallucination 16→13 but *missed* (gold present, abstained) 10→18; bm25
+  hallucination 11→10. Report the trade. (2) **The 4c "sharpening" claim belongs
+  to `cite_all`, not to the guard — but the *reason* recorded here until
+  2026-08-10 was wrong and is WITHDRAWN.** Family 1's 12 pairwise tests separate
+  **2/12** under `sentence_cap`, **8/12** under `cite_all`, **6/12** under
+  `cite_all_guarded`. The old text said the guard "compresses the spread"; that
+  rested on a 3/12 measured *before* the truncation repair, and restoring the
+  evidence took the guarded count to 6/12. What actually differs is **which**
+  pairs each prompt resolves: under the guard all 6 significant cells are m2v
+  pairs (it separates the weak arm from everything) while `hybrid vs bm25`
+  narrowly misses on both metrics (recall Holm 0.1056, precision 0.2430) and
+  `hybrid vs dense` is a flat tie (−0.0028, Holm 0.9164) — **`cite_all` is the
+  only variant that separates the two strong arms from each other.**
+  **Recommendation: report `cite_all_guarded` as the paper's prompt but cite the
+  ordering result from `cite_all`, with the guarded 6/12 and its differing
+  composition stated alongside.**
   `rq4_score.py` gained `--treatment-variant` and `--out` so a variant is scored
   against the same baseline without clobbering the published `rq4_score.md`
   (guarded report: `data/results/rq4_score_guarded.md`). **Always quote the Holm
   family size** — with 4 arms family 3 holds **24** tests and family 2 holds **9**,
   and on 2026-08-08 they stopped agreeing: `hybrid: guarded vs baseline`, identical
-  data, +0.0706 either way, reads **0.0144 (significant) in family 2** and **0.0600
+  data, +0.0706 either way, reads **0.0192 (significant) in family 2** and **0.0720
   (not significant) in family 3**. Neither is wrong; family 2 is the one built to
   answer "does this prompt beat the baseline", so cite that one, *as family 2*.
   Family 3 was added 2026-08-08 because the variant-vs-variant pairs
