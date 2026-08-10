@@ -754,3 +754,61 @@ found by comparing that column by hand. The differ now reports every non-numeric
 cell change and exits 1 on one (confidence intervals excluded, being numeric in
 substance). Same shape as every silent-corruption bug this project has hit: not a
 crash, just a number nobody looked at.
+
+## Pre-registration (2026-08-10): the two entity arms as a decisive upper bound
+
+Written **before** the run, so the reading rule is not chosen after seeing the number.
+This is task #1, and it exists to gate the 5-7 days of work behind relation-graph
+edges B (`person → responsible_for → program`) and C (`person → replaces → person`).
+
+**The argument being tested.** `entity_lookup` reads `programs.json` / `people.json` /
+`courses.json` and returns *every* document tagged with the query's entity — exhaustive
+and unranked. It is structurally advantaged **twice**: (a) exhaustive, so it has no
+ranking to lose evidence to, and (b) **circular**, because its qrels were derived from
+the same dictionaries it retrieves with (see `docs/eval-validity-threats.md` §3). A
+richer graph built on those same dictionaries can, at best, route evidence the
+dictionaries already contain. **So if the dictionary-driven arm cannot lift end-to-end
+citation recall above the shipped hybrid arm, edges B and C cannot either**, and the
+graph axis closes on measurement rather than on taste.
+
+**Arms.** `entity_lookup_semantic` and `entity_boost_semantic`, contexts already built
+(106 each, `data/rq4/contexts/`). Baseline for comparison: the existing `hybrid` arm.
+
+**Prompt variant: `cite_all`, pre-registered.** Three reasons, and the choice is
+deliberately the one most favourable to the entity arms, because this is an *upper*
+bound: (1) `cite_all` is the variant under which the arm-ordering result separates most
+(family 1 splits 9/12, vs 3/12 under `cite_all_guarded`); (2) it instructs the model to
+cite every relevant document, which is exactly what an exhaustive retriever needs to
+convert its recall into citation recall; (3) the `hybrid` baseline under `cite_all`
+is **uncontaminated by the truncation defect** — see below. `cite_all_guarded` remains
+the paper's recommended prompt; it is not what this bound is measured under.
+
+**`--num-ctx 16384`, and why the comparison is clean anyway.** Every published RQ4
+answer was generated at 8192 (`docs/rq4-prompt-truncation.md`). The entity arms would
+have been ~45-50% truncated there, so they *must* run at 16384. The comparison is still
+paired and valid because **`hybrid` is 0/106 truncated in all three variants** (longest
+prompt 7,999 tokens, 193 short of the line) and the measured rule is that a prompt which
+*fits* is fed whole — so the `hybrid` answers on disk are byte-for-byte the experiment a
+16384 run would have produced. **`dense`, `bm25` and `m2v` are NOT clean** (16 / 5 / 7
+of 106 truncated) and any entity-vs-those comparison must be reported as confounded
+until those 80 cells are regenerated.
+
+**Primary comparison and decision rule, fixed now.**
+- Primary metric: **citation recall**, `entity_lookup` vs `hybrid`, under `cite_all`.
+- Secondary: citation precision, and the same pair for `entity_boost`.
+- Holm within the family `rq4_score.py` already defines; **quote the family size**.
+- **If `entity_lookup` does not significantly beat `hybrid` on citation recall** → the
+  upper bound fails to clear, and edges B/C are **not built**. Report it as a bound
+  ("rules out a graph gain larger than X"), never as "no difference"
+  ([[feedback_report_ties_as_bounds]]).
+- **If it does** → the axis has measured headroom; the size of the margin is the budget
+  edges B/C have to earn, and it is still an *upper* bound, not a forecast, because of
+  the circularity.
+- Either way the `entity_lookup` number is **recall at k=1000, not recall@10** — the arm
+  is exhaustive and unranked, and that distinction is why it must never be set beside the
+  dense/lexical recall@10 columns.
+
+**Known noise floor.** phi4 at temperature 0 reproduces only **14/24** identical citation
+sets on byte-identical prompts under `cite_all`
+([[feedback_temperature_zero_is_not_reproducible]]). A margin near that floor is not a
+result; this is why the run is *scored*, not read.
