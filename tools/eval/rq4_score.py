@@ -86,6 +86,15 @@ ARM_ORDER = [
     "closed_book",
 ]
 
+# Arms that exist on disk but are NOT part of the published five. Kept out of the
+# default so `rq4_score.md` stays reproducible: family 1's Holm size is the number
+# of arm pairs, so merely making the script aware of two more arms would move the
+# adjusted p of every published comparison. Opt in with --arms.
+EXTRA_ARMS = [
+    "entity_lookup_semantic",
+    "entity_boost_semantic",
+]
+
 
 def parse_citations(answer: str, label_map: dict[str, str]) -> tuple[set[str], set[str]]:
     """-> (cited resolution_ids that resolve, phantom labels that don't)."""
@@ -209,7 +218,24 @@ def main() -> int:
                     "non-default --treatment-variant should pass a different path "
                     "rather than clobber it, the same way rq4_generate.py gives each "
                     "prompt variant its own answers dir.")
+    ap.add_argument("--arms", default="",
+                    help="comma-separated arm names, in the order they should be "
+                    "reported. Default: the five published design-doc arms. Pass an "
+                    "explicit list to score the entity arms (see EXTRA_ARMS) -- and "
+                    "pass --out too, because changing the arm set changes family 1's "
+                    "Holm size and would silently move every published verdict.")
     args = ap.parse_args()
+
+    arm_order = [a for a in args.arms.split(",") if a] or ARM_ORDER
+    unknown = [a for a in arm_order if a not in ARM_ORDER + EXTRA_ARMS]
+    if unknown:
+        raise SystemExit(f"unknown arm(s): {unknown}. Known: {ARM_ORDER + EXTRA_ARMS}")
+    if arm_order != ARM_ORDER and Path(args.out) == _OUTPUT:
+        raise SystemExit(
+            "refusing to write the published rq4_score.md with a non-default arm "
+            "set: family 1 is Holm-corrected across arm pairs, so a different arm "
+            "set silently re-adjusts every published p. Pass --out."
+        )
 
     rng = np.random.default_rng(args.seed)
     lines = [
@@ -226,7 +252,7 @@ def main() -> int:
 
     scores: dict[tuple[str, str], ArmScore] = {}  # (variant, arm) -> ArmScore
     for variant in variants:
-        for arm in ARM_ORDER:
+        for arm in arm_order:
             recs = load_arm(variant, arm)
             if recs:
                 scores[(variant, arm)] = ArmScore(recs)
@@ -242,7 +268,7 @@ def main() -> int:
         "| variant | arm | n | mean precision | (n with citations) | mean recall | phantom / total citations |",
         "|---|---|---|---|---|---|---|",
     ]
-    for (variant, arm), s in sorted(scores.items(), key=lambda kv: (kv[0][0], ARM_ORDER.index(kv[0][1]))):
+    for (variant, arm), s in sorted(scores.items(), key=lambda kv: (kv[0][0], arm_order.index(kv[0][1]))):
         prec, n_prec = s.mean_precision()
         ph, tot = s.phantom_rate()
         prec_str = f"{prec:.4f}" if not np.isnan(prec) else "—"
@@ -260,7 +286,7 @@ def main() -> int:
         "hallucinated (no gold, answered) | correctly abstained (no gold) |",
         "|---|---|---|---|---|---|",
     ]
-    for (variant, arm), s in sorted(scores.items(), key=lambda kv: (kv[0][0], ARM_ORDER.index(kv[0][1]))):
+    for (variant, arm), s in sorted(scores.items(), key=lambda kv: (kv[0][0], arm_order.index(kv[0][1]))):
         lines.append(
             f"| {variant} | {arm} | {s.cell(True, False)} | {s.cell(True, True)} | "
             f"{s.cell(False, False)} | {s.cell(False, True)} |"
@@ -277,7 +303,7 @@ def main() -> int:
 
     def arm_ordering_family(variant: str, label: str) -> list[str]:
         out_lines = []
-        ordering_arms = [a for a in ARM_ORDER if a != "closed_book" and (variant, a) in scores]
+        ordering_arms = [a for a in arm_order if a != "closed_book" and (variant, a) in scores]
         if len(ordering_arms) < 2:
             return [f"## Significance family 1{label}: skipped (fewer than 2 arms "
                     f"with citations found for variant {variant})\n"]
@@ -312,7 +338,7 @@ def main() -> int:
     lines += arm_ordering_family(cite_all_variant, "b")
 
     # ---- family 2: prompt ablation, cite_all vs sentence_cap, per arm ----
-    ablation_arms = [a for a in ARM_ORDER
+    ablation_arms = [a for a in arm_order
                       if (base_variant, a) in scores and (cite_all_variant, a) in scores]
     if ablation_arms:
         tv = args.treatment_variant
@@ -368,7 +394,7 @@ def main() -> int:
     # family 2 under another heading.
     variants_by_arm = {
         arm: [v for v in variants if (v, arm) in scores]
-        for arm in ARM_ORDER
+        for arm in arm_order
     }
     family3_arms = [a for a, vs in variants_by_arm.items() if len(vs) >= 3 and a != "closed_book"]
     if family3_arms:
