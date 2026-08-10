@@ -621,11 +621,12 @@ see `docs/adr/`.
   **417.9 ms** (−0.672 s, 2.6x), F=1,000 421.0 ms.** So the over-fetch is **~62% of hybrid
   query time**, and the ~0.42 s left is real scoring work (dense encode + gemv + `get_scores`)
   that no depth cut can touch — **do not read the earlier "the remaining ~1.36s is the k=n
-  over-fetch" as all removable**; that sentence bundled the residual in. **Nothing is wired:
-  the shipped default stays k=n.** The trade on the table is ~0.67 s/query for −0.0033 macro
+  over-fetch" as all removable**; that sentence bundled the residual in. The trade on the
+  table was ~0.67 s/query for −0.0033 macro
   recall@10 at F=200 — a *cost* decision of the same shape as soft-vs-hard routing, and it
-  would need re-measuring against the hard router (which now ships) before adoption, since
-  that macro figure is an average over a whole combo family, not a system result. Two method
+  needed re-measuring against the hard router (which now ships) before adoption, since
+  that macro figure is an average over a whole combo family, not a system result.
+  **That re-measurement is DONE and the decision is made — see the next bullet.** Two method
   notes: the sweep replicates the **truncated** tie-break (the fusion dict is filled
   `dense[:F]` first, then the BM25-only remainder in BM25 rank order, so equal RRF scores stay
   dense-first — the same trap `miss_depth_profile.py` documents at full depth), and **S5
@@ -635,6 +636,44 @@ see `docs/adr/`.
   (a cut chunk's normalised score reads 0, a harsher approximation) and is **unmeasured**.
   Everything the report renders is cached in `hybrid_fetch_depth_raw.json`, so `--render`
   reproduces it without a GPU.
+- **`fetch_depth` against the shipped router, and the ship decision (2026-08-09,
+  `tools/eval/routed_fetch_depth_test.py` → `data/results/routed_fetch_depth_test.md`,
+  ~2.5 min quality + ~3 min latency).** The sweep above left one blocker: its
+  −0.0033 is a macro over 36 combos retrieving with **no router**, and hard routing has
+  shipped since 2026-08-08 — the exact wrong-pair trap that killed per-`entity_type` alpha
+  and rrf4. Re-measured on the 106 queries routed by `classify_query` to their 4 shipped
+  indices, **the trade gets better on both sides**: pre-registered F=200 vs k=n (3 metrics,
+  Holm m=3) is recall@10 **+0.0005**, MRR −0.0024, nDCG@10 −0.0022, **all Holm-adj 1.0000**,
+  and latency **1193.9 → 475.6 ms p50 (−0.718 s, 2.51x)**, paired on the index each query is
+  actually routed to. **Note the null points the other way here than in those two cases** —
+  they had to *win* and a null killed them; a depth cut only has to not *lose*, so the null
+  is what licenses shipping — which is exactly why it must be **cited as a bound**: the CI
+  rules out a loss worse than **0.0078** on the worst of the three metrics. **The
+  pre-registered prediction was confirmed and it is the part that carries the mechanism**:
+  unrouted, `person` is the one entity type that *gains* from a shallow cut (+0.0202 at F=50)
+  because BM25 carries it while the cut deletes a weak dense arm's tail; routing already
+  hands `person` its dense specialist, so the gain should shrink — it **reverses** to
+  −0.0207. Also worth knowing: routed damage at *shallow* F is **worse** than unrouted
+  (F=10 −0.0705 vs −0.0480) because routing raised the baseline there is more to lose from,
+  yet routed rankings are *more* stable (84.0% of top-10s identical at F=200 vs 66.0%) —
+  don't assume the unrouted damage curve transfers in either direction.
+  **DECISION: wired at the query-time layer, NOT as the class default.**
+  `app/streamlit_app.py` sets `fetch_depth` per query through `StrategySpec` params
+  (default 200, with 1000 and "whole corpus" selectable); `HybridRetriever.__init__` keeps
+  `fetch_depth=None`, pinned by `tests/retrievers/test_hybrid_retriever.py`. The split is
+  load-bearing, not a hedge: F=200 changes the top-10 on **17 of 106** Gold queries, so as a
+  constructor default it would silently re-rank every future eval run while ~24k persisted
+  results and every published table still said k=n — this project's signature
+  silent-corruption shape. The UI is where 0.72 s is felt; the eval harness is where
+  reproducibility is. Containment is checked, not assumed: `audit_pipeline_invariants.py`
+  already classifies `mode_b`/`mode_b_routed` as write-only UI dirs, so nothing an eval
+  reads can pick up an F=200 result. Anchors: S2 reproduces `routing_eval.md`'s
+  `routed (shipped)` **0.6831** and S3 the unrouted **0.6281**, both exactly, from an
+  independent code path; S4 is the live-mechanism check against a real
+  `HybridRetriever(fetch_depth=F)` on a *routed* index, since S1-S3 exercise only F=n where
+  truncation is inert ([[feedback_anchor_a_check_where_the_mechanism_is_live]]). The fusion
+  itself is **imported** from `hybrid_fetch_depth_sweep.py` rather than reimplemented — two
+  copies of that tie-break would eventually disagree.
   **Refreshed 2026-07-29** against the OCR-remediation-rebuilt indices: latency/cost mechanics
   came back essentially unchanged (confirms these measure model/index/corpus-size mechanics, not
   corpus content), but the recall@10 columns in the report dropped substantially like every other

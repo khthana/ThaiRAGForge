@@ -130,6 +130,37 @@ else:
         ),
     )
 retriever = st.sidebar.selectbox("Retriever", ["dense", "bm25", "hybrid"], index=0, key="retriever")
+fetch_depth = st.sidebar.selectbox(
+    "Hybrid fetch depth", [200, 1000, "ทั้งคลัง (k=n)"], index=0, key="fetch_depth",
+    disabled=retriever != "hybrid",
+    help=(
+        "How many candidates each arm returns before RRF fuses them. 'ทั้งคลัง' "
+        "is what every published number was measured at -- RRF sees complete "
+        "rankings, and a chunk past an arm's cut loses that arm's term outright "
+        "rather than earning a small one, so this is a real change to the "
+        "ranking, not a cache. 200 is the default here on measurement: against "
+        "the shipped hard router it is 2.51x faster (p50 1193.9ms -> 475.6ms) "
+        "for no significant quality cost on any metric (recall@10 +0.0005, MRR "
+        "-0.0024, nDCG@10 -0.0022, all Holm-adj 1.0000, m=3; the CI rules out a "
+        "loss worse than 0.0078). It does change the top-10 on 17 of 106 Gold "
+        "queries, which is why eval code keeps k=n. See "
+        "data/results/routed_fetch_depth_test.md."
+    ),
+)
+
+
+def _retriever_spec() -> StrategySpec:
+    """The retriever the UI queries with.
+
+    `fetch_depth` is set HERE, not on HybridRetriever's constructor, and that
+    split is deliberate: the class default stays `None` (= whole corpus) so
+    every eval script and all ~24k persisted results keep reproducing their
+    published numbers by construction. Only the interactive path, where 0.72s
+    per query is what a person actually feels, opts into the cut.
+    """
+    if retriever != "hybrid" or fetch_depth == "ทั้งคลัง (k=n)":
+        return StrategySpec(type=retriever)
+    return StrategySpec(type=retriever, params={"fetch_depth": int(fetch_depth)})
 k = st.sidebar.slider("top-k", min_value=1, max_value=20, value=5, key="k")
 year_filter = st.sidebar.text_input("Filter by year (พ.ศ., optional)", "", key="year_filter")
 entity_boost = st.sidebar.checkbox(
@@ -184,7 +215,7 @@ if search_clicked and query and smart_routing:
         )
     try:
         result = route_query(
-            query, infos, StrategySpec(type=retriever), k,
+            query, infos, _retriever_spec(), k,
             results_dir="data/results/mode_b_routed",
             unmatched_strategy=unmatched_strategy,
         )
@@ -203,7 +234,7 @@ elif search_clicked and query and not smart_routing and selected:
     combos = query_indices(
         query,
         dirs,
-        StrategySpec(type=retriever),
+        _retriever_spec(),
         k,
         results_dir="data/results/mode_b",
         filter_criteria=criteria,

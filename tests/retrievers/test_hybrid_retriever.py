@@ -1,11 +1,14 @@
 """Cycle G — HybridRetriever fuses Dense + BM25 (RRF default, weighted option)."""
 from __future__ import annotations
 
+import inspect
+
 import numpy as np
 
 from rag_lab.config import StrategySpec
 from rag_lab.factory import build_retriever
 from rag_lab.retrievers import DenseRetriever
+from rag_lab.retrievers.hybrid import HybridRetriever
 from rag_lab.schema import Chunk, Index, Query
 
 
@@ -145,6 +148,18 @@ def test_fetch_depth_none_is_identical_to_fetching_the_whole_corpus():
     full = [r.chunk_id for r in _hybrid().retrieve(q, index, 3)]
     assert [r.chunk_id for r in _hybrid(fetch_depth=3).retrieve(q, index, 3)] == full
     assert [r.chunk_id for r in _hybrid(fetch_depth=999).retrieve(q, index, 3)] == full
+
+
+def test_the_class_default_stays_none_so_only_callers_opt_into_a_cut():
+    # The 2026-08-09 ship decision, pinned. Measured against the shipped hard
+    # router, F=200 costs nothing significant (recall@10 +0.0005, MRR -0.0024,
+    # nDCG@10 -0.0022, all Holm-adj 1.0000) and saves 0.718s/query -- so the
+    # Streamlit UI sets it, per query, via StrategySpec params. What it must
+    # NOT become is this default: eval scripts construct HybridRetriever()
+    # directly, and a cut here would silently re-rank 17 of 106 Gold queries
+    # while every published table still said k=n.
+    # See data/results/routed_fetch_depth_test.md.
+    assert inspect.signature(HybridRetriever).parameters["fetch_depth"].default is None
 
 
 def test_truncating_the_fetch_drops_a_chunk_out_of_reach_of_one_arm():

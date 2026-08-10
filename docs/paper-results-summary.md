@@ -2486,6 +2486,49 @@ F=200. **Nothing is wired — the shipped default is still k=n**, and the knob's
 default (`fetch_depth=None`) computes `depth = len(index.chunks)`, i.e. the
 old expression exactly, so no published number moves.
 
+### The same cut measured against the shipped hard router — and the ship decision
+
+*(2026-08-09, `tools/eval/routed_fetch_depth_test.py` →
+`data/results/routed_fetch_depth_test.md`; 106 queries routed by
+`classify_query` to their 4 shipped indices, k = 10 sent by every arm.)*
+
+The table above is a macro average over 36 combos retrieving **without a
+router**, and hard routing has shipped since 2026-08-08 — the same wrong-pair
+trap that per-`entity_type` alpha and the rrf4 reranker both fell into. Re-run
+against the shipped configuration, **the trade gets better on both sides**:
+
+| arm | docs sent | docs fetched | recall@10 | MRR | nDCG@10 | p50 latency |
+|---|---|---|---|---|---|---|
+| routed, k=n (shipped) | 10 | n (57k–75k) | 0.6831 | 0.8686 | 0.7502 | 1193.9 ms |
+| routed, F=1,000 | 10 | 1,000 | 0.6804 | 0.8686 | 0.7481 | 483.1 ms |
+| routed, F=200 | 10 | 200 | 0.6835 | 0.8662 | 0.7480 | 475.6 ms |
+
+Pre-registered family (F=200 vs k=n, 3 metrics, Holm m=3): recall@10
+**+0.0005** (Holm-adj 1.0000), MRR **−0.0024** (1.0000), nDCG@10 **−0.0022**
+(1.0000). **State it as a bound, since a null is the outcome that licenses
+shipping here**: the CI rules out a loss worse than **0.0078** on the
+worst-behaved of the three metrics. Latency **−0.718 s/query (2.51×)**, measured
+paired on the index each query is actually routed to.
+
+**The registered prediction was confirmed, and it confirms the mechanism rather
+than the headline.** Unrouted, `person` is the one entity type that *gains* from
+a shallow cut (+0.0202 at F=50 here, +0.0212 in the sweep) because BM25 carries
+it while the cut deletes a weak dense arm's tail. Routing already hands `person`
+its dense specialist, so that gain should shrink — it **reverses**, to −0.0207.
+Same mechanism as the two interventions that died against the router; here it
+costs nothing, because a depth cut only has to avoid losing.
+
+**Decision: shipped at the query-time layer, not as the class default**
+(`app/streamlit_app.py` sets `fetch_depth` per query via `StrategySpec` params,
+defaulting to 200 with `1000` and "whole corpus" selectable;
+`HybridRetriever.__init__` keeps `fetch_depth=None`, pinned by a test). The
+split is the point: F=200 changes the top-10 on **17 of 106** Gold queries, so
+letting it become the constructor default would silently re-rank every future
+eval run while all ~24k persisted results and every published table still said
+k=n. The UI is where 0.72 s is felt; the eval harness is where reproducibility
+is. Nothing an eval reads is touched — the invariant audit already classifies
+`mode_b`/`mode_b_routed` as write-only UI dirs.
+
 ## Open items (not yet done, needed before the numbers above are "final")
 
 1. ~~Per-chunker point comparison of BM25 vs. embedder (not averaged across
@@ -2549,11 +2592,16 @@ old expression exactly, so no published number moves.
    ~2.2x for the most expensive embedder up to ~3.5x for the cheapest,
    purely because the same fixed overhead is divided by very different
    intrinsic baselines — the additive number is the real story.
-   **The second is now measured but deliberately not fixed** (2026-08-09,
-   see "Hybrid fetch depth" above): capping the fetch at F=200 removes
-   ≈0.67s/query but costs −0.0033 macro recall@10 and changes 43% of
-   top-10 orderings, so it is a cost/quality trade for the deployer, not a
-   defect to silently repair. The shipped default remains k=n.
+   **The second is now measured, and DECIDED** (2026-08-09, see "Hybrid
+   fetch depth" above): capping the fetch at F=200 removes ≈0.67s/query but
+   costs −0.0033 macro recall@10 and changes 43% of top-10 orderings, so it
+   is a cost/quality trade for the deployer, not a defect to silently
+   repair. Re-measured against the **shipped hard router** (rather than the
+   36-combo macro, which is not a system result) the same cut is
+   **+0.0005 recall@10, all three metrics ns, for −0.718 s/query**, so it is
+   now **wired at the query-time layer** — the UI opts in per query while
+   `HybridRetriever`'s default stays k=n, which is what keeps every
+   published number and every eval script reproducing unchanged.
 4. ~~MAP + Precision@k + multi-k (1/3/5/10)~~ — DONE 2026-07-21:
    `precision_at_k` and `average_precision_at_k` added to
    `src/rag_lab/metrics.py`, `evaluate()` now accepts a list of k's and
