@@ -38,6 +38,10 @@ Checks, grouped by layer (C = corpus, I = index, E = eval):
         contamination bug (expected in a retired result set) from a genuine
         index mismatch
     E4  persisted results older than the index they were computed from
+    G1  no published RQ4 answer was generated from a truncated prompt: G1a reads
+        the `num_ctx`/`prompt_eval_count` an answer records, G1b re-derives the
+        same claim for pre-fix answers from provable evidence about their prompt,
+        and G1c reports how many answers neither can reach
 
 Read-only. Exits 1 if any check FAILs.
 
@@ -68,6 +72,20 @@ sys.path.insert(0, "src")
 from rag_lab.config import StrategySpec  # noqa: E402
 from rag_lab.factory import build_loader  # noqa: E402
 from rag_lab.loaders.common import _meeting_manifest, iter_corpus_files  # noqa: E402
+
+# G1b rebuilds RQ4 prompts to bound their token count. `rq4_generate` pulls in the
+# ollama client, so the import is guarded: this audit is read-only and makes no
+# request, and it must stay runnable where that client is absent. Missing => every
+# pre-fix answer falls to G1c as *unmeasured*, which is the honest degradation
+# rather than a silent pass.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    from rq4_generate import (  # noqa: E402
+        _CONTEXTS as _RQ4_CONTEXTS, build_prompt as _rq4_build_prompt,
+        token_upper_bound as _rq4_token_upper_bound, truncated_to as _rq4_truncated_to,
+    )
+except Exception:                                       # pragma: no cover
+    _RQ4_CONTEXTS = None
 
 CORPUS = Path("academic_resolutions")
 
@@ -693,9 +711,38 @@ def audit_generation() -> None:
     `prompt_eval_count` in every answer it writes; ollama truncates an over-long
     prompt to exactly `num_ctx // 2 + 2` tokens (docs/rq4-prompt-truncation.md), so
     that equality is an exact signature. Answers predating the fix carry neither
-    field -- they are counted separately as *unverifiable*, not as clean, because
-    "no evidence of truncation" and "evidence of no truncation" are different
+    field -- they are counted separately, not as clean, because "no evidence of
+    truncation" and "evidence of no truncation" are different
     ([[feedback_undefined_is_not_zero]]).
+
+    **The pre-fix answers are not one bucket, and calling them one overstated the
+    hole by 2x (sharpened 2026-08-11).** The field is not the only *provable*
+    evidence about a prompt; two others already exist on disk and cost nothing:
+
+      1. `rq4_generate.token_upper_bound` -- a prompt can be no more tokens than it
+         is UTF-8 bytes, for any byte-level BPE vocabulary. A prompt under 8,192
+         bytes provably fitted the old default whatever the tokenizer did. Loose
+         (~3x on Thai) and that is the safe direction ([[feedback_an_observed_extreme_is_not_a_bound]]).
+      2. `rq4_truncated_cells_raw.json` -- `rq4_find_truncated_answers.py` sent 228
+         prompts to ollama *at num_ctx=8192* and recorded what it fed. That is the
+         old run reproduced, not a proxy for it.
+
+    Both are evidence about the *prompt*, so they need one premise about the answer:
+    that pre-fix answers were generated at 8,192 (`docs/rq4-prompt-truncation.md`;
+    it was the default until that day). The premise is used in the conservative
+    direction only -- 8,192 is the smallest context any published run used, so
+    "fits 8,192" implies "fits whatever it actually ran at", and a larger true
+    num_ctx cannot turn a proven fit into a truncation.
+
+    What is deliberately NOT used as evidence is `SCREEN_CHARS_PER_TOKEN = 0.95`,
+    which would clear every remaining answer at a stroke. It is an observed
+    minimum with headroom, and this project has already published a wrong blast
+    radius three times by treating one of those as a bound.
+
+    So: G1a is the recorded field, G1b re-derives the same claim from 1 and 2 and
+    **fails** if either shows a truncation, and G1c reports what neither reaches --
+    with its denominator, because 0 must not be ambiguous between "examined and
+    clean" and "nothing left to examine".
     """
     root = Path("data/rq4/answers")
     if not root.is_dir():
@@ -703,7 +750,7 @@ def audit_generation() -> None:
                "0 of 0 answers on disk", warn=True)
         return
 
-    truncated, unverifiable, checked = [], 0, 0
+    truncated, pre_fix, checked = [], [], 0
     for path in sorted(root.glob("*/*/q*.json")):
         try:
             rec = json.loads(path.read_text(encoding="utf-8"))
@@ -711,7 +758,7 @@ def audit_generation() -> None:
             continue
         num_ctx, n_prompt = rec.get("num_ctx"), rec.get("prompt_eval_count")
         if num_ctx is None or n_prompt is None:
-            unverifiable += 1
+            pre_fix.append(path)
             continue
         checked += 1
         if n_prompt == num_ctx // 2 + 2:
@@ -721,19 +768,84 @@ def audit_generation() -> None:
            f"{len(truncated)} truncated of {checked} answers carrying num_ctx")
     for m in truncated[:10]:
         print(f"        {m}")
-    # Deliberately a WARN and deliberately not silent: docs/rq4-prompt-truncation.md
-    # reconstructed 81 of these prompt by prompt and found them truncated (section 4
-    # published 80; re-deriving the list with a sound screen on 2026-08-10 found one
-    # more, `cite_all_guarded/dense/q001` at 8,258 tokens, and the doc was corrected),
-    # so this is outstanding work, not merely unmeasured. It clears only by
-    # regenerating them -- which is the point, since the timestamp check that used to
-    # carry this finding could be cleared by re-running the scorer.
-    record("G1b every RQ4 answer records the context it was generated at", unverifiable == 0,
-           f"{unverifiable} of {checked + unverifiable} answers predate the num_ctx fix "
-           f"and cannot be verified either way; the 81 KNOWN truncated ones "
-           f"(docs/rq4-prompt-truncation.md) were regenerated 2026-08-10 and have left "
-           f"this count -- they are now among the {checked} G1a verifies",
+
+    by_bound, by_probe, unmeasured, pre_fix_trunc = _rq4_prompt_fit_evidence(pre_fix)
+    proven = by_bound + by_probe
+    # Deliberately not silent: docs/rq4-prompt-truncation.md reconstructed 81 of these
+    # prompt by prompt and found them truncated (section 4 published 80; re-deriving
+    # the list with a sound screen on 2026-08-10 found one more,
+    # `cite_all_guarded/dense/q001` at 8,258 tokens, and the doc was corrected). Those
+    # 81 were regenerated the same day, so they now carry the field and are counted by
+    # G1a -- which is why this reads 0 rather than 81, and why it is a real FAIL if it
+    # ever does not.
+    record("G1b no pre-fix RQ4 answer is provably truncated", not pre_fix_trunc,
+           f"{len(pre_fix_trunc)} truncated of {proven} pre-fix answers carrying "
+           f"provable evidence either way about their prompt, none of it needing them "
+           f"regenerated ({by_bound} by the UTF-8-byte upper bound, {by_probe} by a "
+           f"cached probe at num_ctx=8,192)")
+    for m in pre_fix_trunc[:10]:
+        print(f"        {m}")
+    record("G1c every RQ4 answer's prompt fit is established", not unmeasured,
+           f"{len(unmeasured)} of {checked + len(pre_fix)} answers have neither a "
+           f"recorded num_ctx nor provable evidence about their prompt; they are "
+           f"unmeasured, not suspected (the empirical 0.95 chars/token screen clears "
+           f"all of them, but an observed minimum is not a bound). Closing this needs "
+           f"a probe at num_ctx=8,192 per prompt, ~1 GPU-hour, not a regeneration",
            warn=True)
+
+
+_RQ4_LEGACY_NUM_CTX = 8192
+# answers/<model_dir>/<arm>/qNNN.json -- the variant lives in the model dir, and it
+# is what picks rule 4, so the prompt cannot be rebuilt without it.
+_RQ4_VARIANT_BY_DIR = {"phi4": "sentence_cap", "phi4_cite_all": "cite_all",
+                       "phi4_cite_all_guarded": "cite_all_guarded"}
+
+
+def _rq4_prompt_fit_evidence(paths: list[Path]) -> tuple[int, int, list[str], list[str]]:
+    """Provable evidence that each pre-fix answer's prompt fitted 8,192 tokens.
+
+    Returns (n_by_byte_bound, n_by_cached_probe, unmeasured, provably_truncated).
+    See `audit_generation` for why these two sources and not the chars/token screen.
+    """
+    unmeasured: list[str] = []
+    truncated: list[str] = []
+    by_bound = by_probe = 0
+    if _RQ4_CONTEXTS is None:
+        return 0, 0, [str(p) for p in paths], []
+
+    raw_path = Path("data/results/rq4_truncated_cells_raw.json")
+    try:
+        raw = json.loads(raw_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        raw = {}
+    signature = _rq4_truncated_to(_RQ4_LEGACY_NUM_CTX)
+
+    for path in paths:
+        label = f"{path.parent.parent.name}/{path.parent.name}/{path.stem}"
+        variant = _RQ4_VARIANT_BY_DIR.get(path.parent.parent.name)
+        ctx_path = _RQ4_CONTEXTS / path.parent.name / path.name
+        if variant is None or not ctx_path.is_file():
+            unmeasured.append(label)
+            continue
+        try:
+            prompt = _rq4_build_prompt(json.loads(ctx_path.read_text(encoding="utf-8")), variant)
+        except (OSError, json.JSONDecodeError, KeyError):
+            unmeasured.append(label)
+            continue
+        if _rq4_token_upper_bound(prompt) <= _RQ4_LEGACY_NUM_CTX:
+            by_bound += 1
+            continue
+        probe = raw.get(f"{variant}/{path.parent.name}/{path.stem}") or {}
+        n8, n16 = probe.get("n_8192"), probe.get("n_16384")
+        if n8 is None:
+            unmeasured.append(label)
+            continue
+        by_probe += 1
+        # A prompt whose true length is near the signature reports it cut or not, so
+        # where the finder disambiguated with a second probe, believe that one.
+        if (n16 > n8 + 128) if n16 is not None else (n8 == signature):
+            truncated.append(f"{label} (fed {n8:,} tok at num_ctx=8,192)")
+    return by_bound, by_probe, unmeasured, truncated
 
 
 def main() -> int:

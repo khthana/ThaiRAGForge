@@ -106,12 +106,36 @@ see `docs/adr/`.
   recorded relabel (`relabeled_mispairings.at` in an index manifest) as bringing
   an index current without a rebuild — without that second half it would sit
   permanently red after any title repair, and an always-red check is one nobody
-  reads. Current state (**re-run 2026-08-10 after G1a/G1b landed**): **25 pass /
-  2 warn / 0 fail** over 27 checks (was 24/1/0 on 08-09, when E0 first made the
-  gate green). **The second warn is the new `G1b`** — 1,590 RQ4 answers predate
-  the `num_ctx` fix and record no context size, 80 of them known truncated; it
-  exists because `audit_doc_claims.py`'s D4 could be cleared without regenerating
-  them (see the doc-claims bullet). **The first warn is real and is not E0's
+  reads. Current state (**re-run 2026-08-11 after `G1b` was sharpened**): **26 pass
+  / 2 warn / 0 fail** over 28 checks (was 25/2/0 over 27 on 08-10; 24/1/0 on
+  08-09, when E0 first made the gate green). **The second warn is `G1c`, and how
+  the G1 family became three checks is the reusable part.** The `G1b` that landed
+  08-10 WARNed that **1,509** RQ4 answers predate the `num_ctx` fix and were
+  therefore *unverifiable*, "clearable only by regenerating" — but *no recorded
+  field* is not *no evidence*, and treating them as one bucket **overstated the
+  hole by 2x**. Two provable sources were already on disk and free: the UTF-8-byte
+  upper bound (a prompt under 8,192 **bytes** cannot exceed 8,192 tokens for any
+  byte-level BPE vocabulary) clears **603**, and `rq4_truncated_cells_raw.json`'s
+  cached probes — **228** prompts actually sent at `num_ctx=8192`, i.e. the old run
+  reproduced rather than a proxy — decide **147** more (228 − the 81 regenerated
+  cells, which now carry the field and belong to G1a). Both are evidence about the
+  *prompt*, so they lean on one premise about the answer — that pre-fix answers ran
+  at 8,192 — used in the conservative direction only: 8,192 is the smallest context
+  any published run used, so "fits 8,192" implies "fits whatever it actually ran
+  at". So **`G1a`** is the recorded field (0 truncated of 293), **`G1b`**
+  *re-derives* the same claim for **750** pre-fix answers and can **FAIL** (0 do),
+  and **`G1c`** WARNs on the **759** neither reaches — *unmeasured*, never
+  *suspected* ([[feedback_undefined_is_not_zero]]), with its denominator printed.
+  `SCREEN_CHARS_PER_TOKEN = 0.95` would clear all 759 at a stroke and is
+  deliberately **not** evidence: it is an observed minimum, and this project has
+  already published a wrong blast radius from exactly that
+  ([[feedback_an_observed_extreme_is_not_a_bound]]). Closing G1c honestly costs one
+  probe per prompt, **~1 GPU-hour, not a regeneration** — which is the point of
+  separating it, since the old wording priced the whole 1,509 at a regeneration.
+  Because G1b reports 0 on live data its failing branch is unexercised there, so
+  `tests/tools/test_audit_g1_prompt_fit.py` pins all three outcomes — including a
+  cached probe carrying the `num_ctx//2 + 2` signature
+  ([[feedback_anchor_a_check_where_the_mechanism_is_live]]). **The first warn is real and is not E0's
   doing**: it is that same `I6`, 41 indexes built 2026-08-08 19:33
   against a corpus last edited 2026-08-09 09:53, i.e. the `2566/ครั้งที่ 3`
   re-download + re-OCR earlier that day. **Unlike the title repair, that one is a
@@ -224,15 +248,16 @@ see `docs/adr/`.
   byte-identically. The finding was nonetheless discharged by an unrelated
   action, which is [[feedback_cleanup_can_break_an_audit]] one layer up.
   **So the finding was moved somewhere an mtime can't clear it**:
-  `audit_pipeline_invariants.py` gained **G1a/G1b**, which read the *artifacts* —
-  `rq4_generate.py` now records `num_ctx`/`prompt_eval_count` in every answer and
-  `prompt_eval_count == num_ctx//2 + 2` is an exact truncation signature. G1a is
-  0 truncated of 212 verifiable; **G1b WARNs that 1,590 answers predate the fix
-  and carry no `num_ctx`, of which 80 are known truncated** — classified as
-  *unverifiable*, never as clean ([[feedback_undefined_is_not_zero]]), and
-  clearable only by regenerating. General rule: **a staleness check is a proxy;
-  when it is carrying a real finding, add the check that reads the thing
-  itself.**
+  `audit_pipeline_invariants.py` gained the **G1** family, which reads the
+  *artifacts* — `rq4_generate.py` now records `num_ctx`/`prompt_eval_count` in
+  every answer and `prompt_eval_count == num_ctx//2 + 2` is an exact truncation
+  signature. **G1a** is the recorded field (0 truncated of 293 answers carrying
+  it, after the regeneration). See the invariant-audit bullet above for **G1b/G1c**,
+  which split the pre-fix answers by whether provable evidence about their prompt
+  exists — the point being that the first version called all 1,509 of them
+  *unverifiable* and that overstated the hole by 2x. General rule: **a staleness
+  check is a proxy; when it is carrying a real finding, add the check that reads
+  the thing itself.**
 - The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;
   corpus-prep tooling in `tools/corpus_prep/` needs Poppler + Ollama.
 - **Superseded backups live off-repo** (2026-07-30): 2,389 `*.dup` / `*.bak` files

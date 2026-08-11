@@ -1,6 +1,6 @@
 # Pipeline invariant audit
 
-Run 2026-08-10 17:15 UTC. 25 pass / 2 warn / 0 fail.
+Run 2026-08-11 06:17 UTC. 26 pass / 2 warn / 0 fail.
 
 | check | status | detail |
 |---|---|---|
@@ -30,4 +30,5 @@ Run 2026-08-10 17:15 UTC. 25 pass / 2 warn / 0 fail.
 | E3b results answer a known gold query | PASS | 0 unrecognized queries across 23156 result files (['mode_b', 'mode_b_routed'] excluded: interactive UI queries are not gold by design) |
 | E4 results newer than their index | PASS | 0 result sets computed before their index was rebuilt |
 | G1a no RQ4 answer generated from a truncated prompt | PASS | 0 truncated of 293 answers carrying num_ctx |
-| G1b every RQ4 answer records the context it was generated at | WARN | 1509 of 1802 answers predate the num_ctx fix and cannot be verified either way; the 81 KNOWN truncated ones (docs/rq4-prompt-truncation.md) were regenerated 2026-08-10 and have left this count -- they are now among the 293 G1a verifies |
+| G1b no pre-fix RQ4 answer is provably truncated | PASS | 0 truncated of 750 pre-fix answers carrying provable evidence either way about their prompt, none of it needing them regenerated (603 by the UTF-8-byte upper bound, 147 by a cached probe at num_ctx=8,192) |
+| G1c every RQ4 answer's prompt fit is established | WARN | 759 of 1802 answers have neither a recorded num_ctx nor provable evidence about their prompt; they are unmeasured, not suspected (the empirical 0.95 chars/token screen clears all of them, but an observed minimum is not a bound). Closing this needs a probe at num_ctx=8,192 per prompt, ~1 GPU-hour, not a regeneration |
