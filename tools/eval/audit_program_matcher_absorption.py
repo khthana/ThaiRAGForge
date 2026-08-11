@@ -15,13 +15,16 @@ which is precisely why the size had to be known first. Scope was already bounded
 on one side: 0 of the 253 dictionary names collide with *each other* at
 threshold, so every absorption is a collision with a name outside the dictionary.
 
-**The repair landed 2026-08-11 and this script now measures both states.** The
-fix is not a threshold move -- it is a degree filter: 35.7% of absorptions swap
-only the degree level, so a winner whose degree the text contradicts is replaced
-by the best same-degree candidate whose subject the span also supports, and the
-mention goes untagged when there is none. §1-§2 are computed from the pre-repair
-winner so the figures that motivated the fix keep reproducing; §3 measures the
-repair against them.
+**The repair landed 2026-08-11 in two halves and this script measures both.**
+Neither is a threshold move. (§3) 35.7% of absorptions swap only the *degree*
+level, so a winner whose degree the text contradicts is replaced by the best
+same-degree candidate whose subject the span also supports. (§3b) The rest swap
+the *programme* at the same degree -- the ทันต-/พยาบาล- -> แพทย- shape the first
+half is structurally unable to see -- so the head noun and the subject are
+compared separately, which is what removes the dilution the joined ratio suffers
+from. Either way the mention goes untagged when nothing fits. §1-§2 are computed
+from the pre-repair winner so the figures that motivated the fix keep
+reproducing; §3/§3b measure each repair against them.
 
 Four questions, in the order that decides whether a fix is worth anything:
 
@@ -63,6 +66,7 @@ from rag_lab.loaders.common import (  # noqa: E402
     strip_mapping_tables,
 )
 from rag_lab.loaders.program_loader import (  # noqa: E402
+    _HEAD_THRESHOLD,
     _MATCH_THRESHOLD,
     _WINDOW_SLACK,
     _build_scan_pattern,
@@ -70,6 +74,9 @@ from rag_lab.loaders.program_loader import (  # noqa: E402
     _by_prefix,
     _field_agrees,
     _field_of,
+    _head_contradicted,
+    _head_of,
+    _subject_contradicted,
     degree_level,
     load_dictionary,
     match_programs,
@@ -123,7 +130,26 @@ def match_programs_detailed(text: str, dictionary=None) -> list[dict]:
         span_degree = degree_level(best_span)
         selected_span = best_span
         if span_degree is None or degree_level(best_canonical) in (None, span_degree):
-            selected, bucket = best_canonical, "unchanged"
+            if _head_contradicted(best_canonical, best_span) or _subject_contradicted(
+                best_canonical, best_span
+            ):
+                pick = next(
+                    ((c, s) for _r, c, s in sorted(qualified, reverse=True)
+                     if (span_degree is None or degree_level(c) in (None, span_degree))
+                     and not _head_contradicted(c, s) and not _subject_contradicted(c, s)
+                     and _field_agrees(c, s)),
+                    None,
+                )
+                selected = pick[0] if pick else None
+                if selected is not None:
+                    selected_span = pick[1]  # per-candidate window, as above
+                    bucket = "rescued (same degree, wrong programme)"
+                else:
+                    bucket = ("dropped: head noun contradicted"
+                              if _head_contradicted(best_canonical, best_span)
+                              else "dropped: subject contradicted")
+            else:
+                selected, bucket = best_canonical, "unchanged"
         else:
             same_level = [c for c in qualified if degree_level(c[1]) == span_degree]
             pick = next(
@@ -282,11 +308,12 @@ def self_checks(raw: dict) -> list[tuple[str, bool, str]]:
     # would mean §3 is counting something other than the degree filter, and the
     # bucket names would be describing a rule the code no longer has.
     moved = [h for h in hits if h["selected"] not in (None, h["canonical"])]
+    degree_moved = [h for h in moved if h["bucket"] == "rescued"]
     ok = all(degree_level(h["selected"]) == degree_level(h["span"])
              and degree_level(h["selected"]) != degree_level(h["canonical"])
-             for h in moved)
-    checks.append(("S6 every re-selection sits at the span's own degree", ok,
-                   f"{len(moved):,} matches re-selected"))
+             for h in degree_moved)
+    checks.append(("S6 every degree re-selection sits at the span's own degree", ok,
+                   f"{len(degree_moved):,} of {len(moved):,} re-selected by the degree filter"))
 
     # S7 -- and it is not a rename in disguise: a rescue must land on a
     # *different* canonical whose subject the text supports, which is the one
@@ -306,9 +333,37 @@ def self_checks(raw: dict) -> list[tuple[str, bool, str]]:
     # corpus, not the rule, decides how many there are. It fails only if that
     # became the common case, which would mean the filter is re-ranking on
     # something other than degree.
-    widened = [h for h in moved if not _field_agrees(h["selected"], h["canonical"])]
-    checks.append(("S8 a rescue keeps the winner's subject", len(widened) <= len(moved) // 10,
-                   f"{len(widened)} of {len(moved):,} land on a longer sibling name"))
+    widened = [h for h in degree_moved if not _field_agrees(h["selected"], h["canonical"])]
+    checks.append(("S8 a degree rescue keeps the winner's subject",
+                   len(widened) <= max(1, len(degree_moved)) // 10,
+                   f"{len(widened)} of {len(degree_moved):,} land on a longer sibling name"))
+
+    # S9 -- the cross-subject half, gated on its own mechanism rather than on
+    # the degree one. A same-degree rescue must NOT move the degree (that is
+    # what the branch above is for) and must be uncontradicted on both halves,
+    # which is the whole rule: this is the check that would fail if the guard
+    # started re-selecting on the winner's ratio again.
+    subject_moved = [h for h in moved if h["bucket"].startswith("rescued (same degree")]
+    ok = all(
+        degree_level(h["selected"]) == degree_level(h["canonical"])
+        and not _head_contradicted(h["selected"], h["selected_span"])
+        and not _subject_contradicted(h["selected"], h["selected_span"])
+        for h in subject_moved
+    )
+    checks.append(("S9 every same-degree rescue keeps the degree and is uncontradicted",
+                   ok, f"{len(subject_moved):,} matches rescued across subject"))
+
+    # S10 -- a drop is exhaustive, not a first-candidate failure. Every match
+    # left untagged by the cross-subject guard must have NO admissible
+    # candidate at all, or the guard is dropping mentions whose right answer
+    # was sitting in the dictionary -- exactly the error the degree half's
+    # `reject` rule was rejected for (0 gained / 340 lost).
+    dropped = [h for h in hits if h["bucket"].startswith("dropped: head")
+               or h["bucket"].startswith("dropped: subject")]
+    ok = all(_head_contradicted(h["canonical"], h["span"])
+             or _subject_contradicted(h["canonical"], h["span"]) for h in dropped)
+    checks.append(("S10 every cross-subject drop really is contradicted", ok,
+                   f"{len(dropped):,} matches dropped by the cross-subject guard"))
     return checks
 
 
@@ -331,12 +386,13 @@ def render(raw: dict) -> str:
          "`match_programs` used to accept the best candidate in a prefix group at "
          f"ratio >= {_MATCH_THRESHOLD} with no *reject* branch, so a program name "
          "absent from `programs.json` was absorbed by its nearest neighbour instead "
-         "of matching nothing. **That is now repaired** (2026-08-11): a winner whose "
-         "degree level the text contradicts no longer wins, and the degree instead "
-         "*filters the candidate set*. §1-§2 below still size the original defect -- "
-         "they are computed from the pre-repair winner, so the figures that motivated "
-         "the fix keep reproducing -- and §3 measures what the repair does to them. "
-         "§4-§5 are why it was safe to ship: the matcher is read by "
+         "of matching nothing. **That is now repaired in two halves** (2026-08-11): a "
+         "winner whose *degree level* the text contradicts no longer wins, and the "
+         "degree instead *filters the candidate set* (§3); a winner whose *head noun "
+         "or subject* the text contradicts at the same degree no longer wins either "
+         "(§3b). §1-§2 below still size the original defect -- they are computed from "
+         "the pre-repair winner, so the figures that motivated the fix keep "
+         "reproducing. §4-§5 are why it was safe to ship: the matcher is read by "
          "`build_gold_candidates.py` and `router.classify_query`, and neither moves.\n",
          "## 1. Corpus\n",
          f"- files with >=1 program tag: **{raw['n_files_with_hits']:,}**",
@@ -392,6 +448,49 @@ def render(raw: dict) -> str:
     return "\n".join(L), per, suspicious, hits
 
 
+def _cut_distribution(hits: list[dict]) -> str:
+    """The sentence defending §3b's two thresholds, RECOMPUTED from the cache.
+
+    It was hardcoded prose until 2026-08-11, and by the second walk every figure
+    in it was wrong -- it had been measured once, in a probe, over a population
+    nobody wrote down. Counts are not p-values, so nothing downstream verdicts
+    on them; that is exactly why a typed one rots unnoticed
+    ([[feedback_verify_status_numbers_against_the_artifact]]). The population is
+    now stated in the sentence itself: matches where *both* sides carry the half
+    being measured, which is the only set either test ever runs on.
+    """
+    head, subj = [], []
+    for h in hits:
+        a, b = _head_of(h["canonical"]), _head_of(h["span"])
+        if a and b:
+            head.append(SequenceMatcher(None, a, b).ratio())
+        a, b = _field_of(h["canonical"]), _field_of(h["span"])
+        if a and b:
+            shared = SequenceMatcher(None, a, b).find_longest_match(
+                0, len(a), 0, len(b)).size
+            subj.append(shared / min(len(a), len(b)))
+
+    def band(v, lo, hi):
+        return sum(1 for x in v if lo <= x < hi)
+
+    return (
+        "Neither cut is load-bearing, and the distribution says so rather than "
+        "the choice being defended on taste. Over the matches where both sides "
+        f"carry a head noun (**{len(head):,}**), head ratio sits at exactly 1.00 "
+        f"for **{band(head, 1.0, 1.01):,}** and only "
+        f"**{band(head, _HEAD_THRESHOLD - 0.05, _HEAD_THRESHOLD):,}** land in the "
+        f"band immediately below the {_HEAD_THRESHOLD:.2f} cut, against "
+        f"**{band(head, _HEAD_THRESHOLD, _HEAD_THRESHOLD + 0.05):,}** immediately "
+        "above it -- so the cut separates a dense mass of agreement from a thin "
+        "tail, it does not slice through the middle of one. Subject coverage, "
+        f"over the **{len(subj):,}** matches where both sides carry a `สาขาวิชา`, "
+        f"is the same shape: **{band(subj, 1.0, 1.01):,}** at 1.00, "
+        f"**{band(subj, 0.70, 0.80):,}** between 0.70 and 0.80 and "
+        f"**{band(subj, 0.80, 0.85):,}** between 0.80 and 0.85. And a subject drop "
+        "no longer turns on that cut alone -- it needs the ratio test against it "
+        "too, which is what rule (1) above added.\n")
+
+
 def repair(raw: dict, hits: list[dict]) -> str:
     """§3: what the degree filter does, and what the two rejected rules did.
 
@@ -401,28 +500,43 @@ def repair(raw: dict, hits: list[dict]) -> str:
     show that it beat anything.
     """
     buckets = Counter(h["bucket"] for h in hits)
-    fired = sum(n for b, n in buckets.items() if b != "unchanged")
+    subject_buckets = [b for b in buckets if b.startswith("rescued (same degree")
+                       or b.startswith("dropped: head") or b.startswith("dropped: subject")]
+    fired = sum(n for b, n in buckets.items()
+                if b != "unchanged" and b not in subject_buckets)
     rescued = buckets["rescued"]
     widened = [h for h in hits if h["bucket"] == "rescued"
                and not _field_agrees(h["selected"], h["canonical"])]
 
     # File-level, because a tag is per file: a mention dropped in a file that
-    # names the same programme elsewhere costs nothing.
-    gained = lost = stripped = changed = 0
-    for hs in raw["files"].values():
-        old = {h["canonical"] for h in hs}
-        new = {h["selected"] for h in hs if h["selected"]}
-        if old != new:
-            changed += 1
-            gained += len(new - old)
-            lost += len(old - new)
-        if old and not new:
-            stripped += 1
+    # names the same programme elsewhere costs nothing. Both guards are counted
+    # separately as well as together -- the degree half's published figures were
+    # measured before the cross-subject half existed, and a combined-only table
+    # would silently move them.
+    def per_file(selector) -> tuple[int, int, int, int]:
+        gained = lost = stripped = changed = 0
+        for hs in raw["files"].values():
+            old = {h["canonical"] for h in hs}
+            new = {s for h in hs if (s := selector(h))}
+            if old != new:
+                changed += 1
+                gained += len(new - old)
+                lost += len(old - new)
+            if old and not new:
+                stripped += 1
+        return gained, lost, stripped, changed
+
+    # Degree-only counterfactual: a hit the cross-subject guard touched keeps
+    # the pre-repair winner, which is exactly what the degree half did to it.
+    degree_only = per_file(
+        lambda h: h["canonical"] if h["bucket"] in subject_buckets else h["selected"])
+    both = per_file(lambda h: h["selected"])
+    gained, lost, stripped, changed = degree_only
 
     L = ["\n## 3. The repair, and the two rules it beat\n",
-         f"The guard fires on **{fired:,}** of the {len(hits):,} accepted matches -- "
-         "every one a mention whose text names a degree its winner contradicts. What "
-         "should happen there was measured, not argued:\n",
+         f"The degree guard fires on **{fired:,}** of the {len(hits):,} accepted "
+         "matches -- every one a mention whose text names a degree its winner "
+         "contradicts. What should happen there was measured, not argued:\n",
          "| outcome | matches | |", "|---|---|---|"]
     order = ["rescued",
              "dropped: same degree available, no subject agreed",
@@ -453,8 +567,10 @@ def repair(raw: dict, hits: list[dict]) -> str:
           "Per file, against the pre-repair matcher:\n",
           "| | tags gained | tags lost | files losing every tag | files changed |",
           "|---|---|---|---|---|",
-          f"| shipped (degree filters the candidates) | **{gained:,}** | {lost:,} | "
-          f"**{stripped:,}** | {changed:,} |\n",
+          f"| degree guard alone | **{gained:,}** | {lost:,} | "
+          f"**{stripped:,}** | {changed:,} |",
+          f"| shipped (both guards) | **{both[0]:,}** | {both[1]:,} | "
+          f"**{both[2]:,}** | {both[3]:,} |\n",
           "The earlier fallthrough rule, walked the same way, re-tagged 11 mentions "
           "of which 3 were the right programme -- eliminating the winner in a prefix "
           "group leaves candidates that are by construction *different programmes*, "
@@ -467,6 +583,63 @@ def repair(raw: dict, hits: list[dict]) -> str:
           "were judged on what they read -- the first version of S7 judged them "
           "against the *winner's* shorter span, cut the subject in half, and reported "
           "4 contract violations that had not happened.\n"]
+
+    # --- 3b: the half the degree filter is structurally unable to see --------
+    sub_fired = sum(buckets[b] for b in subject_buckets)
+    sub_rescued = buckets["rescued (same degree, wrong programme)"]
+    head_drop = buckets["dropped: head noun contradicted"]
+    subj_drop = buckets["dropped: subject contradicted"]
+    L += ["\n## 3b. The same-degree half (2026-08-11)\n",
+          "`หลักสูตรทันตแพทยศาสตรบัณฑิต` and `หลักสูตรพยาบาลศาสตรบัณฑิต` are both "
+          "absorbed by `หลักสูตรแพทยศาสตรบัณฑิต` at the *same* degree, so the filter "
+          "above never fires on them -- they are the motivating instance of this whole "
+          "audit (§S4) and the degree repair could not reach them. The mechanism is "
+          "**dilution by concatenation**: the ratio is computed over head noun + "
+          "subject joined, so a disagreement confined to one half is averaged away by "
+          "the other half agreeing (`ทันต-` scores 0.88). Testing the two halves "
+          "*separately* removes the dilution.\n",
+          "The two halves need **different** tests, and the asymmetry is structural "
+          "rather than a fudge: `_bounded_span_for` sizes the window from the match "
+          "position, so the head noun (immediately after the `หลักสูตร` anchor) is "
+          "always covered in full, while the subject sits at the tail and is routinely "
+          "truncated. So truncation must be *forgiven* in the subject "
+          "(longest-common-substring coverage, where a cut name still scores 1.00) and "
+          "must **not** be forgiven in the head (extra leading material is a different "
+          "formal degree name). Both tests are positive-evidence-only: no `สาขาวิชา` "
+          "on either side is not a contradiction.\n",
+          f"| outcome | matches | |", "|---|---|---|",
+          f"| rescued (same degree, wrong programme) | **{sub_rescued:,}** | a "
+          "candidate the text contradicts on neither half was already in the "
+          "dictionary |",
+          f"| dropped: head noun contradicted | **{head_drop:,}** | ทันต-/พยาบาล-/"
+          "วิทยาศาสตร- against แพทยศาสตร-: a different degree name, not a different "
+          "level |",
+          f"| dropped: subject contradicted | **{subj_drop:,}** | same head noun, a "
+          "`สาขาวิชา` the winner's does not cover |",
+          f"\nThe guard fires on **{sub_fired:,}** of {len(hits):,} accepted matches, "
+          f"and unlike the degree half it is mostly **drops** ({sub_rescued:,} "
+          f"rescued, {head_drop + subj_drop:,} dropped) -- which is itself the "
+          "finding: where a degree swap usually has the right answer sitting one level "
+          "away in the dictionary, a cross-subject absorption usually does not, "
+          "because the absorbed programme is simply **not in `programs.json`**. "
+          "*Matches nothing* is the correct answer there, and until now it was not an "
+          "available one.\n",
+          "Two rules were added after the first walk, both because a self-check went "
+          "red rather than because anything was reasoned out in advance -- the "
+          "corpus was fine and the guard was wrong, twice. (1) **A drop needs both "
+          "subject tests against it.** Coverage is blind to a difference spread "
+          "through the string rather than sitting at one end, so a one-character "
+          "dictionary/OCR variant (`วิศวกรรมเล็กทรอนิกส์` against "
+          "`วิศวกรรมอิเล็กทรอนิกส์`) covers 0.55 while `_field_agrees` -- this "
+          "project's own settled test for the very same relation -- puts it at 0.95. "
+          "One pair must not be agreeing and contradicting at once, so the guard "
+          "convicts only when coverage **and** ratio are both against it; **133 of "
+          "569** subject drops sat in exactly that band. (2) **A cross-subject rescue "
+          "may not cross the degree.** This branch is reached precisely when the "
+          "*winner's* degree is uncontradicted, which says nothing about the "
+          "runner-up's -- 6 rescues in the first walk moved a mention between "
+          "บัณฑิต and มหาบัณฑิต, silently undoing §3's rule (S9).\n",
+          _cut_distribution(hits)]
     return "\n".join(L)
 
 

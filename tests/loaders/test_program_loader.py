@@ -5,7 +5,14 @@ from __future__ import annotations
 
 from rag_lab.config import StrategySpec
 from rag_lab.factory import build_loader
-from rag_lab.loaders.program_loader import degree_level, match_programs
+from rag_lab.loaders.program_loader import (
+    _field_agrees,
+    _head_contradicted,
+    _head_of,
+    _subject_contradicted,
+    degree_level,
+    match_programs,
+)
 
 _DICT = [
     {
@@ -203,6 +210,173 @@ class TestDegreeFiltersTheCandidateSet:
         # span must not start rejecting matches the matcher used to make.
         text = "หลักสูตรวิทยาศาสตรบณฑิต สาขาวิชาฟิสิกส์ (การปรับปรุงแก้ไขหลักสูตร)"
         assert match_programs(text, _DICT) == ["หลักสูตรวิทยาศาสตรบัณฑิต สาขาวิชาฟิสิกส์"]
+
+
+class TestHeadNounAndSubjectAreTestedSeparately:
+    """The half the degree filter is structurally unable to see.
+
+    `หลักสูตรทันตแพทยศาสตรบัณฑิต` is absorbed by `หลักสูตรแพทยศาสตรบัณฑิต` at the
+    *same* degree, so the guard above never fires on it -- it is the instance
+    this whole audit was found through. The mechanism is dilution by
+    concatenation: the ratio runs over head noun + subject joined, so a
+    disagreement confined to one half is averaged away by the other agreeing
+    (`ทันต-` scores 0.88). Testing the halves separately removes the dilution.
+
+    The two tests are deliberately DIFFERENT, and the asymmetry is structural:
+    `_bounded_span_for` sizes the window from the match position, so the head
+    noun is always covered in full while the subject sits at the tail and is
+    routinely cut. Truncation is therefore forgiven in the subject and must not
+    be forgiven in the head.
+    """
+
+    _WITH_DENTAL = _DICT + [
+        {
+            "canonical": "หลักสูตรแพทยศาสตรบัณฑิต",
+            "prefix_type": "หลักสูตร",
+            "degree": "แพทยศาสตรบัณฑิต",
+            "field": None,
+        },
+    ]
+    _AND_THE_RIGHT_ONE = _WITH_DENTAL + [
+        {
+            "canonical": "หลักสูตรทันตแพทยศาสตรบัณฑิต",
+            "prefix_type": "หลักสูตร",
+            "degree": "ทันตแพทยศาสตรบัณฑิต",
+            "field": None,
+        },
+    ]
+
+    def test_head_is_delimited_at_both_ends(self):
+        # Left edge: the LAST anchor, because the scanner re-anchors on a heading
+        # (`๑) หลักสูตร...`) and reading from the first one reported 149 mentions
+        # as contradictions. Right edge: the end of the degree token, because a
+        # canonical with no สาขาวิชา lets the window overrun into the next word.
+        assert _head_of("๑) หลักสูตรแพทยศาสตรบัณฑิต สาขาวิชาก") == "แพทยศาสตรบัณฑิต"
+        assert _head_of("หลักสูตรบริหารธุรกิจบัณฑิตหล") == "บริหารธุรกิจบัณฑิต"
+
+    def test_markup_and_thai_numerals_are_invisible_to_the_head(self):
+        # `<br/>`, `</td><td>`, `**` and `๑)` were every false positive the head
+        # test had. Dropping everything but Thai letters removes them in one
+        # pass -- `br`/`td` are Latin, and Thai digits sit at U+0E50+.
+        assert (_head_of("</td><td>หลักสูตรวิศวกรรมศาสตรบัณฑิต<br/>สาขาวิชาโยธา")
+                == "วิศวกรรมศาสตรบัณฑิต")
+
+    def test_a_longer_degree_name_contradicts_the_head(self):
+        assert _head_contradicted("หลักสูตรแพทยศาสตรบัณฑิต", "หลักสูตรทันตแพทยศาสตรบัณฑิต")
+        assert _head_contradicted("หลักสูตรแพทยศาสตรบัณฑิต", "หลักสูตรพยาบาลศาสตรบัณฑิต")
+
+    def test_the_same_head_re_anchored_or_overrun_does_not_contradict(self):
+        # Both directions matter: a head test that fires on the scanner finding
+        # the same name twice would drop tags the matcher was right about.
+        assert not _head_contradicted(
+            "หลักสูตรแพทยศาสตรบัณฑิต", "๑) หลักสูตรแพทยศาสตรบัณฑิต สาขาวิชาก")
+        assert not _head_contradicted(
+            "หลักสูตรแพทยศาสตรบัณฑิต", "หลักสูตรแพทยศาสตรบัณฑิตหล")
+
+    def test_a_truncated_subject_is_the_same_subject(self):
+        # 120 of the first rule's 604 firings were this: the window cut the name
+        # short and a plain ratio read the cut as disagreement (0.78). Contiguous
+        # coverage of the shorter side reads it as 1.00, which is what it is.
+        assert not _subject_contradicted(
+            "หลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาวิศวกรรมดนตรีและสื่อประสม",
+            "หลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาวิศวกรรมดนตรีและ",
+        )
+
+    def test_a_different_subject_contradicts(self):
+        assert _subject_contradicted(
+            "หลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาวิศวกรรมโยธา",
+            "หลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาวิศวกรรมไฟฟ้า",
+        )
+
+    def test_a_missing_subject_on_either_side_is_not_a_contradiction(self):
+        # [[feedback_undefined_is_not_zero]], pinned in both directions because
+        # this gates a drop: no สาขาวิชา must not start rejecting matches.
+        assert not _subject_contradicted(
+            "หลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาวิศวกรรมโยธา", "หลักสูตรวิศวกรรมศาสตรบัณฑิต")
+        assert not _subject_contradicted(
+            "หลักสูตรวิศวกรรมศาสตรบัณฑิต", "หลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาวิศวกรรมโยธา")
+
+    def test_the_motivating_absorption_no_longer_happens(self):
+        text = "หลักสูตรทันตแพทยศาสตรบัณฑิต (หลักสูตรปรับปรุง พ.ศ. ๒๕๖๕)"
+        assert match_programs(text, self._WITH_DENTAL) == []
+
+    def test_the_right_programme_is_selected_when_the_dictionary_holds_it(self):
+        # Same text, one more dictionary entry -- the drop is a consequence of
+        # the corpus name being absent, not of the guard banning the shape.
+        text = "หลักสูตรทันตแพทยศาสตรบัณฑิต (หลักสูตรปรับปรุง พ.ศ. ๒๕๖๕)"
+        assert match_programs(text, self._AND_THE_RIGHT_ONE) == [
+            "หลักสูตรทันตแพทยศาสตรบัณฑิต"
+        ]
+
+    def test_the_absorbing_canonical_still_matches_its_own_text(self):
+        # The guard must not become a ban on แพทยศาสตรบัณฑิต.
+        text = "หลักสูตรแพทยศาสตรบัณฑิต (หลักสูตรปรับปรุง พ.ศ. ๒๕๖๕)"
+        assert match_programs(text, self._AND_THE_RIGHT_ONE) == ["หลักสูตรแพทยศาสตรบัณฑิต"]
+
+    def test_a_one_character_variant_is_not_a_contradiction(self):
+        # Coverage is blind to a difference spread through the string rather than
+        # sitting at one end: this real dictionary/OCR pair covers 0.55 while
+        # `_field_agrees` -- the project's own settled test for the same relation
+        # -- puts it at 0.95. One pair must not be agreeing and contradicting at
+        # once, so a drop needs both tests against it (133 of 569 subject drops
+        # sat in that band).
+        assert not _subject_contradicted(
+            "หลักสูตรวิศวกรรมศาสตรมหาบัณฑิต สาขาวิชาวิศวกรรมเล็กทรอนิกส์",
+            "หลักสูตรวิศวกรรมศาสตรมหาบัณฑิต สาขาวิชาวิศวกรรมอิเล็กทรอนิกส์",
+        )
+        assert _field_agrees(
+            "หลักสูตรวิศวกรรมศาสตรมหาบัณฑิต สาขาวิชาวิศวกรรมเล็กทรอนิกส์",
+            "หลักสูตรวิศวกรรมศาสตรมหาบัณฑิต สาขาวิชาวิศวกรรมอิเล็กทรอนิกส์",
+        )
+
+
+class TestACrossSubjectRescueMayNotCrossTheDegree:
+    """The two guards must not undo each other.
+
+    The cross-subject branch is reached precisely when the *winner's* degree is
+    uncontradicted -- which says nothing about the runner-up's, so without an
+    explicit condition the re-selection can hand the mention to a candidate at a
+    degree the text contradicts, i.e. exactly what the settled degree rule
+    exists to prevent. It is not hypothetical: the first full walk rescued 6
+    mentions across บัณฑิต/มหาบัณฑิต, and the audit's S9 failed on them.
+
+    The text is a real corpus mention (`2564/ครั้งที่ 11`), kept verbatim
+    because no clean synthetic name reproduces it -- a candidate that agrees on
+    the subject is normally *closer* to the text than the contradicted winner
+    and would simply win instead. Here `<br/>` inflates every candidate's window
+    differently, which is what lets the wrong one lead.
+    """
+
+    _CIVIL = {
+        "canonical": "หลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาวิศวกรรมโยธา",
+        "prefix_type": "หลักสูตร",
+        "degree": "วิศวกรรมศาสตรบัณฑิต",
+        "field": "วิศวกรรมโยธา",
+    }
+    _FOOD_MASTERS = {
+        "canonical": "หลักสูตรวิศวกรรมศาสตรมหาบัณฑิต สาขาวิชาวิศวกรรมอาหาร",
+        "prefix_type": "หลักสูตร",
+        "degree": "วิศวกรรมศาสตรมหาบัณฑิต",
+        "field": "วิศวกรรมอาหาร",
+    }
+    _DICTIONARY = [_CIVIL, _FOOD_MASTERS]
+
+    def test_the_rescue_refuses_a_candidate_at_another_degree(self):
+        # The document names the BACHELOR's food-engineering programme, broken by
+        # markup. The winner (civil) is rightly contradicted on subject; the only
+        # candidate whose subject the truncated span supports is the MASTER's,
+        # and taking it would be a wrong tag, not a rescue.
+        text = ("หลักสูตรวิศวกรรม<br/>ศาสตรบัณฑิต สาขาวิชาวิศวกรรม<br/>อาหาร "
+                "ไปยังสำนักงานปลัดกระทรวง")
+        assert match_programs(text, self._DICTIONARY) == []
+
+    def test_the_same_candidate_is_still_selected_at_its_own_degree(self):
+        # The condition is a filter on the text's evidence, not a ban on the
+        # master's programme -- pinned in the positive direction too.
+        text = "หลักสูตรวิศวกรรมศาสตรมหาบัณฑิต สาขาวิชาวิศวกรรมอาหาร (หลักสูตรปรับปรุง)"
+        assert match_programs(text, self._DICTIONARY) == [
+            "หลักสูตรวิศวกรรมศาสตรมหาบัณฑิต สาขาวิชาวิศวกรรมอาหาร"
+        ]
 
 
 class TestProgramLoaderIntegration:

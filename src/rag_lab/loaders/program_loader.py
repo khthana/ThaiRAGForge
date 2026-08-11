@@ -87,6 +87,34 @@ _DEGREE_NOISE = re.compile(r"(<br\s*/?>|\s|​)+")
 # splits the two halves, and the degree guard below has to compare them apart.
 _FIELD_MARKER = "สาขาวิชา"
 
+# The scan anchor every canonical starts with, and so the left edge of the head
+# noun -- see _head_of for why the LAST one in a span is the right one.
+_ANCHOR = "หลักสูตร"
+
+# A head noun is pure Thai letters. Dropping everything else in one pass is what
+# makes `<br/>`, `</td><td>`, `**`, `:` and the agenda numbering `๑)` (Thai
+# numerals sit at U+0E50+, outside this range) invisible to the head comparison
+# -- measured: those four artifacts were every false positive the head test had.
+_THAI_LETTERS_ONLY = re.compile(r"[^ก-๎]+")
+
+# Two cuts, each picked from its own measured distribution rather than by taste,
+# and each sitting in a sparse region so it is not load-bearing (the full
+# histograms are in docs/program-matcher-absorption.md §6).
+#
+# The two halves need DIFFERENT tests, and the asymmetry is structural, not a
+# fudge: `_bounded_span_for` sizes the window from the match position, so the
+# head noun (immediately after the anchor) is always covered in full while the
+# subject sits at the tail and is routinely cut short. So truncation must be
+# forgiven in the subject and must NOT be forgiven in the head -- extra material
+# in front of a head noun is a different formal degree name
+# (ทันตแพทยศาสตรบัณฑิต is not แพทยศาสตรบัณฑิต): over the cached walk the head
+# test contradicts on 319 mentions and 60 of them are exactly that shape.
+_HEAD_THRESHOLD = 0.90
+# Longest-common-substring coverage of the shorter subject: 1.0 means one
+# subject is a contiguous truncation or extension of the other, i.e. the same
+# name cut by the window. A plain ratio cannot express that.
+_SUBJECT_COVER = 0.80
+
 
 @lru_cache(maxsize=1)
 def load_dictionary() -> list[dict[str, Any]]:
@@ -146,6 +174,66 @@ def _field_agrees(canonical: str, span: str) -> bool:
     return SequenceMatcher(None, a, b).ratio() >= _MATCH_THRESHOLD
 
 
+def _head_of(text: str) -> str | None:
+    """The degree-naming half of a programme name: between the LAST `หลักสูตร`
+    and the end of its degree token, non-Thai characters dropped.
+
+    Delimited at *both* ends on purpose, and both ends were found by measurement.
+    The left edge takes the last anchor because the scanner re-anchors on a
+    heading (`หลักสูตร ๑) หลักสูตรวิทยาศาสตรบัณฑิต...`), which is the same name
+    found twice, not a longer one -- reading from the first anchor reported 149
+    such mentions as contradictions. The right edge stops at the degree token
+    because a canonical with no `สาขาวิชา` lets the window overrun into the
+    following sentence (`...บัณฑิตหล`), which is text the mention does not own.
+
+    None when no degree token is present -- undecidable, never "no head"
+    ([[feedback_undefined_is_not_zero]]); a span whose head the window cut mid
+    token has no evidence to offer and must not be read as a contradiction."""
+    i = text.find(_FIELD_MARKER)
+    head = _THAI_LETTERS_ONLY.sub("", text if i < 0 else text[:i])
+    if _ANCHOR in head:
+        head = head[head.rindex(_ANCHOR) + len(_ANCHOR):]
+    for degree in _DEGREES:  # longest-first, same reason as degree_level
+        at = head.find(degree)
+        if at >= 0:
+            return head[: at + len(degree)]
+    return None
+
+
+def _head_contradicted(canonical: str, span: str) -> bool:
+    """Positive evidence that the span names a different *degree* name than
+    `canonical` does. Missing evidence on either side is not evidence."""
+    a, b = _head_of(canonical), _head_of(span)
+    if a is None or b is None:
+        return False
+    return SequenceMatcher(None, a, b).ratio() < _HEAD_THRESHOLD
+
+
+def _subject_contradicted(canonical: str, span: str) -> bool:
+    """Positive evidence that the span names a different *subject*.
+
+    Scored by how much of the shorter subject the two share contiguously, not by
+    overall similarity: the window truncates the subject routinely, and a
+    truncation is the same name continuing, so `วิศวกรรมดนตรีและ` must not
+    contradict `วิศวกรรมดนตรีและสื่อประสม` (ratio 0.78, coverage 1.00) while
+    `วิศวกรรมเซมิคอนด` must contradict `วิศวกรรมเคมี` (coverage 0.75).
+
+    Coverage alone is not enough to *convict*, though, and the second clause was
+    added after the first walk: coverage is blind to a difference spread over the
+    string rather than concentrated at one end, so a one-character OCR/dictionary
+    variant (`วิศวกรรมเล็กทรอนิกส์` vs `วิศวกรรมอิเล็กทรอนิกส์`, coverage 0.55)
+    reads as a contradiction while `_field_agrees` -- this project's own settled
+    test for the same relation -- puts it at ratio 0.95. One pair must not be
+    simultaneously agreeing and contradicting, so a drop needs BOTH tests against
+    it; 133 of 569 subject drops sat in exactly that band."""
+    a, b = _field_of(canonical), _field_of(span)
+    if not a or not b:
+        return False
+    shared = SequenceMatcher(None, a, b).find_longest_match(0, len(a), 0, len(b)).size
+    return (shared / min(len(a), len(b)) < _SUBJECT_COVER
+            and SequenceMatcher(None, a, b).ratio() < _MATCH_THRESHOLD)
+
+
 def match_programs(text: str, dictionary: list[dict[str, Any]] | None = None) -> list[str]:
     """Every canonical program name found in `text`, deduped and sorted.
 
@@ -182,7 +270,23 @@ def match_programs(text: str, dictionary: list[dict[str, Any]] | None = None) ->
 
     Both halves of the test fire only on positive evidence from both sides, so OCR
     that garbles a degree token, or a name with no `สาขาวิชา` to compare, leaves the
-    mention with the behaviour it had ([[feedback_undefined_is_not_zero]])."""
+    mention with the behaviour it had ([[feedback_undefined_is_not_zero]]).
+
+    A second guard closes the half the degree filter is structurally blind to:
+    **same-degree, different programme**, where the degree agrees so the rule above
+    never fires. It compares the two halves of the name *separately* (`_head_of`,
+    `_field_of`), which is the whole mechanism -- the ratio is computed over the
+    concatenation, so a disagreement confined to one half is diluted by the other
+    half agreeing, and `หลักสูตรทันตแพทยศาสตรบัณฑิต` scores 0.88 against
+    `หลักสูตรแพทยศาสตรบัณฑิต` on the strength of a shared suffix. Split apart, the
+    head noun scores the same 0.88 with nothing to hide behind, and the subject
+    comparison is scored by contiguous coverage so the window's own truncation is
+    not mistaken for a different name. Neither cut is load-bearing: over the 9,134
+    live matches carrying a head on both sides, 8,124 sit at exactly 1.00 and 157
+    land in the band below the cut against 599 just above it -- a dense mass of
+    agreement separated from a thin tail, not a slice through the middle of one.
+    Those figures are re-derived from the cache by the audit's §3b rather than
+    typed here; this docstring quotes them, it does not own them."""
     dictionary = dictionary if dictionary is not None else load_dictionary()
     grouped = _by_prefix(dictionary)
     pattern = _build_scan_pattern(tuple(grouped))
@@ -199,19 +303,40 @@ def match_programs(text: str, dictionary: list[dict[str, Any]] | None = None) ->
         span_degree = degree_level(best_span)
         canonical_degree = degree_level(best_canonical)
         if (
-            span_degree is None
-            or canonical_degree is None
-            or span_degree == canonical_degree
+            span_degree is not None
+            and canonical_degree is not None
+            and span_degree != canonical_degree
         ):
-            found.add(best_canonical)
+            # The winner names a degree the text contradicts. Re-select among the
+            # candidates the text's own degree admits, best ratio first, and require
+            # the subject to agree -- see docstring for why degree alone is not enough.
+            for _ratio, canonical, span in sorted(qualified, reverse=True):
+                if degree_level(canonical) == span_degree and _field_agrees(canonical, span):
+                    found.add(canonical)
+                    break
             continue
-        # The winner names a degree the text contradicts. Re-select among the
-        # candidates the text's own degree admits, best ratio first, and require
-        # the subject to agree -- see docstring for why degree alone is not enough.
-        for _ratio, canonical, span in sorted(qualified, reverse=True):
-            if degree_level(canonical) == span_degree and _field_agrees(canonical, span):
-                found.add(canonical)
-                break
+        if _head_contradicted(best_canonical, best_span) or _subject_contradicted(
+            best_canonical, best_span
+        ):
+            # Same degree, different programme: the half the degree filter cannot
+            # see. Re-selection is filtered the same way -- a candidate is only
+            # admissible if nothing about it is contradicted and its subject is
+            # positively supported. The degree condition is not redundant with the
+            # branch above: this branch is reached precisely when the *winner's*
+            # degree is uncontradicted, which says nothing about the runner-up's,
+            # and without it 6 rescues in the first walk crossed บัณฑิต/มหาบัณฑิต
+            # -- a cross-subject rescue silently undoing the settled degree rule.
+            for _ratio, canonical, span in sorted(qualified, reverse=True):
+                if (
+                    (span_degree is None or degree_level(canonical) in (None, span_degree))
+                    and not _head_contradicted(canonical, span)
+                    and not _subject_contradicted(canonical, span)
+                    and _field_agrees(canonical, span)
+                ):
+                    found.add(canonical)
+                    break
+            continue
+        found.add(best_canonical)
     return sorted(found)
 
 

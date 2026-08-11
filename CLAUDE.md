@@ -395,20 +395,26 @@ see `docs/adr/`.
   would be this project's signature two-artifacts-from-different-days failure.
   One corpus walk (~22 min, 2,854 files) caches its evidence to
   `data/results/relation_graph_raw.json` so `--render` re-derives graph and report
-  free. **Edge A: 177 of 253 programs resolved, 62 ambiguous, 14 no_evidence**
-  — and the `ambiguous` bucket is **not one thing**: only **12** have two faculties
-  genuinely pointing at each other, the other **50** have a single faculty with
-  fewer witnesses than `min_votes=2`. **Those are the 2026-08-11 REBUILD's figures,
-  and the rebuild was forced rather than routine**: this script calls
-  `match_programs`, so the matcher repair below moved the graph without touching
-  its own generator — the two-artifacts-from-different-days shape again, now
-  guarded by a `program_loader.py → relation-graph.md` edge in
-  `audit_doc_claims.py`'s `EVAL_INPUTS`. It moved in the predicted direction —
-  pre-repair **170 / 60 / 23** with the split **9 / 51** — because a rescued tag
-  returns evidence to the program that actually owns it, which is why
-  `no_evidence` fell by 9 while `resolved` rose by 7. The two cross-checks moved
-  too (see below) and all four self-checks still PASS. Two distinct causes
-  underneath, and the
+  free. **Edge A: 182 of 253 programs resolved, 57 ambiguous, 14 no_evidence**
+  — and the `ambiguous` bucket is **not one thing**: only **8** have two faculties
+  genuinely pointing at each other, the other **49** have a single faculty with
+  fewer witnesses than `min_votes=2`. **Those figures are the SECOND 2026-08-11
+  re-walk's, and both re-walks were forced rather than routine**: this script calls
+  `match_programs`, so each half of the matcher repair below moved the graph
+  without touching its own generator — the two-artifacts-from-different-days shape
+  again, now guarded by a `program_loader.py → relation-graph.md` edge in
+  `audit_doc_claims.py`'s `EVAL_INPUTS`. Both moves went in the predicted
+  direction: **170 / 60 / 23** (split 9 / 51) before either repair → **177 / 62 /
+  14** (12 / 50) after the degree half → **182 / 57 / 14** (8 / 49) after the
+  cross-subject half. A rescued tag returns evidence to the program that actually
+  owns it, which is why `no_evidence` fell by 9 on the first walk; a *dropped*
+  absorption stops lending a foreign programme's votes to its neighbour, which is
+  why `ambiguous` fell by 5 on the second. **The motivating case of the whole
+  audit visibly moved**: `หลักสูตรแพทยศาสตรบัณฑิต` — the row that held both
+  `ทันตแพทยศาสตรบัณฑิต` and `พยาบาลศาสตรบัณฑิต` — left the `ambiguous` table
+  altogether and is now `resolved → คณะแพทยศาสตร์` on 8 votes. The two
+  cross-checks moved too (see below) and all four self-checks still PASS. Two
+  distinct causes underneath, and the
   first is the important one: **`program → faculty` is not a function** —
   `วิศวกรรมเครื่องกล` really is offered by both `คณะวิศวกรรมศาสตร์` and
   `วิทยาเขตชุมพรเขตรอุดมศักดิ์` (23 vs 18 votes), so any graph forcing one faculty
@@ -419,9 +425,9 @@ see `docs/adr/`.
   `หลักสูตรพยาบาลศาสตรบัณฑิต` both match `หลักสูตรแพทยศาสตรบัณฑิต`, which accounts
   for that whole ambiguous row. Scope was **measured, not guessed**: 0 of 253
   dictionary names collide with each other, so the collision is only with names
-  outside it. **The degree half of this is now REPAIRED (2026-08-11) — see the
-  paragraph after next; the same-degree cross-subject half, which is exactly the
-  dental/nursing row above, is not.** `match_programs` is also read by
+  outside it. **Both halves are now REPAIRED (2026-08-11) — the degree half in
+  the paragraph after next, the same-degree cross-subject half (exactly the
+  dental/nursing row above) in the one after that.** `match_programs` is also read by
   `build_gold_candidates.py` and `router`, so moving the threshold would move
   published numbers. **That blast radius was MEASURED and it is zero on both
   call sites (2026-08-10, `tools/eval/audit_program_matcher_absorption.py` →
@@ -463,11 +469,55 @@ see `docs/adr/`.
   33/13/30/30 — and it is a counterfactual either way, because
   `build_gold_candidates.py` reads the **cached**
   `academic_resolutions/entity_tags/programs_by_file.json` (2026-07-25), so
-  nothing published moves until that artifact is regenerated. **What the repair
-  does NOT touch is the dental/nursing shape** — those are same-degree
-  cross-subject absorptions, so `หลักสูตรทันตแพทยศาสตรบัณฑิต` still lands on
-  `หลักสูตรแพทยศาสตรบัณฑิต`; that is the next shape to fix, and it needs a
-  different signal than degree. **The measurement that decided all this was
+  nothing published moves until that artifact is regenerated.
+  **The same-degree cross-subject half — the dental/nursing shape the degree
+  filter is structurally unable to see — was then CLOSED the same day, and the
+  mechanism is the reusable part: dilution by concatenation
+  ([[feedback_a_similarity_over_a_concatenation_dilutes]]).** The ratio runs
+  over head noun + subject *joined*, so a disagreement confined to one half is
+  averaged away by the other half agreeing — `ทันตแพทยศาสตรบัณฑิต` against
+  `แพทยศาสตรบัณฑิต` scores **0.88**, comfortably over the 0.82 threshold, purely
+  because the shared `แพทยศาสตรบัณฑิต` outweighs the `ทันต` prefix. Testing the
+  two halves separately (`_head_contradicted` / `_subject_contradicted`) removes
+  the dilution. **The two halves need different tests, and the asymmetry is
+  structural, not a fudge**: `_bounded_span_for` sizes the window from the match
+  position, so the head noun is always covered in full while the subject sits at
+  the tail and is routinely truncated — truncation is therefore *forgiven* in
+  the subject (longest-common-substring coverage, so a cut name still scores
+  1.00) and **not** forgiven in the head (extra leading material is a different
+  formal degree name). Result: the guard fires on **606** of 9,141 accepted
+  matches and is mostly **drops** (12 rescued, 594 dropped: 159 head, 435
+  subject) — which is itself the finding, because where a degree swap usually
+  has the right answer one level away in the dictionary, a cross-subject
+  absorption usually does not; the absorbed programme is simply **not in
+  `programs.json`**, and *matches nothing* is the right answer. Per file, both
+  guards together: **140 gained / 594 lost / 115 stripped bare / 446 changed**.
+  Blast radius unchanged and re-verified rather than inherited (§4 **0 of 30**
+  program gold queries, §5 router **33/13/30/30**), and the degree half's own
+  figures reproduce **exactly** (752 → 354/213/129/56), which is why the two are
+  reported as separate rows and never merged. **Two rules were added after the
+  first cross-subject walk, both because a self-check went red — the corpus was
+  fine and the guard was wrong, twice.** (1) **A drop needs *both* subject tests
+  against it.** Coverage is blind to a difference spread through the string
+  rather than sitting at one end, so a one-character OCR/dictionary variant
+  (`วิศวกรรมเล็กทรอนิกส์` vs `วิศวกรรมอิเล็กทรอนิกส์`) covers 0.55 while
+  `_field_agrees` — this project's own settled test for the same relation — puts
+  it at 0.95. **One pair must not be agreeing and contradicting at once**, so a
+  drop now needs coverage **and** ratio against it; **133 of 569** subject drops
+  sat in exactly that band ([[feedback_agreement_and_contradiction_are_one_relation]]). (2) **A cross-subject rescue may not cross the
+  degree**: that branch is reached precisely when the *winner's* degree is
+  uncontradicted, which says nothing about the *runner-up's*, and 6 rescues in
+  the first walk moved a mention between บัณฑิต and มหาบัณฑิต — a cross-subject
+  rescue silently undoing the settled degree rule (now `S9`). **The unit test for
+  (2) had to be taken from the corpus, not invented**: two brute-force searches
+  over degree/subject/tail grids returned **0** synthetic fixtures, because a
+  candidate that agrees on the subject is normally textually closer than the
+  contradicted winner and simply wins outright — the real mention
+  (`2564/ครั้งที่ 11`, where `<br/>` markup inflates each candidate's window
+  differently) is what reaches the branch. **What is still NOT fixed**: nothing
+  in either guard gives `match_programs` a *lexical* notion of subject identity,
+  so a subject the window truncates past recognition is still undecidable rather
+  than wrong. **The measurement that decided all this was
   itself wrong once and the correction is the reusable part**
   ([[feedback_a_guards_precondition_biases_its_own_test]]): the first A/B asked
   "does the text support the **subject** of the tag the guard removed?" and
@@ -514,12 +564,18 @@ see `docs/adr/`.
   disambiguator. So A′ is a **biased** sample of people, and deriving
   person→faculty from plain document co-occurrence the way edge A does would be
   wrong *with a direction*, not merely noisy. Two independent cross-checks on A,
-  reported and never gated: manifest title vs OCR'd body agree on 165 of 180
+  reported and never gated: manifest title vs OCR'd body agree on **170 of 181**
   programs both can name (two independent text sources — typed vs scanned), and a
-  split-half over disjoint document sets agrees on 110 of 118 (pre-repair 158 of
-  169 and 103 of 112 — **both denominators grew**, i.e. the repair made more
-  programs nameable by both sources, and agreement stayed inside a point either
-  way: 93.5% → 91.7% and 92.0% → 93.2%). Four self-checks
+  split-half over disjoint document sets agrees on **105 of 115**. Read them
+  across all three walks rather than as a level, because the two repairs pull the
+  denominator in opposite directions and neither is a quality signal on its own:
+  manifest-vs-body 158/169 → 165/180 → 170/181 (93.5% → 91.7% → **93.9%**),
+  split-half 103/112 → 110/118 → 105/115 (92.0% → 93.2% → **91.3%**). The degree
+  half *rescued* tags so both denominators grew; the cross-subject half is mostly
+  *drops*, so the split-half denominator fell 118 → 115 — a programme no longer
+  named in both halves is one the guard stopped inventing, which is the intended
+  effect and not a loss of coverage. Agreement stayed inside ~2 points throughout.
+  Four self-checks
   (S1 every faculty node is canonical, S2 `no_evidence` stays *undefined* rather
   than a low score, S3 a window-extracted faculty must also appear in the
   document's own tags, S4 every A′ name must be one `find_people` found in that
