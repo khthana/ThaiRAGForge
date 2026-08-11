@@ -785,12 +785,22 @@ def audit_generation() -> None:
            f"cached probe at num_ctx=8,192)")
     for m in pre_fix_trunc[:10]:
         print(f"        {m}")
+    # Closed 2026-08-11 by measuring it: `tools/eval/rq4_probe_prompt_fit.py` sent all
+    # 759 remaining prompts to ollama at the old default (70 min) and none came back
+    # cut. The warning stays wired rather than deleted -- a new pre-fix answer, a
+    # rebuilt context, or a deleted probe cache all reopen it, and it must reopen as
+    # *unmeasured* rather than silently as clean.
     record("G1c every RQ4 answer's prompt fit is established", not unmeasured,
-           f"{len(unmeasured)} of {checked + len(pre_fix)} answers have neither a "
-           f"recorded num_ctx nor provable evidence about their prompt; they are "
-           f"unmeasured, not suspected (the empirical 0.95 chars/token screen clears "
-           f"all of them, but an observed minimum is not a bound). Closing this needs "
-           f"a probe at num_ctx=8,192 per prompt, ~1 GPU-hour, not a regeneration",
+           (f"{len(unmeasured)} of {checked + len(pre_fix)} answers have neither a "
+            f"recorded num_ctx nor provable evidence about their prompt; they are "
+            f"unmeasured, not suspected (the empirical 0.95 chars/token screen clears "
+            f"all of them, but an observed minimum is not a bound). Closing this needs "
+            f"a probe at num_ctx=8,192 per prompt, ~1 GPU-hour, not a regeneration")
+           if unmeasured else
+           (f"0 of {checked + len(pre_fix)} answers are unmeasured -- every published "
+            f"RQ4 answer's prompt is now established by a recorded field, the "
+            f"UTF-8-byte bound, or a probe at num_ctx=8,192 "
+            f"(data/results/rq4_prompt_fit_probes.md), never by the 0.95 screen"),
            warn=True)
 
 
@@ -813,11 +823,22 @@ def _rq4_prompt_fit_evidence(paths: list[Path]) -> tuple[int, int, list[str], li
     if _RQ4_CONTEXTS is None:
         return 0, 0, [str(p) for p in paths], []
 
-    raw_path = Path("data/results/rq4_truncated_cells_raw.json")
-    try:
-        raw = json.loads(raw_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        raw = {}
+    # Two probe caches, deliberately separate files rather than one shared pool.
+    # `rq4_truncated_cells_raw.json` belongs to `rq4_find_truncated_answers.py`,
+    # whose S1 self-check re-derives the realized chars/token of *every* entry to
+    # prove its own 0.95 screen was sound. `rq4_probe_prompt_fit.py` probes a
+    # wider universe (all 5 arms, screened by the provable byte bound instead), so
+    # writing its entries into that file would let a hybrid prompt -- which that
+    # screen never has to admit -- fail a check about a screen it is not under.
+    # Same evidence, different provenance: read both, and let the older file win
+    # any key they share so a re-read cannot silently change a published cell.
+    raw: dict = {}
+    for raw_path in (Path("data/results/rq4_prompt_fit_probes.json"),
+                     Path("data/results/rq4_truncated_cells_raw.json")):
+        try:
+            raw.update(json.loads(raw_path.read_text(encoding="utf-8")))
+        except (OSError, json.JSONDecodeError):
+            continue
     signature = _rq4_truncated_to(_RQ4_LEGACY_NUM_CTX)
 
     for path in paths:

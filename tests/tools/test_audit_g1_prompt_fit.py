@@ -48,8 +48,8 @@ def bench(tmp_path, monkeypatch):
             json.dumps({"query": "คำถาม", "blocks": blocks}), encoding="utf-8")
         return Path("data/rq4/answers") / VARIANT_DIR / ARM / f"{query}.json"
 
-    def cache(entries: dict) -> None:
-        (tmp_path / "data" / "results" / "rq4_truncated_cells_raw.json").write_text(
+    def cache(entries: dict, name: str = "rq4_truncated_cells_raw.json") -> None:
+        (tmp_path / "data" / "results" / name).write_text(
             json.dumps(entries), encoding="utf-8")
 
     return write, cache
@@ -129,6 +129,45 @@ def test_the_byte_bound_clears_a_short_prompt_with_no_probe_at_all(bench):
     by_bound, by_probe, unmeasured, truncated = A._rq4_prompt_fit_evidence([path])
 
     assert (by_bound, by_probe, unmeasured, truncated) == (1, 0, [], [])
+
+
+def test_a_probe_from_the_second_cache_is_evidence_too(bench):
+    """`rq4_probe_prompt_fit.py` writes its own file, and G1b must read it.
+
+    The two caches are deliberately separate: the finder's file is subject to its
+    own S1 check that every entry cleared a 0.95 chars/token screen, and the
+    prober admits prompts that screen never has to (all five arms, screened by the
+    provable byte bound instead). Merging them on disk would make one file's
+    entries fail a check about the other's screen -- so they merge at read time
+    here, and this pins that the newer file is actually consulted.
+    """
+    write, cache = bench
+    path = write("q007", 4_000)
+    cache({})                                       # the finder never probed this one
+    cache({f"sentence_cap/{ARM}/q007": {"n_8192": 5_000}}, "rq4_prompt_fit_probes.json")
+
+    by_bound, by_probe, unmeasured, truncated = A._rq4_prompt_fit_evidence([path])
+
+    assert (by_bound, by_probe, unmeasured, truncated) == (0, 1, [], [])
+
+
+def test_the_finder_wins_a_key_both_caches_hold(bench):
+    """Precedence, so a re-probe cannot silently move a published cell.
+
+    The 81 regenerated cells were identified from the finder's counts. If the
+    prober ever re-probed one of those keys and disagreed -- a different ollama
+    build, a rebuilt context -- the published blast radius must not change
+    underneath the reader; the newer measurement would be a finding to report,
+    not a value to adopt silently.
+    """
+    write, cache = bench
+    path = write("q008", 4_000)
+    cache({f"sentence_cap/{ARM}/q008": {"n_8192": A._rq4_truncated_to(8192)}})
+    cache({f"sentence_cap/{ARM}/q008": {"n_8192": 5_000}}, "rq4_prompt_fit_probes.json")
+
+    _, _, _, truncated = A._rq4_prompt_fit_evidence([path])
+
+    assert [t.split()[0] for t in truncated] == [f"{VARIANT_DIR}/{ARM}/q008"]
 
 
 def test_the_screen_constant_is_not_used_as_evidence(bench):

@@ -106,10 +106,11 @@ see `docs/adr/`.
   recorded relabel (`relabeled_mispairings.at` in an index manifest) as bringing
   an index current without a rebuild — without that second half it would sit
   permanently red after any title repair, and an always-red check is one nobody
-  reads. Current state (**re-run 2026-08-11 after `G1b` was sharpened**): **26 pass
-  / 2 warn / 0 fail** over 28 checks (was 25/2/0 over 27 on 08-10; 24/1/0 on
-  08-09, when E0 first made the gate green). **The second warn is `G1c`, and how
-  the G1 family became three checks is the reusable part.** The `G1b` that landed
+  reads. Current state (**re-run 2026-08-11 after `G1c` was closed by measurement**):
+  **27 pass / 1 warn / 0 fail** over 28 checks (was 26/2/0 earlier the same day,
+  25/2/0 over 27 on 08-10; 24/1/0 on 08-09, when E0 first made the gate green).
+  **`G1c` was the second warn, and how the G1 family became three checks — then how
+  the third one was retired — is the reusable part.** The `G1b` that landed
   08-10 WARNed that **1,509** RQ4 answers predate the `num_ctx` fix and were
   therefore *unverifiable*, "clearable only by regenerating" — but *no recorded
   field* is not *no evidence*, and treating them as one bucket **overstated the
@@ -123,19 +124,48 @@ see `docs/adr/`.
   at 8,192 — used in the conservative direction only: 8,192 is the smallest context
   any published run used, so "fits 8,192" implies "fits whatever it actually ran
   at". So **`G1a`** is the recorded field (0 truncated of 293), **`G1b`**
-  *re-derives* the same claim for **750** pre-fix answers and can **FAIL** (0 do),
-  and **`G1c`** WARNs on the **759** neither reaches — *unmeasured*, never
-  *suspected* ([[feedback_undefined_is_not_zero]]), with its denominator printed.
-  `SCREEN_CHARS_PER_TOKEN = 0.95` would clear all 759 at a stroke and is
-  deliberately **not** evidence: it is an observed minimum, and this project has
-  already published a wrong blast radius from exactly that
-  ([[feedback_an_observed_extreme_is_not_a_bound]]). Closing G1c honestly costs one
-  probe per prompt, **~1 GPU-hour, not a regeneration** — which is the point of
-  separating it, since the old wording priced the whole 1,509 at a regeneration.
-  Because G1b reports 0 on live data its failing branch is unexercised there, so
-  `tests/tools/test_audit_g1_prompt_fit.py` pins all three outcomes — including a
-  cached probe carrying the `num_ctx//2 + 2` signature
-  ([[feedback_anchor_a_check_where_the_mechanism_is_live]]). **The first warn is real and is not E0's
+  *re-derives* the same claim from provable evidence and can **FAIL**, and
+  **`G1c`** counts what neither reaches — *unmeasured*, never *suspected*
+  ([[feedback_undefined_is_not_zero]]), with its denominator printed.
+  `SCREEN_CHARS_PER_TOKEN = 0.95` would have cleared the whole remainder at a
+  stroke and is deliberately **not** evidence: it is an observed minimum, and this
+  project has already published a wrong blast radius from exactly that
+  ([[feedback_an_observed_extreme_is_not_a_bound]]). **G1c is now CLOSED, and the
+  separation is what made closing it affordable**: it priced the job at one probe
+  per prompt where the old wording had priced all 1,509 at a regeneration.
+  `tools/eval/rq4_probe_prompt_fit.py` sent all **759** remaining prompts to ollama
+  at the old `num_ctx=8192` — **70 min, 0 truncated** — so G1b now re-derives the
+  claim for **all 1,509** pre-fix answers (**603** by the byte bound, **906** by
+  probe) and G1c reads **0 of 1,802**. Report:
+  `data/results/rq4_prompt_fit_probes.md`. Four things worth keeping from it.
+  (1) **The estimate was checked before the run, not after**: a timed
+  12-cell sample spread across the length distribution (not longest-first —
+  [[feedback_dont_extrapolate_gpu_eta_from_first_batches]]) projected 1.2 GPU-hours
+  against an actual 1.17. (2) **`S0` re-probes two cells
+  `rq4_find_truncated_answers.py` already measured and must reproduce its counts**
+  (8,052 and the truncated 4,098) — every other number here is one nothing else can
+  confirm, so without that anchor a systematically different measurement would
+  produce a clean, plausible, wrong report. (3) **53 of 759 prompts landed within
+  128 tokens of the signature**, where the count alone cannot say whether it was
+  cut, and were re-probed at 16,384 to decide; a run reporting "0 truncated"
+  without those would not have measured its own boundary. (4) The longest of the
+  759 was fed **7,999** tokens — **193 short** of the line, the same margin the
+  `hybrid` arm cleared by, which is a margin nobody chose. The probes live in
+  **their own cache**, `rq4_prompt_fit_probes.json`, and the audit merges the two
+  at read time with the finder's file winning any shared key: that file is subject
+  to its own S1 check that every entry cleared a 0.95 chars/token screen, and this
+  script deliberately admits prompts that screen never has to. Because G1b reports
+  0 on live data its failing branch is unexercised there, so
+  `tests/tools/test_audit_g1_prompt_fit.py` pins all three outcomes plus both
+  cache rules — including a cached probe carrying the `num_ctx//2 + 2` signature
+  ([[feedback_anchor_a_check_where_the_mechanism_is_live]]). **The warn stays
+  wired rather than deleted**: a new pre-fix answer, a rebuilt context or a deleted
+  probe cache must reopen it as *unmeasured*, not pass silently as clean. One
+  measurement worth carrying: realized chars/token over these 759 spans
+  **1.0080–3.4644**, so the observed floor moved **again** (1.046 documented,
+  1.0098 previously seen) the moment more prompts were measured — and the UTF-8
+  byte bound is 2.49x–3.94x loose here, which is why it is sound rather than tight.
+  **The one remaining warn is real and is not E0's
   doing**: it is that same `I6`, 41 indexes built 2026-08-08 19:33
   against a corpus last edited 2026-08-09 09:53, i.e. the `2566/ครั้งที่ 3`
   re-download + re-OCR earlier that day. **Unlike the title repair, that one is a
@@ -255,7 +285,9 @@ see `docs/adr/`.
   it, after the regeneration). See the invariant-audit bullet above for **G1b/G1c**,
   which split the pre-fix answers by whether provable evidence about their prompt
   exists — the point being that the first version called all 1,509 of them
-  *unverifiable* and that overstated the hole by 2x. General rule: **a staleness
+  *unverifiable* and that overstated the hole by 2x, and that the remainder was
+  then **closed by paying the measurement** (2026-08-11, 759 probes, 70 min,
+  0 truncated) rather than by an estimator. General rule: **a staleness
   check is a proxy; when it is carrying a real finding, add the check that reads
   the thing itself.**
 - The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;
