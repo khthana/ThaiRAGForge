@@ -34,8 +34,11 @@ class HybridRetriever(BaseRetriever):
     change to the result, not an optimisation: a chunk inside dense's top-F but
     past BM25's cut loses its BM25 term outright rather than earning a small
     one. tools/eval/hybrid_fetch_depth_sweep.py measures how deep is deep enough
-    (rrf method only -- under `weighted` a truncated chunk's score is likewise
-    read as 0, which is a harsher approximation and is unmeasured)."""
+    -- for `rrf` only. Under `weighted` a cut chunk's *normalized score* reads 0,
+    a harsher approximation, and nothing has measured it. That used to be stated
+    here and enforced nowhere; the combination now raises, because an asserted
+    invariant is not a check and the failure mode is a plausible number rather
+    than an error. It is a guard, not a verdict -- measure it and lift it."""
 
     def __init__(
         self,
@@ -45,6 +48,15 @@ class HybridRetriever(BaseRetriever):
         bm25_weight: float = 0.5,
         fetch_depth: int | None = None,
     ) -> None:
+        if method == "weighted" and fetch_depth is not None:
+            raise ValueError(
+                "fetch_depth is measured for method='rrf' only "
+                "(data/results/hybrid_fetch_depth_sweep.md, routed_fetch_depth_test.md). "
+                "Under 'weighted' a chunk past one arm's cut has that arm's normalized "
+                "score read as 0 rather than merely losing an RRF term, which is a "
+                "harsher approximation nobody has measured. Pass fetch_depth=None, or "
+                "measure the combination and lift this guard."
+            )
         self.method = method
         self.rrf_k = rrf_k
         self.dense_weight = dense_weight

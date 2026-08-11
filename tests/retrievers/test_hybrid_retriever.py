@@ -4,6 +4,7 @@ from __future__ import annotations
 import inspect
 
 import numpy as np
+import pytest
 
 from rag_lab.config import StrategySpec
 from rag_lab.factory import build_retriever
@@ -179,6 +180,24 @@ def test_truncating_the_fetch_drops_a_chunk_out_of_reach_of_one_arm():
     # c3 is past both cuts, so it is not merely demoted -- it is unreachable,
     # and a k of 4 cannot be filled from a fetch of 2.
     assert "c3" not in cut and len(cut) == 3
+
+
+def test_weighted_refuses_a_fetch_depth_because_that_pair_is_unmeasured():
+    # The sweep and the routed test both measured `rrf`. Under `weighted` a chunk
+    # past one arm's cut has that arm's normalized score read as 0 -- strictly
+    # harsher than losing an RRF term -- and no run has ever measured it. The
+    # docstring said so and nothing enforced it; a silently harsher fusion returns
+    # a plausible ranking, not an error, which is the shape this project keeps
+    # getting caught by ([[feedback_an_asserted_invariant_is_not_a_check]]).
+    #
+    # Pinned in both directions: neither knob alone may be affected, so the guard
+    # cannot quietly become a ban on `weighted` or on truncation.
+    index, q = _truncation_index(), _truncation_query()
+    with pytest.raises(ValueError, match="rrf"):
+        _hybrid(method="weighted", fetch_depth=2)
+
+    assert _hybrid(method="weighted").retrieve(q, index, 4)
+    assert _hybrid(fetch_depth=2).retrieve(q, index, 4)
 
 
 def test_truncated_ties_still_break_dense_first():

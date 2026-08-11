@@ -102,9 +102,16 @@ the single-vector index we already ship. On a 12 GB card this is workable.
    matrix. Whether it handles Thai council prose well is an empirical question, not
    an assumption — a pilot on a subset should precede any full index build
    (`feedback_scan_before_broad_preprocessing_fix`).
-3. **Scope.** RQ4 (end-to-end answer quality) is unstarted and is the gap that
-   blocks the paper. ColBERT is a retrieval-side axis that would sit alongside
-   RQ1-RQ2, not close RQ4.
+3. **Scope.** ColBERT is a retrieval-side axis that sits alongside RQ1-RQ2. This
+   used to read "RQ4 is unstarted and is the gap that blocks the paper";
+   **RQ4 completed 2026-08-03** (and has been refreshed twice since), so that is
+   no longer the reason to defer. What replaces it is a sharper one, measured
+   after these notes were written: the routed oracle over a P=50 pool delivers
+   **0.8331** against arm C's 0.6831 (`data/results/reranker_rrf_routed_test.md`),
+   i.e. **+0.1500 of headroom that a better ranker could reach and
+   `bge-reranker-v2-m3` reaches 1% of** — and swapping the model moves recall@10
+   by 20x the anchor's own effect (`reranker_model_comparison.md`). So the axis is
+   motivated by a *measured* ceiling now, not by a gap in the study.
 
 ## A pre-registered prediction, so this is falsifiable
 
@@ -129,5 +136,9 @@ unchanged. Only the index build and a `ColbertRetriever` are new.
 Even unbuilt, late interaction should appear in related work. An IR reviewer will
 ask why a project that tested a cross-encoder reranker did not test ColBERT, and
 the answer is a strength rather than an excuse: **we measured the cross-encoder
-reranker making hybrid worse**, which is precisely the result that motivates
-late interaction as future work.
+reranker making hybrid worse** when it replaces the ranking, and — after these
+notes were written — that it adds **+0.0017 (ns)** on top of the shipped router
+even when fused as a fourth RRF signal, against an oracle **+0.1500** over the
+same pool. State it that way rather than as the bare "it hurt": the evidence that
+motivates late interaction is that the *evidence is reachable and this model does
+not reach it*, which is exactly what a scoring mechanism change is for.

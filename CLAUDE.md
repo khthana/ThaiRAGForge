@@ -801,9 +801,19 @@ see `docs/adr/`.
   checks the numpy fusion against a real `HybridRetriever(fetch_depth=F)`**, added because the
   first version anchored only F=n, where the mechanism under test is inert and the check would
   have passed identically had `fuse_at_depth` ignored F. The `weighted` branch truncates too
-  (a cut chunk's normalised score reads 0, a harsher approximation) and is **unmeasured**.
-  Everything the report renders is cached in `hybrid_fetch_depth_raw.json`, so `--render`
-  reproduces it without a GPU.
+  (a cut chunk's normalised score reads 0 outright, a strictly harsher approximation than
+  losing an RRF term) and is **unmeasured — so as of 2026-08-11 that combination raises**
+  rather than being merely warned against in a docstring: `HybridRetriever.__init__` refuses
+  `method="weighted"` with a non-`None` `fetch_depth`, pinned in both directions by
+  `tests/retrievers/test_hybrid_retriever.py` so the guard cannot quietly become a ban on
+  either knob alone. **It is containment, not a verdict** — closed this way rather than by
+  measuring, because `weighted` is reachable from no eval, no config and no UI path (only its
+  own unit tests), so a run would have priced an axis nothing uses; measure it and lift the
+  guard. The reason not to leave the docstring doing the work is
+  [[feedback_an_asserted_invariant_is_not_a_check]]: a harsher fusion returns a plausible
+  ranking, not an error, which is the same shape as the `--num-ctx` help string that asserted
+  in capitals what nothing measured. Everything the report renders is cached in
+  `hybrid_fetch_depth_raw.json`, so `--render` reproduces it without a GPU.
 - **`fetch_depth` against the shipped router, and the ship decision (2026-08-09,
   `tools/eval/routed_fetch_depth_test.py` → `data/results/routed_fetch_depth_test.md`,
   ~2.5 min quality + ~3 min latency).** The sweep above left one blocker: its
