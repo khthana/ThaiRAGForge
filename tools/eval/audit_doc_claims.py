@@ -125,6 +125,17 @@ EVAL_INPUTS: dict[str, list[str]] = {
         "power_analysis.md", "map_precision_significance_test.md", "rq4_score.md",
     ],
     "tools/eval/rq4_generate.py": ["rq4_score.md", "rq4_score_guarded.md"],
+    # The absorption report IS a measurement of this matcher's rule, so editing
+    # the rule re-scores every figure in it. The edge was missing while the
+    # report's own conclusion ("not fixed here") was true, and became live the
+    # moment that stopped being true -- an input list is only as good as its
+    # least-recently-revisited entry.
+    # `relation-graph.md` is the second consumer and was easy to miss: edge A
+    # counts faculty votes around whatever `match_programs` tagged, so a change
+    # to the matcher moves the graph without touching its own generator.
+    "src/rag_lab/loaders/program_loader.py": [
+        "docs/program-matcher-absorption.md", "docs/relation-graph.md",
+    ],
 }
 
 findings: list[tuple[str, str, str]] = []
@@ -432,7 +443,12 @@ def audit_eval_inputs() -> None:
             continue
         changed = _mtime(p)
         for rname in reports:
-            r = RESULTS / rname
+            # Most reports live in `data/results/`, but a few artifacts are
+            # tracked under `docs/` (`ARTIFACT_FILES`). A name carrying a
+            # separator is repo-relative so both kinds can be declared here;
+            # without this the docs ones resolve to a path that never exists
+            # and D4b reports them missing forever.
+            r = (REPO / rname) if "/" in rname else (RESULTS / rname)
             if not r.exists():
                 missing.append(f"{rname} (declared under {src})")
                 continue

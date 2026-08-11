@@ -395,13 +395,23 @@ see `docs/adr/`.
   would be this project's signature two-artifacts-from-different-days failure.
   One corpus walk (~22 min, 2,854 files) caches its evidence to
   `data/results/relation_graph_raw.json` so `--render` re-derives graph and report
-  free. **Edge A: 170 of 253 programs resolved, 60 ambiguous, 23 no_evidence**
-  — and the `ambiguous` bucket is **not one thing**: only **9** have two faculties
-  genuinely pointing at each other, the other **51** have a single faculty with
-  fewer witnesses than `min_votes=2`. Two distinct causes underneath, and the
+  free. **Edge A: 177 of 253 programs resolved, 62 ambiguous, 14 no_evidence**
+  — and the `ambiguous` bucket is **not one thing**: only **12** have two faculties
+  genuinely pointing at each other, the other **50** have a single faculty with
+  fewer witnesses than `min_votes=2`. **Those are the 2026-08-11 REBUILD's figures,
+  and the rebuild was forced rather than routine**: this script calls
+  `match_programs`, so the matcher repair below moved the graph without touching
+  its own generator — the two-artifacts-from-different-days shape again, now
+  guarded by a `program_loader.py → relation-graph.md` edge in
+  `audit_doc_claims.py`'s `EVAL_INPUTS`. It moved in the predicted direction —
+  pre-repair **170 / 60 / 23** with the split **9 / 51** — because a rescued tag
+  returns evidence to the program that actually owns it, which is why
+  `no_evidence` fell by 9 while `resolved` rose by 7. The two cross-checks moved
+  too (see below) and all four self-checks still PASS. Two distinct causes
+  underneath, and the
   first is the important one: **`program → faculty` is not a function** —
   `วิศวกรรมเครื่องกล` really is offered by both `คณะวิศวกรรมศาสตร์` and
-  `วิทยาเขตชุมพรเขตรอุดมศักดิ์` (23 vs 20 votes), so any graph forcing one faculty
+  `วิทยาเขตชุมพรเขตรอุดมศักดิ์` (23 vs 18 votes), so any graph forcing one faculty
   per program is wrong for that group by construction. The second is a matcher
   finding worth its own ticket: **`match_programs` has no "matches nothing" exit
   for a near-miss**, so a corpus name absent from the dictionary is absorbed by
@@ -409,9 +419,11 @@ see `docs/adr/`.
   `หลักสูตรพยาบาลศาสตรบัณฑิต` both match `หลักสูตรแพทยศาสตรบัณฑิต`, which accounts
   for that whole ambiguous row. Scope was **measured, not guessed**: 0 of 253
   dictionary names collide with each other, so the collision is only with names
-  outside it. **Not fixed here** — `match_programs` is also read by
+  outside it. **The degree half of this is now REPAIRED (2026-08-11) — see the
+  paragraph after next; the same-degree cross-subject half, which is exactly the
+  dental/nursing row above, is not.** `match_programs` is also read by
   `build_gold_candidates.py` and `router`, so moving the threshold would move
-  published numbers. **That blast radius is now MEASURED and it is zero on both
+  published numbers. **That blast radius was MEASURED and it is zero on both
   call sites (2026-08-10, `tools/eval/audit_program_matcher_absorption.py` →
   `docs/program-matcher-absorption.md`, ~23 min walk cached so `--render` is
   free).** Corpus-wide the defect is large — 9,141 accepted matches over 1,710
@@ -427,15 +439,67 @@ see `docs/adr/`.
   have a `resolution_id` failing to contain the program; and `classify_query`
   asks only whether *any* program matched, never which one, so a name-for-name
   swap **cannot** change a route (33/13/30/30 exact, 0 program queries routed
-  elsewhere). So the ticket closes as *documented, not repaired* — and if it is
-  ever repaired, the degree-level swap is the shape to fix first. **Its first
+  elsewhere).
+  **The degree-level swap was then REPAIRED (2026-08-11), and the useful part is
+  how the rule was chosen: three candidate rules were each walked over the whole
+  corpus, and both losers were rejected by their own numbers.** The naive
+  *reject* (drop the tag whenever the text's degree contradicts the winner's)
+  and *fallthrough* (take the next candidate) both assume the guard's job is to
+  decide keep-or-drop. It is not: of the **752** mentions where a winner's degree
+  is contradicted, **354 (47%) had a same-degree candidate whose subject the text
+  also supports already sitting in the dictionary** — the matcher had not run out
+  of options, it had **ranked** them wrong. So what ships is *select*: the degree
+  **filters the candidate set** and the best surviving candidate is re-selected,
+  which strictly dominates reject (**134 tags gained / 340 lost / 44 files
+  stripped bare**, against reject's 0 / 340 / 71). **The subject test inside the
+  rescue is load-bearing, not belt-and-braces**: 213 of the 752 have a
+  same-degree candidate that disagrees on subject, so filtering on degree alone
+  would hand `...ดุษฎีบัณฑิต ...ไฟฟ้า` to `...โยธา` — trading a wrong degree for a
+  wrong subject. The remaining 129 are **undecidable** (one side has no
+  `สาขาวิชา`, so no evidence means no rescue, [[feedback_undefined_is_not_zero]])
+  and 56 have nothing at the text's own degree, where *matches nothing* is now
+  finally an available answer. **Blast radius re-measured after the repair, not
+  inherited**: 0 of 247 published program gold pairs move and the router stays
+  33/13/30/30 — and it is a counterfactual either way, because
+  `build_gold_candidates.py` reads the **cached**
+  `academic_resolutions/entity_tags/programs_by_file.json` (2026-07-25), so
+  nothing published moves until that artifact is regenerated. **What the repair
+  does NOT touch is the dental/nursing shape** — those are same-degree
+  cross-subject absorptions, so `หลักสูตรทันตแพทยศาสตรบัณฑิต` still lands on
+  `หลักสูตรแพทยศาสตรบัณฑิต`; that is the next shape to fix, and it needs a
+  different signal than degree. **The measurement that decided all this was
+  itself wrong once and the correction is the reusable part**
+  ([[feedback_a_guards_precondition_biases_its_own_test]]): the first A/B asked
+  "does the text support the **subject** of the tag the guard removed?" and
+  answered 573 loss / 55 fix — an instrument that cannot return the other answer,
+  because every firing has a contradicted *degree* by construction, so the
+  subject is always the half that agreed. **Its first
   run was wrong in a way worth remembering**: it reported "99.3% absorb a
   foreign name" with the inserted-character distribution's mode at exactly
   **4** — which is `_WINDOW_SLACK`, i.e. it was counting the matcher's own
   read-ahead window as absorbed text
   ([[feedback_a_mode_on_a_constant_is_your_instrument]]). `S5` now pins that a
   pure window tail scores 0 (6,333 such spans) while a longer tail still
-  registers its excess. **Edge A′ is ~7x smaller than the scan note claimed and the
+  registers its excess. **And the same trap caught the repair's own check**:
+  `S7` (every rescue agrees with the span's subject) FAILED on **4 of 354**
+  because it judged the rescue against the span sized to the **winner's** length,
+  while `_bounded_span_for` sizes the window to *each candidate*, so a rescue
+  onto a longer sibling name (`...การจัดการโลจิสติกส์` →
+  `...การจัดการโลจิสติกส์และซัพพลายเชน`) read further into the text than the
+  check let it. The record now carries `selected_span`, and the 4 are reported
+  as a fact about the dictionary (`S8`) instead of a violation that never
+  happened — **diagnose a red self-check from the cache before editing either
+  the rule or the check**; both times here the instrument was wrong and the
+  corpus was fine. **`entity_tags_full` is deliberately NOT rebuilt for this**:
+  `entity_loader.py` is a third call site, so that index (rebuilt 2026-08-05)
+  holds pre-repair program tags feeding `entity_lookup`/`entity_boost` and the
+  published RQ4 entity arms — but the gating verdict there rests on **−0.2531**
+  at Holm 0.0000 with a *ranking* failure over already gold-dense contexts
+  (0.6448), which better program tags cannot plausibly close, and a rebuild
+  would decouple that index's tags from the qrels' own 2026-07-25 cached tags in
+  an unmeasured way ([[project_rq4_entity_arms_gating]]). Rebuild it only
+  together with a regeneration of `programs_by_file.json`, and re-run the RQ4
+  entity arms if you do. **Edge A′ is ~7x smaller than the scan note claimed and the
   note is corrected**: `สังกัดคณะ` was recorded as appearing in "1,465 files
   (51%)"; direct counting over the 2,854 live files gives `สังกัด` in **209**
   files and `สังกัดคณะ` in **73**, and no alternative anchor supplies a larger
@@ -450,9 +514,12 @@ see `docs/adr/`.
   disambiguator. So A′ is a **biased** sample of people, and deriving
   person→faculty from plain document co-occurrence the way edge A does would be
   wrong *with a direction*, not merely noisy. Two independent cross-checks on A,
-  reported and never gated: manifest title vs OCR'd body agree on 158 of 169
+  reported and never gated: manifest title vs OCR'd body agree on 165 of 180
   programs both can name (two independent text sources — typed vs scanned), and a
-  split-half over disjoint document sets agrees on 103 of 112. Four self-checks
+  split-half over disjoint document sets agrees on 110 of 118 (pre-repair 158 of
+  169 and 103 of 112 — **both denominators grew**, i.e. the repair made more
+  programs nameable by both sources, and agreement stayed inside a point either
+  way: 93.5% → 91.7% and 92.0% → 93.2%). Four self-checks
   (S1 every faculty node is canonical, S2 `no_evidence` stays *undefined* rather
   than a low score, S3 a window-extracted faculty must also appear in the
   document's own tags, S4 every A′ name must be one `find_people` found in that

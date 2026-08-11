@@ -8,20 +8,32 @@ nothing" exit for a near miss: it keeps the best candidate in the prefix group
 and accepts it at ratio >= 0.82, so a corpus name absent from `programs.json`
 is absorbed by its nearest dictionary neighbour rather than rejected.
 
-**This measures the blast radius; it does not fix anything.** The matcher is
-read by `build_gold_candidates.py` and by `router.classify_query`, so moving
-the threshold would move published numbers -- which is precisely why the size
-has to be known first. Scope was already bounded on one side: 0 of the 253
-dictionary names collide with *each other* at threshold, so every absorption is
-a collision with a name outside the dictionary.
+The first run of this script measured the blast radius and deliberately fixed
+nothing: the matcher is read by `build_gold_candidates.py` and by
+`router.classify_query`, so moving the threshold would move published numbers,
+which is precisely why the size had to be known first. Scope was already bounded
+on one side: 0 of the 253 dictionary names collide with *each other* at
+threshold, so every absorption is a collision with a name outside the dictionary.
 
-Three questions, in the order that decides whether a fix is worth anything:
+**The repair landed 2026-08-11 and this script now measures both states.** The
+fix is not a threshold move -- it is a degree filter: 35.7% of absorptions swap
+only the degree level, so a winner whose degree the text contradicts is replaced
+by the best same-degree candidate whose subject the span also supports, and the
+mention goes untagged when there is none. §1-§2 are computed from the pre-repair
+winner so the figures that motivated the fix keep reproducing; §3 measures the
+repair against them.
+
+Four questions, in the order that decides whether a fix is worth anything:
 
   1. CORPUS   how many accepted matches have a span that is not the canonical,
               and how many of those inserted enough text to be a different
               program rather than OCR noise;
-  2. QRELS    whether any of it reaches the Gold set;
-  3. ROUTER   whether any of it changes a route.
+  2. SHAPE    which canonicals absorb what, and what the dominant shape is;
+  3. REPAIR   what the degree filter recovers, what it drops, and what the two
+              rejected candidate rules would have done instead;
+  4. QRELS
+     + ROUTER whether any of it -- defect or repair -- reaches the Gold set or
+              changes a route.
 
 Run (CPU only, one corpus walk ~5 min):
     PYTHONPATH=src python tools/eval/audit_program_matcher_absorption.py
@@ -56,6 +68,9 @@ from rag_lab.loaders.program_loader import (  # noqa: E402
     _build_scan_pattern,
     _bounded_span_for,
     _by_prefix,
+    _field_agrees,
+    _field_of,
+    degree_level,
     load_dictionary,
     match_programs,
 )
@@ -73,11 +88,22 @@ INSERT_FLOOR = 2
 
 
 def match_programs_detailed(text: str, dictionary=None) -> list[dict]:
-    """`match_programs` with its working shown: one record per *accepted*
-    match, carrying the span it accepted and the ratio it accepted it at.
+    """Both rules over one set of candidate ratios: one record per match the
+    *pre-repair* matcher accepted, carrying the span and ratio it accepted it
+    at, plus what the shipped degree-filtering matcher does with it.
 
-    Deliberately a transcription of the original loop rather than a call into
-    it -- S1 gates the two against each other on real corpus text, because a
+      canonical -- the pre-repair winner. §1-§2 size the absorption defect from
+                   this field, so those figures keep reproducing after the
+                   repair; they are what motivated it.
+      selected  -- what ships now: the same canonical, a re-selected one, or
+                   None where the mention is left untagged.
+      selected_span -- the span `selected` was accepted against, which is NOT
+                   `span` for a rescue: the window is sized to each candidate's
+                   own length. S7 needs this one; see the comment where it is set.
+      bucket    -- why, for §3.
+
+    Deliberately a transcription of both loops rather than a call into them --
+    S1 gates `selected` against `match_programs` on real corpus text, because a
     measurement of a slightly different function measures nothing.
     """
     dictionary = dictionary if dictionary is not None else load_dictionary()
@@ -85,15 +111,46 @@ def match_programs_detailed(text: str, dictionary=None) -> list[dict]:
     pattern = _build_scan_pattern(tuple(grouped))
     out: list[dict] = []
     for m in pattern.finditer(text):
-        best_canonical, best_ratio, best_span = None, 0.0, ""
+        scored = []
         for canonical in grouped[m.group(0)]:
             span = _bounded_span_for(text, m.start(), len(canonical))
-            ratio = SequenceMatcher(None, canonical, span).ratio()
-            if ratio > best_ratio:
-                best_canonical, best_ratio, best_span = canonical, ratio, span
-        if best_canonical is not None and best_ratio >= _MATCH_THRESHOLD:
-            out.append({"canonical": best_canonical, "span": best_span,
-                        "ratio": round(best_ratio, 4)})
+            scored.append((SequenceMatcher(None, canonical, span).ratio(), canonical, span))
+        qualified = [c for c in scored if c[0] >= _MATCH_THRESHOLD]
+        if not qualified:
+            continue
+        best_ratio, best_canonical, best_span = max(qualified, key=lambda c: c[0])
+
+        span_degree = degree_level(best_span)
+        selected_span = best_span
+        if span_degree is None or degree_level(best_canonical) in (None, span_degree):
+            selected, bucket = best_canonical, "unchanged"
+        else:
+            same_level = [c for c in qualified if degree_level(c[1]) == span_degree]
+            pick = next(
+                ((c, s) for _r, c, s in sorted(same_level, reverse=True) if _field_agrees(c, s)),
+                None,
+            )
+            selected = pick[0] if pick else None
+            if selected is not None:
+                # Record the span the rescue was tested against, NOT `best_span`.
+                # `_bounded_span_for` sizes the window to each candidate's own
+                # length, so a rescue onto a longer name reads further into the
+                # text; judging it against the winner's shorter span cuts the
+                # subject off and reports a contract violation that never
+                # happened (S7 did exactly that on 4 of 354 -- all four cases
+                # the dictionary's same-degree sibling is the longer name).
+                selected_span = pick[1]
+                bucket = "rescued"
+            elif same_level:
+                bucket = "dropped: same degree available, no subject agreed"
+            elif _field_of(best_canonical) is None or _field_of(best_span) is None:
+                bucket = "dropped: no subject to compare"
+            else:
+                bucket = "dropped: nothing at the span's own degree"
+        out.append({"canonical": best_canonical, "span": best_span,
+                    "ratio": round(best_ratio, 4),
+                    "selected": selected, "selected_span": selected_span,
+                    "bucket": bucket})
     return out
 
 
@@ -168,12 +225,14 @@ def self_checks(raw: dict) -> list[tuple[str, bool, str]]:
 
     # S1 -- the instrumented matcher IS the shipped one. Sampled on real
     # corpus text, not a fixture: the transcription could diverge only on
-    # inputs the fixture doesn't have.
+    # inputs the fixture doesn't have. Gated on `selected`, the field that
+    # tracks what ships; `canonical` deliberately no longer can be, since it
+    # transcribes the rule the repair replaced.
     sample = [p for p in list(iter_corpus_files(CORPUS_ROOT))[::173]][:15]
     bad = []
     for path in sample:
         text = strip_mapping_tables(strip_document_header(read_text(path)))
-        mine = sorted({h["canonical"] for h in match_programs_detailed(text)})
+        mine = sorted({h["selected"] for h in match_programs_detailed(text) if h["selected"]})
         if mine != match_programs(text):
             bad.append(path.name)
     checks.append(("S1 instrumented matcher == match_programs", not bad,
@@ -217,6 +276,39 @@ def self_checks(raw: dict) -> list[tuple[str, bool, str]]:
     ok = all(inserted_chars(h["canonical"], h["span"]) == 0 for h in slack_only)
     checks.append((f"S5 a pure {_WINDOW_SLACK}-char window tail counts as 0 inserted",
                    ok, f"{len(slack_only):,} slack-only spans"))
+
+    # S6 -- the repair changed a match only through the stated mechanism. A
+    # re-selection that is neither the old winner nor a same-degree candidate
+    # would mean §3 is counting something other than the degree filter, and the
+    # bucket names would be describing a rule the code no longer has.
+    moved = [h for h in hits if h["selected"] not in (None, h["canonical"])]
+    ok = all(degree_level(h["selected"]) == degree_level(h["span"])
+             and degree_level(h["selected"]) != degree_level(h["canonical"])
+             for h in moved)
+    checks.append(("S6 every re-selection sits at the span's own degree", ok,
+                   f"{len(moved):,} matches re-selected"))
+
+    # S7 -- and it is not a rename in disguise: a rescue must land on a
+    # *different* canonical whose subject the text supports, which is the one
+    # thing separating this from the degree-blind fallthrough that was measured
+    # and rejected (11 re-tags, 3 correct). Judged against `selected_span`, the
+    # window sized to the rescue's own length -- the first version of this check
+    # used `span` (sized to the winner) and FAILED on 4 of 354, every one of
+    # them the check truncating the subject it was about to compare.
+    ok = all(_field_agrees(h["selected"], h["selected_span"]) for h in moved)
+    checks.append(("S7 every re-selection agrees with the span's subject", ok,
+                   f"{len(moved):,} matches re-selected"))
+
+    # S8 -- how far a rescue may travel. A degree swap is the whole intent, so
+    # the selected name should normally be the winner's subject at another
+    # level; a rescue whose *subject* also moves is the dictionary holding a
+    # longer sibling name, and it is reported rather than gated because the
+    # corpus, not the rule, decides how many there are. It fails only if that
+    # became the common case, which would mean the filter is re-ranking on
+    # something other than degree.
+    widened = [h for h in moved if not _field_agrees(h["selected"], h["canonical"])]
+    checks.append(("S8 a rescue keeps the winner's subject", len(widened) <= len(moved) // 10,
+                   f"{len(widened)} of {len(moved):,} land on a longer sibling name"))
     return checks
 
 
@@ -236,13 +328,16 @@ def render(raw: dict) -> str:
     L = [f"# `match_programs` absorption -- blast radius\n",
          f"Generated by `tools/eval/audit_program_matcher_absorption.py` "
          f"({raw['generated_at']}, walk {raw['walk_seconds']}s).\n",
-         "`match_programs` accepts the best candidate in a prefix group at ratio "
-         f">= {_MATCH_THRESHOLD} and has no *reject* branch, so a program name absent "
-         "from `programs.json` is absorbed by its nearest neighbour instead of "
-         "matching nothing. This measures how far that reaches. **Nothing is "
-         "changed here** -- the matcher is read by `build_gold_candidates.py` and "
-         "`router.classify_query`, so a threshold move would move published "
-         "numbers.\n",
+         "`match_programs` used to accept the best candidate in a prefix group at "
+         f"ratio >= {_MATCH_THRESHOLD} with no *reject* branch, so a program name "
+         "absent from `programs.json` was absorbed by its nearest neighbour instead "
+         "of matching nothing. **That is now repaired** (2026-08-11): a winner whose "
+         "degree level the text contradicts no longer wins, and the degree instead "
+         "*filters the candidate set*. §1-§2 below still size the original defect -- "
+         "they are computed from the pre-repair winner, so the figures that motivated "
+         "the fix keep reproducing -- and §3 measures what the repair does to them. "
+         "§4-§5 are why it was safe to ship: the matcher is read by "
+         "`build_gold_candidates.py` and `router.classify_query`, and neither moves.\n",
          "## 1. Corpus\n",
          f"- files with >=1 program tag: **{raw['n_files_with_hits']:,}**",
          f"- accepted matches: **{len(hits):,}**",
@@ -292,14 +387,92 @@ def render(raw: dict) -> str:
              f"({len(swapped)/max(1, len(suspicious)):.1%}) swap the *degree level* "
              f"({'/'.join(levels)}) -- a one-token difference that keeps the ratio "
              "far above threshold while tagging, say, a master's programme as the "
-             "bachelor's of the same subject. That is the shape to fix first if "
-             "this is ever fixed.\n")
+             "bachelor's of the same subject. **That is the shape the repair in §3 "
+             "attacks**, and it was picked because it is the largest one here.\n")
     return "\n".join(L), per, suspicious, hits
 
 
+def repair(raw: dict, hits: list[dict]) -> str:
+    """§3: what the degree filter does, and what the two rejected rules did.
+
+    Three rules were walked over this corpus before one shipped, and the two
+    that lost were rejected by their own numbers rather than on taste. Their
+    counts are kept here because a fix that only reports its own arm cannot
+    show that it beat anything.
+    """
+    buckets = Counter(h["bucket"] for h in hits)
+    fired = sum(n for b, n in buckets.items() if b != "unchanged")
+    rescued = buckets["rescued"]
+    widened = [h for h in hits if h["bucket"] == "rescued"
+               and not _field_agrees(h["selected"], h["canonical"])]
+
+    # File-level, because a tag is per file: a mention dropped in a file that
+    # names the same programme elsewhere costs nothing.
+    gained = lost = stripped = changed = 0
+    for hs in raw["files"].values():
+        old = {h["canonical"] for h in hs}
+        new = {h["selected"] for h in hs if h["selected"]}
+        if old != new:
+            changed += 1
+            gained += len(new - old)
+            lost += len(old - new)
+        if old and not new:
+            stripped += 1
+
+    L = ["\n## 3. The repair, and the two rules it beat\n",
+         f"The guard fires on **{fired:,}** of the {len(hits):,} accepted matches -- "
+         "every one a mention whose text names a degree its winner contradicts. What "
+         "should happen there was measured, not argued:\n",
+         "| outcome | matches | |", "|---|---|---|"]
+    order = ["rescued",
+             "dropped: same degree available, no subject agreed",
+             "dropped: no subject to compare",
+             "dropped: nothing at the span's own degree"]
+    why = {
+        "rescued": "a same-degree candidate whose subject the span supports was "
+                   "already in the dictionary -- the matcher had not run out of "
+                   "options, it had ranked them wrong",
+        "dropped: same degree available, no subject agreed":
+            "the ...ดุษฎีบัณฑิต ...ไฟฟ้า family: filtering on degree alone would hand "
+            "these to ...โยธา, trading a wrong degree for a wrong subject",
+        "dropped: no subject to compare":
+            "undecidable, not wrong -- one side has no `สาขาวิชา`, so no evidence "
+            "means no rescue",
+        "dropped: nothing at the span's own degree":
+            "nothing in the dictionary fits, so *matches nothing* is the right answer",
+    }
+    for b in order:
+        L.append(f"| {b} | **{buckets[b]:,}** | {why[b]} |")
+
+    L += [f"\n**{rescued:,} of {fired:,} ({rescued/max(1, fired):.0%}) were "
+          "recoverable**, which is what decides between the two candidate rules. A "
+          "plain *reject* -- drop the mention whenever the degree contradicts -- "
+          "throws all of those away; the degree filter keeps them, and removes "
+          "exactly the same mentions otherwise. So reject is dominated, not merely "
+          "beaten on a preference.\n",
+          "Per file, against the pre-repair matcher:\n",
+          "| | tags gained | tags lost | files losing every tag | files changed |",
+          "|---|---|---|---|---|",
+          f"| shipped (degree filters the candidates) | **{gained:,}** | {lost:,} | "
+          f"**{stripped:,}** | {changed:,} |\n",
+          "The earlier fallthrough rule, walked the same way, re-tagged 11 mentions "
+          "of which 3 were the right programme -- eliminating the winner in a prefix "
+          "group leaves candidates that are by construction *different programmes*, "
+          "so the subject test is what makes a re-selection safe.\n",
+          f"How far a rescue travels: **{len(widened)} of {rescued:,}** land on a name "
+          "whose subject is *longer* than the winner's rather than the same subject at "
+          "another level (`...การจัดการโลจิสติกส์` -> "
+          "`...การจัดการโลจิสติกส์และซัพพลายเชน`). The window is sized to each "
+          "candidate's own length, so those rescues read further into the text and "
+          "were judged on what they read -- the first version of S7 judged them "
+          "against the *winner's* shorter span, cut the subject in half, and reported "
+          "4 contract violations that had not happened.\n"]
+    return "\n".join(L)
+
+
 def impact(per, suspicious, hits) -> str:
-    """§3-§4: does any of it reach the Gold set or the router?"""
-    L = ["## 3. Does it reach the Gold set?\n"]
+    """§4-§5: does any of it reach the Gold set or the router?"""
+    L = ["## 4. Does it reach the Gold set?\n"]
     # program_candidates() does NOT call match_programs: it takes the union of
     # files tagged by it and then gates on `canonical in resolution_id`, i.e.
     # an exact substring of the manifest TITLE. So an over-match can only add a
@@ -318,7 +491,7 @@ def impact(per, suspicious, hits) -> str:
           f"program: **{len(bad)}**\n",
           "**So the absorption defect does not reach the program qrels.**"
           if not bad else f"**{len(bad)} pairs are not title-supported -- investigate.**",
-          "\n## 4. Does it change a route?\n"]
+          "\n## 5. Does it change a route?\n"]
 
     # classify_query only asks whether *any* program matched, so the failure
     # that would matter is a non-program query absorbed into the program route.
@@ -350,6 +523,14 @@ def main() -> int:
 
     if args.render:
         raw = json.loads(RAW_PATH.read_text(encoding="utf-8"))
+        # A cache written before the 2026-08-11 repair has no `selected`, and
+        # §3 would then be reporting the absence of a field as the absence of a
+        # re-selection ([[feedback_undefined_is_not_zero]]). Refuse instead.
+        if any(k not in h for hs in raw["files"].values() for h in hs
+               for k in ("selected", "selected_span")):
+            print(f"{RAW_PATH.name} predates the degree-filter repair "
+                  "(no `selected`/`selected_span` field) -- re-run without --render.")
+            return 1
     else:
         raw = collect()
         RAW_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -357,10 +538,10 @@ def main() -> int:
         print(f"cached -> {RAW_PATH}")
 
     body, per, suspicious, hits = render(raw)
-    text = body + "\n" + impact(per, suspicious, hits)
+    text = body + "\n" + repair(raw, hits) + "\n" + impact(per, suspicious, hits)
 
     checks = self_checks(raw)
-    text += "\n## 5. Self-checks\n\n| check | result | detail |\n|---|---|---|\n"
+    text += "\n## 6. Self-checks\n\n| check | result | detail |\n|---|---|---|\n"
     for name, ok, detail in checks:
         text += f"| {name} | {'PASS' if ok else 'FAIL'} | {detail} |\n"
 
@@ -371,4 +552,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # The report is Thai and uses `§`; a Windows console defaults to cp874 and
+    # would crash on the echo *after* the file is already written, turning a
+    # clean run into a traceback and losing the self-check exit code.
+    sys.stdout.reconfigure(encoding="utf-8")
     raise SystemExit(main())

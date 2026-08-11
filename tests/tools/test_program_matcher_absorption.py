@@ -66,11 +66,19 @@ def test_instrumented_matcher_agrees_with_the_shipped_one():
     """S1 in miniature: the audit transcribes `match_programs`' loop to expose
     the span it accepted, and a measurement of a slightly different function
     would measure nothing. Uses a real canonical so the prefix-group path runs.
+
+    Gate on `selected`, not `canonical`: since the degree filter landed the two
+    fields answer different questions -- `canonical` is the *pre-repair* winner
+    (kept so §1-§2's published absorption figures keep reproducing) and only
+    `selected` is what ships. They coincide on this fixture, which is exactly
+    why asserting the wrong one would pass and mean nothing.
     """
     from rag_lab.loaders.program_loader import load_dictionary
 
     canonical = load_dictionary()[0]["canonical"]
     text = f"ที่ประชุมเห็นชอบ{canonical} ตามที่เสนอ"
-    detailed = sorted({h["canonical"] for h in match_programs_detailed(text)})
-    assert detailed == match_programs(text)
-    assert detailed, "fixture must actually match something, or this is vacuous"
+    hits = match_programs_detailed(text)
+    selected = sorted({h["selected"] for h in hits if h["selected"]})
+    assert selected == match_programs(text)
+    assert selected, "fixture must actually match something, or this is vacuous"
+    assert all(h["canonical"] for h in hits), "the pre-repair winner is still recorded"

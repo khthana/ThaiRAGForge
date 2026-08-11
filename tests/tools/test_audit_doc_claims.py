@@ -101,6 +101,27 @@ class TestRetiredReportExemption:
             assert name not in adc.RETIRED_REPORTS, name
 
 
+class TestEvalInputs:
+    """D4's edges are hand-curated, so a typo'd or moved path degrades the check
+    to a permanent D4b WARN that nobody reads -- the same shape as a retirement
+    list going vacuous."""
+
+    def test_every_declared_input_and_report_exists(self):
+        for src, reports in adc.EVAL_INPUTS.items():
+            assert (adc.REPO / src).exists(), src
+            for rname in reports:
+                # Mirrors D4's own resolution rule: a separator means
+                # repo-relative (the `docs/` artifacts), otherwise data/results.
+                r = (adc.REPO / rname) if "/" in rname else (adc.RESULTS / rname)
+                assert r.exists(), f"{rname} (declared under {src})"
+
+    def test_both_report_locations_are_declared(self):
+        # If every entry lived in data/results the "/" branch would be dead code
+        # and a docs artifact could be added back in the broken form unnoticed.
+        names = [r for v in adc.EVAL_INPUTS.values() for r in v]
+        assert any("/" in n for n in names) and any("/" not in n for n in names)
+
+
 class TestSignificanceWording:
     def test_verdict_words(self):
         assert adc.NOT_SIG.search("both ns")
