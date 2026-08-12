@@ -490,9 +490,18 @@ see `docs/adr/`.
   ดุษฎีบัณฑิต), one token apart so the ratio stays far above 0.82 while a
   master's programme is tagged as the bachelor's of the same subject. **But it
   reaches neither published path, and both were verified rather than assumed**:
-  `program_candidates()` never calls `match_programs` for membership — it seeds
-  from tagged files then gates on `canonical in resolution_id`, an exact
-  substring of the manifest title, and **0 of 30** program queries' gold pairs
+  `program_candidates()` never calls `match_programs` for membership — and it
+  never reads the *tags* either, which is stronger than this file used to say
+  (the old "seeds from tagged files" wording overstated the coupling, corrected
+  2026-08-12). It iterates `programs_by_file.json`'s **keys**, and
+  `tag_programs.py` writes a key for every live corpus file including the
+  zero-match ones, so the pool *is* the corpus and the only gate is `canonical
+  in resolution_id`, an exact substring of the manifest title. The matcher
+  therefore cannot move the program qrels **structurally**; only corpus
+  *membership* can. That is executed, not argued — `S2` in
+  `tools/corpus_prep/audit_program_tag_regeneration.py` blanks every value and
+  requires identical output — and the independent second route still holds:
+  **0 of 30** program queries' gold pairs
   have a `resolution_id` failing to contain the program; and `classify_query`
   asks only whether *any* program matched, never which one, so a name-for-name
   swap **cannot** change a route (33/13/30/30 exact, 0 program queries routed

@@ -646,19 +646,30 @@ def repair(raw: dict, hits: list[dict]) -> str:
 def impact(per, suspicious, hits) -> str:
     """§4-§5: does any of it reach the Gold set or the router?"""
     L = ["## 4. Does it reach the Gold set?\n"]
-    # program_candidates() does NOT call match_programs: it takes the union of
-    # files tagged by it and then gates on `canonical in resolution_id`, i.e.
-    # an exact substring of the manifest TITLE. So an over-match can only add a
-    # document whose own title literally names the program. Verified, not
-    # assumed:
+    # program_candidates() does NOT call match_programs, and it does not read
+    # the tags either: it iterates the mapping's KEYS, and tag_programs.py
+    # writes a key for every live corpus file including the zero-match ones. So
+    # the pool is the corpus, the tag VALUES are never read, and the only gate
+    # is `canonical in resolution_id` -- an exact substring of the manifest
+    # TITLE. An over-match therefore cannot reach the qrels at all; only corpus
+    # *membership* can. Executed (not argued) by S2 in
+    # tools/corpus_prep/audit_program_tag_regeneration.py, which blanks every
+    # value and requires identical output. The gold-pair check below stays as
+    # the independent second route:
     gold = yaml.safe_load(GOLD.read_text(encoding="utf-8"))
     prog = [e for e in gold if e.get("entity_type") == "program"]
     bad = [(e["query"], rid) for e in prog for rid in e["relevant_resolution_ids"]
            if e["entity"] not in rid]
-    L += [f"`program_candidates()` gates on `canonical in resolution_id` (an exact "
-          f"substring of the manifest title), *after* seeding its pool from the "
-          f"files `match_programs` tagged. So an absorption can only add a document "
-          f"whose own title literally spells the program out.\n",
+    L += [f"`program_candidates()` iterates `programs_by_file.json`'s **keys**, and "
+          f"`tag_programs.py` writes a key for every live corpus file -- including "
+          f"the ones matching zero programs. So the tag *values* are never read: "
+          f"the pool is the corpus, and the only gate is `canonical in "
+          f"resolution_id`, an exact substring of the manifest title. An absorption "
+          f"therefore cannot reach the program qrels **structurally**, not merely in "
+          f"this sample -- executed by S2 in "
+          f"`tools/corpus_prep/audit_program_tag_regeneration.py`, which blanks every "
+          f"value and requires identical output. Only corpus *membership* can move "
+          f"them. Second, independent route:\n",
           f"- program gold queries: **{len(prog)}**",
           f"- gold pairs whose resolution_id does NOT literally contain the "
           f"program: **{len(bad)}**\n",

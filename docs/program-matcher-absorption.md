@@ -115,7 +115,7 @@ Neither cut is load-bearing, and the distribution says so rather than the choice
 
 ## 4. Does it reach the Gold set?
 
-`program_candidates()` gates on `canonical in resolution_id` (an exact substring of the manifest title), *after* seeding its pool from the files `match_programs` tagged. So an absorption can only add a document whose own title literally spells the program out.
+`program_candidates()` iterates `programs_by_file.json`'s **keys**, and `tag_programs.py` writes a key for every live corpus file -- including the ones matching zero programs. So the tag *values* are never read: the pool is the corpus, and the only gate is `canonical in resolution_id`, an exact substring of the manifest title. An absorption therefore cannot reach the program qrels **structurally**, not merely in this sample -- executed by S2 in `tools/corpus_prep/audit_program_tag_regeneration.py`, which blanks every value and requires identical output. Only corpus *membership* can move them. Second, independent route:
 
 - program gold queries: **30**
 - gold pairs whose resolution_id does NOT literally contain the program: **0**
