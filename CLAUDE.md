@@ -1417,7 +1417,29 @@ see `docs/adr/`.
   robustness check (does a second model agree on arm ordering) — no longer needed to
   answer "is the ceiling real" (that's closed), but if run later for other reasons it
   must use `cite_all`, not the original prompt, or it will just reproduce the retired
-  artifact. Two build-phase gotchas worth keeping in mind for any future generation
+  artifact. **Those preconditions are now GUARDS in `rq4_generate.py`, not prose
+  (2026-08-12, `9962a96`, pinned both ways by
+  `tests/tools/test_rq4_generate_guards.py`)** — every published answer came from one
+  model under one set of defaults, and each default is wrong for a *second* model in
+  the way this project keeps getting hurt by: it returns plausible output rather than
+  an error. (1) `--variant sentence_cap` now **refuses** for any model but `phi4`
+  (whose 530 answers are keyed to that pair), because the pre-registered rule in
+  `rq4_score.py` made a second generator interesting only if recall stayed flat and it
+  rose. (2) **`think` was never passed** — a no-op for `phi4` (capabilities
+  `['completion']`) and expensive for a thinking model, so it is now *read* from
+  `ollama.show(model).capabilities` rather than assumed, disabled when present, and
+  recorded per answer (`thinking_supported`/`thinking_disabled`) exactly as `num_ctx`
+  is, since the answer **text itself changes** with it. **Measured, not estimated**: on
+  one real RQ4 prompt `gemma4:e4b` spends **1058 eval tokens / 27.2 s** unset against
+  **243 / 4.9 s** at `think=False` — **77%** of generated tokens discarded, 5.6x
+  slower; end-to-end the guarded path measured **8.1 s/answer**, so 530 answers is
+  ~1.2 h, not the ~5 h this file used to imply. (3) `--num-ctx` below **16,384** is
+  refused outright: `preflight()` probes for the truncation signature but probes at
+  most 5 prompts and is skippable, and *a bound that holds for every prompt beats a
+  probe of five*. All three are **containment with a named escape hatch**
+  (`--allow-retired-variant`, `--allow-small-ctx`) — `rq4_probe_prompt_fit.py`
+  legitimately probes at the old 8,192 — the same shape as the
+  `weighted`×`fetch_depth` raise. Two build-phase gotchas worth keeping in mind for any future generation
   work: (a) **Ollama truncates an over-long prompt from the front**, so a default
   `num_ctx=4096` silently deleted the instructions on long prompts and produced
   fluent, plausible, citation-free answers — always set `num_ctx` and put instructions
