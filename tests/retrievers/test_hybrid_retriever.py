@@ -4,7 +4,6 @@ from __future__ import annotations
 import inspect
 
 import numpy as np
-import pytest
 
 from rag_lab.config import StrategySpec
 from rag_lab.factory import build_retriever
@@ -182,48 +181,30 @@ def test_truncating_the_fetch_drops_a_chunk_out_of_reach_of_one_arm():
     assert "c3" not in cut and len(cut) == 3
 
 
-def test_weighted_refuses_a_fetch_depth_because_that_pair_is_unmeasured():
-    # The sweep and the routed test both measured `rrf`. Under `weighted` a chunk
+def test_weighted_accepts_a_fetch_depth_now_that_the_pair_is_measured():
+    # `weighted` + `fetch_depth` used to raise, because under `weighted` a chunk
     # past one arm's cut has that arm's normalized score read as 0 -- strictly
-    # harsher than losing an RRF term -- and no run has ever measured it. The
-    # docstring said so and nothing enforced it; a silently harsher fusion returns
-    # a plausible ranking, not an error, which is the shape this project keeps
-    # getting caught by ([[feedback_an_asserted_invariant_is_not_a_check]]).
+    # harsher than losing an RRF term -- and no run had measured it. That was a
+    # guard, not a verdict, and it named its own exit condition.
     #
-    # Pinned in both directions: neither knob alone may be affected, so the guard
-    # cannot quietly become a ban on `weighted` or on truncation.
-    index, q = _truncation_index(), _truncation_query()
-    with pytest.raises(ValueError, match="rrf"):
-        _hybrid(method="weighted", fetch_depth=2)
-
-    assert _hybrid(method="weighted").retrieve(q, index, 4)
-    assert _hybrid(fetch_depth=2).retrieve(q, index, 4)
-
-
-def test_the_escape_hatch_is_off_by_default_and_really_truncates():
-    # tools/eval/hybrid_weighted_fetch_depth.py has to build the forbidden pair
-    # in order to check its numpy replication against this class -- the same
-    # named-escape-hatch shape as rq4_generate.py's --allow-small-ctx, rather
-    # than a silent removal of the guard or a post-construction attribute poke.
-    #
-    # Two things to pin. The flag must default to False (otherwise the test
-    # above is testing nothing a caller can hit), and when set it must actually
-    # cut: a hatch that quietly ignored fetch_depth would let the measurement
-    # publish the untruncated ranking as if it were the truncated one, which is
-    # exactly the vacuous-anchor failure the sweep's S5 exists to prevent.
-    assert (
-        inspect.signature(HybridRetriever)
-        .parameters["allow_unmeasured_truncation"]
-        .default
-        is False
-    )
+    # The measurement ran 2026-08-12 (36 combos x 106 queries,
+    # data/results/hybrid_weighted_fetch_depth.md) and its pre-registered rule
+    # came out LIFT: the damage is bounded and writable as a number, and no
+    # depth beats its own F=n baseline. So the pair is permitted, and what this
+    # test pins is that permitting it did not quietly make it a no-op --
+    # truncation under `weighted` must still really truncate, since that is what
+    # costs -0.0609 macro recall@10 at F=200 (18x `rrf`, and -0.1965 on
+    # `person`). A version that accepted the argument and ignored it would look
+    # like a fix and read as a lie.
     index, q = _truncation_index(), _truncation_query()
     full = _hybrid(method="weighted").retrieve(q, index, 8)
-    cut = _hybrid(
-        method="weighted", fetch_depth=2, allow_unmeasured_truncation=True
-    ).retrieve(q, index, 8)
+    cut = _hybrid(method="weighted", fetch_depth=2).retrieve(q, index, 8)
     assert len(full) == 8 and len(cut) == 3
     assert [r.chunk_id for r in cut] != [r.chunk_id for r in full][:3]
+
+    # ...and neither knob alone changed meaning on the way through.
+    assert _hybrid(method="weighted").retrieve(q, index, 4)
+    assert _hybrid(fetch_depth=2).retrieve(q, index, 4)
 
 
 def test_truncated_ties_still_break_dense_first():

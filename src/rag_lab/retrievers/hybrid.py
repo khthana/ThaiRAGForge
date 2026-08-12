@@ -29,20 +29,27 @@ class HybridRetriever(BaseRetriever):
     fusion. See tools/eval/hybrid_alpha_sweep.py.
 
     `fetch_depth` caps how many chunks each arm returns before fusion. The
-    default `None` means the whole corpus, so RRF sees complete rankings and
+    default `None` means the whole corpus, so fusion sees complete rankings and
     every published hybrid number is reproduced exactly. Setting it is a real
     change to the result, not an optimisation: a chunk inside dense's top-F but
     past BM25's cut loses its BM25 term outright rather than earning a small
     one. tools/eval/hybrid_fetch_depth_sweep.py measures how deep is deep enough
-    -- for `rrf` only. Under `weighted` a cut chunk's *normalized score* reads 0,
-    a harsher approximation, and nothing has measured it. That used to be stated
-    here and enforced nowhere; the combination now raises, because an asserted
-    invariant is not a check and the failure mode is a plausible number rather
-    than an error. It is a guard, not a verdict -- measure it and lift it.
-    `allow_unmeasured_truncation` is the named escape hatch for the measurement
-    itself (tools/eval/hybrid_weighted_fetch_depth.py has to construct the very
-    pair the guard forbids in order to check its replication against this
-    class); it is not for callers."""
+    under `rrf` -- F=200 costs -0.0033 macro recall@10 and saves ~0.67s/query,
+    which is why the Streamlit UI sets it per query and this class does not.
+
+    Under `weighted` the same cut is far more expensive, and that is measured
+    rather than merely warned about (2026-08-12, 36 combos x 106 queries,
+    tools/eval/hybrid_weighted_fetch_depth.py). A cut chunk's *normalized
+    score* for that arm reads 0 instead of merely losing a reciprocal-rank
+    term, and at F=200 the pair costs **-0.0609** macro recall@10 against its
+    own F=n -- about **18x** `rrf`'s -0.0033 at the same depth -- with `person`
+    queries alone losing **-0.1965**. It does not recover with depth the way
+    `rrf` does: at F=10,000 of ~75,000 chunks it is still -0.0112 against
+    `rrf`'s -0.0005, so for `weighted` "deep enough" is essentially n and the
+    knob buys nothing. The combination used to raise, when nobody had run it;
+    it is permitted now because the objection was that it was *unmeasured*, not
+    that it was bad, and a measured-but-worse configuration is the caller's to
+    choose. Permitted is not recommended -- the numbers above are the reason."""
 
     def __init__(
         self,
@@ -51,19 +58,7 @@ class HybridRetriever(BaseRetriever):
         dense_weight: float = 0.5,
         bm25_weight: float = 0.5,
         fetch_depth: int | None = None,
-        allow_unmeasured_truncation: bool = False,
     ) -> None:
-        forbidden = method == "weighted" and fetch_depth is not None
-        if forbidden and not allow_unmeasured_truncation:
-            raise ValueError(
-                "fetch_depth is measured for method='rrf' only "
-                "(data/results/hybrid_fetch_depth_sweep.md, routed_fetch_depth_test.md). "
-                "Under 'weighted' a chunk past one arm's cut has that arm's normalized "
-                "score read as 0 rather than merely losing an RRF term, which is a "
-                "harsher approximation nobody has measured. Pass fetch_depth=None, or "
-                "measure the combination and lift this guard "
-                "(allow_unmeasured_truncation=True is for that measurement only)."
-            )
         self.method = method
         self.rrf_k = rrf_k
         self.dense_weight = dense_weight

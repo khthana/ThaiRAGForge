@@ -42,12 +42,16 @@ Three replication traps, all inherited from where they were found the hard way:
      would pass unchanged if `fuse_weighted_at_depth` ignored F entirely
      (feedback_anchor_a_check_where_the_mechanism_is_live).
 
-S6 needs to construct the very combination the guard forbids, so
-`HybridRetriever` grew `allow_unmeasured_truncation` -- a named escape hatch of
-the same shape as `rq4_generate.py`'s `--allow-small-ctx`, not a silent removal
-of the guard. Whether the guard survives this measurement is decided by the
-pre-registered rule below, which is frozen in this file and committed before
-the run.
+Whether the guard survives this measurement is decided by the pre-registered
+rule below, which is frozen in this file and committed before the run.
+
+Historical note, because it explains this file's own commit history: S6 has to
+construct the very combination the guard forbade, so the first run went through
+`allow_unmeasured_truncation`, a named escape hatch of the same shape as
+`rq4_generate.py`'s `--allow-small-ctx` rather than a silent removal of the
+guard. The rule then came out **LIFT** (see `VERDICT`), which retired both the
+guard and the hatch -- so re-running this script today constructs the pair
+directly.
 
 Read-only: consumes indices, persisted results and the gold set; writes one
 report and one cache, and no index.
@@ -129,6 +133,58 @@ DECISION_RULE = (
     "would mean truncation is not an approximation of the untruncated "
     "ranking at all). Either way the docstring stops saying \"nobody has "
     "measured it\"."
+)
+
+# Written AFTER the numbers, unlike everything above it. Kept in the source
+# rather than only in CLAUDE.md so `--render` reproduces the verdict along with
+# the table it rests on.
+OUTCOMES = [
+    ("P1", "CONFIRMED", "`weighted` agrees with its own F=n top-10 far less "
+     "often at every depth -- 33.57% vs `rrf`'s 56.29% at F=200, and still "
+     "75.55% vs 88.00% at F=10,000."),
+    ("P2", "CONFIRMED",
+     "On the full set -- **and refuted by the smoke slice**, "
+     "which is the part worth keeping. On 2 combos x 8 queries `weighted` "
+     "*gained* from truncation, peaking at 0.7708 (F=100) against 0.5938 at "
+     "F=n, i.e. the smoke reversed the sign of the headline and would have "
+     "sent the decision down the KEEP branch. A smoke run checks that the "
+     "code runs; it is not a small version of the answer."),
+    ("P3", "REFUTED",
+     "Both halves. The BM25 side is **not** nearly free: only "
+     "0.1% of the BM25 terms a cut zeroes were already 0, so BM25 carries "
+     "73% of dense's zeroed mass at F=50 (88,301 vs 121,437). A chunk scores "
+     "exactly 0 only when it matches *no* query term, and a 20-token query "
+     "has common tokens that reach almost every chunk -- the IDF floor makes "
+     "each of those contributions positive rather than negative. The "
+     "promotion half is real but negligible in the other direction: 2 of "
+     "157,717 zeroed dense terms at F=50, 990 of 3,086,381 at F=1,000 "
+     "(0.0%). So the perturbation is effectively one-sided after all, just "
+     "for the opposite reason to `rrf`'s."),
+    ("P4", "REFUTED",
+     "In the direction that is worth a follow-up: at F=n "
+     "`weighted` scores **above** `rrf` (0.5442 vs 0.5204, +0.0239 macro "
+     "recall@10). Descriptive only -- no significance test, macro over 36 "
+     "combos, unrouted, and nothing ships `weighted`. Read it as a "
+     "hypothesis, never as a result."),
+]
+
+VERDICT = (
+    "**LIFT.** (i) S5 and S6 reproduce the real `HybridRetriever` exactly at "
+    "F=n and at all four truncated depths. (ii) The damage is bounded, "
+    "statable and monotone-ish: it shrinks from -0.1161 (F=10) to -0.0112 "
+    "(F=10,000) with one ~0.010-wide dip in the 100-500 band, on a 0.116 "
+    "span. **Neither KEEP trigger fired** -- no depth beats its own F=n "
+    "baseline (every delta is negative; the smoke's apparent baseline-beating "
+    "did not survive the full set), and \"deep enough\" is not undefined, it "
+    "is ~= n.\n\n"
+    "**LIFT is not a recommendation, and the number is the whole point.** At "
+    "F=200 `weighted` loses **-0.0609** macro recall@10 against its own F=n, "
+    "about **18x** `rrf`'s -0.0033 at the same depth, and `person` alone "
+    "loses **-0.1965**. The guard existed because the pair was *unmeasured*, "
+    "not because it was bad; this codebase does not ban a measured-but-worse "
+    "configuration (nothing bans `m2v`), it bans an unmeasured one from "
+    "passing as measured. So the raise goes and the docstring carries the "
+    "cost."
 )
 
 
@@ -256,13 +312,7 @@ def verify_weighted_against_retriever(
         query = Query(text=q, vector=qq, tokens=q_tokens[q])
         for F in [None, *depths]:
             eff = n if F is None else F
-            retr = (
-                HybridRetriever(method="weighted")
-                if F is None
-                else HybridRetriever(
-                    method="weighted", fetch_depth=F, allow_unmeasured_truncation=True
-                )
-            )
+            retr = HybridRetriever(method="weighted", fetch_depth=F)
             real = [r.chunk_id for r in retr.retrieve(query, index, K)]
             cand = candidates_at_depth(dorder, dpos, border, eff)
             mine = [
@@ -765,11 +815,19 @@ def render(
               f"{mass:,.1f} |")
     w()
 
-    w("## 3b. ทำไม `weighted` ถึง *ดีขึ้น* เมื่อตัดตื้นลง")
+    w("## 3b. การตัดทำอะไรกับ `weighted` — สัญญาณ intersection ที่ทายผิดทาง")
     w()
-    w("สมมติฐาน: ที่ F=n ประโยค “chunk นี้อยู่ในลิสต์ของอีก arm ด้วย” เป็นจริงกับ "
-      "**ทุก** chunk จึงไม่ได้บอกอะไรเลย — `weighted` ไม่มีสัญญาณ *ตัดกัน* "
-      "(intersection) แบบที่ `rrf` ได้มาฟรีจากอันดับ การตัดคือสิ่งที่สร้างสัญญาณนั้นขึ้นมา")
+    w("สมมติฐานตอนเขียนสคริปต์: ที่ F=n ประโยค “chunk นี้อยู่ในลิสต์ของอีก arm ด้วย” "
+      "เป็นจริงกับ **ทุก** chunk จึงไม่ได้บอกอะไรเลย — `weighted` ไม่มีสัญญาณ *ตัดกัน* "
+      "(intersection) แบบที่ `rrf` ได้มาฟรีจากอันดับ และการตัดคือสิ่งที่สร้างสัญญาณนั้นขึ้นมา "
+      "จึงคาดว่าตัดแล้วน่าจะ *ดีขึ้น* (smoke 2 combo × 8 คำถามก็ออกมาแบบนั้นจริง ๆ)")
+    w()
+    w("**ชุดเต็มหักล้างข้อสรุปนั้น แต่ยืนยันกลไก** — Δ ติดลบทุกความลึก (§1) "
+      "สิ่งที่การตัดทำไม่ใช่ *เพิ่ม* สัญญาณ intersection พอประมาณ แต่ทำให้การอยู่ใน "
+      "intersection **เกือบชี้ขาด**: 10 อันดับแรกของ `weighted` เป็น chunk ที่อยู่ใน "
+      "top-F ทั้งสอง arm 8.25/10 ที่ F=200 และ 9.99/10 ที่ F=1,000 เทียบกับ `rrf` "
+      "ที่ 7.41 และ 8.30 — พูดอีกอย่างคือ `weighted` ที่ถูกตัดกลายเป็นตัวจัดอันดับแบบ "
+      "*เอาเฉพาะที่ทั้งสอง arm เห็นตรงกัน* และเขี่ยแถวที่ arm เดียวเจอทิ้ง")
     w()
     w("| F | rrf: จาก 10 อันดับแรก อยู่ใน top-F ทั้งสอง arm | weighted: เท่าไร |")
     w("|---|---|---|")
@@ -781,17 +839,27 @@ def render(
     w(f"| n (ทั้งคลัง) | {both_arms['rrf'][-1]/n_pairs:.2f} / 10 (จริงโดยนิยาม) | "
       f"{both_arms['weighted'][-1]/n_pairs:.2f} / 10 (จริงโดยนิยาม) |")
     w()
-    w("และเหตุผลที่ `weighted` ขาดสัญญาณนั้นอยู่ที่สเกลของคะแนนเอง — "
-      "cosine ที่ normalize ด้วยค่าสูงสุดแล้วยัง **แบนมาก** ทั้งคลัง ส่วน BM25 ยุบเป็น 0 สนิท")
+    w("เหตุผลอยู่ที่สเกลของคะแนน — cosine ที่ normalize ด้วยค่าสูงสุดแล้วยัง **แบนมาก** "
+      "ทั้งคลัง")
     w()
     w("| arm | คะแนน normalize ที่อันดับ 10 | ที่อันดับสุดท้าย (n) |")
     w("|---|---|---|")
     w(f"| dense (cosine) | {flat['d10']:.4f} | {flat['dmin']:.4f} |")
     w(f"| BM25 | {flat['b10']:.4f} | {flat['bmin']:.4f} |")
     w()
-    w("`BM25Okapi` ยก IDF ที่ติดลบขึ้นเป็น `epsilon × average_idf > 0` คะแนน BM25 "
-      "จึง ≥ 0 เสมอ และหางของอันดับเป็น 0 พอดี — การอ่านเทอมที่เป็น 0 อยู่แล้วให้เป็น 0 "
-      "ไม่เปลี่ยนอะไร นั่นคือเหตุผลที่คอลัมน์ “ฟรี” ของฝั่ง BM25 ในตารางที่ 3 สูงมาก")
+    w("แถวที่หลุดจุดตัดของ arm หนึ่งจึงเสียคะแนนราว `0.5 × 0.27..0.95` ทันที ขณะที่ภายใต้ "
+      "`rrf` แถวที่หลุดที่อันดับ 1,000 เสียแค่ `0.5/1060 ≈ 0.0005` เทียบกับ `0.5/61 ≈ 0.0082` "
+      "ที่ arm ที่เหลือให้ — **ภายใต้ `rrf` การถูกตัดคือการถูกลดอันดับ ภายใต้ `weighted` "
+      "มันเกือบเท่ากับถูกตัดสิทธิ์** และนั่นคือสิ่งที่ §4 วัดได้: `person` ซึ่ง BM25 เป็น "
+      "arm ที่แบกอยู่ ตกไป -0.1965 ที่ F=200 ส่วน `program` ที่ dense แบก กลับ +0.0212")
+    w()
+    w("**ข้อควรระวังกับตารางข้างบนนี้ — อย่าอ่าน `BM25 = 0.0000` ว่าหางเป็นศูนย์ทั้งหาง** "
+      "`BM25Okapi` ยก IDF ที่ติดลบขึ้นเป็น `epsilon × average_idf > 0` คะแนนจึง ≥ 0 เสมอ "
+      "และแถว *สุดท้าย* ของอันดับก็เป็น 0 จริง แต่ตารางที่ 3 บอกว่าเทอมที่การตัดแทนด้วย 0 "
+      "นั้นเป็น 0 อยู่แล้วเพียง **0.1%** เพราะ chunk จะได้ 0 พอดีก็ต่อเมื่อไม่ตรงกับ "
+      "*คำใดเลย* ในคำถาม และคำถามยาว ~20 token ย่อมมีคำพบบ่อยที่แตะเกือบทุก chunk "
+      "(คำทำนาย P3 ที่ว่า “ฝั่ง BM25 แทบฟรี” จึงถูกหักล้าง — ที่ F=50 ฝั่ง BM25 "
+      "แบกมวลที่ถูกลบไป 73% ของฝั่ง dense: 88,301 ต่อ 121,437)")
     w()
 
     w("## 4. แยกตามชนิดคำถาม (Δ จาก F=n ของวิธีเดียวกัน)")
@@ -828,6 +896,18 @@ def render(
       "ไม่ใช่จากการ fuse ดังนั้นตัวเลขก็คือของ `hybrid_fetch_depth_sweep.py` "
       "(k=n 1089.5 ms → F=200 417.9 ms) และการรันซ้ำบนเครื่องที่ไม่ว่างจะให้ตัวเลขที่แย่กว่า ")
     w("โดยไม่ได้ตอบอะไรใหม่ — ข้อนี้เป็นการให้เหตุผล ไม่ใช่การวัด จึงไม่ตีพิมพ์เป็นตัวเลขใหม่")
+    w()
+
+    w("## 6. คำทำนายข้อไหนถูกหักล้าง และคำตัดสิน")
+    w()
+    w("ส่วนนี้เขียน *หลัง* เห็นตัวเลข ต่างจาก §0 ที่ freeze ไว้ก่อนรัน")
+    w()
+    for pid, status, text in OUTCOMES:
+        w(f"- **{pid} — {status}** · {text}")
+    w()
+    w("### คำตัดสินตามกติกาที่ลงทะเบียนไว้")
+    w()
+    w(VERDICT)
     w()
 
     w("## self-check")

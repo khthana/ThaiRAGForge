@@ -137,8 +137,17 @@ IS_SIG = re.compile(r"\bsignificant(?:ly)?\b", re.I)
 # the check would be ignored within a week.
 EVAL_INPUTS: dict[str, list[str]] = {
     "src/rag_lab/router.py": ["routing_eval.md", "soft_vs_hard_routing.md"],
+    # `hybrid_weighted_fetch_depth.md` is the tightest edge in this table: its
+    # S5/S6 *construct a real HybridRetriever* and require the numpy fusion to
+    # reproduce it at F=n and at four truncated depths, so a change to the
+    # `weighted` branch, to `_normalize`, or to the tie-break order makes the
+    # report a record of a fusion that no longer exists. It is also the only
+    # report whose verdict (LIFT, see its `DECISION_RULE`) is *why* that file no
+    # longer raises on `weighted` + `fetch_depth`, so re-raising the guard
+    # without re-rendering would leave code and report openly disagreeing.
     "src/rag_lab/retrievers/hybrid.py": [
         "hybrid_alpha_sweep.md", "soft_vs_hard_routing.md", "hybrid_significance_test_9way.md",
+        "hybrid_fetch_depth_sweep.md", "hybrid_weighted_fetch_depth.md",
     ],
     "config/eval/gold_query_set_73det.yaml": [
         "routing_eval.md", "soft_vs_hard_routing.md", "hybrid_alpha_sweep.md",

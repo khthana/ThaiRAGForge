@@ -1051,20 +1051,60 @@ see `docs/adr/`.
   dense-first — the same trap `miss_depth_profile.py` documents at full depth), and **S5
   checks the numpy fusion against a real `HybridRetriever(fetch_depth=F)`**, added because the
   first version anchored only F=n, where the mechanism under test is inert and the check would
-  have passed identically had `fuse_at_depth` ignored F. The `weighted` branch truncates too
-  (a cut chunk's normalised score reads 0 outright, a strictly harsher approximation than
-  losing an RRF term) and is **unmeasured — so as of 2026-08-11 that combination raises**
-  rather than being merely warned against in a docstring: `HybridRetriever.__init__` refuses
-  `method="weighted"` with a non-`None` `fetch_depth`, pinned in both directions by
-  `tests/retrievers/test_hybrid_retriever.py` so the guard cannot quietly become a ban on
-  either knob alone. **It is containment, not a verdict** — closed this way rather than by
-  measuring, because `weighted` is reachable from no eval, no config and no UI path (only its
-  own unit tests), so a run would have priced an axis nothing uses; measure it and lift the
-  guard. The reason not to leave the docstring doing the work is
-  [[feedback_an_asserted_invariant_is_not_a_check]]: a harsher fusion returns a plausible
-  ranking, not an error, which is the same shape as the `--num-ctx` help string that asserted
-  in capitals what nothing measured. Everything the report renders is cached in
-  `hybrid_fetch_depth_raw.json`, so `--render` reproduces it without a GPU.
+  have passed identically had `fuse_at_depth` ignored F. Everything the report renders is
+  cached in `hybrid_fetch_depth_raw.json`, so `--render` reproduces it without a GPU.
+- **`weighted` × `fetch_depth`: MEASURED 2026-08-12 and the guard is LIFTED
+  (`tools/eval/hybrid_weighted_fetch_depth.py` → `data/results/hybrid_weighted_fetch_depth.md`,
+  36 combos × 106 queries = 3,816 pairs, 16 min).** From 08-11 to 08-12 that pair *raised*
+  in `HybridRetriever.__init__`, and the entry here said so — **containment, not a verdict**,
+  with its own exit condition written into it ("measure it and lift the guard"). The
+  measurement was run and the pre-registered rule (frozen in the script as `DECISION_RULE`,
+  committed before the run) came out **LIFT**: the raise and its `allow_unmeasured_truncation`
+  hatch are gone, and `tests/retrievers/test_hybrid_retriever.py` now pins that permitting the
+  pair did not quietly make it a **no-op** — truncation under `weighted` must still really
+  truncate, since that is the whole cost. **LIFT is not a recommendation and the number is the
+  point**: at F=200 `weighted` loses **−0.0609** macro recall@10 against its own F=n, about
+  **18x** `rrf`'s −0.0033 at the same depth, and it does **not** recover with depth the way
+  `rrf` does — at F=10,000 of ~75,000 chunks it is still −0.0112 against `rrf`'s −0.0005, so
+  for `weighted` "deep enough" is essentially n and the knob buys nothing. What licenses
+  permitting it anyway is that this codebase bans an **unmeasured** configuration from passing
+  as measured, not a measured-but-worse one (nothing bans `m2v`); the docstring now carries
+  the cost. Four things worth more than the verdict. (1) **The smoke slice reversed the sign
+  of the headline** — on 2 combos × 8 queries `weighted` *gained* from truncation, peaking
+  0.7708 at F=100 against 0.5938 at F=n, which is the KEEP branch; on the full set every Δ is
+  negative. A smoke run checks that the code runs, it is **not a small version of the answer**
+  ([[feedback_a_smoke_slice_is_not_a_small_answer]]). (2) **P3 refuted, and the plausible
+  reasoning behind it is the trap**: `BM25Okapi` floors negative IDF, so BM25 scores are ≥ 0
+  and the *last-ranked* chunk really does score 0 — but only **0.1%** of the terms a cut
+  zeroes were already 0, because a chunk scores exactly 0 only when it matches **no** query
+  term and a ~20-token Thai query has common tokens reaching nearly every chunk. BM25 carries
+  73% of dense's zeroed mass at F=50 (88,301 vs 121,437). The promotion half is real and
+  negligible (2 of 157,717 dense terms at F=50), so the perturbation is one-sided after all —
+  for the opposite reason to `rrf`'s. (3) **The mechanism, corrected by the same data**: the
+  hypothesis was that truncation *creates* the intersection signal `weighted` structurally
+  lacks (at F=n "also in the other arm's list" is true of every chunk). Truncation does not
+  add that signal mildly — it makes intersection membership **nearly decisive**, because a cut
+  arm's normalized term is worth 0.5 × 0.27–0.95 (max-normalized cosine is *flat*: 0.9491 at
+  rank 10, 0.2699 at rank n) where `rrf` at rank 1,000 forfeits only 0.5/1060 ≈ 0.0005. So
+  `weighted`'s top-10 goes 8.25/10 in-both-arms at F=200 and 9.99/10 at F=1,000 (`rrf` 7.41 /
+  8.30): it becomes an intersection-only ranker and evicts what one arm alone found. That
+  lands exactly where a single arm carries a type — **`person` −0.1965** at F=200 (BM25 carries
+  person at 0.8147) against `program` **+0.0212**. (4) **P4 refuted in the interesting
+  direction and it is a hypothesis, never a result**: at F=n `weighted` scores **above** `rrf`
+  (0.5442 vs 0.5204, **+0.0239** macro recall@10). Descriptive only — no significance test,
+  macro over 36 combos, **unrouted**, and nothing ships `weighted`; the wrong-pair trap that
+  killed per-`entity_type` alpha and rrf4 applies here too, so it would need re-measuring
+  against the hard router before it means anything. The fusion is **imported** from
+  `hybrid_fetch_depth_sweep.py` rather than reimplemented, which makes this run's `rrf` columns
+  a cross-artifact anchor (S7 reproduces that sweep at all 11 depths); S5/S6 check against the
+  real `HybridRetriever` at F=n **and** at F ∈ {5, 50, 200, 1000}, since S5 alone would pass
+  unchanged if the fusion ignored F ([[feedback_anchor_a_check_where_the_mechanism_is_live]]).
+  The F-invariance of the two normalizers (`_normalize` runs over the already-truncated,
+  descending-sorted arm list, so `max(top-F) == max(all n)` for any F ≥ 1) is reported as a
+  lemma and deliberately **not** a self-check — it is true by construction, and a check that
+  cannot fail is a vacuous PASS dressed up as evidence. Raw cache
+  `hybrid_weighted_fetch_depth_raw.json` is written before `render()`, so `--render` is free
+  and a render crash after a GPU run loses nothing.
 - **`fetch_depth` against the shipped router, and the ship decision (2026-08-09,
   `tools/eval/routed_fetch_depth_test.py` → `data/results/routed_fetch_depth_test.md`,
   ~2.5 min quality + ~3 min latency).** The sweep above left one blocker: its
