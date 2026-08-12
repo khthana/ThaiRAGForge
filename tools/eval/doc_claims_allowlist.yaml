@@ -43,6 +43,14 @@ counts:
       ("13 of 106 eval queries (12%)"), but a design doc is not a report and is
       outside D5's haystack on purpose.
 
+  - doc: docs/paper-results-summary.md
+    figure: "13 of 106"
+    checked: 2026-08-12
+    reason: >-
+      Same figure, same evidence as the CLAUDE.md entry above — kept as a
+      separate entry because allowlist entries are keyed per document on
+      purpose, so clearing it in one doc must not silently clear it in another.
+
   - doc: CLAUDE.md
     figure: "182 of 253"
     checked: 2026-08-12

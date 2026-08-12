@@ -460,6 +460,63 @@ reranker trained/validated on hybrid-fused candidates specifically, or
 blending the reranker's score into RRF as a fourth ranked signal instead of a
 hard truncate-and-replace step — are untested hypotheses, not implemented.
 
+**SUPERSEDED IN PART — both follow-ups have since been tested, and (a) is
+positive. Read the next section before citing the paragraph above.** What
+survives it is narrow and still correct: *the off-the-shelf* `bge-reranker-v2-m3`
+should not truncate-and-replace this project's hybrid ranking.
+
+## Resolved 2026-08-12: The reranker axis, closed in four measurements — the model was the problem, not reranking
+
+The 2026-07-23 negative result above was reported for one model, in one wiring,
+against one baseline. Four follow-ups took each of those apart, and the axis ends
+somewhere quite different from where it started. Reports:
+`data/results/reranker_rrf_signal_test.md`, `reranker_rrf_routed_test.md`,
+`reranker_model_comparison.md`, `reranker_trained_test.md`. Pre-registration and
+outcome for the last one: `docs/reranker-trained-on-hybrid-design.md`.
+
+| what varied | result |
+|---|---|
+| **the wiring** — reranker as a 4th RRF signal instead of truncate-and-replace | beats unrouted hybrid **+0.0379** recall@10 (Holm 0.0216), but **not** the hard router (**+0.0017**, Holm 1.0000) |
+| **the model** — 4 qualified cross-encoders on one routed pool | spread **0.0355** recall@10, ~20x the anchor's whole effect; the *older* `bge-reranker-v1-large` is best |
+| **the ceiling** — oracle over the same routed P=50 pool | pool holds **0.9054**, a perfect selection of 10 delivers **0.8331** = **+0.1500** over the router |
+| **the weights** — fine-tuned on hybrid-fused candidates from this corpus | **+0.0654** over the router, **+0.0637** over the off-the-shelf model, all six pre-registered tests Holm **0.0000** |
+
+**The headline result.** A cross-encoder that starts from the published anchor's
+own weights and is fine-tuned for 68 minutes on 505 routed-hybrid P=50 pools drawn
+from this corpus — entities disjoint from the eval set, checkpoint selected on
+held-out *training* queries — reaches **0.7485** recall@10 against the shipped
+router's **0.6831** and the off-the-shelf model's **0.6847**. Because only the
+weights vary (pool, routing, fusion, the `w` grid, P, k, metrics and bootstrap are
+all held at published values), `T vs D` is a within-model paired before/after: the
+difference cannot be attributed to model size, tokenizer or language coverage.
+**This is the first reranker intervention in the study to survive the hard router**,
+and it explains the earlier nulls rather than contradicting them — `program`, the
+route the off-the-shelf model actively *damaged*, is where training pays most
+(**+0.1089** over the router, **+0.1723** over the untrained model).
+
+**Two limits to state with it.** The trained model captures **44%** of the oracle's
++0.1500 (off-the-shelf: 1%), so the axis is narrowed rather than closed. And
+`faculty` is the one route that gets *worse*: only one faculty entity survives the
+disjointness filter, so 13 of 106 eval queries sit on a route the fine-tune never
+learned — its held-out training recall for that route is **0.5000** in every epoch
+including epoch 0.
+
+**The caveat a reviewer will raise, measured in advance.** A pre-registered control
+that scores candidates purely by *whether the query's entity string appears in the
+chunk* — no GPU, no training — fused through the identical path reaches **0.7442**.
+`T vs L` recall@10 is **+0.0043**, not significant (CI rules out more than
+**0.0229**), while `T vs L` MRR **+0.0409** (Holm 0.0150) and nDCG@10 **+0.0271**
+(Holm 0.0432) *are* significant, and the control alone beats the router on all three
+metrics. Training labels and eval qrels come from the same string-containment
+generator (`docs/eval-validity-threats.md` §2), so **recall@10 on these qrels is
+largely a containment test**, and the fine-tune's separable contribution over that
+is **ordering, not which documents come back**. Cite `T vs D` without qualification —
+both arms are cross-encoders under the same labelling rule, so it cancels — and never
+cite `T vs C` without the control's number beside it.
+
+**Nothing is wired into `query_service`.** The cost side (~1.2 s/query, 50 extra
+fetches) is a separate decision, and the control is now a third option at zero cost.
+
 ## Resolved 2026-07-21: ConGen/SCT max_seq_length — investigated, model-specific answer found
 
 Both `congen` and `sct` (PhayaThaiBERT-backbone, kornwtp) ship
