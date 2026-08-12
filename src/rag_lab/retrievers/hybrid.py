@@ -38,7 +38,11 @@ class HybridRetriever(BaseRetriever):
     a harsher approximation, and nothing has measured it. That used to be stated
     here and enforced nowhere; the combination now raises, because an asserted
     invariant is not a check and the failure mode is a plausible number rather
-    than an error. It is a guard, not a verdict -- measure it and lift it."""
+    than an error. It is a guard, not a verdict -- measure it and lift it.
+    `allow_unmeasured_truncation` is the named escape hatch for the measurement
+    itself (tools/eval/hybrid_weighted_fetch_depth.py has to construct the very
+    pair the guard forbids in order to check its replication against this
+    class); it is not for callers."""
 
     def __init__(
         self,
@@ -47,15 +51,18 @@ class HybridRetriever(BaseRetriever):
         dense_weight: float = 0.5,
         bm25_weight: float = 0.5,
         fetch_depth: int | None = None,
+        allow_unmeasured_truncation: bool = False,
     ) -> None:
-        if method == "weighted" and fetch_depth is not None:
+        forbidden = method == "weighted" and fetch_depth is not None
+        if forbidden and not allow_unmeasured_truncation:
             raise ValueError(
                 "fetch_depth is measured for method='rrf' only "
                 "(data/results/hybrid_fetch_depth_sweep.md, routed_fetch_depth_test.md). "
                 "Under 'weighted' a chunk past one arm's cut has that arm's normalized "
                 "score read as 0 rather than merely losing an RRF term, which is a "
                 "harsher approximation nobody has measured. Pass fetch_depth=None, or "
-                "measure the combination and lift this guard."
+                "measure the combination and lift this guard "
+                "(allow_unmeasured_truncation=True is for that measurement only)."
             )
         self.method = method
         self.rrf_k = rrf_k

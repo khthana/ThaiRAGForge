@@ -200,6 +200,32 @@ def test_weighted_refuses_a_fetch_depth_because_that_pair_is_unmeasured():
     assert _hybrid(fetch_depth=2).retrieve(q, index, 4)
 
 
+def test_the_escape_hatch_is_off_by_default_and_really_truncates():
+    # tools/eval/hybrid_weighted_fetch_depth.py has to build the forbidden pair
+    # in order to check its numpy replication against this class -- the same
+    # named-escape-hatch shape as rq4_generate.py's --allow-small-ctx, rather
+    # than a silent removal of the guard or a post-construction attribute poke.
+    #
+    # Two things to pin. The flag must default to False (otherwise the test
+    # above is testing nothing a caller can hit), and when set it must actually
+    # cut: a hatch that quietly ignored fetch_depth would let the measurement
+    # publish the untruncated ranking as if it were the truncated one, which is
+    # exactly the vacuous-anchor failure the sweep's S5 exists to prevent.
+    assert (
+        inspect.signature(HybridRetriever)
+        .parameters["allow_unmeasured_truncation"]
+        .default
+        is False
+    )
+    index, q = _truncation_index(), _truncation_query()
+    full = _hybrid(method="weighted").retrieve(q, index, 8)
+    cut = _hybrid(
+        method="weighted", fetch_depth=2, allow_unmeasured_truncation=True
+    ).retrieve(q, index, 8)
+    assert len(full) == 8 and len(cut) == 3
+    assert [r.chunk_id for r in cut] != [r.chunk_id for r in full][:3]
+
+
 def test_truncated_ties_still_break_dense_first():
     # Under truncation the fusion dict is filled dense-top-F first, then the
     # BM25-only remainder, so equal scores keep dense ahead. The sweep replicates
