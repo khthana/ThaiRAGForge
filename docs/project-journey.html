@@ -1456,8 +1456,8 @@ m2v แย่สุดทั้งสอง metric, abstention 106→104
 ข้อสรุปที่ป้องกันได้คือ <b><code>hybrid &gt; {dense, bm25} &gt; m2v</code></b> เท่านั้น
 — การเรียง 4 ชั้นเป็นการอ่านผลเสมอให้เป็นลำดับ<br><br>
 <b>2. "0 การอ้างอิงที่กุขึ้นมาเอง" ผูกกับ prompt</b> — ยังจริงสำหรับ prompt เดิม
-(0 จาก 954 ครบทั้ง 4 อาร์ม) แต่ภายใต้ <code>cite_all</code> อาร์ม dense ขึ้นเป็น
-<b>4 จาก 359</b> ทั้งสี่มาจากคำถามเดียวที่อ้าง <code>[6]</code>–<code>[9]</code>
+(0 จาก 981 ครบทั้ง 4 อาร์ม) แต่ภายใต้ <code>cite_all</code> อาร์ม dense ขึ้นเป็น
+<b>4 จาก 391</b> ทั้งสี่มาจากคำถามเดียวที่อ้าง <code>[6]</code>–<code>[9]</code>
 ทั้งที่ป้อนเอกสารให้แค่ 5 ฉบับ กลไกจึงไม่ร้ายแรง (label เกินช่วง ไม่ใช่การยัดเนื้อหา
 ให้เอกสารที่มีอยู่จริง) แต่ <code>cite_all</code> ก็กุการอ้างอิงใน<b>สองอาร์ม</b>แล้ว
 ไม่ใช่แค่ closed-book
@@ -1466,7 +1466,8 @@ m2v แย่สุดทั้งสอง metric, abstention 106→104
 <span class="label">ข้อ 2 เกือบหลุด — และนั่นคือ finding ในตัวมันเอง</span>
 <code>diff_significance_reports.py</code> เทียบเฉพาะ cell ที่ parse เป็นตัวเลขได้
 แต่คอลัมน์ phantom เป็นรูปแบบ <code>count/total</code> — <code>0/370 → 4/359</code>
-จึงไม่เข้าทั้งสาขา numeric และสาขา verdict แล้ว<b>ถูกข้ามไปเงียบๆ</b>
+(ตัวเลข ณ การ refresh 7 ส.ค.; หลังการ regenerate 10 ส.ค. คอลัมน์นี้อ่านได้
+<code>4/391</code>) จึงไม่เข้าทั้งสาขา numeric และสาขา verdict แล้ว<b>ถูกข้ามไปเงียบๆ</b>
 เจอเพราะไล่เทียบคอลัมน์นั้นด้วยมือ<br><br>
 รูปทรงเดียวกับบั๊ก silent-corruption ทุกตัวในโปรเจกต์นี้: ไม่ crash แค่มีตัวเลข
 ที่ไม่มีใครมอง — <b>คอลัมน์ที่เครื่องมือจำแนกไม่ได้ คือคอลัมน์ที่ควรแสดง ไม่ใช่ทิ้ง</b>
@@ -3167,9 +3168,11 @@ over-fetch ตัวสุดท้ายของ hybrid ถูกวัด (§
 ตอนนี้ใหญ่กว่าฐานราวสิบเท่า)</li>
 <li><b>ColBERT / late interaction</b> — เขียน note ไว้แล้วพร้อมคำทำนายที่ลงทะเบียนล่วงหน้า
 (<code>docs/colbert-late-interaction-notes.md</code>) ยังไม่ได้เริ่ม</li>
-<li><b>entity-indexed retrieval path สำหรับคำถามแบบ "list all X"</b> —
-มีโครงสร้างพื้นฐานพร้อมแล้ว (tagger ทั้ง 4) แต่ยังไม่เคยสร้าง/ทดสอบ
-เป็นทางที่มีเหตุผลรองรับดี เพราะ top-k similarity ติดเพดาน ~0.68 โดยโครงสร้าง</li>
+<li><b><s>entity-indexed retrieval path สำหรับคำถามแบบ "list all X"</s> — ปิดแล้ว
+ย้ายลงข้างล่าง</b> (แก้ 12 ส.ค.): รายการนี้เคยเขียนว่า "ยังไม่เคยสร้าง/ทดสอบ"
+ซึ่ง<b>ไม่จริงมาตั้งแต่ 25 ก.ค.</b> — <code>entity_lookup</code>/<code>entity_boost</code>
+ต่อเข้า <code>query_service</code> แล้ว มี index ของตัวเอง (<code>entity_tags_full</code>)
+และถูกวัดถึงปลายทางในฐานะ arm ของ RQ4 เมื่อ 10 ส.ค. (§9.25) → ดู "ปิดสมบูรณ์แล้ว"</li>
 <li><b>Qdrant</b> — vertical slice พิสูจน์แล้วว่า filter ระดับ resolution ทำงาน end-to-end
 แต่คำเตือน 20k-point ของ embedded mode ยังไม่ได้แก้</li>
 </ol>
@@ -3257,7 +3260,7 @@ default 8192→16384) + regenerate 81 เซลล์แบบจับคู่
 530+212 gen แล้ว regen อีก 362 เซลล์หลัง rebuild #3 · ข้อสรุปที่ยืนได้คือ <b>prompt ablation</b>
 (citation recall ที่แบนราบเป็นปัญหาของ prompt ไม่ใช่ generator) และ <b>m2v แย่กว่าทุก arm อย่างมีนัยสำคัญ</b>
 · สองข้อที่<b>ถูกแก้</b>ตอน refresh: ลำดับ precision อ่านได้แค่ <code>hybrid &gt; {dense, bm25} &gt; m2v</code>
-ไม่ใช่ลำดับ 4 ชั้น และ "0 การกุการอ้างอิง" จริงเฉพาะ prompt เดิม (ใต้ <code>cite_all</code> arm dense กุ 4/359)
+ไม่ใช่ลำดับ 4 ชั้น และ "0 การกุการอ้างอิง" จริงเฉพาะ prompt เดิม (ใต้ <code>cite_all</code> arm dense กุ 4/391)
 · <b>ต้นทุนทั้งสองข้อของ <code>cite_all</code> ถูกซ่อมแล้ว</b> (7–8 ส.ค.) ด้วย variant ใหม่
 <code>cite_all_guarded</code> (abstention กลับเป็น 106/106, phantom เป็น 0, ครบทั้ง 4 อาร์ม)
 — การวินิจฉัยคือประเด็น: กฎที่ห้ามไว้มีอยู่แล้ว มันแพ้เพราะ<i>ตำแหน่ง</i> guard จึงต้องวางไว้

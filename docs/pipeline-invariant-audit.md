@@ -1,6 +1,6 @@
 # Pipeline invariant audit
 
-Run 2026-08-11 06:17 UTC. 26 pass / 2 warn / 0 fail.
+Run 2026-08-12 00:28 UTC. 27 pass / 1 warn / 0 fail.
 
 | check | status | detail |
 |---|---|---|
@@ -30,5 +30,5 @@ Run 2026-08-11 06:17 UTC. 26 pass / 2 warn / 0 fail.
 | E3b results answer a known gold query | PASS | 0 unrecognized queries across 23156 result files (['mode_b', 'mode_b_routed'] excluded: interactive UI queries are not gold by design) |
 | E4 results newer than their index | PASS | 0 result sets computed before their index was rebuilt |
 | G1a no RQ4 answer generated from a truncated prompt | PASS | 0 truncated of 293 answers carrying num_ctx |
-| G1b no pre-fix RQ4 answer is provably truncated | PASS | 0 truncated of 750 pre-fix answers carrying provable evidence either way about their prompt, none of it needing them regenerated (603 by the UTF-8-byte upper bound, 147 by a cached probe at num_ctx=8,192) |
-| G1c every RQ4 answer's prompt fit is established | WARN | 759 of 1802 answers have neither a recorded num_ctx nor provable evidence about their prompt; they are unmeasured, not suspected (the empirical 0.95 chars/token screen clears all of them, but an observed minimum is not a bound). Closing this needs a probe at num_ctx=8,192 per prompt, ~1 GPU-hour, not a regeneration |
+| G1b no pre-fix RQ4 answer is provably truncated | PASS | 0 truncated of 1509 pre-fix answers carrying provable evidence either way about their prompt, none of it needing them regenerated (603 by the UTF-8-byte upper bound, 906 by a cached probe at num_ctx=8,192) |
+| G1c every RQ4 answer's prompt fit is established | PASS | 0 of 1802 answers are unmeasured -- every published RQ4 answer's prompt is now established by a recorded field, the UTF-8-byte bound, or a probe at num_ctx=8,192 (data/results/rq4_prompt_fit_probes.md), never by the 0.95 screen |
