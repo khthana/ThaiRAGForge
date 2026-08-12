@@ -82,10 +82,12 @@ see `docs/adr/`.
   kept **out of `meta`** (which is what `save` writes back, so a load-time field
   must not round-trip) and the new result fields are optional (the ~24k legacy
   results must keep validating); `select()` carries it because a filtered view is
-  still the same build, unlike `lexical_scorer`. Rule 1 currently fires on **zero**
-  files on disk — nothing has been re-run since the fields landed — so
-  `tests/tools/test_audit_pipeline_invariants.py` pins all six outcomes, or it
-  would be exactly the vacuous PASS the next bullet warns about.
+  still the same build, unlike `lexical_scorer`. Rule 1 fired on **zero** files
+  until 2026-08-12 — nothing had been re-run since the fields landed — and now
+  carries the **212** entity results re-scored that day (14,826 unique name /
+  7,268 elimination / 850 no built index); `tests/tools/test_audit_pipeline_invariants.py`
+  pins all six outcomes anyway, or the other five would be exactly the vacuous
+  PASS the next bullet warns about.
   Two lessons about the audit itself, both learned by breaking it the same day it was
   written: (a) **a check whose subject matter moves becomes a vacuous PASS** — C4
   (orphaned `.md.dup`) went 24→0 the moment those archives were moved off-repo, so it
@@ -106,9 +108,10 @@ see `docs/adr/`.
   recorded relabel (`relabeled_mispairings.at` in an index manifest) as bringing
   an index current without a rebuild — without that second half it would sit
   permanently red after any title repair, and an always-red check is one nobody
-  reads. Current state (**re-run 2026-08-11 after `G1c` was closed by measurement**):
-  **27 pass / 1 warn / 0 fail** over 28 checks (was 26/2/0 earlier the same day,
-  25/2/0 over 27 on 08-10; 24/1/0 on 08-09, when E0 first made the gate green).
+  reads. Current state (**re-run 2026-08-12 after the entity arms were re-scored**):
+  **27 pass / 1 warn / 0 fail** over 28 checks (unchanged from the 08-11 run that
+  closed `G1c`; was 26/2/0 earlier on 08-11, 25/2/0 over 27 on 08-10; 24/1/0 on
+  08-09, when E0 first made the gate green).
   **`G1c` was the second warn, and how the G1 family became three checks — then how
   the third one was retired — is the reusable part.** The `G1b` that landed
   08-10 WARNed that **1,509** RQ4 answers predate the `num_ctx` fix and were
@@ -123,7 +126,7 @@ see `docs/adr/`.
   *prompt*, so they lean on one premise about the answer — that pre-fix answers ran
   at 8,192 — used in the conservative direction only: 8,192 is the smallest context
   any published run used, so "fits 8,192" implies "fits whatever it actually ran
-  at". So **`G1a`** is the recorded field (0 truncated of 293), **`G1b`**
+  at". So **`G1a`** is the recorded field (0 truncated of 1,353), **`G1b`**
   *re-derives* the same claim from provable evidence and can **FAIL**, and
   **`G1c`** counts what neither reaches — *unmeasured*, never *suspected*
   ([[feedback_undefined_is_not_zero]]), with its denominator printed.
@@ -136,7 +139,8 @@ see `docs/adr/`.
   `tools/eval/rq4_probe_prompt_fit.py` sent all **759** remaining prompts to ollama
   at the old `num_ctx=8192` — **70 min, 0 truncated** — so G1b now re-derives the
   claim for **all 1,509** pre-fix answers (**603** by the byte bound, **906** by
-  probe) and G1c reads **0 of 1,802**. Report:
+  probe) and G1c reads **0 of 2,862** (that denominator grows with every new
+  answer: 1,802 when G1c closed, +1,060 for the `gemma4:e4b` check). Report:
   `data/results/rq4_prompt_fit_probes.md`. Four things worth keeping from it.
   (1) **The estimate was checked before the run, not after**: a timed
   12-cell sample spread across the length distribution (not longest-first —
@@ -166,13 +170,15 @@ see `docs/adr/`.
   1.0098 previously seen) the moment more prompts were measured — and the UTF-8
   byte bound is 2.49x–3.94x loose here, which is why it is sound rather than tight.
   **The one remaining warn is real and is not E0's
-  doing**: it is that same `I6`, 41 indexes built 2026-08-08 19:33
+  doing**: it is that same `I6`, **40** indexes built 2026-08-08 19:33
   against a corpus last edited 2026-08-09 09:53, i.e. the `2566/ครั้งที่ 3`
   re-download + re-OCR earlier that day. **Unlike the title repair, that one is a
   text change, so a relabel cannot discharge it** — those indices genuinely hold
   the old OCR of that file. It is left standing rather than waived because a
   16.4h rebuild is not worth it here: 0 gold entries in either gold set cite any
-  resolution from that meeting, so no published metric can have moved. The
+  resolution from that meeting, so no published metric can have moved. It was 41
+  until 2026-08-12, when the `entity_tags_full` rebuild took that index out of the
+  list — a rebuild, not a waiver, which is the check behaving as intended. The
   previous state was **24 pass / 0 warn / 1 fail** (that lone FAIL being the
   `BuildCombo.id` caveat, now closed above). That headline was written here before it was true —
   the report on disk at the time said **21 pass / 3 warn / 1 fail**, the 3 warns
@@ -332,8 +338,9 @@ see `docs/adr/`.
   `audit_pipeline_invariants.py` gained the **G1** family, which reads the
   *artifacts* — `rq4_generate.py` now records `num_ctx`/`prompt_eval_count` in
   every answer and `prompt_eval_count == num_ctx//2 + 2` is an exact truncation
-  signature. **G1a** is the recorded field (0 truncated of 293 answers carrying
-  it, after the regeneration). See the invariant-audit bullet above for **G1b/G1c**,
+  signature. **G1a** is the recorded field (0 truncated of 1,353 answers carrying
+  it — 293 after the regeneration, then every answer generated since). See the
+  invariant-audit bullet above for **G1b/G1c**,
   which split the pre-fix answers by whether provable evidence about their prompt
   exists — the point being that the first version called all 1,509 of them
   *unverifiable* and that overstated the hole by 2x, and that the remainder was
