@@ -54,6 +54,24 @@ the eval set from the artifacts themselves rather than from the builder's own
 report, and S8 checks the trained model actually ranks differently from the
 off-the-shelf one -- a null is not evidence if the swap never happened.
 
+HOW THE CHECKPOINT IS LOADED (verified, not assumed)
+----------------------------------------------------
+The trainer writes a bare `model.save_pretrained` + `tok.save_pretrained`
+directory with no sentence-transformers config, and this script scores it
+through `CrossEncoderReranker`, i.e. the same ST path every published arm used.
+That contract was round-tripped on a tiny fixture before the fine-tune finished
+(the real tokenizer beside a 2-layer XLM-R of the same family), because a
+failure here would land only at the last step, after the GPU time was already
+spent. Three things it settled. ST accepts such a directory. The base head is
+**already 1-logit** (`id2label` has one entry), so the trainer's explicit
+`num_labels=1` keeps the pretrained ranking head rather than reinitialising it
+-- which `C2`'s 2e-7 agreement with ST independently confirms, since a random
+head could not match. And ST caps the tokenizer at the *config's*
+`max_position_embeddings` (`base/modules/transformer.py:684`), which for this
+checkpoint is `min(8192, 8194) = 8192`: the trained arm therefore scores at the
+same native length as every published arm, even though training capped at
+`MAX_LEN` (see `C5`, which reports that mismatch as a measured rate).
+
 Run (GPU; one job at a time on this machine):
     .venv/Scripts/python.exe tools/eval/reranker_trained_test.py --smoke
     .venv/Scripts/python.exe tools/eval/reranker_trained_test.py
