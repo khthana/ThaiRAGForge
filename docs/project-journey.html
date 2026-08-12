@@ -3174,7 +3174,15 @@ over-fetch ตัวสุดท้ายของ hybrid ถูกวัด (§
 ต่อเข้า <code>query_service</code> แล้ว มี index ของตัวเอง (<code>entity_tags_full</code>)
 และถูกวัดถึงปลายทางในฐานะ arm ของ RQ4 เมื่อ 10 ส.ค. (§9.25) → ดู "ปิดสมบูรณ์แล้ว"</li>
 <li><b>Qdrant</b> — vertical slice พิสูจน์แล้วว่า filter ระดับ resolution ทำงาน end-to-end
-แต่คำเตือน 20k-point ของ embedded mode ยังไม่ได้แก้</li>
+· <s>คำเตือน 20k-point ของ embedded mode ยังไม่ได้แก้</s> <b>ข้อนี้ผิด แก้ 12 ส.ค.:
+คำเตือน 20k-point ปิดไปตั้งแต่ 16 ก.ค. ด้วยการวัด</b> — บน combo จริง 62k chunk
+embedded mode ทำได้ 309 ms เทียบกับ numpy brute-force 343 ms คือ<b>เสมอกัน</b>
+(query ที่มี filter ช้ากว่าที่ 793 ms และ payload index ไม่ช่วย — รับได้สำหรับงานวิจัย)
+· คำเตือนนั้นเป็น<b>ฮิวริสติกของไลบรารี</b> ส่วนที่มาแย้งคือ<b>การวัดบนเคสจริง</b>
+และในกรณีที่สองอย่างนี้ขัดกัน การวัดชนะ · <b>ที่ยังค้างจริงคือการต่อสาย</b>
+เข้า <code>runner.py</code>/<code>query_service.py</code>/UI, ingestion ที่ยังเป็น
+สคริปต์ครั้งเดียวต่อ combo แทนที่จะขนานกับ <code>ArtifactStore</code>,
+และมี filter อยู่ชนิดเดียว (<code>resolution_id_in</code>)</li>
 </ol>
 
 <h3>ปิดสมบูรณ์แล้ว</h3>
