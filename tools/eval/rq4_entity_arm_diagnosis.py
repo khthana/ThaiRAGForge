@@ -48,12 +48,63 @@ from rq4_score import is_abstained, parse_citations  # noqa: E402
 
 _ANSWERS = REPO / "data" / "rq4" / "answers"
 _OUTPUT = REPO / "data" / "results" / "rq4_entity_arm_diagnosis.md"
+_SCORE_REPORT = REPO / "data" / "results" / "rq4_score_entity.md"
 _VARIANT = "phi4_cite_all"
 _ARMS = [
     "hybrid_qwen3_0.6b_semantic",
     "entity_lookup_semantic",
     "entity_boost_semantic",
 ]
+
+
+def score_report_recalls() -> tuple[dict[str, float], str]:
+    """Mean citation recall per arm, *read* from `rq4_score_entity.md`.
+
+    The first version of this script retyped the pair (`0.4379 vs 0.1431`) into
+    its own prose, which survives exactly until the arms are regenerated -- and
+    a wrong number in a `data/results/*.md` file is worse than one in a doc,
+    because that directory is `audit_doc_claims.py`'s *haystack*: a stale figure
+    here would go on to clear the same figure quoted anywhere else.
+
+    Returns `({}, why)` rather than a number when the report is missing, or when
+    it predates the answers measured below. The staleness branch is the
+    load-bearing one: quoting a recall computed from a previous generation run
+    beside *these* abstention counts is this project's signature
+    two-artifacts-from-different-days failure, and it never crashes -- it just
+    makes one sentence quietly wrong.
+    """
+    if not _SCORE_REPORT.exists():
+        return {}, f"{_SCORE_REPORT.name} not found"
+    newest_answer = max(
+        (p.stat().st_mtime for arm in _ARMS for p in (_ANSWERS / _VARIANT / arm).glob("q*.json")),
+        default=0.0,
+    )
+    if _SCORE_REPORT.stat().st_mtime < newest_answer:
+        return {}, f"{_SCORE_REPORT.name} is older than the answers measured here -- re-run rq4_score.py"
+
+    out: dict[str, float] = {}
+    col: int | None = None
+    for line in _SCORE_REPORT.read_text(encoding="utf-8").splitlines():
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        # Locate `mean recall` by NAME, re-reading the header of every table.
+        # Keying on (variant, arm) alone is not enough: this report repeats the
+        # same two labels in its abstention 2x2, whose column 5 is a *count*, so
+        # a positional read silently returns 3 instead of 0.1431. Same trap
+        # `diff_significance_reports.py` keys its rows around.
+        if "arm" in cells:                       # a header row: a new table starts
+            col = cells.index("mean recall") if "mean recall" in cells else None
+            continue
+        if col is not None and len(cells) > col and cells[0] == _VARIANT and cells[1] in _ARMS:
+            try:
+                out[cells[1]] = float(cells[col])
+            except ValueError:
+                continue
+    missing = [a for a in _ARMS if a not in out]
+    if missing:
+        return {}, f"{_SCORE_REPORT.name} has no {_VARIANT} row for {', '.join(missing)}"
+    return out, ""
 
 
 def measure(arm: str) -> dict:
@@ -141,20 +192,29 @@ def main() -> None:
         "relevant when it *contains the entity*, and `entity_lookup` retrieves "
         "exactly the documents containing the entity -- so a near-pure gold context "
         "is true by construction, not a sign of a good context. The generator was "
-        "then handed ~8 documents that all name the entity, and on 40 queries it "
+        f"then handed ~{lookup['blocks']:.0f} documents that all name the entity, and on "
+        f"{lookup['missed']} queries it "
         "judged that none of them answered the question asked. That is direct "
         "evidence, from an independent judge, that string containment over-counts "
         "relevance for this query shape -- the same threat "
         "`docs/eval-validity-threats.md` raises for the entity arms, here visible "
         "rather than argued.\n"
     )
+    recalls, why_no_recalls = score_report_recalls()
+    if recalls:
+        recall_clause = (
+            f"citation recall {recalls['entity_boost_semantic']:.4f} vs "
+            f"{recalls['entity_lookup_semantic']:.4f}, "
+        )
+    else:
+        recall_clause = f"citation recall: see `{_SCORE_REPORT.name}` ({why_no_recalls}), "
     L.append(
         f"**What separates the two entity arms is ranking, and it is worth more than "
         f"the dictionaries are.** Both draw on the same dictionaries and both supply "
         f"entity-bearing contexts ({lookup['density']:.4f} vs {boost['density']:.4f} "
         f"density); the difference is that `entity_boost` orders them by hybrid "
         f"relevance, so what fills the budget also answers the question "
-        f"(citation recall 0.4379 vs 0.1431, missed {boost['missed']} vs "
+        f"({recall_clause}missed {boost['missed']} vs "
         f"{lookup['missed']}). That gap is far larger than `entity_boost`'s entire "
         f"non-significant margin over shipped hybrid. **An exhaustive retriever's "
         f"advantage does not survive a fixed context budget it cannot rank into** -- "
