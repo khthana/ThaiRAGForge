@@ -1291,7 +1291,17 @@ see `docs/adr/`.
      fuse only when the arms are comparable. **Selection caveat**: the winner is an argmax
      over 4 models on the same 106 queries (`w` is LOO, the *model* is not), so the citable
      claim is *at least one qualified model does materially better*, never *use bge-v1-large*
-     — that needs a fresh query set. **The bound is unchanged**: the best model captures 13%
+     — that would need a fresh query set, and **that confirmation is CLOSED as dominated
+     (2026-08-12): do not re-propose it.** Three reasons no measurement would change. (i) The
+     outcome has no decision attached — follow-up (a) reaches 0.7485 and its **free** lexical
+     control 0.7442, so `bge-v1-large`'s 0.7027 is dominated by an arm costing no GPU. (ii) The
+     claim it served (*the model is the weak part, not the axis*) already holds from two
+     independent routes, the oracle column and (a) capturing 44% of that gap at Holm 0.0000.
+     (iii) No clean fresh set exists: the 179 thematic queries move query *shape* and retrieval
+     regime together (BM25 collapses there), so a non-replication could not be attributed —
+     the wrong-pair trap that killed per-`entity_type` alpha and rrf4 — and the only same-shape
+     disjoint queries are (a)'s own training set, ~2 h GPU for a result nobody would act on.
+     **The bound is unchanged**: the best model captures 13%
      of +0.1500, so 87% is still untouched and follow-up (a) keeps its motivation. Nothing is
      wired. Confounds measured rather than assumed: `ctx` is the one thing not equal across
      arms (anchor 8192, the rest 512 — each at its own max, since forcing 512 on the anchor

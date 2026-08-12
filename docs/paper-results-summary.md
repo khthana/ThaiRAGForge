@@ -481,6 +481,12 @@ outcome for the last one: `docs/reranker-trained-on-hybrid-design.md`.
 | **the ceiling** — oracle over the same routed P=50 pool | pool holds **0.9054**, a perfect selection of 10 delivers **0.8331** = **+0.1500** over the router |
 | **the weights** — fine-tuned on hybrid-fused candidates from this corpus | **+0.0654** over the router, **+0.0637** over the off-the-shelf model, all six pre-registered tests Holm **0.0000** |
 
+Read row 2 as *the model is a real variable*, never as a model recommendation: the winner is an
+argmax over four models on the same 106 queries, its pre-registered recall@10 family separates 0
+of 3, and it is dominated outright by the free control described at the end of this section.
+Confirming it on a fresh query set is deliberately **not** owed — the reasons are recorded in
+`docs/reranker-hybrid-interaction-research.md`.
+
 **The headline result.** A cross-encoder that starts from the published anchor's
 own weights and is fine-tuned for 68 minutes on 505 routed-hybrid P=50 pools drawn
 from this corpus — entities disjoint from the eval set, checkpoint selected on

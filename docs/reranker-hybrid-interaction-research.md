@@ -660,6 +660,21 @@ one significant cell is nDCG@10 **+0.0275** (Holm 0.0228) in the m=6 MRR/nDCG fa
 an argmax over four models measured on the same 106 queries — `w` is leave-one-out, the *model* is not
 — so the claim is *at least one qualified model does materially better*, never *use bge-reranker-large*.
 
+**That confirmation is CLOSED as dominated, 2026-08-12 — do not re-propose it.** Confirming the argmax
+on a fresh query set was the natural next step and is now pointless, for three reasons, none of which a
+new measurement would change. (1) **Nothing would be recommended either way**: follow-up (a) below
+reaches 0.7485 and its *free* lexical control reaches 0.7442, so `bge-reranker-large`'s 0.7027 is
+dominated by an arm that costs no GPU at all — a confirmation with no decision attached to its outcome.
+(2) **The scientific claim it served is already confirmed twice** from independent routes — the oracle
+column, and follow-up (a) capturing 44% of that same gap at Holm 0.0000. A third route cannot move a
+conclusion that two already agree on. (3) **No clean fresh set exists**: the 179 thematic queries change
+the query *shape* and the retrieval regime at once (BM25 collapses there), so a non-replication would be
+uninterpretable — selection noise or shape change? — which is the wrong-pair trap that killed
+per-`entity_type` alpha and rrf4; and the only same-shape disjoint queries are follow-up (a)'s own
+training set, ~2 h of GPU for a result nobody would act on. The sentence above is therefore the
+**final** wording of this result: cite it as evidence that the model is a real variable, never as a
+model recommendation.
+
 **The counter-intuitive part is the strongest evidence.** The best model is the **older v1 lineage**
 that v2-m3 was released to supersede, and it is better on every metric. Reranker choice on this corpus
 therefore does not track general benchmark strength and has to be measured here. In the other
