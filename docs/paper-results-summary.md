@@ -717,6 +717,15 @@ out dense beating hybrid by more than 0.0098. An earlier version of this claim
 ("citation precision orders exactly as recall@10 did") over-read a tie; corrected
 2026-08-07, then narrowed again 2026-08-10.
 
+**And that last bound is `phi4`'s, not the system's — withdraw it as a system
+claim (2026-08-12).** The second-generator check below re-ran the same contexts
+through `gemma4:e4b`, where the same cell reads **+0.0228, CI [−0.0258, +0.0711],
+Holm 0.7212** — the sign is reversed and the interval straddles zero, so the
+CI-excludes-zero reading above does not replicate. **`hybrid` vs `dense` is
+unresolved and generator-dependent**; state the ordering as
+**`{hybrid, dense} > BM25 > m2v`**, which both generators support, and attribute
+any hybrid-over-dense statement to `phi4`.
+
 Family 1a (`sentence_cap`) is 2/12 comparisons significant, family 1b (`cite_all`)
 8/12 (was 9/12 before the repair) — **arm ordering is more cleanly separable under
 the better prompt**, because the original prompt's citation budget partly masked
@@ -840,6 +849,48 @@ stopped agreeing: `hybrid: guarded vs baseline`, identical data, point estimate
 "does this prompt beat the baseline", so quote it there — as family 2, of 9
 tests. An unqualified "Holm p = 0.02" is now demonstrably ambiguous in this
 report.
+
+### Second-generator robustness check — `gemma4:e4b` (2026-08-12)
+
+Every RQ4 figure above is one generator's. `rq4_generate.py --model gemma4:e4b`
+re-ran **the same contexts** through a second model under both live prompts (1,060
+answers, 76 min, 0 errors, 0 truncated, `think` read from the model's capabilities
+and disabled explicitly, recorded per answer). Reports:
+`data/results/rq4_score_gemma4.md`, `data/results/rq4_score_gemma4_guarded.md`.
+`sentence_cap` is deliberately not re-run — the generator refuses that variant for
+any model but `phi4`, whose 530 answers are keyed to it — so family 1b is the
+whole comparison and families 1a/2/3 skip by construction.
+
+**What transfers is the ordering.** Citation precision orders identically in all
+four positions under `cite_all` (hybrid 0.7417 > dense 0.7375 > BM25 0.6850 > m2v
+0.6279), and `m2v` is again significantly worst on both metrics against every
+other arm.
+
+**What does not transfer is the levels — and one bound.** Gemma's citation recall
+is higher on every arm (dense 0.5074 against `phi4`'s 0.3356), so no absolute
+figure in this section is a property of the retrieval arm alone. And
+`hybrid` vs `dense` — the one pair this document told the reader to cite as a
+bound — is the **only** pair of the twelve that disagrees on **sign**: `phi4`
+−0.0606 with a CI excluding zero, gemma **+0.0228, CI [−0.0258, +0.0711], Holm
+0.7212**, and +0.0108 (Holm 1.0000) under the guard. Every other difference
+between the two models is a verdict resolving or failing to resolve, never a
+reversal — which is why the headline is this one cell and not the flip count.
+State the ordering as **`{hybrid, dense} > BM25 > m2v`**.
+
+**The larger finding was not the reason for the run: `cite_all`'s closed-book cost
+is model-dependent, and rule 5 is what contains it.** Unguarded closed-book
+hallucinations are **2** for `phi4` and **24** for gemma (37/37 phantom
+citations); `cite_all_guarded` takes gemma to **1** (1/1). In both models they are
+**entirely `course` queries** — no person, programme or faculty query produced
+one. So the guard whose benefit was measured on the model that barely needed it is
+what makes the prompt safe on a model that does, which strengthens the
+recommendation to report `cite_all_guarded` as the paper's prompt. Its published
+*cost* does not generalise either: on gemma the `missed` count falls on every arm
+(hybrid recall 0.4846 → 0.5155) and the cost lands on the weak arm's precision
+instead (BM25 0.6850 → 0.6028).
+
+Full narrative, including the sign-vs-verdict comparison in full:
+`docs/rq4-second-generator-check.md`.
 
 ### Two caveats a reviewer will raise
 
