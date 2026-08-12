@@ -37,10 +37,16 @@ the model declines when the context lacks the answer, and the closed-book arm ha
 no context by construction, so ไม่พบข้อมูล is the correct answer there 106 times
 out of 106. Nothing in the prompt tells the model which arm it is in.
 
-Run (pilot first -- the generator choice is an open decision in the design doc):
-    PYTHONPATH=src python tools/eval/rq4_generate.py --model phi4 --limit 20
-    PYTHONPATH=src python tools/eval/rq4_generate.py --model gemma4:e4b --limit 20
-    PYTHONPATH=src python tools/eval/rq4_generate.py --model <winner>
+Run:
+    PYTHONPATH=src python tools/eval/rq4_generate.py --model phi4 \
+        --variant cite_all_guarded
+
+A second generator (the deferred gemma4:e4b robustness check) must name a live
+variant -- `sentence_cap` is refused for any model but phi4, since the ablation
+that would have justified it already fired the other way:
+
+    PYTHONPATH=src python tools/eval/rq4_generate.py --model gemma4:e4b \
+        --variant cite_all_guarded --limit 20
 """
 from __future__ import annotations
 
@@ -64,9 +70,14 @@ ABSTAIN = "ไม่พบข้อมูล"
 # "Correction (same day)" section found citation recall flat at ~0.41 across every
 # retrieval arm and traced it to this rule fighting the gold set's aggregation
 # queries (mean 9.87 relevant docs) rather than to a generator comprehension limit.
-# "cite_all" is the pending ablation: if recall rises, the flat line was a prompt
-# artifact; if it stays ~0.41, it's a real generator ceiling worth testing gemma4:e4b
-# against.
+# "cite_all" was the ablation that decided it, under a rule registered before the
+# number existed: recall rising => prompt artifact, recall staying ~0.41 => a real
+# generator ceiling, and only *then* is a second generator (gemma4:e4b) the right
+# next step. **Recall rose** (hybrid +0.1181 / dense +0.1095 / bm25 +0.0696, all
+# Holm 0.0000), so that branch never opened and "sentence_cap" is a retired
+# baseline, kept only because the 530 answers on disk are keyed to it. Running a
+# *different model* under it therefore reproduces a retired artifact rather than
+# answering anything -- see `_refuse_retired_variant`.
 #
 # "cite_all_guarded" is that ablation with its one measured cost repaired. The
 # ablation worked (recall rose significantly for hybrid/dense/bm25, no precision
@@ -128,6 +139,89 @@ def build_prompt(ctx: dict, variant: str = "sentence_cap") -> str:
     return f"{body}\n\n{build_instructions(variant)}\n\nคำถาม: {ctx['query']}\n\nคำตอบ:"
 
 
+# Every published RQ4 answer was generated with this model. It is the only model
+# for which "sentence_cap" names a real, comparable baseline.
+_BASELINE_MODEL = "phi4"
+
+# The longest prompt in the current context set measures 14,721 tokens, so 8192 --
+# the default until 2026-08-10 -- truncates silently, keeping the tail and deleting
+# the highest-ranked documents. preflight() probes for exactly that, but it probes
+# at most `max_probes` prompts and can be skipped, so the floor is enforced
+# separately: a bound that holds for every prompt beats a probe of five of them.
+_MIN_NUM_CTX = 16384
+
+
+def _refuse_retired_variant(model: str, variant: str, allow: bool) -> None:
+    """`sentence_cap` names a baseline that exists only for `phi4`.
+
+    The pre-registered rule in `rq4_score.py` made a second generator worth
+    running only if the flat ~0.41 citation recall survived the `cite_all`
+    ablation. It did not, so a gemma4:e4b run under `sentence_cap` would spend
+    ~5 GPU-hours reproducing a retired artifact: nothing scores that pair (the
+    published families are baseline-vs-variant within `phi4`), and the 3-sentence
+    cap is the very instruction the ablation showed to be the confound.
+
+    Containment, not a ban -- `--allow-retired-variant` exists because the run is
+    legitimate if someone deliberately wants a same-prompt cross-model reading.
+    """
+    if variant != "sentence_cap" or allow or model.split(":")[0] == _BASELINE_MODEL:
+        return
+    raise SystemExit(
+        f"refusing to start: --variant sentence_cap with --model {model}.\n"
+        f"sentence_cap is a retired baseline kept for {_BASELINE_MODEL}'s 530 "
+        "answers; its rule 4 is the confound the cite_all ablation identified "
+        "(recall rose for hybrid/dense/bm25 at Holm 0.0000), so the branch that "
+        "made a second generator interesting never opened.\n"
+        "Use --variant cite_all (the arm-ordering result) or cite_all_guarded "
+        "(the paper's prompt), or pass --allow-retired-variant if you really "
+        "mean to reproduce the retired pair."
+    )
+
+
+def _refuse_small_ctx(num_ctx: int, allow: bool) -> None:
+    """Enforce the context floor for every prompt, not just the probed ones.
+
+    preflight() already refuses to start on the truncation signature, but it
+    probes at most `max_probes` candidates and `--skip-preflight` turns it off,
+    so on its own it is a sample. This is the bound.
+    """
+    if num_ctx >= _MIN_NUM_CTX or allow:
+        return
+    raise SystemExit(
+        f"refusing to start: --num-ctx {num_ctx:,} is below {_MIN_NUM_CTX:,}. "
+        "The longest prompt in this context set measures 14,721 tokens, and "
+        "ollama cuts an over-long prompt to num_ctx//2+2 keeping the TAIL, so "
+        "the best-ranked documents are deleted and the rules survive -- there "
+        "is no symptom in the answer. Raise --num-ctx, or pass "
+        "--allow-small-ctx to reproduce a historical run on purpose."
+    )
+
+
+def supports_thinking(model: str) -> bool:
+    """Whether ollama reports a `thinking` capability for `model`.
+
+    Asked rather than assumed, because the answer decides how tokens are spent
+    and the two models this project uses differ: `phi4:latest` reports
+    `['completion']`, `gemma4:e4b` reports `[..., 'thinking']`. A thinking model
+    left unconfigured emits a `thinking` field that `generate()` never reads --
+    measured 2026-08-12 on one real RQ4 prompt, gemma4:e4b spends **1058 eval
+    tokens / 27.2 s** unset against **243 / 4.9 s** at `think=False`, i.e. 77% of
+    the generated tokens are discarded, a 5.6x slowdown. `llm_ocr_scan.py` has
+    passed `think=False` since the OCR scan for exactly this reason; this script
+    never did, which was harmless only while `phi4` was the only model used.
+
+    Gated on the capability rather than sent unconditionally: `think=False` is in
+    fact accepted by `phi4:latest` today (checked), but a flag that is a silent
+    no-op for one model and load-bearing for another should be visible in the
+    run's own record, which is why `generate()` writes both fields per answer.
+    """
+    try:
+        return "thinking" in (getattr(ollama.show(model), "capabilities", None) or [])
+    except Exception as exc:
+        print(f"  [warn] cannot read capabilities for {model}: {exc}; assuming none")
+        return False
+
+
 def resident_models() -> list[str]:
     try:
         out = subprocess.run(["ollama", "ps"], capture_output=True, text=True, timeout=30).stdout
@@ -179,7 +273,7 @@ def token_upper_bound(text: str) -> int:
 
 
 def preflight(model: str, arms: list[str], variant: str, num_ctx: int,
-              max_probes: int = 5) -> None:
+              max_probes: int = 5, chat_kwargs: dict | None = None) -> None:
     """Refuse to start if any prompt does not fit `num_ctx`.
 
     The old `--num-ctx` help already *said* it must exceed the longest prompt.
@@ -229,7 +323,8 @@ def preflight(model: str, arms: list[str], variant: str, num_ctx: int,
     for n_bound, label, text in candidates[:max_probes]:
         n = ollama.chat(model=model, messages=[{"role": "user", "content": text}],
                         options={"temperature": 0.0, "num_ctx": num_ctx,
-                                 "num_predict": 1})["prompt_eval_count"]
+                                 "num_predict": 1},
+                        **(chat_kwargs or {}))["prompt_eval_count"]
         print(f"preflight: {label} = {len(text):,} chars (<= {n_bound:,} tok) "
               f"-> {n:,} prompt tokens")
         if n == truncated_to(num_ctx):
@@ -255,7 +350,15 @@ def main() -> int:
                     "ollama feeds a fitting prompt whole but cuts an over-long one "
                     "to num_ctx/2, keeping the tail (see build_prompt and the "
                     "pre-flight below). Raised 8192 -> 16384 on 2026-08-10, when "
-                    "the pre-flight measured the longest prompt at 14,721 tokens.")
+                    "the pre-flight measured the longest prompt at 14,721 tokens. "
+                    f"Values below {_MIN_NUM_CTX:,} are refused: see --allow-small-ctx.")
+    ap.add_argument("--allow-small-ctx", action="store_true",
+                    help=f"permit --num-ctx below {_MIN_NUM_CTX:,}. Only for "
+                    "deliberately reproducing a historical run (the 8192 era); a "
+                    "real generation at 8192 truncates the longest prompts silently")
+    ap.add_argument("--allow-retired-variant", action="store_true",
+                    help="permit --variant sentence_cap with a non-phi4 model "
+                    "(reproduces a retired artifact; see _refuse_retired_variant)")
     ap.add_argument("--skip-preflight", action="store_true",
                     help="do not measure the longest prompt first (do not use)")
     ap.add_argument("--allow-resident", action="store_true",
@@ -265,6 +368,9 @@ def main() -> int:
                     "a separate answers/<model>_<variant>/ dir so they never clobber "
                     "the baseline run.")
     args = ap.parse_args()
+
+    _refuse_retired_variant(args.model, args.variant, args.allow_retired_variant)
+    _refuse_small_ctx(args.num_ctx, args.allow_small_ctx)
 
     resident = resident_models()
     if resident and not args.allow_resident:
@@ -276,15 +382,19 @@ def main() -> int:
 
     arms = [a for a in (args.arms.split(",") if args.arms else
                         sorted(p.name for p in _CONTEXTS.iterdir() if p.is_dir())) if a]
+    thinking = supports_thinking(args.model)
+    chat_kwargs = {"think": False} if thinking else {}
     print(f"model={args.model}  arms={arms}  limit={args.limit or 'all'}  "
-          f"num_ctx={args.num_ctx}  variant={args.variant}")
+          f"num_ctx={args.num_ctx}  variant={args.variant}  "
+          f"thinking={'supported -> disabled' if thinking else 'not supported'}")
 
     model_dir = args.model.replace(":", "_")
     if args.variant != "sentence_cap":
         model_dir += f"_{args.variant}"
 
     if not args.skip_preflight:
-        preflight(args.model, arms, args.variant, args.num_ctx)
+        preflight(args.model, arms, args.variant, args.num_ctx,
+                  chat_kwargs=chat_kwargs)
 
     t_start, truncated = time.time(), 0
     for arm in arms:
@@ -308,6 +418,7 @@ def main() -> int:
                     model=args.model,
                     messages=[{"role": "user", "content": build_prompt(ctx, args.variant)}],
                     options={"temperature": 0.0, "num_ctx": args.num_ctx},
+                    **chat_kwargs,
                 )
                 answer, error = resp["message"]["content"].strip(), None
                 n_prompt = resp.get("prompt_eval_count")
@@ -336,6 +447,12 @@ def main() -> int:
                 # why their damage had to be re-measured prompt by prompt
                 "num_ctx": args.num_ctx,
                 "prompt_eval_count": n_prompt,
+                # same reasoning as num_ctx: a generation setting that changes the
+                # answer must be readable off the answer, not inferred from the
+                # date. `think=False` is not cosmetic -- on gemma4:e4b it changes
+                # the wording, not just the discarded `thinking` field.
+                "thinking_supported": thinking,
+                "thinking_disabled": bool(chat_kwargs),
                 "seconds": round(time.time() - t1, 2),
             }, ensure_ascii=False, indent=1), encoding="utf-8")
             done += 1
