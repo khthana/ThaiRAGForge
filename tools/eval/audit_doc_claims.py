@@ -80,6 +80,7 @@ ARTIFACT_FILES = [
     Path("docs/title-body-agreement.md"),
     Path("docs/relation-graph.md"),
     Path("docs/program-matcher-absorption.md"),
+    Path("docs/program-tag-regeneration.md"),
     Path("docs/rq4-prompt-truncation.md"),
 ]
 
@@ -152,8 +153,15 @@ EVAL_INPUTS: dict[str, list[str]] = {
     # `relation-graph.md` is the second consumer and was easy to miss: edge A
     # counts faculty votes around whatever `match_programs` tagged, so a change
     # to the matcher moves the graph without touching its own generator.
+    # `program-tag-regeneration.md` is the third, and the one this project would
+    # have missed for the same reason as the second: it reports what the cached
+    # `programs_by_file.json` becomes when the *current* matcher is re-run over
+    # the corpus, so its whole drift-vs-repair decomposition is a function of
+    # this file. A matcher change makes it a record of a matcher that no longer
+    # exists, with nothing else on disk saying so.
     "src/rag_lab/loaders/program_loader.py": [
         "docs/program-matcher-absorption.md", "docs/relation-graph.md",
+        "docs/program-tag-regeneration.md",
     ],
     # The G1 family reads these two caches at *audit* time, so paying for new
     # probes moves the invariant report without touching its generator. That is

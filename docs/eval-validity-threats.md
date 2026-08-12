@@ -214,11 +214,17 @@ different view) or scoped so a search tool cannot cross the boundary.
 `programs.json` / `people.json` — the **same dictionaries** the `entity_tags`
 loader and the `entity_lookup` / `entity_boost` retrieval modes use. Evaluating
 those modes against these qrels is partly self-fulfilling: `entity_lookup`'s
-recall of **0.9422** substantially measures the dictionary agreeing with itself.
+recall of **0.9449** substantially measures the dictionary agreeing with itself.
+
+> **Re-scored 2026-08-12** after the `match_programs` repair reached this arm
+> (`programs_by_file.json` regenerated + `entity_tags_full` rebuilt): 0.9422 →
+> **0.9449**, all of it in the `program` row (0.8918 → 0.9013). Read the metric
+> from the report rather than from any date-stamped quote here — it has now moved
+> on every rebuild of that index, which is why the report stamps its own build.
 
 > **Corrected 2026-08-07.** This paragraph previously read "recall@10 of 0.9291",
 > which was wrong twice over: the figure predates the 2026-08-05 `entity_tags_full`
-> rebuild and its 08-06 re-score (current value **0.9422**), and the metric is
+> rebuild and its 08-06 re-score (0.9422 then, **0.9449** now), and the metric is
 > **recall@1000**, not recall@10 — `entity_lookup` is exhaustive and unranked, and is
 > deliberately scored at k=1000 so recall/precision reduce to plain set recall and
 > precision. Quoting it as recall@10 invites exactly the false comparison against the

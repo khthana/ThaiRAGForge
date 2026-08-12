@@ -27,10 +27,14 @@ built on the same dictionaries will not either.
 every hit 1.0, so `rank` is corpus order, not relevance -- taking the first k is
 an arbitrary slice wherever the arm returns more than k documents (49 of 106
 queries; median 10, max 768). At k=10 that slice still carries >=1 gold document
-for 97 of 106 queries, so the arm is not gutted, but a null from it alone would
+for 98 of 106 queries, so the arm is not gutted, but a null from it alone would
 be ambiguous between "the dictionary adds nothing" and "the slice threw the
 evidence away". `entity_boost_semantic` is the disambiguator: same candidates,
-ordered, 104 of 106 and macro recall@10 0.7646 vs 0.6578. Cite the pair.
+ordered, 105 of 106 and context macro recall 0.7661 vs 0.6636. Cite the pair.
+(Those four figures are 2026-08-12, after the `match_programs` repair reached
+this index; they were 97 / 104 / 0.7646 / 0.6578 before it. Re-derive them from
+the context files after any `entity_tags_full` rebuild rather than trusting this
+docstring -- the numbers move, the argument does not.)
 
 **Citations are numbered, not spelled out.** The design doc left the citation
 format open; numeric labels win on the only criterion that matters here, which is
@@ -85,7 +89,10 @@ ARMS: dict[str, tuple[str, str] | None] = {
     "bm25_semantic": ("gold_bm25_73det", "plain__semantic__e5__35b906c6__bm25"),
     "hybrid_m2v_semantic": ("gold_hybrid_73det", "plain__semantic__local__834c4336__hybrid"),
     # circular by construction -- see the module docstring. Both read
-    # `entity_tags_full`, rebuilt 2026-08-05.
+    # `entity_tags_full`, which is rebuilt whenever an entity loader changes
+    # (2026-08-05 resolution_id fix, 2026-08-12 match_programs repair), so these
+    # two arms' contexts go stale on a schedule the other five do not share.
+    # Rebuild them together with the two gold_entity_* result sets, never alone.
     "entity_lookup_semantic": (
         "gold_entity_lookup_73det", "entity_tags__semantic__local__e4fe19d6__entity_lookup"),
     "entity_boost_semantic": (

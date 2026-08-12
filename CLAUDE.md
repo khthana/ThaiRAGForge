@@ -526,10 +526,13 @@ see `docs/adr/`.
   and 56 have nothing at the text's own degree, where *matches nothing* is now
   finally an available answer. **Blast radius re-measured after the repair, not
   inherited**: 0 of 247 published program gold pairs move and the router stays
-  33/13/30/30 — and it is a counterfactual either way, because
+  33/13/30/30 — which was a counterfactual when it was written, because
   `build_gold_candidates.py` reads the **cached**
   `academic_resolutions/entity_tags/programs_by_file.json` (2026-07-25), so
-  nothing published moves until that artifact is regenerated.
+  nothing published moved until that artifact was regenerated. **It was
+  regenerated 2026-08-12 and the counterfactual is now closed as a real
+  measurement** — see the regeneration bullet below; the 0 and the 33/13/30/30
+  both reproduce against the new artifact.
   **The same-degree cross-subject half — the dental/nursing shape the degree
   filter is structurally unable to see — was then CLOSED the same day, and the
   mechanism is the reusable part: dilution by concatenation
@@ -600,16 +603,33 @@ see `docs/adr/`.
   as a fact about the dictionary (`S8`) instead of a violation that never
   happened — **diagnose a red self-check from the cache before editing either
   the rule or the check**; both times here the instrument was wrong and the
-  corpus was fine. **`entity_tags_full` is deliberately NOT rebuilt for this**:
-  `entity_loader.py` is a third call site, so that index (rebuilt 2026-08-05)
-  holds pre-repair program tags feeding `entity_lookup`/`entity_boost` and the
-  published RQ4 entity arms — but the gating verdict there rests on **−0.2531**
-  at Holm 0.0000 with a *ranking* failure over already gold-dense contexts
-  (0.6448), which better program tags cannot plausibly close, and a rebuild
-  would decouple that index's tags from the qrels' own 2026-07-25 cached tags in
-  an unmeasured way ([[project_rq4_entity_arms_gating]]). Rebuild it only
-  together with a regeneration of `programs_by_file.json`, and re-run the RQ4
-  entity arms if you do. **Edge A′ is ~7x smaller than the scan note claimed and the
+  corpus was fine. **`entity_tags_full` was deliberately NOT rebuilt at first,
+  and was then rebuilt 2026-08-12 together with the cached artifact — never
+  alone, and that coupling is the rule to keep.** `entity_loader.py` is a third
+  call site, so leaving the index at its 2026-08-05 build held pre-repair program
+  tags in front of `entity_lookup`/`entity_boost` and the published RQ4 entity
+  arms, while rebuilding it *alone* would have decoupled its tags from the qrels'
+  own 2026-07-25 cached tags in an unmeasured way. So both moved together:
+  `programs_by_file.json` regenerated (see the bullet below) and the index
+  rebuilt from it (71,073 chunks, `docset_hash 7a274096d8609f61`), then both
+  entity result sets re-scored. **Only the program-bearing rows moved, which is
+  the built-in control** — the person/course/faculty loaders were untouched, and
+  under `entity_lookup` (pure set membership) their scores are identical to 4
+  decimals while `program` goes 0.8918 → **0.9013** and overall 0.9422 →
+  **0.9449**; `entity_boost` `program` recall@10 0.5765 → **0.5834**, with
+  person/course moving ±0.007 in *both* directions because a tag line is part of
+  chunk *text*, so changed program tags perturb the embeddings and BM25 of the
+  same documents even for a person query. **This refuted a pre-registered
+  prediction**: recall was predicted to fall, since the cross-subject guard cuts
+  far more tags than it adds (594 vs 140) — but the degree guard *re-selects* a
+  same-degree candidate instead of merely dropping, so a rescued tag lands on the
+  programme that actually owns it. The gating verdict in
+  [[project_rq4_entity_arms_gating]] must be **re-measured, not inherited**
+  (RQ4 entity arms re-run 2026-08-12; it rests on **−0.2531** at Holm 0.0000, a
+  *ranking* failure over already gold-dense contexts (0.6448), which better
+  program tags were not expected to close). Rebuild it only together with a
+  regeneration of `programs_by_file.json`, and re-run the RQ4 entity arms if you
+  do. **Edge A′ is ~7x smaller than the scan note claimed and the
   note is corrected**: `สังกัดคณะ` was recorded as appearing in "1,465 files
   (51%)"; direct counting over the 2,854 live files gives `สังกัด` in **209**
   files and `สังกัดคณะ` in **73**, and no alternative anchor supplies a larger
@@ -645,6 +665,44 @@ see `docs/adr/`.
   add up" was true by construction — it now gates on the buckets staying
   *distinguishable*. `docs/relation-graph.md` is in `audit_doc_claims.py`'s
   `ARTIFACT_FILES` so its figures can be cited in prose.
+- **`programs_by_file.json` regeneration, and the counterfactual it closed
+  (2026-08-12, `tools/corpus_prep/audit_program_tag_regeneration.py` →
+  `docs/program-tag-regeneration.md`).** The cached tags dated **2026-07-25**;
+  `match_programs` was repaired 08-11 and the corpus moved three times in
+  between, so the bullet above could only ever say "nothing published moves
+  *until that artifact is regenerated*". It is regenerated, and the useful part
+  is that **drift and repair were separated instead of reported as one delta**.
+  Overall 07-25 → 08-12 is 500 files changed, **+212 / −617** tags, 4,743 →
+  4,338; but that splits into **(B) corpus drift** (old matcher, new corpus:
+  109 files, +95/−46) and **(A) the matcher repair** (new corpus, old → new
+  matcher: 446 files, +140/−594), and the (A) row **reproduces
+  `docs/program-matcher-absorption.md`'s own per-file figures exactly** (S3) —
+  which is what licenses reading (B) as drift rather than as a residue of a
+  mis-modelled repair. The 08-08 title repair cannot appear in either row and
+  that is a fact about the pipeline, not an omission: `tag_programs.py` keys on
+  the **file path** and matches over **body text**, so a title change touches
+  neither. **The blast-radius claim got stronger, not merely confirmed**:
+  `program_candidates()` iterates the mapping's **keys** and never reads a tag
+  *value*, so the matcher cannot move the program qrels **structurally** — and
+  that is *executed*, not argued (S2 blanks every value and requires identical
+  output: 147 candidates either way). Measured anyway, both arms agree
+  147/662 with 0 moved; **0 of 247** scored program gold pairs lost; router
+  **33/13/30/30**. Two triage rules worth keeping. (1) **Diff against the
+  artifact that is actually published**: 1 candidate differs from
+  `gold_candidates.json`, which is a **superseded intermediate** (07-25,
+  regenerated 07-30 for the `resolution_id` fix) — the truncated
+  `2567/1/…(หลักสูตรนานาชาติ)` id became the two full `…๒๕๖๓`/`๒๕๖๔` ids and
+  `gold_query_set_73det.yaml` already holds both, so S6 gates on *scored pairs*
+  rather than on that file. (2) **Corpus membership is the only channel that
+  can move a candidate**, so S4 watches it: the corpus gained exactly one file
+  (`2568/ครั้งที่ 7/เรื่อง รับรองรายงานการประชุม.md`, the 08-09 CHECO
+  restoration), it matches zero programs and its `resolution_id` holds no
+  program canonical, which is why membership moved and the qrels did not.
+  `docs/program-tag-regeneration.md` is in `audit_doc_claims.py`'s
+  `ARTIFACT_FILES`, and `program_loader.py` now names it as a third `EVAL_INPUTS`
+  consumer — the whole report is a function of the matcher, so a future repair
+  turns it into a record of a matcher that no longer exists with nothing else on
+  disk saying so.
 - **Query routing** (`src/rag_lab/router.py`'s `classify_query` + `ROUTE_COMBO`,
   driven by `query_service.route_query`): classify a query by shape and retrieve
   against that route's index only. Validated offline by `tools/eval/routing_eval.py`
@@ -1782,8 +1840,12 @@ see `docs/adr/`.
      retrieval mode uses, so the score is an upper bound, not a measurement. Confined to
      those arms — chunker/embedder/BM25/hybrid never touch the dictionaries, and
      `entity_tags_full` is a separate index nothing else is built on. **Cite the number
-     as recall = 0.9422, and never as `recall@10`**: the long-quoted `0.9291` predates
-     the 2026-08-05 `entity_tags_full` rebuild, and the metric is recall@**1000**
+     as recall = 0.9449, and never as `recall@10`** — and **read it off
+     `data/results/gold_entity_lookup_73det_report.md`, which stamps the build and
+     `docset_hash` it was scored against, rather than off any figure quoted in prose**:
+     it has moved on every rebuild of that index (`0.9291` pre-2026-08-05, `0.9422`
+     after, `0.9449` after the 2026-08-12 `match_programs` repair reached it), and the
+     metric is recall@**1000**
      (`entity_lookup` is exhaustive and unranked, deliberately scored at k=1000 so
      recall/precision reduce to plain set recall/precision) — calling it recall@10
      invites exactly the comparison against the dense/lexical recall@10 columns that the

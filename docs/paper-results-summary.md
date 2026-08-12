@@ -990,15 +990,24 @@ in citable form so the paper does not have to re-derive it.
 
 **Current numbers, for reference.** `entity_lookup` (exhaustive, unranked, scored at
 k=1000 so recall/precision reduce to plain set recall/precision): overall recall
-**0.9422** — `course` 0.9804, `faculty_adjunct_aggregate` 1.0000, `person` 0.9255,
-`program` 0.8918. `entity_boost` (dictionary-narrowed candidate pool, then hybrid
-ranking, recall@10): `person` 0.8182, `course` 0.7107, `program` 0.5765,
+**0.9449** — `course` 0.9804, `faculty_adjunct_aggregate` 1.0000, `person` 0.9255,
+`program` 0.9013. `entity_boost` (dictionary-narrowed candidate pool, then hybrid
+ranking, recall@10): `person` 0.8182, `course` 0.7174, `program` 0.5834,
 `faculty_adjunct_aggregate` 0.5089. Reports:
-`data/results/gold_entity_{lookup,boost}_73det_report.md`, re-scored 2026-08-06 after
-the `entity_tags_full` rebuild. **Note for anyone citing an older draft: the figure
-0.9291 that circulated in this project's notes is superseded (it predates that
-rebuild) and was also mislabelled `recall@10`; it is recall@1000, and it is now
-0.9422.**
+`data/results/gold_entity_{lookup,boost}_73det_report.md`, re-scored **2026-08-12**
+after the `match_programs` repair reached these arms (`programs_by_file.json`
+regenerated + `entity_tags_full` rebuilt; the reports now stamp the build and
+`docset_hash` they were scored against rather than quoting a hardcoded chunk count).
+**Only the two program-bearing rows moved, which is the point**: `program` recall
+0.8918 → 0.9013 and `entity_boost` `program` recall@10 0.5765 → 0.5834, while
+`person`/`faculty` are identical to 4 decimals under `entity_lookup` — the untouched
+loaders are a built-in control. The direction **refutes a pre-registered prediction**
+that recall would fall because the repair cuts more tags than it adds (594 vs 140):
+the degree-level guard *re-selects* a same-degree candidate rather than merely
+dropping, so a rescued tag lands on the programme that actually owns it.
+**Note for anyone citing an older draft: 0.9422 (2026-08-06) and 0.9291 (pre-08-05) are both superseded.**
+The figure 0.9291 is additionally withdrawn as mislabelled `recall@10`; the metric
+is recall@1000 and the current value is 0.9449.
 
 ### The paragraph
 
@@ -1010,7 +1019,7 @@ rebuild) and was also mislabelled `recall@10`; it is recall@1000, and it is now
 > `entity_lookup` / `entity_boost` retrieval modes at query time. Evaluating those
 > modes against those judgements is therefore partly self-fulfilling: a document the
 > dictionary can name is retrievable *and* judged relevant, and a document it cannot
-> name is neither. `entity_lookup`'s recall of 0.9422 should be read as an **upper
+> name is neither. `entity_lookup`'s recall of 0.9449 should be read as an **upper
 > bound on what an exhaustive matcher could deliver given this dictionary**, not as a
 > measurement of retrieval quality, and it should never be quoted alongside the
 > dense or lexical recall figures as though the four arms were ranked on the same
