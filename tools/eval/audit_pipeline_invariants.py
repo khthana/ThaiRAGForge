@@ -869,11 +869,40 @@ def _rq4_prompt_fit_evidence(paths: list[Path]) -> tuple[int, int, list[str], li
     return by_bound, by_probe, unmeasured, truncated
 
 
+# The report this project cites. A bare run prints to the terminal and vanishes,
+# which is how the 2026-08-11 probe run (G1c closed at 14:55) left the 06:17
+# report on disk still saying 26 pass / 2 warn / 0 fail while CLAUDE.md and the
+# journey both -- correctly -- claimed 27/1/0. The claim was right and the
+# artifact was stale, which is the harder direction to notice.
+PUBLISHED_REPORT = Path("docs/pipeline-invariant-audit.md")
+
+
+def _published_counts() -> tuple[int, int, int] | None:
+    """`(pass, warn, fail)` as the report on disk states them, or None."""
+    try:
+        text = PUBLISHED_REPORT.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    m = re.search(r"(\d+) pass / (\d+) warn / (\d+) fail", text)
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--quick", action="store_true", help="skip embedding sampling; cap result files per dir")
     ap.add_argument("--report", type=Path)
     args = ap.parse_args()
+
+    if args.quick and args.report:
+        # A capped run reports capped denominators ("0 of 500 result files"),
+        # and this project has already been bitten by a check whose subject
+        # matter moved under it -- a vacuous PASS reads exactly like a real one.
+        raise SystemExit(
+            "refusing to write a report from a --quick run: it caps result files "
+            "per dir and skips embedding sampling, so its denominators are not the "
+            "published ones. Run without --quick to refresh "
+            f"{PUBLISHED_REPORT}, or drop --report to see the quick numbers."
+        )
 
     started = datetime.now(timezone.utc)
     print("=== corpus ===")
@@ -902,6 +931,24 @@ def main() -> int:
         lines += [f"| {c} | {s} | {d} |" for c, s, d in findings]
         args.report.write_text("\n".join(lines) + "\n", encoding="utf-8")
         print(f"wrote {args.report}")
+    elif args.quick:
+        print(f"\n[note] --quick: counts are not comparable to {PUBLISHED_REPORT}")
+    else:
+        # Say whether the artifact everyone reads still matches this run. A
+        # reminder to pass --report would only be read by whoever already
+        # remembered; this is a check on the file itself.
+        counts = (len(findings) - len(fails) - len(warns), len(warns), len(fails))
+        published = _published_counts()
+        if published is None:
+            print(f"\n[note] no readable summary in {PUBLISHED_REPORT}")
+        elif published != counts:
+            print(f"\n[STALE] {PUBLISHED_REPORT} says "
+                  f"{published[0]} pass / {published[1]} warn / {published[2]} fail; "
+                  f"this run says {counts[0]} / {counts[1]} / {counts[2]}. "
+                  f"Re-run with --report {PUBLISHED_REPORT} to publish it.")
+        else:
+            print(f"\n[ok] {PUBLISHED_REPORT} matches this run "
+                  f"({counts[0]} pass / {counts[1]} warn / {counts[2]} fail)")
     return 1 if fails else 0
 
 

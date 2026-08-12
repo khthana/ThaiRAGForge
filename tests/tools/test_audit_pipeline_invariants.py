@@ -112,3 +112,30 @@ def test_no_candidate_fits_is_classified_not_failed(attributor):
     """Drift: the result cites an id no candidate holds. That is E3a's finding,
     and double-reporting it as an attribution failure would hide which is which."""
     assert attributor.attribute(_result(["2568/9/ฮ"]), NAME) == (None, "no candidate fits")
+
+
+# --- the published report's own freshness -----------------------------------
+#
+# A bare run prints and vanishes, which is how the 2026-08-11 probe run left a
+# report on disk claiming 26 pass / 2 warn / 0 fail while the prose -- correctly
+# -- said 27/1/0. The run now reads the published summary back and says whether
+# it still matches. Pinned both ways: a parser that always returns None would
+# make the notice permanently silent, which is the failure it exists to prevent.
+
+def test_published_counts_parses_the_report_header(tmp_path, monkeypatch):
+    p = tmp_path / "pipeline-invariant-audit.md"
+    p.write_text("# Pipeline invariant audit\n\nRun 2026-08-12 00:28 UTC. "
+                 "27 pass / 1 warn / 0 fail.\n", encoding="utf-8")
+    monkeypatch.setattr(audit, "PUBLISHED_REPORT", p)
+    assert audit._published_counts() == (27, 1, 0)
+
+
+def test_published_counts_survives_a_missing_or_unreadable_report(tmp_path, monkeypatch):
+    """Absent is not zero: the caller must be able to tell 'no artifact' from
+    'an artifact that disagrees', or a fresh clone reads as stale."""
+    monkeypatch.setattr(audit, "PUBLISHED_REPORT", tmp_path / "nope.md")
+    assert audit._published_counts() is None
+    p = tmp_path / "empty.md"
+    p.write_text("# Pipeline invariant audit\n", encoding="utf-8")
+    monkeypatch.setattr(audit, "PUBLISHED_REPORT", p)
+    assert audit._published_counts() is None

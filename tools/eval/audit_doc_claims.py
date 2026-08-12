@@ -136,6 +136,15 @@ EVAL_INPUTS: dict[str, list[str]] = {
     "src/rag_lab/loaders/program_loader.py": [
         "docs/program-matcher-absorption.md", "docs/relation-graph.md",
     ],
+    # The G1 family reads these two caches at *audit* time, so paying for new
+    # probes moves the invariant report without touching its generator. That is
+    # exactly what happened on 2026-08-11: the 759-prompt probe run closed G1c at
+    # 14:55 and the report on disk kept saying 26 pass / 2 warn / 0 fail from
+    # 06:17 -- the claim in CLAUDE.md was right, the artifact behind it was not,
+    # and nothing here could see the difference. Cheap to discharge: the audit is
+    # minutes and re-running it is the whole fix.
+    "data/results/rq4_prompt_fit_probes.json": ["docs/pipeline-invariant-audit.md"],
+    "data/results/rq4_truncated_cells_raw.json": ["docs/pipeline-invariant-audit.md"],
 }
 
 findings: list[tuple[str, str, str]] = []
