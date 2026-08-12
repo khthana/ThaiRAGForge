@@ -62,6 +62,75 @@ class TestDatedSnapshotExemption:
         assert not adc.DATED.search("closed 2026-08-08: 5 routes, 0/106 unrouted")
 
 
+class TestCountExtraction:
+    """D5's regexes. The shape is this project's other universal figure form,
+    and D2 is structurally blind to all of it (it matches only 4 decimals)."""
+
+    def test_finds_both_languages(self):
+        assert adc.COUNT_PROSE.findall("0 of 23,156 live files") == [("0", "23,156")]
+        assert adc.COUNT_PROSE.findall("70 จาก 84 คู่") == [("70", "84")]
+
+    def test_commas_are_not_part_of_the_value(self):
+        # The prose and the reports differ on the separator freely, so the
+        # comparison has to be on values -- "23,156" must match "23156".
+        assert adc._int("23,156") == adc._int("23156") == 23156
+
+    def test_a_decimal_is_not_a_count(self):
+        # Otherwise "0.6831 of 1.0" and version strings would enter D5's
+        # denominator, which is D2's job and a different matching rule.
+        assert adc.COUNT_PROSE.findall("0.6831 of 1.0000") == []
+        assert adc.COUNT_SLASH.findall("v1.2/3.4") == []
+
+    def test_the_slash_form_reads_a_table_cell(self):
+        assert adc.COUNT_SLASH.findall("| 17/106 |") == [("17", "106")]
+
+    def test_a_path_or_a_date_is_not_a_pair(self):
+        assert adc.COUNT_SLASH.findall("2026-08-12 and 33/13/30/30") == []
+
+
+class TestCountAllowlist:
+    """The measured discrimination is 64% real vs 4-13% perturbed, so ~36% of
+    *correct* figures land in the residue by construction -- which makes this
+    allowlist load-bearing, and therefore the easiest place for D5 to go
+    vacuous. Both directions are pinned, as for RETIRED_REPORTS."""
+
+    def test_every_entry_is_a_provenance_record(self):
+        entries = adc._allowlist("counts")
+        assert entries, "D5's allowlist section is empty -- did it get renamed?"
+        for e in entries:
+            assert e.get("reason", "").strip(), e
+            assert e.get("checked"), e
+            assert (adc.REPO / e["doc"]).exists(), e["doc"]
+            # Keyed on the exact figure string, so editing "0 of 239" to
+            # "0 of 241" stops matching and re-flags rather than staying cleared.
+            assert adc.COUNT_PROSE.fullmatch(str(e["figure"])), e["figure"]
+
+    def test_no_entry_exempts_a_figures_own_perturbation(self):
+        # An allowlist holding both "83 of 84" and "84 of 84" would clear the
+        # wrong one too, which is the vacuity this check exists to prevent.
+        keyed = {(e["doc"], str(e["figure"])) for e in adc._allowlist("counts")}
+        for doc, fig in keyed:
+            n, m = (adc._int(x) for x in adc.COUNT_PROSE.fullmatch(fig).groups())
+            for pn, pm in [(n + 1, m), (n, m + 1), (n + 7, m)]:
+                assert (doc, f"{pn} of {pm}") not in keyed, f"{doc}: {fig}"
+
+
+class TestDatedIsNotInheritedByD5:
+    def test_the_count_check_does_not_apply_the_dated_exemption(self):
+        # Measured before shipping: DATED cleared 18 of the 26 D5 flags
+        # *including the one genuine defect* ("0 of 240" where the report says
+        # 239), because CLAUDE.md dates nearly every bullet. It is calibrated
+        # for D2's denominator (1,298 figures), not D5's (72) -- an exemption
+        # is only ever right for the check it was measured on.
+        import inspect
+
+        # The docstring explains the exclusion at length, so read the body only
+        # -- everything after the closing triple quote.
+        body = inspect.getsource(adc.audit_counts).split('"""')[2]
+        assert "DATED" not in body
+        assert "SUPERSEDED" in body
+
+
 class TestGeneratorResolution:
     def test_a_declared_generator_wins_over_the_name_heuristic(self, tmp_path):
         # The retired snapshots are named after scripts that still exist, so the

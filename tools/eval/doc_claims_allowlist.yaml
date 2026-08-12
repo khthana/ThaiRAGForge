@@ -22,6 +22,201 @@ numbers:
       unsourced. Kept as prose rather than added to the sweep script because it
       is a one-off illustration of aggregate blindness, not a reported metric.
 
+# D5: a count/total figure ("N of M") that no report states as a *pair*. The
+# check is deliberately strict -- only the same-shape rule discriminates a real
+# figure from a one-off one (measured: 64% of real pairs clear against 4-13% of
+# perturbed ones; every looser rule clears a wrong number a third to
+# three-quarters of the time). The price is that a report stating the same fact
+# as a table row, a percentage or two separate figures cannot clear its prose,
+# and that is what these entries are. Each names the line that supports it, so
+# the entry is a provenance record rather than a silencer: it is keyed on the
+# exact string, so changing "0 of 239" to "0 of 241" stops matching and re-flags.
+counts:
+  - doc: CLAUDE.md
+    figure: "182 of 253"
+    checked: 2026-08-12
+    reason: >-
+      docs/relation-graph.md line 17 (`resolved` 182, 71.9%) and line 122
+      (S2: "182+57+14 = 253 จาก 253"). The report states the numerator and the
+      denominator as a sum in a self-check row rather than as one pair.
+
+  - doc: CLAUDE.md
+    figure: "0 of 30"
+    checked: 2026-08-12
+    reason: >-
+      docs/program-matcher-absorption.md §4 lines 120-121, which state the two
+      halves on separate lines: "program gold queries: **30**" and "gold pairs
+      whose resolution_id does NOT literally contain the program: **0**".
+      Appears twice in the prose (the degree half and the cross-subject half),
+      both citing that same §4.
+
+  - doc: CLAUDE.md
+    figure: "0 of 247"
+    checked: 2026-08-12
+    reason: >-
+      The 247 is the gold *pair* count behind the same §4 of
+      docs/program-matcher-absorption.md, which reports the pair test as a
+      verdict ("So the absorption defect does not reach the program qrels")
+      rather than printing the denominator. Recomputed by hand 2026-08-12 --
+      re-check if the program qrels are ever regenerated.
+
+  - doc: CLAUDE.md
+    figure: "206 of 435"
+    checked: 2026-08-12
+    reason: >-
+      Correct but unpublished: docs/relation-graph.md line 80 prints only the
+      accepted count ("occurrence ทั้งหมด **206**"), never the raw marker count
+      it accepted them out of. Re-derived 2026-08-12 over the cache's own file
+      list, applying the same strip_document_header + strip_mapping_tables the
+      walk applies before extracting: **435** raw `สังกัด` markers in 206 files,
+      **220** pass the faculty-prefix anchor, **206** accepted with exactly one
+      faculty -- reproducing the report's 206 exactly. A raw-text count (443 in
+      209 files) is NOT comparable and was the first, wrong reading of this gap.
+      Note the coincidence that made it confusing: 435 markers fall in 206
+      files, and 206 is also the accepted count.
+
+  - doc: CLAUDE.md
+    figure: "64 of 64"
+    checked: 2026-08-12
+    reason: >-
+      docs/relation-graph.md line 106 states it as a table row with a
+      percentage: "| คนละคณะ | 64 (100.0%) |" over the 64 determinable
+      occurrences.
+
+  - doc: CLAUDE.md
+    figure: "170 of 181"
+    checked: 2026-08-12
+    reason: >-
+      docs/relation-graph.md line 114 (manifest title vs OCR'd body cross-check,
+      stated as "ตรงกัน **170** (93.9%)" of the 181 programs both can name).
+
+  - doc: CLAUDE.md
+    figure: "105 of 115"
+    checked: 2026-08-12
+    reason: >-
+      docs/relation-graph.md line 115 (split-half cross-check: "115 หลักสูตร
+      ตรงกัน **105** (91.3%)") -- same shape, numerator and denominator on the
+      same line but not joined by "of"/"จาก".
+
+  - doc: CLAUDE.md
+    figure: "4 of 5"
+    checked: 2026-08-12
+    reason: >-
+      Derived, not reported: of the 5 routes in ROUTE_COMBO_BY_RETRIEVER, 4
+      (person, program, course, and the unmatched default) had their target
+      chosen on the 106-query set; `faculty` deliberately stays at the default.
+      Countable from src/rag_lab/router.py and data/results/routing_eval.md, but
+      no report prints the ratio. This is the sentence that exists to warn the
+      `shipped` arm is fitted, so it must not be dropped.
+
+  - doc: CLAUDE.md
+    figure: "3 of 179"
+    checked: 2026-08-12
+    reason: >-
+      Measured in-session 2026-08-03 when the course-comparison-table question
+      was resolved on domain grounds (13 files corpus-wide hold such a table;
+      0 of 106 73det queries and 3 of 179 thematic queries cite one). No report
+      was written -- the whole point of that measurement was that no gold set
+      can detect the regression, so nothing downstream reads it.
+
+  - doc: CLAUDE.md
+    figure: "2 of 6"
+    checked: 2026-08-12
+    reason: >-
+      Derived by counting rows of the table in
+      data/results/reranker_model_qualification.md: 6 candidate models, of which
+      lines 13-14 (`gte-multilingual-reranker-base`, `jina-reranker-v2`) read
+      **REJECTED (load)**.
+
+  - doc: CLAUDE.md
+    figure: "362 of 530"
+    checked: 2026-08-12
+    reason: >-
+      Traceable to a *log*, not a report: data/logs/rq4_regen_2026_08_07.log
+      records per-arm "N generated, M already present" per variant, summing to
+      80+0+99+88+95 = **362** generated and 26+106+7+18+11 = 168 frozen = **530**
+      cells. Re-derived 2026-08-12 from that file. Also stated in
+      docs/paper-results-summary.md, which is prose too, so both copies are
+      exempted here.
+
+  - doc: CLAUDE.md
+    figure: "882 of 1,046"
+    checked: 2026-08-12
+    reason: >-
+      data/results/oracle_union_ceiling.md line 86 states all three figures on
+      one line but never as a pair: "คู่ทั้งหมด: **1046** · ระบบที่ดีที่สุดเจอ
+      **512** (48.9%) · union ของทุกระบบเจอ **882** (84.3%)".
+
+  - doc: CLAUDE.md
+    figure: "38 of 401"
+    checked: 2026-08-12
+    reason: >-
+      data/results/oracle_union_ceiling.md line 162: "คู่ของคำถาม course ทั้งหมด
+      **401** · ... ปรากฏเฉพาะในบรรทัด `PREREQUISITE:` ของวิชาอื่น **38**
+      (9.5%)".
+
+  - doc: CLAUDE.md
+    figure: "73 of 106"
+    checked: 2026-08-12
+    reason: >-
+      The complement of a figure the report does state as a pair:
+      data/results/gold_anchor_ambiguity.md line 18 says "**33 จาก 106**
+      คำถามที่เปิดรับความผิดพลาดชนิดนี้ได้" and then "อีก 73 ข้อปลอดโดยโครงสร้าง".
+      106 - 33 = 73, recomputed 2026-08-12.
+
+  - doc: CLAUDE.md
+    figure: "83 of 84"
+    checked: 2026-08-12
+    reason: >-
+      Derived from data/results/miss_depth_profile.md: line 29 states the 84
+      all-arm misses ("หาไม่เจอ 84 คู่ จาก 1046") and §3 lists exactly one pair
+      deeper than rank 1,000 (รายวิชา CALCULUS 2 at rank 2,984, line 79), so
+      84 - 1 = 83. The report prints the depth histogram, not this subtraction.
+
+  - doc: CLAUDE.md
+    figure: "0 of 1,014"
+    checked: 2026-08-12
+    reason: >-
+      Re-verified 2026-08-12 by matching the 8 title strings in
+      tools/corpus_prep/fix_manifest_title_mispairings.py's FIXES table (4 old,
+      4 new) against every distinct resolution_id in both gold sets: 0 hits on
+      the full <year>/<session>/<title> triple. Replaces an unreproducible
+      "358". No report exists -- the title repair was a one-off and its
+      verification was a direct check, which is why this entry records the
+      method rather than a citation. Match the triple, not the title: a
+      title-only test reports a false hit on 2565/10, a different meeting
+      carrying the same title text as one half of the 2565/8 swap.
+
+  - doc: docs/paper-results-summary.md
+    figure: "8 of 9"
+    checked: 2026-08-12
+    reason: >-
+      Derived by counting the verdict column of
+      data/results/bm25_vs_embedder_significance_test_9way.md's recall@10
+      section: 9 embedder rows, 8 of them **yes**. The report prints the rows,
+      not the tally.
+
+  - doc: docs/paper-results-summary.md
+    figure: "362 of 530"
+    checked: 2026-08-12
+    reason: >-
+      Same figure as the CLAUDE.md entry above, same evidence
+      (data/logs/rq4_regen_2026_08_07.log).
+
+  - doc: docs/paper-results-summary.md
+    figure: "83 of 84"
+    checked: 2026-08-12
+    reason: >-
+      Same figure as the CLAUDE.md entry above, same evidence
+      (data/results/miss_depth_profile.md lines 29 and 79).
+
+  - doc: docs/paper-results-summary.md
+    figure: "73 of 106"
+    checked: 2026-08-12
+    reason: >-
+      Same figure as the CLAUDE.md entry above, same evidence
+      (data/results/gold_anchor_ambiguity.md line 18, 106 - 33).
+
 # D4: an eval input that changed after a report that reads it, cleared because
 # the change provably cannot move that report's numbers.
 inputs:

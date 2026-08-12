@@ -27,12 +27,15 @@ Checks (D = docs):
     D4  an eval *input* (a constant a script reads) changed after the report
         that depends on it was generated -- the "editing ROUTE_COMBO silently
         re-scores soft_vs_hard_routing.md" failure
+    D5  a count/total figure ("N of M", "N จาก M") that no report states as a
+        pair -- the class D2 is structurally blind to, since it matches only
+        4-decimal figures
 
 Read-only. Exits 1 if any check FAILs.
 
 Run:
     python tools/eval/audit_doc_claims.py
-    python tools/eval/audit_doc_claims.py --list        # every D2 hit, with context
+    python tools/eval/audit_doc_claims.py --list        # every D2/D5 hit, with context
     python tools/eval/audit_doc_claims.py --report docs/doc-claims-audit.md
 """
 from __future__ import annotations
@@ -84,6 +87,16 @@ ARTIFACT_FILES = [
 # size or a p-value. Deliberately not 2- or 3-decimal: those collide with dates,
 # version numbers and ordinary prose, and every script here reports at 4.
 NUM = re.compile(r"(?<![\d.])(\d\.\d{4})(?![\d])")
+
+# D5: this project's other universal figure shape. A proportion is written
+# "0 of 23,156" / "70 จาก 84" in prose and additionally "17/106" in reports, and
+# NUM cannot see any of it -- which is how "0 of 240" (the report says 239) and
+# the phantom-citation counts (0/954 -> 0/981, 4/359 -> 4/391) all rotted in
+# place while D2 stayed green. Prose is scanned with COUNT_PROSE only: the slash
+# form is far too common in these docs as ordinary punctuation ("5 pass / 1
+# warn", "33/13/30/30", "person/program"), while in a report it is a table cell.
+COUNT_PROSE = re.compile(r"(?<![\d.])(\d[\d,]*)\s+(?:of|จาก)\s+(\d[\d,]*)(?![\d.])")
+COUNT_SLASH = re.compile(r"(?<![\d./])(\d[\d,]*)\s*/\s*(\d[\d,]*)(?![\d./])")
 
 # D2 exemption 1: the prose is explicitly citing a number as *no longer current*.
 # `paper-results-summary.md` keeps its own supersession history on purpose (see
@@ -168,6 +181,12 @@ def _mtime(p: Path) -> datetime:
     time and D1a/D4 go quiet; that is already true of the checks this mirrors.
     """
     return datetime.fromtimestamp(p.stat().st_mtime, timezone.utc)
+
+
+def _int(s: str) -> int:
+    """"23,156" and "23156" are the same count; the prose and the reports differ
+    on the separator freely, so compare the values, not the strings."""
+    return int(s.replace(",", ""))
 
 
 def _blocks(lines: list[str]) -> list[list[tuple[int, str]]]:
@@ -398,6 +417,97 @@ def audit_numbers(show_all: bool) -> None:
         print(f"        ... {len(residue) - 12} more (--list)")
 
 
+# ------------------------------------------------------------------- D5
+def audit_counts(show_all: bool = False) -> None:
+    """A count/total figure in the prose must be stated as a pair by a report.
+
+    WHY THE TRACE RULE IS THE STRICT ONE, measured before this shipped
+    (2026-08-12, over the 72 count/total figures then in the prose). Integers
+    collide far more easily than 4-decimal values, so the question was never
+    "does the pattern find things" but "would a looser rule clear a *wrong*
+    number just as readily?". Each observed pair was perturbed (n+1, m+1, n+7)
+    and put through the same rule -- if the perturbed pairs clear at a similar
+    rate, the rule is not a check:
+
+        V1 pair stated in the same shape : real 64%  | n+1 13% | m+1  4% | n+7  4%
+        V2 both integers on one line     : real 89%  | n+1 59% | m+1 39% | n+7 33%
+        V3 both integers in one file     : real 93%  | n+1 80% | m+1 68% | n+7 71%
+        proximity (<=40 chars apart)     : real 85%  | n+1 47% | m+1 33% | n+7 40%
+
+    Only V1 discriminates, so only V1 is used -- the looser rules would have
+    cleared a one-off number a third to three-quarters of the time. The price is
+    the 36% of *correct* figures V1 cannot trace, because the report states the
+    same fact as a table row or a percentage instead of a pair; those are what
+    the allowlist is for, and why this is a WARN.
+
+    `DATED` is deliberately NOT inherited from D2, and that was measured too:
+    it cleared 18 of the 26 V1 flags -- including the one true positive. D2's
+    exemption is sound for `paper-results-summary.md`, which keeps dated
+    snapshots on purpose, but CLAUDE.md is living guidance whose bullets carry a
+    date on nearly every claim, so the same rule reads as "exempt everything".
+    """
+    artifacts: list[Path] = []
+    for g in ARTIFACT_GLOBS:
+        artifacts += sorted(REPO.glob(g))
+    artifacts += [REPO / f for f in ARTIFACT_FILES if (REPO / f).exists()]
+
+    shape: dict[tuple[int, int], str] = {}
+    for a in artifacts:
+        rel = str(a.relative_to(REPO)).replace("\\", "/")
+        for i, ln in enumerate(a.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
+            for rx in (COUNT_PROSE, COUNT_SLASH):
+                for n, m in rx.findall(ln):
+                    shape.setdefault((_int(n), _int(m)), f"{rel}:{i}")
+
+    allow = {(e["doc"], str(e["figure"])) for e in _allowlist("counts")}
+    total = untraceable = exempt_sup = exempt_allow = 0
+    residue: list[tuple[str, int, list[str], str]] = []
+
+    for doc in DOCS:
+        lines = (REPO / doc).read_text(encoding="utf-8").splitlines()
+        blocks = _blocks(lines)
+        for bi, blk in enumerate(blocks):
+            around = "\n".join(
+                l for j in (bi - 1, bi + 1) if 0 <= j < len(blocks) for _, l in blocks[j]
+            )
+            for lineno, ln in blk:
+                found = COUNT_PROSE.findall(ln)
+                total += len(found)
+                miss = [f"{n} of {m}" for n, m in found if (_int(n), _int(m)) not in shape]
+                if not miss:
+                    continue
+                untraceable += len(miss)
+                if SUPERSEDED.search(ln) or SUPERSEDED.search(around):
+                    exempt_sup += len(miss)
+                    continue
+                keep = [f for f in miss if (str(doc).replace("\\", "/"), f) not in allow]
+                exempt_allow += len(miss) - len(keep)
+                if keep:
+                    residue.append(
+                        (str(doc).replace("\\", "/"), lineno, keep, ln.strip()[:160])
+                    )
+
+    n_res = sum(len(r[2]) for r in residue)
+    # WARN, not FAIL. Unlike D2, a residue here is "cannot verify", not "wrong":
+    # the measured base rate is that ~1 in 3 correct figures is stated by its
+    # report in some other form. A gate that goes red on a third of correct
+    # writing is one people learn to ignore. The denominator is printed because
+    # 0 is ambiguous between "examined and clean" and "nothing to examine" --
+    # the same rule the E3 family follows.
+    record(
+        "D5 count/total figures trace to a report", not residue,
+        f"{n_res} untraceable of {total} count/total figures across {len(DOCS)} docs "
+        f"({untraceable} not stated as a pair in {len(artifacts)} reports; "
+        f"{exempt_sup} cited as superseded, {exempt_allow} allowlisted)",
+        warn=True,
+    )
+    for doc, lineno, keep, ctx in (residue if show_all else residue[:12]):
+        print(f"        {doc}:{lineno}  {', '.join(keep)}")
+        print(f"          {ctx}")
+    if not show_all and len(residue) > 12:
+        print(f"        ... {len(residue) - 12} more (--list)")
+
+
 # ------------------------------------------------------------------- D3
 def audit_significance_wording() -> None:
     bad: list[str] = []
@@ -479,13 +589,14 @@ def audit_eval_inputs() -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--list", action="store_true", help="print every D2 hit, not the first 12")
+    ap.add_argument("--list", action="store_true", help="print every D2/D5 hit, not the first 12")
     ap.add_argument("--report", type=Path)
     args = ap.parse_args()
 
     started = datetime.now(timezone.utc)
     audit_reports()
     audit_numbers(args.list)
+    audit_counts(args.list)
     audit_significance_wording()
     audit_eval_inputs()
 

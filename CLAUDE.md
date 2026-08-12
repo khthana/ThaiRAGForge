@@ -89,7 +89,7 @@ see `docs/adr/`.
   Two lessons about the audit itself, both learned by breaking it the same day it was
   written: (a) **a check whose subject matter moves becomes a vacuous PASS** — C4
   (orphaned `.md.dup`) went 24→0 the moment those archives were moved off-repo, so it
-  now follows them to `ARCHIVE_ROOT` and says "0 of 240" rather than "0"; (b) **don't
+  now follows them to `ARCHIVE_ROOT` and says "0 of 239" rather than "0"; (b) **don't
   let a known-retired artifact keep the gate red** — deleting the 8 superseded combos
   removed the only indices still holding the pre-contamination-fix ids, which made
   E3a jump 7→3,106 for result sets nothing reads. Those are now classified separately
@@ -208,12 +208,13 @@ see `docs/adr/`.
   corpus/index/eval and `diff_significance_reports.py` gates report-vs-report,
   but **nothing read the prose**, which is where this project's avoidable errors
   actually live — a number typed by hand, correct that day, that no later
-  refresh touches because a refresh re-runs scripts and diffs reports. Four
+  refresh touches because a refresh re-runs scripts and diffs reports. Five
   checks: D1 report older than its generator (+ reports that don't declare one),
   **D2 every 4-decimal figure in the prose must appear in some report** (the main
   one), D3 a p-value quoted against a contradicting verdict word, D4 an eval
   *input* changed after a report that reads it (the "editing `ROUTE_COMBO`
-  silently re-scores `soft_vs_hard_routing.md`" failure). Report:
+  silently re-scores `soft_vs_hard_routing.md`" failure), **D5 the count/total
+  shape D2 is structurally blind to** (see the paragraph after next). Report:
   `docs/doc-claims-audit.md`; triaged exemptions with written reasons in
   `tools/eval/doc_claims_allowlist.yaml`. **First run found three real stale
   tables, and the way it found them is the point**: all three had drifted in the
@@ -240,6 +241,54 @@ see `docs/adr/`.
   D1a's denominator stays honest. Uses filesystem mtimes, not git dates — reports
   are gitignored and a script's commit lands *after* the run, which flagged all
   10 pairs as false positives on the first run.
+  **D5 (2026-08-12) closes the sub-layer D2 cannot see, and the reusable part is
+  the negative control that decided its design.** D2 matches 4-decimal figures
+  only, so *every* count/total figure in these docs — `0 of 23,156`, `70 จาก 84`,
+  `17/106` — was unchecked, and that class had rotted three times in two days
+  (the phantom-citation counts `0/954`→981 and `4/359`→4/391; `0 of 240` where
+  the report says 239). The obvious worry is that integer counts collide by
+  coincidence far more easily than 4-decimal ones, so **each candidate rule was
+  scored against its own perturbations** — every observed pair re-tested at n+1,
+  m+1 and n+7, on the reasoning that a rule which clears a wrong number as
+  readily as a right one is not a check:
+
+  | rule | real | n+1 | m+1 | n+7 |
+  |---|---|---|---|---|
+  | V1 the pair stated in the same shape | 64% | 13% | 4% | 4% |
+  | V2 both integers on one line | 89% | 59% | 39% | 33% |
+  | V3 both integers in one file | 93% | 80% | 68% | 71% |
+  | proximity (≤40 chars apart) | 85% | 47% | 33% | 40% |
+
+  **Only V1 is a check**; V2/V3 look thorough and clear a wrong number a third to
+  three-quarters of the time — the same *vacuous rather than thorough* trap that
+  set D2's haystack. Two consequences. (a) **`DATED` is deliberately NOT
+  inherited**, and that was measured too: it cleared **18 of the 26** V1 flags
+  *including the one true positive*, because CLAUDE.md dates nearly every bullet
+  — an exemption is only ever right for the check it was calibrated on
+  (D2's 1,298 figures, not D5's 72), pinned by
+  `tests/tools/test_audit_doc_claims.py`. (b) **WARN, not FAIL**: V1's 64% means
+  ~36% of *correct* figures are untraceable by construction (the report states
+  the fact as a table row, a percentage, or two figures on one line), so a FAIL
+  would go red on a third of correct writing. Denominator printed, per the E3
+  rule that 0 is ambiguous. The residue was triaged to **0**: one genuine defect
+  (`0 of 240` → **239**), one figure whose denominator reproduces from nothing on
+  disk (`0 of 358` gold ids → restated as `0 of 1,014`, claim re-verified), and
+  20 correct-but-differently-stated figures now in the allowlist's `counts:`
+  section, **each naming the report line that supports it** — keyed on the exact
+  figure string, so changing either half of a cleared figure stops matching its
+  entry and re-flags rather than staying silently cleared. (Write such an example
+  out in full and D5 flags the *example*: it cannot tell an illustration from a
+  claim, which is a live cost of the strict rule, not a bug.) Two lessons from
+  that triage. **Reproduce an artifact's own pipeline
+  before calling it wrong**: `206 of 435` was accused of being a defect on a
+  raw-text recount (443 in 209 files), but `build_relation_graph.collect()`
+  applies `strip_mapping_tables(strip_document_header(...))` first, and over
+  stripped text it reproduces exactly (435 markers in 206 files, 220 pass the
+  faculty prefix, 206 accepted) — accusation withdrawn. **Match the whole
+  composite key, never one component**: verifying "no gold id references a
+  repaired title" by title substring reports a false hit on `2565/10`, a
+  different meeting carrying the same title text as one half of the `2565/8`
+  swap — a `resolution_id` is `<year>/<session>/<title>` and all three must match.
   **D1b closed 2026-08-09 (18 → 0), and the naive way to close it would have
   traded one benign WARN for 8 FAILs.** The line belongs in the *generator*, not
   the report — a hand-added line is erased by the next run — so 9 live reports
@@ -264,7 +313,9 @@ see `docs/adr/`.
   check vacuous — the [[feedback_cleanup_can_break_an_audit]] shape again — and
   the tests pin that no current report (`routing_eval`, `rq4_score`,
   `oracle_union_ceiling`, `power_analysis`, the three 9-way tables) is exempt.
-  Was **5 pass / 1 warn / 0 fail**, the warn being D3's 3 known false positives.
+  Current state: **6 pass / 1 warn / 0 fail** over 7 checks (2026-08-12, D5's
+  first green run), the warn still being D3's 3 known false positives. Was
+  **5 pass / 1 warn / 0 fail** over 6 before D5 landed.
   It went **4 pass / 1 warn / 1 fail** on 2026-08-10 with D4 as a **true
   positive** (`rq4_score.md`/`rq4_score_guarded.md` predating the truncation
   repair in `tools/eval/rq4_generate.py`, i.e. describing answers from a
@@ -1814,7 +1865,14 @@ see `docs/adr/`.
   a relabel, not a rebuild.** A title change moves an id but not chunk *text*,
   and embeddings are a function of text alone — minutes, no GPU, and rewriting a
   persisted result is exactly equivalent to re-running retrieval. No metric can
-  have moved: 0 of 358 gold `resolution_id` entries reference any old or new id.
+  have moved: 0 of 1,014 distinct gold `resolution_id`s (both gold sets) reference
+  any of the 4 repaired titles — **re-verified 2026-08-12 against the `FIXES`
+  table itself**, because the "358" this line used to quote reproduces from
+  nothing on disk today (the sets hold 2,265 entries / 1,014 distinct ids). The
+  one near-hit is instructive: `2565/10/…เทียบโอนหลักสูตรฝึกอบรม…` carries the
+  *same title text* as one half of the `2565/8` swap, so a title-only match
+  says "hit" and the id is in a different meeting the repair never touched —
+  match the whole `<year>/<session>/<title>` triple, never the title alone.
   Three things worth reusing. (1) The mapping was **derived, not typed** —
   loader-computed id snapshots either side of the manifest edit, diffed — because
   a typo in a 90-character Thai title would silently mint a third id. (2) **A
