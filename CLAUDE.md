@@ -1464,11 +1464,46 @@ see `docs/adr/`.
   So `cite_all` shows
   fabrication in two arms, not closed-book alone. Caveat: citation precision is judged against the
   same qrels, so it inherits the pooling-bias threat — direction is conservative (see
-  validity bullet below). **De-prioritized, not cancelled**: the `gemma4:e4b`
-  robustness check (does a second model agree on arm ordering) — no longer needed to
-  answer "is the ceiling real" (that's closed), but if run later for other reasons it
-  must use `cite_all`, not the original prompt, or it will just reproduce the retired
-  artifact. **Those preconditions are now GUARDS in `rq4_generate.py`, not prose
+  validity bullet below). **The `gemma4:e4b` robustness check is DONE (2026-08-12,
+  `docs/rq4-second-generator-check.md`; 1,060 answers under both live prompts,
+  76 min, 0 errors, 0 truncated, `think` disabled, scored to
+  `data/results/rq4_score_gemma4{,_guarded}.md`) — and the headline is that the arm
+  ordering survives a generator swap while the one bound this bullet tells you to
+  cite does not.** It was queued on family 2's pre-registered rule ("a second
+  generator is worth running only if recall stays flat"), which *recall rising*
+  already closed, so it answers a different question instead: **is the ordering a
+  property of retrieval or of one model?** `sentence_cap` is unavailable by guard,
+  so **family 1b is the whole deliverable** and 1a/2/3 skip by design. Result:
+  citation **precision** orders identically in all four positions under both
+  prompts (gemma `cite_all` hybrid 0.7417 > dense 0.7375 > bm25 0.6850 > m2v
+  0.6279), verdicts agree **10 of 12** under `cite_all` and **7 of 12** under the
+  guard — **but no flip is a reversal**: every disagreement is one model resolving
+  what the other leaves inconclusive, in the same direction (the guarded 5 are
+  mostly gemma separating bm25 from both strong arms, which phi4 cannot). **The
+  sign was checked mechanically over all 24 cells and disagrees for exactly one
+  pair — `hybrid` vs `dense`, in all four of its cells.** Three are near-zero and
+  ns under both, but the fourth is the published bound: phi4/`cite_all` −0.0606 CI
+  [−0.1115, −0.0098] (excludes zero) against gemma **+0.0228** CI [−0.0258,
+  +0.0711]. **So cite `{hybrid, dense} > bm25 > m2v` as generator-independent and
+  restate `hybrid > dense` as a phi4 result, not a system result.** Levels do not
+  transfer at all — gemma's recall is higher on every arm (dense 0.5074 vs 0.3356)
+  — and neither does prompt fit: identical contexts tokenize to **6,714** tokens
+  here against phi4's 7,999, so [[project_rq4_prompt_truncation]]'s clearance is
+  per-model. **The larger finding is Result B, on the guard.** `cite_all`'s missing
+  zero-document rule cost phi4 2 hallucinations; it costs `gemma4:e4b` **24**, with
+  **37/37** of its closed-book citations phantom. Rule 5 generalises — **24 → 1**,
+  phantom 37/37 → **1/1** — so `cite_all_guarded`'s case is much stronger than the
+  model it was tuned on could show. **100% of closed-book hallucination in both
+  models is `course` queries** (gemma 24 of 33, phi4 2 of 33; zero across all 73
+  person/program/faculty queries), which is a target, not a diffuse risk. And **the
+  guard's published cost is phi4-specific**: where phi4 pushed m2v toward
+  abstention (missed 10 → 18), gemma's `missed` **fell** on every arm and recall
+  rose on every arm (hybrid 0.4846 → 0.5155), the cost landing on weak-arm
+  precision instead (bm25 0.6850 → 0.6028). Two operational notes: the abstention
+  detector is a substring test for `ไม่พบข้อมูล`, so all 24 raw answers were read
+  before the count was believed (they invent meeting numbers *and* labels); and
+  **`--out` is mandatory when scoring another model**, because the guard protecting
+  `rq4_score.md` keys on `--arms`, not on `--model`. **Those preconditions are now GUARDS in `rq4_generate.py`, not prose
   (2026-08-12, `9962a96`, pinned both ways by
   `tests/tools/test_rq4_generate_guards.py`)** — every published answer came from one
   model under one set of defaults, and each default is wrong for a *second* model in

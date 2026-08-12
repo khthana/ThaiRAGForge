@@ -95,8 +95,14 @@ NUM = re.compile(r"(?<![\d.])(\d\.\d{4})(?![\d])")
 # place while D2 stayed green. Prose is scanned with COUNT_PROSE only: the slash
 # form is far too common in these docs as ordinary punctuation ("5 pass / 1
 # warn", "33/13/30/30", "person/program"), while in a report it is a table cell.
-COUNT_PROSE = re.compile(r"(?<![\d.])(\d[\d,]*)\s+(?:of|จาก)\s+(\d[\d,]*)(?![\d.])")
-COUNT_SLASH = re.compile(r"(?<![\d./])(\d[\d,]*)\s*/\s*(\d[\d,]*)(?![\d./])")
+# The `\d(?:[\d,]*\d)?` shape (rather than `\d[\d,]*`) is load-bearing, not
+# tidiness: a greedy trailing comma makes the *captured string* "24 of 33,"
+# where the prose reads "24 of 33, phi4 2 of 33", and the allowlist is keyed on
+# the exact figure string -- so no naturally-written exemption could ever match
+# it and the flag would be unclearable. Values are unaffected (_int strips
+# separators), and a number never ends in a comma anyway.
+COUNT_PROSE = re.compile(r"(?<![\d.])(\d(?:[\d,]*\d)?)\s+(?:of|จาก)\s+(\d(?:[\d,]*\d)?)(?![\d.])")
+COUNT_SLASH = re.compile(r"(?<![\d./])(\d(?:[\d,]*\d)?)\s*/\s*(\d(?:[\d,]*\d)?)(?![\d./])")
 
 # D2 exemption 1: the prose is explicitly citing a number as *no longer current*.
 # `paper-results-summary.md` keeps its own supersession history on purpose (see

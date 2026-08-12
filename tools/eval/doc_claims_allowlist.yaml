@@ -217,6 +217,51 @@ counts:
       Same figure as the CLAUDE.md entry above, same evidence
       (data/results/gold_anchor_ambiguity.md line 18, 106 - 33).
 
+  - doc: CLAUDE.md
+    figure: "10 of 12"
+    checked: 2026-08-12
+    reason: >-
+      Verdict agreement between data/results/rq4_score.md's family 1b (variant
+      phi4_cite_all) and data/results/rq4_score_gemma4.md's family 1b. Both
+      report 12 rows with a `significant` column; the agreement count is a
+      comparison across two reports, so no single report can state it as a pair.
+      Recomputed 2026-08-12 by matching rows on the unordered arm+metric pair
+      and counting equal `significant` cells -- 10, with 8 significant in each
+      report. Re-check if either report is regenerated.
+
+  - doc: CLAUDE.md
+    figure: "7 of 12"
+    checked: 2026-08-12
+    reason: >-
+      The same recount for the guarded variant: data/results/rq4_score_guarded.md
+      vs data/results/rq4_score_gemma4_guarded.md, family 1b, 12 rows each ->
+      7 agreeing (6 significant for phi4, 9 for gemma4:e4b). Cross-report figure,
+      recomputed 2026-08-12. Both counts are also stated in
+      docs/rq4-second-generator-check.md, which is hand-written and deliberately
+      NOT declared as a haystack file -- prose must not clear prose.
+
+  - doc: CLAUDE.md
+    figure: "24 of 33"
+    checked: 2026-08-12
+    reason: >-
+      Closed-book hallucinations by entity_type for gemma4:e4b under cite_all.
+      The report (data/results/rq4_score_gemma4.md, 4b table) prints only the
+      arm total, 24 -- the per-entity_type split is not a reported metric.
+      Re-derived 2026-08-12 directly from data/rq4/answers/gemma4_e4b_cite_all/
+      closed_book*/*.json by counting records whose answer lacks the abstention
+      marker, grouped by the record's own `entity_type`: course 24 of 33,
+      person 0 of 30, program 0 of 30, faculty 0 of 13 -- summing to the 24 the
+      report states, which is the cross-check that makes the split trustworthy.
+
+  - doc: CLAUDE.md
+    figure: "2 of 33"
+    checked: 2026-08-12
+    reason: >-
+      The same split for phi4 under cite_all, re-derived the same way from
+      data/rq4/answers/phi4_cite_all/ on 2026-08-12: course 2 of 33 and zero in
+      all three other types, summing to the 2 that data/results/rq4_score.md's
+      4b table reports for the closed_book arm.
+
 # D4: an eval input that changed after a report that reads it, cleared because
 # the change provably cannot move that report's numbers.
 inputs:

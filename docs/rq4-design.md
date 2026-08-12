@@ -910,3 +910,55 @@ those dictionaries would be paying 5-7 days for a quantity measured at "no more 
 highest citation precision of any arm ever measured here (0.8048, vs the previous best
 0.7268), and the lowest miss count (5). If the entity signal is ever used for anything,
 use it as a **boost on a ranked retriever**, never as a retriever.
+
+## Second-generator robustness check complete (2026-08-12): `gemma4:e4b`
+
+**This section supersedes every "deferred" / "de-prioritized" statement about the
+`gemma4:e4b` check above** (the design section's "not piloted", finding 2's "worth
+re-testing with a second generator", the ablation's "correspondingly
+de-prioritized"). Those were true when written; the check has now been run. Full
+comparison, including the tables this summary condenses:
+`docs/rq4-second-generator-check.md`.
+
+**The pre-registered rule did not require it.** Family 2's rule was "flat recall ⇒
+a second generator is the right next test", and recall rose, which closed the
+question the check was queued for. It was run on instruction, and it answers a
+different and still-open question: **is the arm ordering a property of retrieval,
+or of one model?**
+
+**Run**: `gemma4:e4b`, both live prompts (`cite_all`, `cite_all_guarded`), all 5
+published arms, 530 answers each, 76 min, 0 errors. Identical contexts, so the
+comparison is paired. `sentence_cap` is refused by `rq4_generate.py`'s guard for
+any model but `phi4`, so **families 1a, 2 and 3 skip by design** and family 1b is
+the whole deliverable. Prompt fit recorded, not assumed: 0 of 1,060 carry the
+truncation signature, longest **6,714** tokens — against `phi4`'s 7,999 on the
+same contexts, so a prompt-fit clearance does **not** transfer between models.
+
+**Result A — ordering.** Citation precision orders identically in all four
+positions under both prompts. Verdicts agree 10 of 12 (`cite_all`) and 7 of 12
+(guarded), and **no flip is a reversal** — each is one model resolving what the
+other leaves inconclusive, same direction. Checking the *sign* over all 24 cells,
+exactly one pair disagrees: `hybrid` vs `dense`, in all four of its cells. Three
+are near-zero and ns under both; the fourth is the published bound
+(phi4 −0.0606, CI excluding zero; gemma **+0.0228**, CI straddling it).
+**Citable: `{hybrid, dense} > bm25 > m2v` is generator-independent; `hybrid >
+dense` is a `phi4` result, not a system result.** Levels transfer not at all —
+gemma's recall is higher on every arm.
+
+**Result B — the guard, and the bigger finding.** `cite_all`'s missing
+zero-document rule cost `phi4` 2 hallucinations; it costs `gemma4:e4b` **24**,
+with 37/37 closed-book citations phantom. Rule 5 takes that to **1**, phantom
+1/1. So `cite_all_guarded`'s case is far stronger than the model it was tuned on
+could show. **100% of closed-book hallucination in both models is `course`
+queries** (gemma 24 of 33, phi4 2 of 33; 0 across all 73 person/program/faculty
+queries) — a target, not a diffuse risk. And the guard's *cost* is
+model-specific: where `phi4` pushed m2v toward abstention (missed 10 → 18),
+gemma's missed **fell** on every arm and recall rose on every arm, the cost
+landing on weak-arm precision instead.
+
+**Two operational notes.** `is_abstained()` is a substring test for
+`ไม่พบข้อมูล`, so all 24 raw answers were read before the count was believed —
+they invent meeting numbers *and* citation labels with zero documents supplied,
+so the detector is right. And **`--out` is mandatory when scoring another
+model**: the guard protecting the published `rq4_score.md` keys on `--arms`, not
+on `--model`, so a default-path run with a non-default model would clobber it.
