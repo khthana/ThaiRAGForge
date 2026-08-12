@@ -911,6 +911,54 @@ highest citation precision of any arm ever measured here (0.8048, vs the previou
 0.7268), and the lowest miss count (5). If the entity signal is ever used for anything,
 use it as a **boost on a ranked retriever**, never as a retriever.
 
+### Re-measured 2026-08-12 after the `match_programs` repair — decision unchanged, one verdict flipped
+
+The section above is the 2026-08-10 record and its figures are superseded, not wrong:
+`programs_by_file.json` was regenerated and `entity_tags_full` rebuilt on 2026-08-12
+(`docs/program-tag-regeneration.md`), which changes what these two arms *retrieve*, so
+CLAUDE.md's standing instruction is to re-run them rather than inherit the verdict.
+Done as a **54-of-212 paired subset** — only the cells whose context actually changed
+(`entity_lookup` 4, `entity_boost` 50) were regenerated, the other 158 frozen
+byte-for-byte, so repair is separated from drift
+([[feedback_repair_a_subset_paired_with_a_control]]). Run: 5,851 s, exit 0, 0 errors,
+**0 truncated** (peak `prompt_eval_count` 14,103 / 14,091 against `num_ctx` 16,384).
+
+| arm (all `cite_all`) | precision | n w/ citations | recall | gold density in ctx | missed |
+|---|---|---|---|---|---|
+| `hybrid_qwen3_0.6b_semantic` (frozen) | 0.7268 | 101 | 0.3962 | 0.5352 | 8 |
+| `entity_lookup_semantic` | 0.5944 | **65** | **0.1439** | 0.6501 | **40** |
+| `entity_boost_semantic` | **0.8248** | 104 | **0.4328** | 0.7848 | 5 |
+
+**Every claim above survives except one, and the one that moved is the bound's
+precision half.** The pre-registered primary comparison is unchanged in size and
+verdict — `entity_lookup` vs `hybrid` citation recall **−0.2523**, CI
+[−0.3213, −0.1805], Holm **0.0000** — so **edges B and C are still not built**. The
+ranking-not-knowledge diagnosis holds and slightly strengthens (density 0.6501 vs
+0.5352, still 40 abstentions on gold-bearing contexts). What flipped is
+**`entity_boost` vs `hybrid` on citation precision: +0.0847, CI [+0.0215, +0.1510],
+Holm 0.1192 → 0.0164 — now significant**, where recall stays ns (+0.0366, Holm
+0.2140, bound tightened from +0.1001 to **+0.0942**).
+
+**Read that flip as power, not as a reversal** ([[feedback_a_replication_disagrees_by_sign_not_verdict]]):
+the sign never changed (+0.0635 → +0.0847), and the movement is *located* rather than
+assumed. All of it sits in the regenerated cells — the 56 frozen `entity_boost` cells
+score 0.8778 precision before and after by construction, while the 50 regenerated ones
+went 0.7195 → 0.7630, diluting to +0.0200 overall. **Repair and generator noise are not
+separable inside those 50**: 48 had a genuinely different context (so the repair is a
+real cause) but 38 changed their citation set, and this variant's measured floor is
+14/24 identical citation sets on byte-identical prompts. Exactly one cell (`q055`) was
+regenerated with an identical document list *and* an identical prompt token count —
+n=1, so it is a pure-noise observation, not a control.
+
+**The decision does not turn on it, for a reason stated before the number existed**:
+the gating rule is about *recall* — did ranked dictionary use find and cite the
+relevant documents — and precision here is the metric the circularity flatters most
+directly, since `entity_boost`'s candidate pool is drawn from the same dictionaries the
+qrels are derived from. A newly-significant result on the circular metric is not
+evidence for building more dictionary-derived structure. **Cite it as: with the
+repaired matcher, ranked dictionary use buys at most +0.0942 citation recall (ns) and a
+measurable +0.0847 citation precision on qrels that share its own dictionary.**
+
 ## Second-generator robustness check complete (2026-08-12): `gemma4:e4b`
 
 **This section supersedes every "deferred" / "de-prioritized" statement about the

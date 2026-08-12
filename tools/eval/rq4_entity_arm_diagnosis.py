@@ -57,6 +57,75 @@ _ARMS = [
 ]
 
 
+def _report_unusable() -> str:
+    """`""` if `rq4_score_entity.md` may be quoted here, else why not.
+
+    The staleness branch is the load-bearing one: quoting a statistic computed
+    from a previous generation run beside *these* abstention counts is this
+    project's signature two-artifacts-from-different-days failure, and it never
+    crashes -- it just makes one sentence quietly wrong.
+    """
+    if not _SCORE_REPORT.exists():
+        return f"{_SCORE_REPORT.name} not found"
+    newest_answer = max(
+        (p.stat().st_mtime for arm in _ARMS for p in (_ANSWERS / _VARIANT / arm).glob("q*.json")),
+        default=0.0,
+    )
+    if _SCORE_REPORT.stat().st_mtime < newest_answer:
+        return f"{_SCORE_REPORT.name} is older than the answers measured here -- re-run rq4_score.py"
+    return ""
+
+
+def boost_vs_hybrid() -> tuple[dict[str, tuple[float, float, bool]], str]:
+    """`metric -> (entity_boost's margin over hybrid, Holm-adj p, significant)`.
+
+    Read from family 1b of `rq4_score_entity.md` rather than characterised in
+    prose. The first version of this script called that margin
+    "non-significant" in words; the 2026-08-12 regeneration moved
+    `entity_boost`'s precision from 0.8048 to 0.8248 and the pair crossed the
+    bar (Holm 0.1192 -> 0.0164), so the word was wrong while every number
+    around it was right -- the failure mode a hardcoded *verdict* has and a
+    hardcoded figure does not, because `audit_doc_claims.py` D3 is the only
+    check that reads a verdict word and it only fires on a quoted p-value.
+
+    The report's `diff` column is `b - a` and the arm order in the label
+    depends on `--arms`, so the sign is resolved from the label, not assumed.
+    """
+    why = _report_unusable()
+    if why:
+        return {}, why
+
+    out: dict[str, tuple[float, float, bool]] = {}
+    cols: dict[str, int] | None = None
+    for line in _SCORE_REPORT.read_text(encoding="utf-8").splitlines():
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if "comparison" in cells:
+            cols = {name: i for i, name in enumerate(cells)}
+            continue
+        if not cols or not {"diff(b-a)", "Holm-adj p", "significant"} <= cols.keys():
+            continue
+        label = cells[cols["comparison"]]
+        for metric in ("precision", "recall"):
+            a_first = f"hybrid_qwen3_0.6b_semantic[{metric}] vs entity_boost_semantic[{metric}]"
+            b_first = f"entity_boost_semantic[{metric}] vs hybrid_qwen3_0.6b_semantic[{metric}]"
+            if label not in (a_first, b_first):
+                continue
+            try:
+                diff = float(cells[cols["diff(b-a)"]].replace("+", ""))
+                holm = float(cells[cols["Holm-adj p"]])
+            except ValueError:
+                continue
+            if label == b_first:                 # diff is hybrid - boost; we want boost - hybrid
+                diff = -diff
+            out[metric] = (diff, holm, "yes" in cells[cols["significant"]])
+    missing = [m for m in ("precision", "recall") if m not in out]
+    if missing:
+        return {}, f"{_SCORE_REPORT.name} family 1b has no boost-vs-hybrid {', '.join(missing)} row"
+    return out, ""
+
+
 def score_report_recalls() -> tuple[dict[str, float], str]:
     """Mean citation recall per arm, *read* from `rq4_score_entity.md`.
 
@@ -73,14 +142,9 @@ def score_report_recalls() -> tuple[dict[str, float], str]:
     two-artifacts-from-different-days failure, and it never crashes -- it just
     makes one sentence quietly wrong.
     """
-    if not _SCORE_REPORT.exists():
-        return {}, f"{_SCORE_REPORT.name} not found"
-    newest_answer = max(
-        (p.stat().st_mtime for arm in _ARMS for p in (_ANSWERS / _VARIANT / arm).glob("q*.json")),
-        default=0.0,
-    )
-    if _SCORE_REPORT.stat().st_mtime < newest_answer:
-        return {}, f"{_SCORE_REPORT.name} is older than the answers measured here -- re-run rq4_score.py"
+    why = _report_unusable()
+    if why:
+        return {}, why
 
     out: dict[str, float] = {}
     col: int | None = None
@@ -208,6 +272,17 @@ def main() -> None:
         )
     else:
         recall_clause = f"citation recall: see `{_SCORE_REPORT.name}` ({why_no_recalls}), "
+
+    margins, why_no_margins = boost_vs_hybrid()
+    if margins:
+        pieces = []
+        for metric in ("precision", "recall"):
+            diff, holm, sig = margins[metric]
+            pieces.append(f"{metric} {diff:+.4f} (Holm {holm:.4f}, "
+                          f"{'significant' if sig else 'ns'})")
+        margin_clause = " and ".join(pieces)
+    else:
+        margin_clause = f"see `{_SCORE_REPORT.name}` ({why_no_margins})"
     L.append(
         f"**What separates the two entity arms is ranking, and it is worth more than "
         f"the dictionaries are.** Both draw on the same dictionaries and both supply "
@@ -215,8 +290,8 @@ def main() -> None:
         f"density); the difference is that `entity_boost` orders them by hybrid "
         f"relevance, so what fills the budget also answers the question "
         f"({recall_clause}missed {boost['missed']} vs "
-        f"{lookup['missed']}). That gap is far larger than `entity_boost`'s entire "
-        f"non-significant margin over shipped hybrid. **An exhaustive retriever's "
+        f"{lookup['missed']}). That gap dwarfs `entity_boost`'s entire margin over "
+        f"shipped hybrid: {margin_clause}. **An exhaustive retriever's "
         f"advantage does not survive a fixed context budget it cannot rank into** -- "
         f"so `entity_lookup` bounds unranked dictionary retrieval, and "
         f"`entity_boost` is the arm that bounds the dictionaries themselves."

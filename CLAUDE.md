@@ -624,10 +624,13 @@ see `docs/adr/`.
   far more tags than it adds (594 vs 140) — but the degree guard *re-selects* a
   same-degree candidate instead of merely dropping, so a rescued tag lands on the
   programme that actually owns it. The gating verdict in
-  [[project_rq4_entity_arms_gating]] must be **re-measured, not inherited**
-  (RQ4 entity arms re-run 2026-08-12; it rests on **−0.2531** at Holm 0.0000, a
-  *ranking* failure over already gold-dense contexts (0.6448), which better
-  program tags were not expected to close). Rebuild it only together with a
+  [[project_rq4_entity_arms_gating]] was **re-measured, not inherited** (RQ4
+  entity arms re-run 2026-08-12 — only the cells whose context actually changed
+  were regenerated, the rest frozen byte-for-byte, per
+  `docs/rq4-design.md`): it is
+  unchanged, resting on **−0.2523** at Holm 0.0000, a *ranking* failure over
+  already gold-dense contexts (**0.6501**), which better program tags were not
+  expected to close — and did not. Rebuild it only together with a
   regeneration of `programs_by_file.json`, and re-run the RQ4 entity arms if you
   do. **Edge A′ is ~7x smaller than the scan note claimed and the
   note is corrected**: `สังกัดคณะ` was recorded as appearing in "1,465 files
@@ -1757,14 +1760,17 @@ see `docs/adr/`.
   → `data/results/rq4_score_entity.md`, family 1b **m=6**; 212 answers, 14,434 s,
   0 errors, **0 truncated** — necessary, since `prompt_eval_count` peaks at 13,636 /
   14,515, so at the old 8192 default about half would have been evidence-stripped).
-  The rule was fixed in `docs/rq4-design.md` before the number existed. **The primary
+  The rule was fixed in `docs/rq4-design.md` before the number existed. **All figures
+  below are the 2026-08-12 re-measurement** after the `match_programs` repair reached
+  these arms (see the paragraph at the end of this bullet for what moved; the
+  superseded 08-10 originals are in `docs/rq4-design.md`). **The primary
   comparison failed in the *opposite* direction**: `entity_lookup` vs hybrid citation
-  recall **−0.2531**, CI [−0.3223, −0.1815], Holm **0.0000** (precision −0.1583,
-  Holm 0.0150) — decisively worse, not merely no better. **But the stated reason for
+  recall **−0.2523**, CI [−0.3213, −0.1805], Holm **0.0000** (precision −0.1557,
+  Holm 0.0156) — decisively worse, not merely no better. **But the stated reason for
   the inference does not survive, which matters more than the verdict**
   (`tools/eval/rq4_entity_arm_diagnosis.py` → `data/results/rq4_entity_arm_diagnosis.md`,
   descriptive, no GPU): `entity_lookup`'s contexts hold a **higher** gold density than
-  hybrid's (**0.6448 vs 0.5352**) and it still abstained on **40** gold-bearing queries
+  hybrid's (**0.6501 vs 0.5352**) and it still abstained on **40** gold-bearing queries
   (hybrid 8, `entity_boost` 5) — a ranking failure, not an evidence failure.
   **Two things fall out that are worth more than the gating decision.** (1) That
   density is the **circularity made visible**: the qrels call a document relevant when
@@ -1773,16 +1779,28 @@ see `docs/adr/`.
   the entity, judged on 40 queries that none answered the question. **An independent
   judge saying string containment over-counts relevance for this query shape**, which
   is the `docs/eval-validity-threats.md` §3 threat measured rather than argued. (2)
-  Same dictionaries, ranked vs unranked, is worth **0.4379 vs 0.1431** recall — far
+  Same dictionaries, ranked vs unranked, is worth **0.4328 vs 0.1439** recall — far
   more than the dictionaries' own margin. **So cite `entity_boost` as the arm that
   answers the gating question**: it is the numerically best arm in the whole RQ4 table
-  (**precision 0.8048**, the highest ever measured here, recall **0.4379**, only 5
-  missed) and **neither metric clears Holm** (0.1192 / 0.1652). **State it as a
-  bound** — ranked dictionary use buys at most **+0.1001** citation recall / +0.1337
-  precision over shipped hybrid, the point estimate (+0.0417) sits inside the measured
-  generator noise floor ([[feedback_temperature_zero_is_not_reproducible]]), and the
-  bound is **optimistic** because of the circularity. Edges B/C are therefore not
-  built. Operational note: `ARM_ORDER` was hardcoded to the published five, so the
+  (**precision 0.8248**, the highest ever measured here, recall **0.4328**, only 5
+  missed). **The gating metric is recall and it is still ns** (+0.0366, Holm 0.2140),
+  so **state it as a bound** — ranked dictionary use buys at most **+0.0942** citation
+  recall over shipped hybrid, the point estimate sits inside the measured generator
+  noise floor ([[feedback_temperature_zero_is_not_reproducible]]), and the bound is
+  **optimistic** because of the circularity. Edges B/C are therefore not
+  built. **Precision is the one cell the 08-12 re-measurement moved, and it does not
+  reopen the gate**: +0.0847, CI [+0.0215, +0.1510], Holm 0.1192 → **0.0164, now
+  significant**. Read it as power, not reversal
+  ([[feedback_a_replication_disagrees_by_sign_not_verdict]]) — the sign never changed
+  (+0.0635 → +0.0847) and the movement is **located** rather than assumed: the 56
+  frozen `entity_boost` cells score 0.8778 before and after by construction, the 50
+  regenerated ones went 0.7195 → 0.7630, and that dilutes to +0.0200 overall. Inside
+  those 50, **repair and generator noise are not separable** — 48 had a genuinely
+  different context but 38 changed their citation set, against a floor of 14/24
+  identical sets at temperature 0. It is also the metric the circularity flatters most
+  directly (the candidate pool comes from the same dictionaries the qrels are derived
+  from), so a newly-significant *precision* margin is not evidence for building more
+  dictionary-derived structure. Operational note: `ARM_ORDER` was hardcoded to the published five, so the
   entity arms would have been **silently dropped** from the report; they are now in
   `EXTRA_ARMS` behind `--arms`, and passing a non-default arm set **refuses to write
   `rq4_score.md`** because family 1's Holm size *is* the number of arm pairs — a
