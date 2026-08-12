@@ -22,6 +22,7 @@ data/results/*
 # data/results/ is regenerable by re-running a script, but this one carries
 # hand-entered relevance judgements that cannot be reproduced if lost.
 !data/results/residual_relevance/
+data/models/
 data/output/
 data/qdrant/
 data/logs/
