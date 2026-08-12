@@ -2075,12 +2075,45 @@ see `docs/adr/`.
   a perfect rerank over P=50 is 0.6281 → **0.8249**, and P=1000 buys only 0.8738,
   so the 10-document budget binds, not the pool. Same family as
   [[feedback_state_the_retrieval_budget_in_every_comparison]].
-- **Candidate next axis, written up but not started**:
+- **Candidate next axes, written up but not started** — both carry a
+  pre-registered prediction, which is the point of writing them up early:
   `docs/colbert-late-interaction-notes.md` (ColBERT: motivated by *our own*
   results — the cross-encoder reranker hurt hybrid MRR, and BM25/dense split
-  person vs program — with a pre-registered prediction so an aggregate win can't
-  be mistaken for resolving that split). Not committed to — RQ4 (the item that
-  used to block starting this) is now complete, see above.
+  person vs program — so an aggregate win can't be mistaken for resolving that
+  split) and `docs/hyde-axis-notes.md` (HyDE, predicted to **fail** on 73det:
+  BM25 alone scores 0.8147 on `person`, so the signal is an exact token and
+  generated filler dilutes it; the generator has never seen these people or
+  programmes, and unlike RQ4 it generates *before* retrieval with nothing to
+  ground it, so hallucinated entities get embedded — feed the dense arm only,
+  give BM25 the raw query. Real chance only on thematic, where BM25 collapses to
+  0.2990). Neither is committed to; RQ4, the item that used to block starting
+  ColBERT, is complete.
+  **HyDE's price is now measured, and the correction is the reusable part
+  (2026-08-12, `tools/eval/probe_hyde_generation_cost.py` →
+  `data/results/hyde_generation_cost.md`).** The notes had inherited **15.6
+  s/query** from the RQ4 generation log; an RQ4 prompt carries ~8k tokens of
+  retrieved context and a HyDE prompt carries only the question (~300), so that
+  figure never transferred ([[feedback_state_the_input_size_with_any_timing]]).
+  Measured warm: **17.57 s** uncapped, **7.85 s** at `num_predict=256`, ≈33 tok/s
+  flat — so 73det is 31 min uncapped / **14 min capped**, thematic 52 / 23, one
+  generation serves every embedder (pure query transform, cacheable to JSON) and
+  **no index rebuild at all**. **The cost is output-bound, not prompt-bound**:
+  the model writes 564–843 tokens for a prompt that says "ไม่เกิน 5 ประโยค", i.e.
+  **a length instruction written in natural language enforces nothing** — capping
+  halves the price and is *closer* to HyDE's intent, not a compromise of it. Two
+  further things worth keeping. (1) **The serving objection grew while the system
+  got faster**: at the time of writing, hybrid cost ~2.1–2.7 s of which ~1.9–2.0 s
+  was the `BM25Okapi` rebuild, so +15.6 s read as ~7x; with the scorer memoised
+  and `fetch_depth=200` shipped, a routed query is **475.6 ms** p50 and the honest
+  addition is 7.85 s — **~17x**. Cheap as an offline eval axis, not as a shipped
+  feature; argue the two separately. (2) **`temperature=0` is not reproducible
+  here either, and it took four runs to see**: the first three reproduced
+  output-token counts exactly on every query, the fourth disagreed on every
+  query. The report's reproducibility sentence is **derived** from
+  `hyde_generation_cost_runs.json` (run history, distinct signatures, leading
+  identical streak) rather than typed, which is the only reason it did not end up
+  asserting determinism on the strength of those three
+  ([[feedback_temperature_zero_is_not_reproducible]]).
 - **Corpus data-quality audit** (`tools/corpus_prep/audit_title_body_agreement.py`,
   2026-07-30): flags manifest titles that disagree with the document's own page-1
   `เรื่อง` subject line. A first version was rejected on measurement (median 0.660,
