@@ -705,3 +705,50 @@ Two of its rules were learned by getting them wrong: G1's integer test is *index
 all zeros), and every gate but G5 scores its pair **alone**, so batch composition can never be mistaken
 for the effect under test. `tests/tools/test_qualify_reranker_model.py` pins both directions of each
 rule without downloading a model.
+
+---
+
+## Follow-up (a) measured 2026-08-12: a reranker TRAINED on hybrid-fused candidates
+
+This is intervention **(a)** from the recommendation above, quoted there as "a reranker trained or at
+least validated on hybrid-fused candidate distributions specifically (HYRR's own approach, §2) rather
+than assuming an off-the-shelf single-retriever-trained cross-encoder transfers". It was the last open
+reranker axis on this corpus. Pre-registration and full outcome:
+`docs/reranker-trained-on-hybrid-design.md`; artifacts
+`tools/eval/train_hybrid_reranker.py` → `data/results/reranker_training_run.md` and
+`tools/eval/reranker_trained_test.py` → `data/results/reranker_trained_test.md`.
+
+**(a) is CONFIRMED, and it is the first intervention in this whole line to survive the hard router.**
+Starting from the anchor's own weights (`BAAI/bge-reranker-v2-m3`) so the comparison is a within-model
+paired before/after, fine-tuned for 67.6 minutes on 505 routed-hybrid P=50 pools built by the eval's
+own retrieval code path over entities disjoint from the 106-query eval set, group-softmax 1 positive vs
+7 negatives, checkpoint selected on 89 held-out **training** queries: **T vs D +0.0637 recall@10**
+(Holm 0.0000, m=6), **T vs C +0.0654** over the shipped router, all six pre-registered tests
+significant. The §3 prediction — small positive, not significant — was **wrong in the positive
+direction**, which was recorded in advance as the informative failure.
+
+**It explains the earlier nulls rather than contradicting them.** The oracle column and the 4-model
+swap had already established that the verdict was *this cross-encoder is weak*, not *the headroom is
+gone*; (a) names the weakness. The clearest evidence is per-route: `program` is the route the
+off-the-shelf model actively **damaged** (−0.0633 in `reranker_rrf_routed_test.md`) and it is where
+training pays most, **+0.1089** over the router and **+0.1723** over the untrained model. The w grid
+says the same thing qualitatively — the trained model's fused recall rises to w=0.65 and holds to
+w=1.00, while the untrained model's declines monotonically past w=0.40. An off-the-shelf cross-encoder
+here is a signal you must dilute; one trained on the fused distribution is a signal you can lean on.
+
+**The axis is narrowed, not closed.** Trained captures **44%** of the routed P=50 oracle's +0.1500;
+off-the-shelf captured 1%. And **`faculty` gets worse** (−0.0077): only one faculty entity survives the
+disjointness filter, so 13 of 106 eval queries sit on a route the fine-tune never learned — dev recall
+for that route is 0.5000 in *every* epoch including epoch 0. That is a corpus limitation, reported
+rather than averaged away.
+
+**The finding that most changes how the earlier results should be read is the control.** A free
+lexical-containment scorer fused through the identical rrf4 path (arm L, no GPU, no training) reaches
+**0.7442** against the trained model's 0.7485. An exploratory family 2 puts a bound on it: `T vs L`
+recall@10 **+0.0043, ns** (CI rules out more than 0.0229), while `T vs L` MRR **+0.0409** and nDCG@10
+**+0.0271** are both significant, and `L vs C` is significant on all three. So the fine-tune's
+separable contribution over string containment is **ordering**, not which documents come back — and
+recall@10 on these qrels is, to a first approximation, a containment test, exactly the shared-labelling
+circularity `docs/eval-validity-threats.md` §2 and the design's §5 named in advance. Cite `T vs D`
+cleanly (both arms are cross-encoders against the same qrels, so the shared rule cancels); never cite
+`T vs C` without arm L's number beside it.

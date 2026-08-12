@@ -1137,8 +1137,12 @@ see `docs/adr/`.
   OCR-remediation-rebuilt indices (they had gone stale like everything else, see the
   staleness lesson above).
   1. **Cross-encoder reranking hurts hybrid — but the finding belongs to
-     *truncate-and-replace*, not to the reranker.** Read the last paragraph of this item
-     before citing this as a negative result: fusing the same model's scores in as a fourth
+     *truncate-and-replace* and to the *off-the-shelf model*, not to reranking.**
+     **This item is no longer a null: follow-up (a) — a cross-encoder fine-tuned on
+     hybrid-fused candidates — beats the shipped hard router (+0.0654 recall@10, Holm
+     0.0000) and is the FIRST intervention in this whole line to do so. Read its
+     paragraph at the end of this item before citing anything above it as settled.**
+     Two earlier corrections still stand: fusing the same model's scores in as a fourth
      RRF signal (2026-08-09) **beats the shipped hybrid on recall@10**, so what is settled
      is "don't let a cross-encoder replace the ranking", not "a cross-encoder is useless
      here". `CrossEncoderReranker`
@@ -1316,6 +1320,60 @@ see `docs/adr/`.
      `token_type_ids` is legitimately all zeros), and every gate but G5 scores its pair
      **alone**, so batch composition can't be mistaken for the effect under test.
      `tests/tools/test_qualify_reranker_model.py` pins both directions of every rule.
+     **FOLLOW-UP (a) IS DONE AND POSITIVE (2026-08-12) — a cross-encoder trained on
+     hybrid-fused candidates is the first intervention in this line to survive the hard
+     router.** Pre-registration **and** outcome in one file, §1-5 frozen as written before
+     the treatment existed: `docs/reranker-trained-on-hybrid-design.md`; artifacts
+     `tools/eval/train_hybrid_reranker.py` → `data/results/reranker_training_run.md`
+     (67.6 min, checkpoint `data/models/reranker_hybrid_trained/`, gitignored) and
+     `tools/eval/reranker_trained_test.py` → `data/results/reranker_trained_test.md`
+     (716 s, then ~95 s GPU-free with `--reuse-scores`). Only the **weights** vary: pool,
+     routing, rrf4, the `w` grid, P=50, k=10, metrics and bootstrap all held at published
+     values, and the fine-tune **starts from the anchor's own weights** so the headline is a
+     within-model paired before/after — a difference can't be attributed to model size,
+     tokenizer or language coverage, the three things `reranker_model_comparison.py` showed
+     matter more here. **T vs D +0.0637 recall@10 / T vs C +0.0654, all six pre-registered
+     tests Holm 0.0000 (m=6)**; arm T 0.7485 vs C 0.6831, D 0.6847. **The §3 prediction
+     (small positive, ns) was wrong in the positive direction**, recorded in advance as the
+     informative failure. It **explains the earlier nulls rather than contradicting them**:
+     the oracle column and the 4-model swap had already said *this cross-encoder is weak,
+     not the headroom is gone*, and (a) names the weakness — `program`, the route the
+     off-the-shelf model actively **damaged** (−0.0633), is where training pays most
+     (**+0.1089** over the router, +0.1723 over D), and the w grid separates them
+     qualitatively (T rises to w=0.65 and holds to 1.00; **D declines monotonically past
+     0.40** to 0.6000). Trained captures **44%** of the routed P=50 oracle's +0.1500 against
+     off-the-shelf's 1%, so **the axis is narrowed, not closed**. **`faculty` gets worse
+     (−0.0077)** exactly as pre-registered: one faculty entity survives the disjointness
+     filter, so 13 of 106 queries sit on a route the fine-tune never learned — dev recall
+     there is **0.5000 in every epoch including epoch 0**. **THE CONTROL IS THE PART TO
+     READ BEFORE CITING THE HEADLINE.** A free lexical-containment scorer fused through the
+     identical rrf4 path (arm L, no GPU, no training) reaches **0.7442** against T's 0.7485.
+     An **exploratory, not pre-registered** family 2 bounds it: **`T vs L` recall@10 +0.0043,
+     Holm 0.6426 — ns, CI rules out more than 0.0229**, while `T vs L` **MRR +0.0409**
+     (0.0150) and **nDCG@10 +0.0271** (0.0432) *are* significant and `L vs C` is significant
+     on all three (+0.0611/+0.0623/+0.0834). So the fine-tune's separable contribution over
+     string containment is **ordering, not which documents come back**, and recall@10 on
+     these qrels is largely a containment test — the shared-labelling circularity §5
+     pre-registered, arriving in the form it was written to detect. **Cite `T vs D` cleanly**
+     (both arms are cross-encoders against the same qrels, so the shared rule cancels — and
+     it is the test (a) is named after); **never cite `T vs C` without arm L's number beside
+     it.** §4.1's own prediction was **refuted** too and that is a second finding: L was
+     predicted weakest on `course` (qrels keyed on the 8-digit code, query supplies the
+     name) and instead **beats T there** (0.7214 vs 0.7145) and on `person`; its real weak
+     route is `faculty`. Two more things worth keeping. **S7 surfaced a threat the
+     pre-registration missed**: 0 shared queries and 0 shared entities, but **325 resolutions
+     are relevant to both sets** — unavoidable in one corpus, never a label the model saw,
+     and structurally invisible to an entity-level disjointness argument. And **the
+     checkpoint-loading contract was verified on a CPU fixture *before* the GPU time was
+     spent** (`scratchpad/probe_ckpt_load.py`, 8/8): sentence-transformers accepts the
+     trainer's bare `save_pretrained` directory, the base head is **already 1-logit** so
+     `num_labels=1` keeps the pretrained ranking head rather than reinitialising it (C2's
+     2e-7 agreement with ST independently confirms it — a random head could not match), and
+     ST caps the tokenizer at the *config's* `max_position_embeddings`, so the trained arm
+     scores at the same **8192** as every published arm despite training at max_len 1024
+     (49 of 25,250 training pairs truncated, 0.19%). **Nothing is wired** — per §3, and the
+     cost side now has a sharper competitor than it did (~1.2 s/query and 50 extra fetches,
+     against arm L at zero and 0.0043 behind).
   2. **RQ3 preprocessing ablations: normalization and word-aware segmentation do nothing;
      only chunk size matters, and only at 1024.** Configs `config/experiments/rq3_*.yaml`,
      scripts `tools/eval/rq3_*`. Thai normalization (Thai digits + `pythainlp.util.normalize()`)

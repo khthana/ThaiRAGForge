@@ -43,6 +43,19 @@ a hypothesis. Note the asymmetry it exposes -- `course` qrels are keyed on the
 8-digit **code** while the query supplies the **name**
 (`gold_anchor_ambiguity.md`), so arm L is expected to be weakest exactly there.
 
+**That prediction was REFUTED by the run, and the refutation is the finding.**
+Arm L lands 0.7442 against arm T's 0.7485 -- within 0.0043 of a 68-minute
+fine-tune, for zero GPU -- and on `course`, where it was predicted weakest, it
+*beats* the trained model (0.7214 vs 0.7145); its real weak route is `faculty`
+(0.4832), which every arm including T fails. So the floor is high, which is
+exactly the reading `docs/eval-validity-threats.md` §2 warns about: training
+labels and eval qrels come from one string-containment generator, and a model
+that learned that generator scores like a model that learned relevance. Two
+point estimates side by side are not a comparison, so **family 2** (T vs L,
+L vs C x 3 metrics, its own Holm, m=6) reports the floor as a bound with a CI.
+It is EXPLORATORY -- added after family 1 came back positive -- and inherits no
+significance from family 1; read it as sizing the threat, never as a result.
+
 ANCHORS
 -------
 Nothing published is trusted; five numbers are reproduced from this code path:
@@ -414,6 +427,22 @@ def main() -> int:
             rows.append((label, m, observed, p, ci))
     fam1 = holm_correct(rows, alpha=args.alpha)
 
+    # ---- family 2: the lexical floor -- EXPLORATORY, NOT pre-registered -------
+    # Added after family 1 came back positive and arm L landed within 0.0043 of
+    # arm T. The design fixed arm L as "a floor to report" and required any
+    # positive result to carry its number; two point estimates side by side are
+    # not a comparison, so the floor is reported the way this project reports
+    # every tie -- as a bound with a CI. Its own family, its own Holm, and no
+    # significance claim is inherited from family 1.
+    rows2 = []
+    for label, a, b in (
+            ("T vs L  (trained model vs the free lexical control)", arm_T, arm_L),
+            ("L vs C  (the lexical control alone, on top of routing)", arm_L, arm_C)):
+        for m in _METRICS:
+            observed, p, ci = bootstrap_pvalue(a[m] - b[m], rng, args.n_boot)
+            rows2.append((label, m, observed, p, ci))
+    fam2 = holm_correct(rows2, alpha=args.alpha)
+
     tlog = json.loads(TRAIN_LOG.read_text(encoding="utf-8")) if TRAIN_LOG.exists() else {}
     L: list[str] = []
     def w_(s: str = "") -> None:
@@ -466,11 +495,24 @@ def main() -> int:
     w_()
     w_(f"**Family 1 (m={len(fam1)}, ลงทะเบียนก่อนรัน)** — paired bootstrap {args.n_boot} รอบ "
        f"(seed={args.seed}), Holm · `w` เลือกแบบ leave-one-out บน `{SELECT_METRIC}` "
-       f"· arm L และกริด w เป็นการบรรยาย ไม่อยู่ในตระกูล")
+       f"· กริด w เป็นการบรรยาย ไม่อยู่ในตระกูล · arm L ก็ไม่อยู่ในตระกูลนี้เช่นกัน "
+       f"แต่ถูกทดสอบแยกใน Family 2 ข้างล่าง")
     w_()
     w_("| เทียบ | metric | diff | 95% CI | raw p | Holm-adj p | นัยสำคัญ |")
     w_("|---|---|---|---|---|---|---|")
     for a, b, diff, p, ci, hp, sig in sorted(fam1, key=lambda x: x[5]):
+        w_(f"| {a} | {b} | {diff:+.4f} | [{ci[0]:+.4f}, {ci[1]:+.4f}] | {p:.4f} | {hp:.4f} | "
+           f"{'**ใช่**' if sig else 'ไม่'} |")
+    w_()
+    w_(f"**Family 2 (m={len(fam2)}) — สำรวจ ไม่ได้ลงทะเบียนล่วงหน้า** เพิ่มหลังเห็นผล "
+       f"Family 1 เพราะ arm L ห่างจาก arm T แค่ **{arm_T['recall@10'].mean() - arm_L['recall@10'].mean():+.4f}** "
+       f"· แบบร่างกำหนดให้ arm L เป็น*พื้นที่ต้องรายงานคู่กับผลบวกทุกครั้ง* และตัวเลขสองตัววางข้างกัน"
+       f"ยังไม่ใช่การเปรียบเทียบ — จึงรายงานเป็น**ขอบเขต**ตามธรรมเนียมของโปรเจกต์นี้ "
+       f"· คนละตระกูล คนละ Holm **ห้ามอ่านเป็นนัยสำคัญที่สืบทอดมาจาก Family 1**")
+    w_()
+    w_("| เทียบ | metric | diff | 95% CI | raw p | Holm-adj p | นัยสำคัญ |")
+    w_("|---|---|---|---|---|---|---|")
+    for a, b, diff, p, ci, hp, sig in sorted(fam2, key=lambda x: x[5]):
         w_(f"| {a} | {b} | {diff:+.4f} | [{ci[0]:+.4f}, {ci[1]:+.4f}] | {p:.4f} | {hp:.4f} | "
            f"{'**ใช่**' if sig else 'ไม่'} |")
     w_()
@@ -524,10 +566,29 @@ def main() -> int:
         w_(f"| {rt} | {len(idx)} | {c:.4f} | {d:.4f} | {t:.4f} | {l:.4f} | "
            f"{t-c:+.4f} | {t-d:+.4f} |")
     w_()
+    by_route_L = {}
+    for rt in ("person", "program", "course", "faculty"):
+        idx = [i for i, q in enumerate(queries) if route_of[q] == rt]
+        if idx:
+            by_route_L[rt] = (arm_L["recall@10"][idx].mean(),
+                              arm_T["recall@10"][idx].mean())
+    worst_L = min(by_route_L, key=lambda r: by_route_L[r][0])
+    beats_T = [r for r, (l, t) in by_route_L.items() if l > t]
     w_(f"arm L เป็นพื้น ไม่ใช่สมมติฐาน: qrels ของ `person`/`program`/`faculty` มาจากการ"
        f"จับคู่ตัวอักษร (`eval-validity-threats.md` §2) ส่วน `course` จับคู่ด้วย**รหัส 8 หลัก** "
-       f"ขณะที่คำถามให้**ชื่อ** (`gold_anchor_ambiguity.md`) — คาดไว้ล่วงหน้าว่า L "
-       f"จะอ่อนที่สุดตรง `course` พอดี")
+       f"ขณะที่คำถามให้**ชื่อ** (`gold_anchor_ambiguity.md`) — จึง**ลงทะเบียนคาดไว้ล่วงหน้า"
+       f"ว่า L จะอ่อนที่สุดตรง `course`**")
+    w_()
+    w_(f"**คำทำนายนั้นผิด และความผิดคือผลของการทดลองนี้**: route ที่ L อ่อนที่สุดจริงคือ "
+       f"`{worst_L}` ({by_route_L[worst_L][0]:.4f}) ส่วน `course` L ทำได้ "
+       f"{by_route_L['course'][0]:.4f} เทียบ T {by_route_L['course'][1]:.4f} — "
+       + (f"L **ชนะ** T ที่ route " + ", ".join(f"`{r}`" for r in beats_T)
+          if beats_T else "L ไม่ชนะ T ที่ route ใดเลย")
+       + f" · รวมทั้งชุด L ตามหลัง T แค่ {arm_T['recall@10'].mean()-arm_L['recall@10'].mean():+.4f} "
+         f"recall@{K} โดยไม่ใช้ GPU เลย ดู Family 2 ข้างบนสำหรับขอบเขตพร้อม CI — "
+         f"อ่านเป็นภัยคุกคามต่อความสมเหตุสมผลที่ `eval-validity-threats.md` §2 เตือนไว้ "
+         f"(label ที่ใช้เทรนกับ qrels ที่ใช้วัด มาจากกฎจับคู่ตัวอักษรอันเดียวกัน) "
+         f"ไม่ใช่ข้อสรุปว่า reranker ไร้ประโยชน์")
     w_()
 
     w_("## self-check")

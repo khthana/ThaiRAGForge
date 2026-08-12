@@ -1,6 +1,12 @@
 # Follow-up (a): a reranker trained on hybrid-fused candidates — pre-registration
 
-**Status: PRE-REGISTERED 2026-08-12. Nothing below has been measured yet.** Every
+**Status: RUN 2026-08-12. §1–§5 are the pre-registration, frozen as written before
+the treatment existed; §6 is the outcome.** Decision rule 1 fired: `T vs D`
+recall@10 **+0.0637**, Holm 0.0000. Read §6.3 before citing the headline — the free
+lexical control lands within **0.0043** of the trained model on recall@10, which is
+§5's central threat arriving in the form it was written to detect.
+
+Every
 number quoted here is an already-published figure the experiment will be anchored
 against; the prediction and the decision rule are written down before the treatment
 exists, because this is the fourth reranker intervention on this corpus and the
@@ -191,3 +197,113 @@ that is also a finding, and the first control in §4 is what would explain it.
   disjoint training entity; report that route separately.
 - **Single fine-tune.** One training run, one seed. A null is a statement about this
   recipe on this corpus, not about fine-tuned cross-encoders in general.
+
+---
+
+## 6. Outcome (2026-08-12)
+
+Artifacts: `tools/eval/train_hybrid_reranker.py` →
+`data/results/reranker_training_run.md` (67.6 min, 3 epochs, checkpoint at
+`data/models/reranker_hybrid_trained/`, gitignored) and
+`tools/eval/reranker_trained_test.py` → `data/results/reranker_trained_test.md`
+(716 s the first time, ~95 s GPU-free with `--reuse-scores`).
+
+### 6.1 The pre-registered family — all six significant
+
+| arm | recall@10 | MRR | nDCG@10 |
+|---|---|---|---|
+| C — router only (ships) | 0.6831 | 0.8686 | 0.7502 |
+| D — off-the-shelf `bge-reranker-v2-m3` | 0.6847 | 0.8801 | 0.7497 |
+| **T — trained on hybrid-fused candidates** | **0.7485** | 0.9717 | 0.8607 |
+| L — lexical containment (control, no GPU) | 0.7442 | 0.9308 | 0.8336 |
+
+`T vs C` **+0.0654** recall@10 [+0.0397, +0.0926], MRR +0.1031, nDCG@10 +0.1105.
+`T vs D` **+0.0637** recall@10 [+0.0386, +0.0915], MRR +0.0916, nDCG@10 +0.1110.
+All six Holm-adj **0.0000** at m=6. **The prediction in §3 was wrong in the positive
+direction**, which §3 recorded in advance as the interesting failure: it forecast a
+small positive `T vs D`, not significant, on the reasoning that candidate-distribution
+mismatch was only one of several possible causes of the oracle's diagnosis. It was
+enough of the cause to clear ~30x the anchor's effect.
+
+**This is the first intervention in the whole reranker line to survive the hard
+router.** Per-`entity_type` alpha, rrf4 and the model swap all won against no routing
+and died against the shipped configuration; this one is measured against arm C from
+the start and beats it.
+
+Share of the ceiling: the routed P=50 oracle delivers **+0.1500** over arm C. Trained
+captures **44%**, off-the-shelf **1%**. So the axis is not closed by this either —
+56% remains — but "this cross-encoder is weak" is now *explained* rather than merely
+observed: it was weak because it had never seen a hybrid-fused pool from this corpus.
+
+### 6.2 Where the gain lives, and where it does not
+
+Per-route recall@10 at P=50:
+
+| route | n | C | D | T | L | T − C |
+|---|---|---|---|---|---|---|
+| person | 30 | 0.8531 | 0.8672 | 0.8816 | **0.9005** | +0.0285 |
+| program | 30 | 0.6545 | 0.5912 | **0.7634** | 0.7260 | **+0.1089** |
+| course | 33 | 0.6262 | 0.6758 | 0.7145 | **0.7214** | +0.0883 |
+| faculty | 13 | 0.5008 | 0.5024 | 0.4931 | 0.4832 | **−0.0077** |
+
+`program` — the route the off-the-shelf model actively *damaged* (−0.0633 in
+`reranker_rrf_routed_test.md`) — is where training pays most (+0.1089, and +0.1723
+over D). **`faculty` is the one route that gets worse**, exactly as §5 pre-registered:
+one disjoint training entity, so 13 of 106 eval queries sit on a route the model never
+learned. Dev confirms it from the other side — `faculty` sits at **0.5000 in every
+epoch including epoch 0**, i.e. the fine-tune never moved it at all.
+
+The w grid separates the two models qualitatively, not just numerically: T peaks at
+**0.7516 at w=0.65** and stays high to w=1.00, while **D declines monotonically past
+w=0.40** down to 0.6000. The untrained model is a signal you must dilute; the trained
+one is a signal you can lean on.
+
+### 6.3 The control did most of it — read this before citing 6.1
+
+**Arm L, string containment with no GPU and no training, reaches 0.7442 against T's
+0.7485.** §4.1 fixed this control as the thing a positive result must be reported
+beside, and §5 named the reason: training labels and eval qrels come from one
+string-containment generator, so a model that learned the *generator* scores like a
+model that learned relevance. Two point estimates side by side are not a comparison,
+so the script gained an **exploratory, not pre-registered, family 2** (T vs L, L vs C
+× 3 metrics, own Holm, m=6):
+
+- **`T vs L` recall@10 +0.0043, Holm 0.6426 — not significant.** As a bound: the CI
+  rules out the trained model beating free string containment by more than **0.0229**
+  recall@10.
+- **`T vs L` MRR +0.0409 (Holm 0.0150) and nDCG@10 +0.0271 (Holm 0.0432) — both
+  significant.** So the fine-tune's separable contribution is **ordering**, not
+  *which* documents come back.
+- **`L vs C` +0.0611 / +0.0623 / +0.0834, all Holm 0.0000.** The free control alone
+  beats the shipped router on all three metrics.
+
+**§4.1's own prediction was refuted, and that is a second finding.** L was predicted
+weakest on `course`, because `course` qrels are keyed on the 8-digit code while the
+query supplies the name (`gold_anchor_ambiguity.md`). L instead **beats T on
+`course`** (0.7214 vs 0.7145) and on `person`; its actual weak route is `faculty` (0.4832),
+which every arm fails.
+
+**How to cite this.** `T vs D` (+0.0637) is clean — both arms are cross-encoders
+scored against the same qrels, so the shared labelling rule cancels, and *that* is the
+test intervention (a) is named after. `T vs C` (+0.0654) is real but **must carry arm
+L's number**: most of it is reachable for free, and the honest reading is that
+recall@10 on these qrels is largely a containment test. The claim that survives
+without qualification is narrower and more useful: **training on hybrid-fused
+candidates fixes an off-the-shelf reranker that was damaging `program`**, and buys a
+significant ordering improvement over lexical containment.
+
+### 6.4 A threat the pre-registration missed
+
+`S7` checks disjointness and found 0 shared queries and 0 shared entities — but also
+**325 resolutions relevant to both the training and eval sets**. Unavoidable in one
+corpus of 2,854 documents, and the model never saw an eval *label*, but it did see
+some of those documents as positives for other entities. It is reported in the check's
+own output rather than waived, and it is the kind of overlap §2.1's entity-level
+disjointness argument is structurally unable to see.
+
+### 6.5 Not wired
+
+Per §3, nothing goes into `query_service` on the strength of this. The cost side is
+unchanged (~1.2 s/query, 50 extra fetches) and now has a sharper competitor: **arm L
+costs nothing and is 0.0043 behind on recall@10.** A deployment decision here is a
+choice between three options, not two.

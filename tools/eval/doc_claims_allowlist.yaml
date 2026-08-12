@@ -33,6 +33,17 @@ numbers:
 # exact string, so changing "0 of 239" to "0 of 241" stops matching and re-flags.
 counts:
   - doc: CLAUDE.md
+    figure: "13 of 106"
+    checked: 2026-08-12
+    reason: >-
+      data/results/reranker_trained_test.md states the two halves in different
+      places by design: the header line says "106 คำถาม" and the per-route table
+      row reads "| faculty | 13 | ...". The pre-registration
+      docs/reranker-trained-on-hybrid-design.md §2.1 states it as a pair
+      ("13 of 106 eval queries (12%)"), but a design doc is not a report and is
+      outside D5's haystack on purpose.
+
+  - doc: CLAUDE.md
     figure: "182 of 253"
     checked: 2026-08-12
     reason: >-
