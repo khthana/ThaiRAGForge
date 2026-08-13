@@ -14,6 +14,50 @@ def _normalize(scores: dict[str, float]) -> dict[str, float]:
     return {k: v / top for k, v in scores.items()}
 
 
+def fuse_rrf(
+    dense: list[RankedChunk],
+    lexical: list[RankedChunk],
+    k: int,
+    *,
+    rrf_k: int = 60,
+    dense_weight: float = 0.5,
+    bm25_weight: float = 0.5,
+) -> list[RankedChunk]:
+    """Weighted Reciprocal Rank Fusion of two rankings -- the project's ONE copy.
+
+    Module-level rather than a method because a second retriever
+    (`QdrantHybridRetriever`) fuses the same two arms served by an engine, and
+    `tools/eval/qdrant_pilot_test.py` re-fuses cached rankings in the same
+    shape. Two copies of the tie-break below would eventually disagree.
+
+    The tie-break is load-bearing and is not incidental to the loop order:
+    `fused` is filled from `dense` first and `sorted` is stable, so chunks with
+    equal fused scores stay in dense order. `miss_depth_profile.py` documents
+    the same rule, and this corpus has large tie groups in both arms
+    (`data/results/qdrant_routed_check.md`), so the convention is reachable in
+    practice rather than theoretical."""
+    by_id = {r.chunk_id: r for r in dense}
+    by_id.update({r.chunk_id: r for r in lexical})
+
+    fused: dict[str, float] = {}
+    for ranking, weight in ((dense, dense_weight), (lexical, bm25_weight)):
+        for r in ranking:
+            fused[r.chunk_id] = fused.get(r.chunk_id, 0.0) + weight / (rrf_k + r.rank)
+
+    ordered = sorted(fused.items(), key=lambda kv: -kv[1])[:k]
+    return [
+        RankedChunk(
+            chunk_id=cid,
+            resolution_id=by_id[cid].resolution_id,
+            page=by_id[cid].page,
+            score=score,
+            rank=rank + 1,
+            text=by_id[cid].text,
+        )
+        for rank, (cid, score) in enumerate(ordered)
+    ]
+
+
 @retriever_registry.register("hybrid")
 class HybridRetriever(BaseRetriever):
     """Fuse Dense and BM25 rankings. Default `rrf` fuses *ranks* (Reciprocal Rank
@@ -76,26 +120,27 @@ class HybridRetriever(BaseRetriever):
         depth = n if self.fetch_depth is None else min(self.fetch_depth, n)
         dense = self._dense.retrieve(query, index, depth)
         bm25 = self._bm25.retrieve(query, index, depth)
-        by_id = {r.chunk_id: r for r in dense}
-        by_id.update({r.chunk_id: r for r in bm25})
 
         if self.method == "rrf":
-            fused: dict[str, float] = {}
-            for ranking, weight in ((dense, self.dense_weight), (bm25, self.bm25_weight)):
-                for r in ranking:
-                    fused[r.chunk_id] = fused.get(r.chunk_id, 0.0) + weight / (
-                        self.rrf_k + r.rank
-                    )
-        elif self.method == "weighted":
-            dn = _normalize({r.chunk_id: r.score for r in dense})
-            bn = _normalize({r.chunk_id: r.score for r in bm25})
-            fused = {
-                cid: self.dense_weight * dn.get(cid, 0.0)
-                + self.bm25_weight * bn.get(cid, 0.0)
-                for cid in by_id
-            }
-        else:
+            return fuse_rrf(
+                dense,
+                bm25,
+                k,
+                rrf_k=self.rrf_k,
+                dense_weight=self.dense_weight,
+                bm25_weight=self.bm25_weight,
+            )
+        if self.method != "weighted":
             raise ValueError(f"unknown hybrid method: {self.method!r}")
+
+        by_id = {r.chunk_id: r for r in dense}
+        by_id.update({r.chunk_id: r for r in bm25})
+        dn = _normalize({r.chunk_id: r.score for r in dense})
+        bn = _normalize({r.chunk_id: r.score for r in bm25})
+        fused = {
+            cid: self.dense_weight * dn.get(cid, 0.0) + self.bm25_weight * bn.get(cid, 0.0)
+            for cid in by_id
+        }
 
         ordered = sorted(fused.items(), key=lambda kv: -kv[1])[:k]
         return [

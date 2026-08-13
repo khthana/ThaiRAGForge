@@ -146,10 +146,20 @@ EVAL_INPUTS: dict[str, list[str]] = {
     # report whose verdict (LIFT, see its `DECISION_RULE`) is *why* that file no
     # longer raises on `weighted` + `fetch_depth`, so re-raising the guard
     # without re-rendering would leave code and report openly disagreeing.
+    # The three Qdrant reports joined this list on 2026-08-13, when the RRF was
+    # lifted here to a module-level `fuse_rrf` and every served arm started
+    # importing it: their fused figures are now a function of this file's
+    # tie-break and defaults, while their own generators say nothing about it.
     "src/rag_lab/retrievers/hybrid.py": [
         "hybrid_alpha_sweep.md", "soft_vs_hard_routing.md", "hybrid_significance_test_9way.md",
         "hybrid_fetch_depth_sweep.md", "hybrid_weighted_fetch_depth.md",
+        "qdrant_pilot.md", "qdrant_concurrency.md", "qdrant_routed_check.md",
     ],
+    # `C8` drives the *shipped* `route_query` through this retriever and gates it
+    # against the check's own hand-assembled arm, so the collection resolution,
+    # the fetch depth and the `exact=True` default are all claims this file makes
+    # and `qdrant_routed_check.py` merely verifies.
+    "src/rag_lab/retrievers/qdrant_hybrid.py": ["qdrant_routed_check.md"],
     "config/eval/gold_query_set_73det.yaml": [
         "routing_eval.md", "soft_vs_hard_routing.md", "hybrid_alpha_sweep.md",
         "power_analysis.md", "map_precision_significance_test.md", "rq4_score.md",

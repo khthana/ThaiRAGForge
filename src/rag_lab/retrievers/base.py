@@ -19,6 +19,16 @@ class BaseRetriever(ABC):
     #: by actual result count instead of the ignored k.
     exhaustive: bool = False
 
+    #: False for a retriever that serves from an external store (Qdrant) and
+    #: reads NOTHING off the Index -- neither `embeddings` nor `chunks`. It is
+    #: one flag rather than two because both consequences follow from that one
+    #: fact: query_service may skip the ~234MB `embeddings.npy` load (the cost
+    #: an engine-served path exists to avoid), and it must REFUSE a row-level
+    #: filter/boost, because narrowing the in-process Index cannot narrow what
+    #: the engine returns -- the failure would otherwise be silent and wrong,
+    #: not loud.
+    reads_index_rows: bool = True
+
     @property
     @abstractmethod
     def name(self) -> str:

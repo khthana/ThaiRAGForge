@@ -105,13 +105,30 @@ def query_indices(
     reranker = build_reranker(reranker_spec) if reranker_spec is not None else None
     detected = detect_entities(query) if entity_boost else {}
 
+    # A retriever serving from an external store (Qdrant) reads no Index rows,
+    # so two things follow from one fact. It does not need `embeddings.npy`
+    # (~234MB per collection -- skipping it is the point of an engine-served
+    # path), and a row-level narrowing CANNOT reach it: filtering the
+    # in-process Index would leave the engine returning the whole collection,
+    # i.e. an unfiltered answer presented as a filtered one. Refuse loudly
+    # instead. `Query.filters` is the engine-side route for that, already
+    # supported for `resolution_id_in` and not yet plumbed through this call.
+    reads_rows = getattr(retriever, "reads_index_rows", True)
+    if not reads_rows and (filter_criteria or entity_boost):
+        raise ValueError(
+            f"retriever {retriever.name!r} serves from an external store and cannot be "
+            f"narrowed by an in-process filter/entity boost -- the narrowing would be "
+            f"silently ignored. Use a row-reading retriever, or express the constraint "
+            f"as a Query.filters kind the retriever supports."
+        )
+
     out: list[ComboRetrieval] = []
     for index_dir in index_dirs:
         manifest = _read_manifest(index_dir)
         embedder = build_embedder(
             StrategySpec.model_validate(manifest["combo"]["embedder"])
         )
-        index = store.load(index_dir)
+        index = store.load(index_dir, with_embeddings=reads_rows)
         if filter_criteria:
             index = MetadataFilter(filter_criteria).apply(index)
         # query_indices compares potentially-heterogeneous combos side by

@@ -306,3 +306,91 @@ def test_query_indices_entity_boost_narrows_entity_tags_index_and_is_noop_on_pla
     by_dir = {cr.index_dir: cr for cr in combos}
     assert by_dir[entity_dir].result.combination_id.endswith("__entity_boost")
     assert not by_dir[plain_dir].result.combination_id.endswith("__entity_boost")
+
+
+class _EngineRetriever:
+    """Stand-in for QdrantHybridRetriever: serves from an external store, so it
+    reads no Index rows (`BaseRetriever.reads_index_rows is False`). A stub
+    rather than the real one because the real one needs a reachable Qdrant --
+    the seam under test is query_service's, not the engine's."""
+
+    reads_index_rows = False
+
+    def __init__(self) -> None:
+        self.seen: list = []
+
+    @property
+    def name(self) -> str:
+        return "stub_engine"
+
+    def retrieve(self, query, index, k):
+        self.seen.append(index)
+        return []
+
+
+class _RowReadingRetriever:
+    """Declares nothing at all, like every retriever written before the flag
+    existed -- deliberately NOT a subclass of the stub above, so it also pins
+    query_service's `getattr(..., True)` default rather than a False it
+    overrode."""
+
+    def __init__(self) -> None:
+        self.seen: list = []
+
+    @property
+    def name(self) -> str:
+        return "stub_rows"
+
+    def retrieve(self, query, index, k):
+        self.seen.append(index)
+        return []
+
+
+def test_an_engine_backed_retriever_is_handed_an_index_with_no_embeddings(tmp_path, monkeypatch):
+    """Skipping `embeddings.npy` (~234MB per collection) is the point of an
+    engine-served path; the rows themselves are still loaded, so the Index still
+    identifies itself."""
+    out = _build_two_indices(tmp_path)
+    dirs = [i.dir for i in discover_indices(out)]
+    stub = _EngineRetriever()
+    monkeypatch.setattr("rag_lab.query_service.build_retriever", lambda spec: stub)
+
+    query_indices("ค่าธรรมเนียม", dirs, StrategySpec(type="qdrant_hybrid"), k=3)
+
+    assert [i.embeddings.shape for i in stub.seen] == [(0, 0), (0, 0)]
+    assert all(i.chunks for i in stub.seen)
+    assert all(i.provenance for i in stub.seen)
+
+
+def test_a_retriever_that_declares_nothing_still_gets_its_embeddings(tmp_path, monkeypatch):
+    out = _build_two_indices(tmp_path)
+    dirs = [i.dir for i in discover_indices(out)]
+    stub = _RowReadingRetriever()
+    monkeypatch.setattr("rag_lab.query_service.build_retriever", lambda spec: stub)
+
+    query_indices("ค่าธรรมเนียม", dirs, StrategySpec(type="dense"), k=3)
+
+    assert len(stub.seen) == 2  # or the all() below is a vacuous pass
+    assert all(i.embeddings.shape[0] == len(i.chunks) > 0 for i in stub.seen)
+
+
+@pytest.mark.parametrize(
+    "narrowing", [{"filter_criteria": {"year": "2569"}}, {"entity_boost": True}]
+)
+def test_query_indices_refuses_to_narrow_an_engine_backed_retriever(
+    tmp_path, monkeypatch, narrowing
+):
+    """Narrowing the in-process Index cannot narrow what the engine returns, and
+    `Index.select` tolerates an empty matrix -- so without this the answer comes
+    back unfiltered while presenting as filtered. Loud, not silent."""
+    out = _build_two_indices(tmp_path)
+    dirs = [i.dir for i in discover_indices(out)]
+    stub = _EngineRetriever()
+    monkeypatch.setattr("rag_lab.query_service.build_retriever", lambda spec: stub)
+
+    with pytest.raises(ValueError, match="external store"):
+        query_indices(
+            "ค่าธรรมเนียม", dirs, StrategySpec(type="qdrant_hybrid"), k=3, **narrowing
+        )
+
+    assert stub.seen == []  # refused before any retrieval, not after

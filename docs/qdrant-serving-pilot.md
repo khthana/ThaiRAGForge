@@ -273,7 +273,8 @@ check fails, ask whether the instrument or the system is wrong before adjusting 
 With the concurrency question closed, the remaining three routed collections were ingested
 with the same `qdrant_pilot_ingest.py`, and the served stack was checked against the
 shipped router: `tools/eval/qdrant_routed_check.py` → `data/results/qdrant_routed_check.md`
-(106 Gold 73det queries, ~118 s, 7/7 checks PASS). **This is a completion check on the
+(106 Gold 73det queries, ~118 s, 8/8 checks PASS — 7/7 when first run; `C8` landed with the
+wiring in §8d). **This is a completion check on the
 ingestion, not an experiment** — no pre-registration, no significance test, no verdict; the
 question is only whether the served stack returns the published answer.
 
@@ -320,6 +321,72 @@ hop** (client and server on one box), nothing about ANN (deliberately — the re
 is `exact=True`), and nothing that survives an index rebuild: a rebuild stales the
 collections, so re-ingest and re-run this.
 
+## 8d. Wiring it into the serving layer (2026-08-13)
+
+Everything above assembles the served arm **by hand**: the script names the collection,
+builds both Qdrant retrievers and calls the fusion itself. That proves the *ingestion* is
+right and says nothing about whether an application reaching for `route_query` gets the same
+thing. This section closes that gap — `qdrant_hybrid` is now a registered retriever the
+shipped path can select, and `C8` in `qdrant_routed_check.py` gates it against the
+hand-assembled arm (**8/8 queries identical, 8/8 the same collection**).
+
+**One spec serves all four collections, and the mechanism is that a collection is a copy of
+an `Index`'s rows.** `QdrantHybridRetriever` resolves its collection *lazily* from
+`index.provenance["index_dir"]` at query time — whose directory name **is** the combo id
+**is** the collection name (`qdrant_pilot_ingest.py`: `collection = args.collection or
+args.index.name`). So `route_query` picks the route's index exactly as it always did, and
+the retriever follows it to the matching collection with no routing table of its own. That
+is what `E0`'s provenance stamp bought, one layer further on than it was built for; passing
+`collection_name=` pins a single collection instead.
+
+**It is a sibling of `HybridRetriever`, not a flag on it.** That class hardcodes
+`DenseRetriever()`/`BM25Retriever()` and sizes its depth from `len(index.chunks)`, neither of
+which exists when the rows live in an engine. **But the fusion is *imported*, never
+reimplemented**: the RRF moved out to a module-level `fuse_rrf` in `hybrid.py` and both
+retrievers call it. Two copies of that tie-break (fill from dense first, stable `sort`, so
+equal fused scores stay dense-first) would eventually disagree, and §8c has just shown this
+corpus reaches tie groups of 22 in practice. `HybridRetriever`'s `weighted` branch is
+untouched, and both Qdrant reports re-render **byte-identically** after the extraction.
+
+**`reads_index_rows` is one flag with two consequences, and the second is the important
+one.** A retriever serving from an external store reads nothing off the `Index`, so
+`query_indices` skips `embeddings.npy` (`ArtifactStore.load(..., with_embeddings=False)`
+— ~234 MB per collection, and avoiding it is the *point* of an engine-served path). It also
+means a row-level narrowing **cannot reach the engine**: filtering the in-process `Index`
+would leave the server returning the whole collection, i.e. an unfiltered answer presented
+as a filtered one. So `query_indices` **refuses** `filter_criteria`/`entity_boost` for such
+a retriever rather than silently ignoring them, and the UI disables both widgets — reading
+the *disabled state* rather than the widget, because a disabled Streamlit widget keeps
+whatever the session already held and would otherwise carry a typed year into the refusal
+as a traceback.
+
+**The UI gets a `qdrant_hybrid` option and a `Qdrant URL` box**, plus one refusal worth
+naming: there is **no whole-corpus (k=n) setting** for the engine path, because each arm is
+a `limit=` request and "k=n" would mean fetching every point in the collection twice per
+query — the exact over-fetch the served path exists to remove. The combination is refused in
+the sidebar rather than silently substituted.
+
+**Nothing defaults to it.** Every eval script and the UI still select the in-process
+retrievers unless a `qdrant_hybrid` spec is passed, which is deliberate: ~24k persisted
+results and every published table were produced by the numpy/`rank_bm25` path, and switching
+the default would silently re-rank them.
+
+**A known serving gap, recorded rather than patched.** `query_indices` builds an embedder
+per call and never releases it, so a served deployment reloads the query encoder on every
+request. It is **pre-existing on the in-process path** (the Streamlit UI has it too), not
+introduced here, and it is why `C8` is a subset (2 queries per route, 8 of 106) rather than
+all 106 — one of the routed embedders is the 4B qwen3 on a 12 GB card. `C8`'s claim is an
+*identity between two code paths*, which a subset settles; the scores are `C2`'s and `C3`'s
+job. §8b already measured that the encoder, not the engine, is what saturates, so this is
+the layer any real deployment has to fix first.
+
+`C8` gates on `bool(compared)` as well as on agreement: re-rendering a cache written before
+the check existed must **FAIL**, not pass vacuously (the `E3` rule — 0 is ambiguous between
+*examined and clean* and *nothing left to examine*). It also asserts
+`route_targets("qdrant_hybrid") == route_targets("hybrid")` rather than assuming the
+fallback holds; if those maps ever diverge, `C8` would be comparing two different
+collections and could still pass.
+
 ## 8. What this pilot does NOT establish
 
 - **~~One collection, one combo, one route.~~** Closed 2026-08-13 — all four routed
@@ -329,6 +396,9 @@ collections, so re-ingest and re-run this.
   narrower: no network hop between app, embedder and engine; no bursty arrival process
   (the loop is closed); and the `encode` curve is this machine's RTX 3060, not the
   faculty GPU server.
-- **Nothing is wired.** `query_service`/`registry` still route to the in-process
-  retrievers; adopting Qdrant in the serving path is a separate decision that has not been
-  taken.
+- **~~Nothing is wired.~~** Closed 2026-08-13 — see §8d: `qdrant_hybrid` is a registered
+  retriever, the shipped `route_query` path serves all four collections through it, and
+  `C8` gates that path against the hand-assembled arm. What remains open is narrower and
+  deliberate: **nothing defaults to it** (every eval and the UI still select the in-process
+  retrievers unless the spec is passed), and `query_indices` still builds an embedder per
+  call — a pre-existing serving gap, and per §8b the layer that actually saturates.

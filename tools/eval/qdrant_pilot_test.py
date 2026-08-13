@@ -78,7 +78,7 @@ from rag_lab.query_sets import load_gold_query_set  # noqa: E402
 from rag_lab.retrievers import bm25_sparse  # noqa: E402
 from rag_lab.retrievers.bm25 import BM25Retriever  # noqa: E402
 from rag_lab.retrievers.dense import DenseRetriever  # noqa: E402
-from rag_lab.retrievers.hybrid import HybridRetriever  # noqa: E402
+from rag_lab.retrievers.hybrid import HybridRetriever, fuse_rrf  # noqa: E402
 from rag_lab.retrievers.qdrant_retriever import (  # noqa: E402
     QdrantRetriever,
     QdrantSparseRetriever,
@@ -109,27 +109,15 @@ EF_GRID = [16, 64, 128, 256, 512, 1024]
 # --------------------------------------------------------------------------- #
 def rrf_fuse(dense: list[RankedChunk], lexical: list[RankedChunk], k: int) -> list[RankedChunk]:
     """The exact fusion `HybridRetriever.retrieve` performs at method='rrf',
-    rrf_k=60, 0.5/0.5 -- reproduced rather than reimplemented in spirit, because
-    two copies of the dense-first tie-break would eventually disagree
-    (cf. miss_depth_profile.py's docstring)."""
-    by_id = {r.chunk_id: r for r in dense}
-    by_id.update({r.chunk_id: r for r in lexical})
-    fused: dict[str, float] = {}
-    for ranking in (dense, lexical):
-        for r in ranking:
-            fused[r.chunk_id] = fused.get(r.chunk_id, 0.0) + 0.5 / (60 + r.rank)
-    ordered = sorted(fused.items(), key=lambda kv: -kv[1])[:k]
-    return [
-        RankedChunk(
-            chunk_id=cid,
-            resolution_id=by_id[cid].resolution_id,
-            page=by_id[cid].page,
-            score=score,
-            rank=rank + 1,
-            text=by_id[cid].text,
-        )
-        for rank, (cid, score) in enumerate(ordered)
-    ]
+    rrf_k=60, 0.5/0.5.
+
+    Was a hand-copy of it, on the reasoning that two copies of the dense-first
+    tie-break would eventually disagree (cf. miss_depth_profile.py's docstring)
+    -- which is an argument for having ONE, so it now calls the one. The
+    defaults are spelled out rather than left implicit because this wrapper is
+    what several reports' published numbers were fused with, and a future
+    change to `fuse_rrf`'s defaults must not silently re-rank them."""
+    return fuse_rrf(dense, lexical, k, rrf_k=60, dense_weight=0.5, bm25_weight=0.5)
 
 
 def to_result(query: str, arm: str, ranked: list[RankedChunk]) -> RetrievalResult:

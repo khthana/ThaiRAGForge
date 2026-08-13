@@ -2792,9 +2792,12 @@ k=n p50 **1089.5 ms** → F=1,000 **421.0 ms** → F=200 **417.9 ms**. So the
 over-fetch is ~62% of hybrid query time, and the ~0.42 s that remains is real
 scoring work (dense encode + gemv + BM25 `get_scores`) that no depth cut
 touches. The trade on offer is ≈0.67 s/query for −0.0033 macro recall@10 at
-F=200. **Nothing is wired — the shipped default is still k=n**, and the knob's
-default (`fetch_depth=None`) computes `depth = len(index.chunks)`, i.e. the
-old expression exactly, so no published number moves.
+F=200. **As of this sweep nothing was wired — the class default is still k=n**,
+and the knob's default (`fetch_depth=None`) computes `depth = len(index.chunks)`,
+i.e. the old expression exactly, so no published number moves. (It was
+subsequently shipped at the *query-time* layer only, once re-measured against the
+hard router — see the ship decision two sections down; the constructor default
+never changed.)
 
 ### The same cut measured against the shipped hard router — and the ship decision
 

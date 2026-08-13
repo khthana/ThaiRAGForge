@@ -2463,7 +2463,8 @@ see `docs/adr/`.
   loop is closed); "one collection" is closed by the next bullet.
 - **All four routed collections ingested and served end to end (2026-08-13,
   `tools/eval/qdrant_routed_check.py` → `data/results/qdrant_routed_check.md`, 106 Gold
-  73det queries, ~118 s, 7/7 self-checks PASS).** With the concurrency question answered,
+  73det queries, ~118 s, 8/8 self-checks PASS — 7/7 when first run, `C8` landing with the
+  wiring below).** With the concurrency question answered,
   the other 3 collections were ingested with the same `qdrant_pilot_ingest.py`. **This is a
   completion check on the ingestion, not an experiment** — no pre-registration, no
   significance test, no verdict; the only question is whether the served stack returns the
@@ -2495,7 +2496,33 @@ see `docs/adr/`.
   semantic 5.22%, sentence 6.87%. **Not established**: one query set, one fetch depth, one
   fusion, **no network hop**, nothing about ANN (deliberately — the recommendation is
   `exact=True`). **A collection is a copy of an `Index`'s rows, so any index rebuild stales
-  it**: re-ingest and re-run this. **Nothing is wired.**
+  it**: re-ingest and re-run this.
+  **IT IS NOW WIRED (2026-08-13, `src/rag_lab/retrievers/qdrant_hybrid.py`,
+  `docs/qdrant-serving-pilot.md` §8d) — the served path is the shipped `route_query`, not a
+  script.** `qdrant_hybrid` is a registered retriever taking an all-scalar
+  `StrategySpec(params={"url", "fetch_depth", "exact", ...})`, and **one spec serves all four
+  collections** because the collection name is resolved *at query time* from
+  `Index.provenance["index_dir"]` — so a `ROUTE_COMBO_BY_RETRIEVER` change moves the served
+  path with it and no per-route config exists to drift. It is a **sibling of
+  `HybridRetriever`, not a flag on it**: an engine-backed arm shares none of its internals but
+  must share its ranking, so `fuse_rrf` was lifted to module level in `hybrid.py` as **the
+  project's one copy of RRF** (tie-break included) and is imported by both — plus by
+  `qdrant_pilot_test.py`, whose two reports re-render byte-identically after the change.
+  **`BaseRetriever.reads_index_rows` (default `True`) is one flag with two consequences**:
+  `query_indices` skips the ~234 MB `embeddings.npy` load for an engine retriever, and it
+  **refuses** a row-level year filter or entity boost with a `ValueError` naming the reason —
+  narrowing the in-process `Index` cannot narrow what the engine returns, so the quiet
+  behaviour would be a silently ignored filter. The UI carries it as a Retriever option with a
+  URL box, and disables/**resets** those two widgets there (a disabled Streamlit widget keeps
+  its session value) and refuses `k=n`. **Nothing defaults to it** — `dense`/`hybrid` still
+  ship in-process, this is opt-in. **`C8` is the gate**: it drives the *shipped* `route_query`
+  on a per-route subset (8 of 106) and requires the same top-10 **and** the same resolved
+  collection as the hand-assembled arm (8/8, 8/8), asserting
+  `route_targets("qdrant_hybrid") == route_targets("hybrid")` rather than assuming the
+  fallback, and gating on `bool(compared)` so an empty subset cannot pass vacuously. **Why a
+  subset**: `build_embedder` has no cache and `query_indices` never releases, so N
+  `route_query` calls are N model loads — a **pre-existing** serving gap (the Streamlit UI has
+  it too), and per §8b the embedder is the layer that saturates anyway.
 - **Corpus data-quality audit** (`tools/corpus_prep/audit_title_body_agreement.py`,
   2026-07-30): flags manifest titles that disagree with the document's own page-1
   `เรื่อง` subject line. A first version was rejected on measurement (median 0.660,

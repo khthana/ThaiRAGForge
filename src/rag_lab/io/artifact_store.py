@@ -54,7 +54,19 @@ class ArtifactStore:
                 json.dumps(index.lexical, ensure_ascii=False), encoding="utf-8"
             )
 
-    def load(self, directory: str | Path) -> Index:
+    def load(self, directory: str | Path, *, with_embeddings: bool = True) -> Index:
+        """`with_embeddings=False` returns an Index whose `embeddings` is an empty
+        (0, 0) array, for a retriever that serves the vectors from elsewhere
+        (`BaseRetriever.reads_index_rows is False`). It is a real saving, not a
+        micro-optimisation -- `embeddings.npy` is ~234MB for a 57k x 1024
+        collection, and avoiding it is the point of an engine-served path.
+
+        Every other field is loaded normally, so the Index still identifies
+        itself (`provenance`) and still carries its rows. Callers that only
+        inspect metadata may use it too; `Index.select` already tolerates an
+        empty matrix, so the filter path does not crash on one -- but it would
+        silently fail to narrow the engine, which is why query_service refuses
+        that combination outright rather than relying on this."""
         d = Path(directory)
         cols = pq.read_table(d / _CHUNKS).to_pydict()
         chunks = [
@@ -68,7 +80,9 @@ class ArtifactStore:
             )
             for i in range(len(cols["chunk_id"]))
         ]
-        embeddings = np.load(d / _EMBEDDINGS)
+        embeddings = (
+            np.load(d / _EMBEDDINGS) if with_embeddings else np.zeros((0, 0), dtype=np.float32)
+        )
         meta = json.loads((d / _META).read_text(encoding="utf-8"))
         lexical_path = d / _LEXICAL
         lexical = (

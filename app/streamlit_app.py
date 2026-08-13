@@ -129,10 +129,29 @@ else:
             "retired 252-query/3-route eval and are withdrawn."
         ),
     )
-retriever = st.sidebar.selectbox("Retriever", ["dense", "bm25", "hybrid"], index=0, key="retriever")
+retriever = st.sidebar.selectbox(
+    "Retriever", ["dense", "bm25", "hybrid", "qdrant_hybrid"], index=0, key="retriever",
+    help=(
+        "'hybrid' fuses in-process numpy + rank_bm25. 'qdrant_hybrid' fuses the "
+        "SAME two arms served by a Qdrant server (dense exact=True + precomputed "
+        "BM25 sparse vectors), with the identical RRF -- data/results/"
+        "qdrant_routed_check.md measured the served routed stack at 0.6827 "
+        "against the published 0.6835, and the per-query Python scoring it "
+        "replaces is ~0.4s. It needs a running container AND the collections "
+        "ingested by tools/eval/qdrant_pilot_ingest.py; a collection is a copy "
+        "of an index's rows, so an index rebuild stales it."
+    ),
+)
+_ENGINE_RETRIEVERS = {"qdrant_hybrid"}
+_FUSED_RETRIEVERS = {"hybrid", "qdrant_hybrid"}
+_WHOLE_CORPUS = "ทั้งคลัง (k=n)"
+qdrant_url = st.sidebar.text_input(
+    "Qdrant URL", "http://localhost:6333", key="qdrant_url",
+    disabled=retriever not in _ENGINE_RETRIEVERS,
+)
 fetch_depth = st.sidebar.selectbox(
-    "Hybrid fetch depth", [200, 1000, "ทั้งคลัง (k=n)"], index=0, key="fetch_depth",
-    disabled=retriever != "hybrid",
+    "Hybrid fetch depth", [200, 1000, _WHOLE_CORPUS], index=0, key="fetch_depth",
+    disabled=retriever not in _FUSED_RETRIEVERS,
     help=(
         "How many candidates each arm returns before RRF fuses them. 'ทั้งคลัง' "
         "is what every published number was measured at -- RRF sees complete "
@@ -147,6 +166,14 @@ fetch_depth = st.sidebar.selectbox(
         "data/results/routed_fetch_depth_test.md."
     ),
 )
+_engine_depth_unavailable = retriever in _ENGINE_RETRIEVERS and fetch_depth == _WHOLE_CORPUS
+if _engine_depth_unavailable:
+    st.sidebar.warning(
+        f"`{retriever}` has no whole-corpus setting: each arm is a `limit=` "
+        "request to the server, so 'ทั้งคลัง' would mean fetching every point "
+        "in the collection twice per query — the over-fetch the served path "
+        "exists to remove. Pick 200 or 1000."
+    )
 
 
 def _retriever_spec() -> StrategySpec:
@@ -157,15 +184,36 @@ def _retriever_spec() -> StrategySpec:
     every eval script and all ~24k persisted results keep reproducing their
     published numbers by construction. Only the interactive path, where 0.72s
     per query is what a person actually feels, opts into the cut.
+
+    `qdrant_hybrid` is the one retriever with no whole-corpus setting: its arms
+    are two `limit=` requests to a server, so "k=n" would mean asking the engine
+    for all ~57k points per arm -- the exact over-fetch the served path exists to
+    remove. Rather than silently substituting a depth, that combination is
+    refused above (the caption beside the selectbox) and never reaches here.
     """
-    if retriever != "hybrid" or fetch_depth == "ทั้งคลัง (k=n)":
+    if retriever in _ENGINE_RETRIEVERS:
+        params: dict = {"url": qdrant_url.strip()}
+        if fetch_depth != _WHOLE_CORPUS:
+            params["fetch_depth"] = int(fetch_depth)
+        return StrategySpec(type=retriever, params=params)
+    if retriever != "hybrid" or fetch_depth == _WHOLE_CORPUS:
         return StrategySpec(type=retriever)
     return StrategySpec(type=retriever, params={"fetch_depth": int(fetch_depth)})
 k = st.sidebar.slider("top-k", min_value=1, max_value=20, value=5, key="k")
-year_filter = st.sidebar.text_input("Filter by year (พ.ศ., optional)", "", key="year_filter")
+_engine_narrowing = retriever in _ENGINE_RETRIEVERS
+year_filter = st.sidebar.text_input(
+    "Filter by year (พ.ศ., optional)", "", key="year_filter", disabled=_engine_narrowing,
+    help=(
+        "Disabled for an engine-served retriever: both this and the entity boost "
+        "narrow the in-process Index, which cannot narrow what the server "
+        "returns. query_service refuses the combination rather than answering an "
+        "unfiltered query as if it were filtered."
+        if _engine_narrowing else None
+    ),
+)
 entity_boost = st.sidebar.checkbox(
     "Entity boost (narrow to detected person/program/course/faculty before ranking)",
-    value=False, key="entity_boost",
+    value=False, key="entity_boost", disabled=_engine_narrowing,
     help=(
         "Detects named people/programs/courses/faculties in the query "
         "(src/rag_lab/router.py's detect_entities) and, for any selected "
@@ -177,6 +225,13 @@ entity_boost = st.sidebar.checkbox(
         "with any other loader (narrowing is skipped for it, not an error)."
     ),
 )
+if _engine_narrowing:
+    # A DISABLED Streamlit widget keeps whatever the session already held, so
+    # switching to an engine retriever with a year typed (or the boost ticked)
+    # would carry that value into query_indices and surface its refusal as a
+    # traceback. Read the disabled state instead of the widget. Nothing is
+    # silently dropped: both widgets are visibly disabled and say why.
+    year_filter, entity_boost = "", False
 query = st.text_input("Query (คำค้น)", key="query")
 
 
@@ -198,7 +253,9 @@ def _show_detected_entities(q: str) -> None:
         st.caption("Detected entities — none (entity boost has no effect on this query)")
 
 
-search_clicked = st.button("Search", type="primary", key="search_button")
+search_clicked = st.button(
+    "Search", type="primary", key="search_button", disabled=_engine_depth_unavailable,
+)
 
 if search_clicked and query and smart_routing:
     route = classify_query(query)
@@ -225,6 +282,10 @@ if search_clicked and query and smart_routing:
             "dir (see the checkbox tooltip). Point 'Index output dir' at one "
             "that has them, or turn off smart routing to compare freely."
         )
+    except FileNotFoundError as e:
+        # qdrant_hybrid resolves its collection from the routed index's own
+        # directory name, so an un-ingested route fails here and nowhere else.
+        st.error(f"{e}")
     else:
         _render_result(result.combination_id, result)
 elif search_clicked and query and not smart_routing and selected:

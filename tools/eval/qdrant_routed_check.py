@@ -27,6 +27,14 @@ while individual queries move in compensating directions. C2 is what makes C3
 (served vs reference) mean anything: without it, a served arm agreeing with a
 *wrong* reference would read as a pass.
 
+C8 is the one check here that is about *code paths* rather than about the
+ingestion. Everything else assembles the served arm by hand -- it names the
+collection, builds both Qdrant retrievers and calls the fusion itself -- which
+proves the collections are right and says nothing about whether an application
+reaching for `route_query` gets the same thing. C8 runs the shipped path
+(`route_query` + a `qdrant_hybrid` StrategySpec) and requires it to return this
+script's own served top-10, id for id.
+
 C6 records the mechanism behind the pilot's one unexplained observation. It
 reported `indexed_vectors_count` at ~1.93x `points_count` and called it
 unexplained; telemetry gives `num_vectors == 2 x num_points` on every
@@ -73,7 +81,11 @@ from rag_lab.config import StrategySpec  # noqa: E402
 from rag_lab.factory import build_embedder  # noqa: E402
 from rag_lab.io.artifact_store import ArtifactStore  # noqa: E402
 from rag_lab.metrics import recall_at_k  # noqa: E402
-from rag_lab.query_service import discover_indices, resolve_index  # noqa: E402
+from rag_lab.query_service import (  # noqa: E402
+    discover_indices,
+    resolve_index,
+    route_query,
+)
 from rag_lab.retrievers.bm25 import BM25Retriever  # noqa: E402
 from rag_lab.retrievers.dense import DenseRetriever  # noqa: E402
 from rag_lab.retrievers.qdrant_retriever import (  # noqa: E402
@@ -188,6 +200,64 @@ def run_one_combo(combo: str, index_dir: Path, qs: list[str], url: str) -> dict:
     return {"combo": combo, "rows": rows, "n_rows": n_rows}
 
 
+def run_wiring_check(
+    queries: list[str],
+    route_of: dict[str, str],
+    indices,
+    url: str,
+    per_route: int = 2,
+) -> dict:
+    """C8's arm: the same answer, fetched through the SHIPPED serving path.
+
+    `run_one_combo` above names the collection, builds both Qdrant retrievers
+    and calls the fusion itself. That is the right shape for checking an
+    *ingestion* and the wrong shape for checking a *deployment*: the route ->
+    collection resolution, the skipped `embeddings.npy`, the lazily-derived
+    collection name and the retriever's own fetch depth are all code it
+    bypasses. Here nothing is assembled -- one `StrategySpec` goes into
+    `route_query` and whatever comes back is the answer an application gets.
+
+    Deliberately a SUBSET (2 queries per route, 8 of 106). `build_embedder`
+    has no cache and `query_indices` never releases, so a 106-query loop loads
+    an embedder 106 times and one of the routed embedders is the 4B qwen3 on a
+    12 GB card. That is affordable here because the claim being anchored is an
+    *identity between two code paths*, which a subset settles; the scores are
+    C2's and C3's job.
+    """
+    # The shipped path resolves its own targets from the spec's retriever type,
+    # and `qdrant_hybrid` is not in ROUTE_COMBO_BY_RETRIEVER -- it falls back to
+    # ROUTE_COMBO (the hybrid map). Assert that rather than assume it: if the
+    # two maps ever diverge, C8 would be comparing two different collections
+    # and could still pass.
+    if route_targets("qdrant_hybrid") != route_targets("hybrid"):
+        raise AssertionError(
+            "route_targets('qdrant_hybrid') no longer resolves to the hybrid map, "
+            "so the shipped path and this script's served arm would be reading "
+            "different collections. Add an explicit entry to "
+            "ROUTE_COMBO_BY_RETRIEVER and re-point this check."
+        )
+
+    by_route: dict[str, list[str]] = collections.defaultdict(list)
+    for q in queries:
+        by_route[route_of[q]].append(q)
+    chosen = [q for r in sorted(by_route) for q in by_route[r][:per_route]]
+
+    spec = StrategySpec(
+        type="qdrant_hybrid",
+        params={"url": url, "fetch_depth": FETCH_DEPTH, "exact": True},
+    )
+    out = {}
+    for i, q in enumerate(chosen, 1):
+        print(f"    wiring [{i}/{len(chosen)}] {route_of[q]}", flush=True)
+        res = route_query(q, indices, spec, K)
+        out[q] = {
+            "route": route_of[q],
+            "combination_id": res.combination_id,
+            "chunk_ids": [r.chunk_id for r in res.results],
+        }
+    return out
+
+
 def collect(args) -> dict:
     raw = yaml.safe_load(GOLD.read_text(encoding="utf-8"))
     queries = [d["query"] for d in raw]
@@ -227,6 +297,11 @@ def collect(args) -> dict:
 
     n_rows = {combo: pc["n_rows"] for combo, pc in per_combo.items()}
 
+    # After the loop above, never inside it: `route_query` builds its own
+    # embedder and this box holds one at a time.
+    print("wiring check (shipped route_query path)", flush=True)
+    wiring = run_wiring_check(queries, route_of, indices, args.url)
+
     return {
         "queries": queries,
         "qrels": qrels,
@@ -241,6 +316,7 @@ def collect(args) -> dict:
         "url": args.url,
         "smoke": bool(args.smoke),
         "per_combo": per_combo,
+        "wiring": wiring,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "elapsed_s": round(time.time() - t0, 1),
     }
@@ -497,6 +573,37 @@ def checks(raw: dict, an: dict) -> list[tuple[str, bool, str]]:
             if s
         ),
     ))
+
+    # C8 is about code paths, not about the engine. Every check above builds
+    # the served arm by hand; this one asks whether an application calling
+    # `route_query` with a `qdrant_hybrid` spec gets that same answer, which is
+    # the only form in which the wiring is testable at all.
+    wiring = raw.get("wiring") or {}
+    served_by_q = {
+        row["query"]: [it["chunk_id"] for it in row["served"]]
+        for pc in raw["per_combo"].values()
+        for row in pc["rows"]
+    }
+    compared = [q for q in wiring if q in served_by_q]
+    differ = [q for q in compared if wiring[q]["chunk_ids"] != served_by_q[q]]
+    wrong_combo = [
+        q for q in compared
+        if not wiring[q]["combination_id"].startswith(raw["combo_of"][raw["route_of"][q]])
+    ]
+    out.append((
+        "C8 the SHIPPED path (`route_query` + a `qdrant_hybrid` StrategySpec) returns "
+        "this script's own served top-10, id for id",
+        # `bool(compared)` is the denominator, not decoration: an empty wiring
+        # run would make both `not differ` and `not wrong_combo` vacuously true.
+        # Re-rendering a cache written before this check existed must FAIL, and
+        # the fix for that is a re-run, never a loosened check (the E3 rule:
+        # 0 is ambiguous between examined-and-clean and nothing-to-examine).
+        bool(compared) and not differ and not wrong_combo,
+        f"{len(compared) - len(differ)}/{len(compared)} queries identical; "
+        f"{len(compared) - len(wrong_combo)}/{len(compared)} resolved the same "
+        f"collection as the hand-assembled arm"
+        + ("" if compared else "; NO wiring run in the cache (re-run, do not --render)"),
+    ))
     return out
 
 
@@ -615,8 +722,20 @@ def render(raw: dict) -> str:
         "nothing about concurrency (`qdrant_concurrency.md` covers that, and found "
         "the GPU binds first), and nothing about a rebuild: a re-ingest after any "
         "index rebuild has to re-run this.",
-        "- **Nothing is wired**: `query_service`/`registry` still route to the "
-        "in-process retrievers.",
+        "- **It is wired** (2026-08-13): `qdrant_hybrid` is a registered retriever, "
+        "`query_service.query_indices` skips `embeddings.npy` for any retriever "
+        "declaring `reads_index_rows = False`, and C8 above runs the shipped "
+        "`route_query` path against the arm this script assembles by hand. One "
+        "spec serves all four collections because the collection name is resolved "
+        "from `Index.provenance` at query time. Nothing *defaults* to it: the "
+        "in-process retrievers are still what every eval and the UI select unless "
+        "a `qdrant_hybrid` spec is passed.",
+        "- **A known serving gap, not introduced here**: `query_indices` builds an "
+        "embedder per call and never releases it, so a served deployment reloads "
+        "the query encoder on every request. That is why C8 is a subset rather "
+        "than all 106, and it is pre-existing on the in-process path (the "
+        "Streamlit UI has it too). `qdrant_concurrency.md` already measured that "
+        "the encoder, not the engine, is what saturates.",
         "",
     ]
     return "\n".join(L)

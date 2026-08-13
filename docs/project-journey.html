@@ -302,7 +302,7 @@ query เท่านั้น — บน thematic query กลับทิศ�
 <tr><td><b>Loader</b></td><td><code>Plain</code> (baseline) · <code>Metadata</code> (สกัดปี/ครั้งที่/เรื่อง/URL) · <code>NER</code> · <code>entity_tags</code> · <code>normalized</code></td></tr>
 <tr><td><b>Chunker</b></td><td><code>FixedSize</code> (512 ตัวอักษร, overlap 50) · <code>Recursive</code> (แยกตามลำดับชั้น separator) · <code>Sentence</code> (ตัดประโยคไทยด้วย crfcut) · <code>Semantic</code> (หา breakpoint จากความคล้ายของ embedding)</td></tr>
 <tr><td><b>Embedder</b></td><td><code>Hashing</code> (baseline ไม่ใช้โมเดล) · <code>Local</code> (โมเดล HF ใดก็ได้บน GPU) · <code>E5</code> (มี prefix query:/passage:) · <code>API</code> (interface พร้อม ยังไม่ต่อจริง)</td></tr>
-<tr><td><b>Retriever</b></td><td><code>Dense</code> (cosine) · <code>BM25</code> · <code>Hybrid</code> (RRF) · <code>Qdrant</code> · + <code>MetadataFilter</code> / <code>EntityFilter</code> ที่ประกอบร่วมกับตัวไหนก็ได้</td></tr>
+<tr><td><b>Retriever</b></td><td><code>Dense</code> (cosine) · <code>BM25</code> · <code>Hybrid</code> (RRF) · <code>Qdrant</code> (dense, embedded) · <code>QdrantHybrid</code> (สอง arm จาก collection เดียวบนเซิร์ฟเวอร์จริง, §9.36) · + <code>MetadataFilter</code> / <code>EntityFilter</code> ที่ประกอบร่วมกับตัวไหนก็ได้</td></tr>
 </tbody>
 </table>
 
@@ -3392,7 +3392,8 @@ residence 0.3 ms ต่ำกว่า switch interval 5 ms ของ CPython �
 
 <div class="win">
 <span class="label">ขยักสาม — ingest ครบทั้ง 4 collection แล้ว<b>ตรวจจนสุดสาย</b> เทียบเลขที่ตีพิมพ์</span>
-<code>tools/eval/qdrant_routed_check.py</code> · 106 Gold 73det · ~118 วินาที · <b>7/7 self-check PASS</b> ·
+<code>tools/eval/qdrant_routed_check.py</code> · 106 Gold 73det · ~118 วินาที · <b>8/8 self-check PASS</b>
+(7/7 ตอนรันครั้งแรก · <code>C8</code> มาพร้อมการต่อสายในขยักสี่) ·
 <b>เป็นเช็คความครบถ้วนของการ ingest ไม่ใช่การทดลอง</b> — ไม่มีการลงทะเบียนคำทำนาย
 ไม่มี significance test ไม่มีคำตัดสิน มีแค่ "สแต็กที่เสิร์ฟจริงคืนคำตอบที่ตีพิมพ์ไว้ไหม"<br>
 ตีพิมพ์ (<code>routed_fetch_depth_test.md</code>, F=200) <b>0.6835</b> → อ้างอิง (numpy +
@@ -3434,11 +3435,40 @@ semantic 5.22%, sentence <b>6.87%</b> — <b>ไม่มีผลก็เพ�
 เท่านั้น ถ้าเสิร์ฟ ANN ตัวเลขนี้จะแปลว่าบางคำถามไม่ได้เดินกราฟเลย
 </div>
 
+<div class="win">
+<span class="label">ขยักสี่ — <b>ต่อสายเข้าเส้นทางที่ ship จริง</b> ไม่ใช่แค่สคริปต์ (13 ส.ค.)</span>
+<code>src/rag_lab/retrievers/qdrant_hybrid.py</code> · <code>qdrant_hybrid</code> เป็น retriever
+ที่ลงทะเบียนแล้ว รับ <code>StrategySpec</code> ที่ทุก argument เป็น scalar
+(<code>url</code> / <code>fetch_depth</code> / <code>exact</code>) ·
+<b>spec เดียวเสิร์ฟได้ทั้ง 4 collection</b> เพราะชื่อ collection ถูกอ่าน<i>ตอน query</i>จาก
+<code>Index.provenance["index_dir"]</code> — แก้ <code>ROUTE_COMBO_BY_RETRIEVER</code>
+เส้นทางที่เสิร์ฟก็ขยับตาม ไม่มี config รายเส้นทางให้หลุดจากกัน<br>
+<b>เป็นพี่น้องกับ <code>HybridRetriever</code> ไม่ใช่ flag ในตัวมัน</b>: arm ที่วิ่งบน engine
+ไม่ได้ใช้ไส้ในร่วมกันเลย แต่<i>ต้อง</i>จัดอันดับเหมือนกัน — <code>fuse_rrf</code> จึงถูกยกขึ้นเป็น
+ระดับโมดูลใน <code>hybrid.py</code> ในฐานะ <b>RRF ชุดเดียวของโปรเจกต์</b> (รวมกฎตัดเสมอ) แล้ว
+import ทั้งสองฝั่ง (และ <code>qdrant_pilot_test.py</code> ด้วย — สองรายงานเดิม render ออกมา
+<b>byte-identical</b> หลังเปลี่ยน)<br>
+<b><code>BaseRetriever.reads_index_rows</code> คือ flag เดียวที่มีผลสองอย่าง</b>:
+<code>query_indices</code> ข้ามการโหลด <code>embeddings.npy</code> ~234 MB และ
+<b>ปฏิเสธ</b> year filter / entity boost ด้วย <code>ValueError</code> ที่บอกเหตุผล — การหด
+<code>Index</code> ในโปรเซสหดสิ่งที่ engine คืนไม่ได้ พฤติกรรมแบบเงียบคือ filter ที่ถูกเมินเฉยๆ ·
+UI มีตัวเลือกนี้พร้อมช่อง URL และ<b>รีเซ็ต</b>สองวิดเจ็ตนั้น (วิดเจ็ต Streamlit ที่ disabled
+ยังเก็บค่าใน session) และปฏิเสธ k=n<br>
+<b><code>C8</code> คือประตู</b> — ขับ <code>route_query</code> ที่ ship จริงบน subset รายเส้นทาง
+(8 จาก 106) แล้วบังคับให้ได้ top-10 <i>และ</i> collection เดียวกับ arm ที่ประกอบเอง
+(8/8, 8/8) · assert ว่า <code>route_targets("qdrant_hybrid") == route_targets("hybrid")</code>
+แทนที่จะสมมติ fallback · gate ที่ <code>bool(compared)</code> เพื่อไม่ให้ subset ว่างผ่านแบบ vacuous<br>
+<b>ไม่มีอะไร default มาที่มัน</b> — <code>dense</code>/<code>hybrid</code> ยังวิ่งในโปรเซส
+อันนี้เป็น opt-in
+</div>
+
 <div class="dead">
 <span class="label">สิ่งที่ยัง<i>ไม่</i>ได้ทำ — และกฎที่ต้องติดไปกับ collection</span>
-<b>ยังไม่ได้ต่อสายอะไรทั้งสิ้น</b>: <code>query_service</code>/<code>registry</code>
-ยังเรียก retriever ในโปรเซสเหมือนเดิม · ไม่มี network hop ระหว่าง app/embedder/engine
-ในการวัดใดๆ (ลูปปิด ไม่มี arrival process แบบกระชาก) · ไม่มี significance test
+<b>ทำไม <code>C8</code> ถึงเป็นแค่ subset</b>: <code>build_embedder</code> ไม่มี cache และ
+<code>query_indices</code> ไม่เคยปล่อยโมเดล — เรียก <code>route_query</code> N ครั้งคือโหลด
+โมเดล N ครั้ง · เป็นช่องโหว่ฝั่งเสิร์ฟที่<b>มีอยู่ก่อนแล้ว</b> (UI ก็เป็น) และตามขยักสองคือ
+ชั้นที่อิ่มตัวจริง · ไม่มี network hop ระหว่าง app/embedder/engine ในการวัดใดๆ
+(ลูปปิด ไม่มี arrival process แบบกระชาก) · ไม่มี significance test
 ทุก Δ ในงานนี้เป็นค่าบรรยาย<br>
 <b>และกฎที่ต้องจำ: collection คือสำเนาแถวของ <code>Index</code></b> — index rebuild ครั้งไหน
 ก็ทำให้มันเก่าทันที ต้อง ingest ใหม่แล้วรันเช็คนี้ซ้ำ วินัยเดียวกับ "refresh ทุกเส้นทาง
@@ -3795,8 +3825,11 @@ count/total (§9.30), ตรวจ RQ4 ด้วย generator ตัวที่
 วันเดียวกันจึงเปิดงานสายใหม่ที่เล็ง<b>การ deploy</b> แทน: pilot Qdrant บนเซิร์ฟเวอร์จริง
 (embedded คือ brute force ไม่ใช่ ANN → เสิร์ฟ dense ด้วย <code>exact=True</code>),
 วัดภาระพร้อมกันได้ว่า<b>คอขวดคือ GPU ไม่ใช่ engine</b> แล้ว ingest ครบทั้ง 4 collection
-ตาม router ที่ ship อยู่ ตรวจจนสุดสายว่าคืนเลขที่ตีพิมพ์ (0.6835 → <b>0.6827</b>, §9.36) ·
-<b>รายการที่เหลือคือการต่อสาย Qdrant เข้าเส้นทาง query จริง กับหนี้ rebuild ที่ตัดสินใจไม่จ่าย</b>
+ตาม router ที่ ship อยู่ ตรวจจนสุดสายว่าคืนเลขที่ตีพิมพ์ (0.6835 → <b>0.6827</b>, §9.36)
+แล้ว<b>ต่อสายเข้าเส้นทาง <code>route_query</code> ที่ ship จริง</b> — <code>qdrant_hybrid</code>
+เป็น retriever ที่ลงทะเบียนแล้ว spec เดียวเสิร์ฟครบ 4 collection มี <code>C8</code> เป็นประตู
+และ<b>ไม่มีอะไร default มาที่มัน</b> (§9.36 ขยักสี่) ·
+<b>รายการที่เหลือคือหนี้ rebuild ที่ตัดสินใจไม่จ่าย</b>
 </p>
 <h3>ยังไม่ได้ทำ (เรียงตามคุณค่าต่อต้นทุน)</h3>
 <ol>
@@ -3829,8 +3862,12 @@ embedded mode ไม่ได้ทำ ANN เลย จึงเทียบ "Q
 ตอนนี้มี<b>เซิร์ฟเวอร์จริง</b> (v1.18.0), <b>ingest ครบทั้ง 4 collection</b> ตาม router ที่ ship อยู่,
 ตรวจจนสุดสายว่าเสิร์ฟแล้วได้ <b>0.6827</b> เทียบเลขที่ตีพิมพ์ 0.6835 (−0.0008 อยู่ในระดับ
 การตัดเสมอ), และวัดภาระพร้อมกันแล้วรู้ว่า<b>คอขวดคือ GPU ไม่ใช่ engine</b>
-(engine มีที่เหลือ ~2 เท่าที่ทุกระดับ concurrency) · <b>ที่ยังค้างจริงเหลือแค่การต่อสาย</b>
-เข้า <code>query_service.py</code>/<code>registry</code>/UI (ตอนนี้<b>ยังไม่ต่ออะไรเลย</b>),
+(engine มีที่เหลือ ~2 เท่าที่ทุกระดับ concurrency) · <b>และต่อสายแล้ว 13 ส.ค.</b> —
+<code>qdrant_hybrid</code> ลงทะเบียนใน registry, <code>route_query</code>/UI เรียกได้จริง,
+spec เดียวเสิร์ฟครบ 4 collection ผ่าน <code>Index.provenance</code>, RRF ใช้
+<code>fuse_rrf</code> ชุดเดียวกับ <code>HybridRetriever</code>, และ <code>C8</code> ยึด
+เส้นทางนั้นไว้กับ arm ที่ประกอบเอง · <b>ที่ยังค้าง</b>: ไม่มีอะไร default มาที่มัน (ตั้งใจ),
+<code>query_indices</code> ยังสร้าง embedder ใหม่ทุกครั้งที่เรียก (ช่องโหว่ที่มีมาก่อน),
 ingestion ที่ยังเป็นสคริปต์ครั้งเดียวต่อ combo แทนที่จะขนานกับ <code>ArtifactStore</code>,
 มี filter อยู่ชนิดเดียว (<code>resolution_id_in</code>) และยังไม่เคยวัดโดยมี network hop
 ระหว่าง app/embedder/engine จริง</li>

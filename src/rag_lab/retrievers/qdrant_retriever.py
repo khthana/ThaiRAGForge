@@ -100,6 +100,8 @@ class QdrantRetriever(BaseRetriever):
     held identical -- so a measured gap cannot be blamed on the swap itself.
     """
 
+    reads_index_rows = False
+
     def __init__(
         self,
         path: str | None = None,
@@ -110,8 +112,15 @@ class QdrantRetriever(BaseRetriever):
         hnsw_ef: int | None = None,
         exact: bool = False,
         timeout: int | None = None,
+        client: QdrantClient | None = None,
     ) -> None:
-        self._client = _make_client(path, url, api_key, timeout)
+        # An already-open client wins over path=/url=. Two arms of one hybrid
+        # query hit the same store, and in *embedded* mode a second client on
+        # the same directory raises outright (Qdrant's local storage takes a
+        # file lock) -- so sharing is what makes QdrantHybridRetriever testable
+        # without a container, and on a server it is one connection instead of
+        # two per collection.
+        self._client = client if client is not None else _make_client(path, url, api_key, timeout)
         self._collection_name = collection_name
         self._vector_name = vector_name
         self._search_params = (
@@ -152,6 +161,8 @@ class QdrantSparseRetriever(BaseRetriever):
     against the wrong terms while still returning a plausible ranking.
     """
 
+    reads_index_rows = False
+
     def __init__(
         self,
         vocab_path: str,
@@ -161,8 +172,10 @@ class QdrantSparseRetriever(BaseRetriever):
         api_key: str | None = None,
         vector_name: str = "bm25",
         timeout: int | None = None,
+        client: QdrantClient | None = None,
     ) -> None:
-        self._client = _make_client(path, url, api_key, timeout)
+        # See QdrantRetriever.__init__ -- an already-open client wins.
+        self._client = client if client is not None else _make_client(path, url, api_key, timeout)
         self._collection_name = collection_name
         self._vector_name = vector_name
         self._vocab: dict[str, int] = json.loads(
