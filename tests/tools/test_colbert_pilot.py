@@ -23,11 +23,13 @@ sys.path.insert(0, str(REPO / "tools" / "eval"))
 
 pytest.importorskip("pyarrow")
 
-from colbert_pilot import STOP_MARGIN, clears, decide  # noqa: E402
+import colbert_pilot  # noqa: E402
+from colbert_pilot import STOP_MARGIN, clears, decide, rider_for  # noqa: E402
 
 
 def cell(label, diff, significant):
-    return {"label": label, "diff": diff, "significant": significant}
+    return {"label": label, "diff": diff, "significant": significant,
+            "queries": ["q"]}
 
 
 def both(person, program):
@@ -117,6 +119,56 @@ def test_both_cells_unmeasured_names_both():
     verdict, why = decide(both((float("nan"), False), (float("nan"), False)))
     assert verdict == "INVALID"
     assert "person" in why and "program" in why
+
+
+# ------------------------------------------------------------- the length rider
+# `DECISION_RULE`'s 512/48 fallback fires "only if the losing cell's truncation is
+# materially above the corpus rate" -- and choosing what counts as material after
+# the gap is on the table is the favourable re-reading the frozen rule exists to
+# prevent. It is therefore answered as an arithmetic bound, and these pin the gate
+# rather than the arithmetic: the bound itself needs the real tokenizer.
+@pytest.fixture()
+def stub_bound(monkeypatch):
+    """Replace the tokenizing half so the gate can be tested without a model."""
+    def _set(bound):
+        monkeypatch.setattr(colbert_pilot, "truncation_rider",
+                            lambda *a, **k: {"recall_damage_bound": bound})
+    return _set
+
+
+def test_the_rider_does_not_run_on_a_continue(stub_bound):
+    """A CONTINUE has no losing cell, so asking whether truncation explains a loss
+    is answering a question the rule does not ask."""
+    stub_bound(1.0)
+    assert rider_for("CONTINUE", both((0.0120, False), (0.0310, True)),
+                     [], {}, 300) is None
+
+
+def test_the_rider_runs_on_a_stop_and_picks_the_worst_cell(stub_bound):
+    stub_bound(0.0)
+    r = rider_for("STOP", both((-0.0100, True), (-0.3331, True)), [], {}, 300)
+    assert r is not None and "program" in r["cell"]
+    assert r["gap"] == pytest.approx(0.3331)
+
+
+def test_the_rider_runs_on_a_narrow_too(stub_bound):
+    stub_bound(0.0)
+    assert rider_for("NARROW", both((0.1000, True), (-0.0400, True)),
+                     [], {}, 300) is not None
+
+
+def test_a_bound_below_the_gap_cannot_explain_it(stub_bound):
+    stub_bound(0.0500)
+    assert rider_for("STOP", both((0.0308, False), (-0.3331, True)),
+                     [], {}, 300)["fires"] is False
+
+
+def test_a_bound_reaching_the_gap_fires(stub_bound):
+    """`>=`, not `>`: a bound that exactly accounts for the gap is enough to make
+    truncation a live explanation, and the fallback is the conservative answer."""
+    stub_bound(0.3331)
+    assert rider_for("STOP", both((0.0308, False), (-0.3331, True)),
+                     [], {}, 300)["fires"] is True
 
 
 def test_the_margin_is_the_one_this_rule_was_justified_against():

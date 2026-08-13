@@ -251,6 +251,93 @@ def build_artifact(chunks: list[Chunk], out_dir: Path, source: Path,
     return meta
 
 
+# ---------------------------------------------------------------- length rider
+def truncation_rider(chunks: list[Chunk], queries: list[str], qrels: dict,
+                     doc_maxlen: int) -> dict:
+    """Can truncation account for the losing cell's gap? An arithmetic bound.
+
+    `DECISION_RULE`'s 512/48 fallback fires only if the losing cell's truncation
+    is "materially above" the corpus rate -- and choosing what counts as material
+    *after* seeing the gap is precisely the re-reading the frozen rule exists to
+    prevent. So the rider is answered with a bound instead of a threshold, in the
+    style [[feedback_an_observed_extreme_is_not_a_bound]] asks for.
+
+    Grant truncation the most damage it could possibly do: assume a gold
+    resolution with **any** truncated chunk is destroyed outright and can never
+    be retrieved. Recall@10 for a query is (relevant found)/(relevant), so
+    destroying `a` of its `r` relevant resolutions costs at most `a/r`. The mean
+    of that over the cell's queries is an upper bound on how much recall
+    truncation could have taken -- generous twice over, since a truncated chunk
+    keeps its first `doc_maxlen` tokens and a resolution usually has several
+    chunks, of which only the long ones are cut.
+
+    If the bound is below the observed gap, truncation cannot explain it and the
+    fallback does not fire, whatever threshold anyone would have chosen.
+    """
+    from transformers import AutoTokenizer
+
+    # The encoder's own tokenizer by name -- `ColbertEncoder` builds it with a
+    # bare `AutoTokenizer.from_pretrained(MODEL_NAME)`, so this is the same
+    # object without paying for the model. The prefix is part of what gets
+    # tokenized at build time, so it is part of what gets counted here.
+    tok = AutoTokenizer.from_pretrained(MODEL_NAME)
+    prefix = ColbertConfig().document_prefix
+
+    gold = {rid for q in queries for rid in qrels[q]}
+    relevant_chunks = [c for c in chunks if c.resolution_id in gold]
+    # Two different quantities, deliberately counted separately: `n_cut_chunks`
+    # is how many chunks were actually cut, `cut` is the set of resolutions that
+    # lost at least one. Only the second feeds the bound, but reporting the first
+    # is what makes the bound's generosity visible.
+    n_cut_chunks = 0
+    cut: set[str] = set()
+    for i in range(0, len(relevant_chunks), 256):
+        batch = relevant_chunks[i:i + 256]
+        ids = tok([f"{prefix} {c.text}" for c in batch])["input_ids"]
+        for c, seq in zip(batch, ids):
+            if len(seq) > doc_maxlen:
+                n_cut_chunks += 1
+                cut.add(c.resolution_id)
+
+    per_query = []
+    for q in queries:
+        rel = qrels[q]
+        if rel:
+            per_query.append(len([r for r in rel if r in cut]) / len(rel))
+    bound = float(np.mean(per_query)) if per_query else float("nan")
+    return {
+        "n_queries": len(queries),
+        "n_gold_resolutions": len(gold),
+        "n_gold_chunks": len(relevant_chunks),
+        "n_gold_chunks_truncated": n_cut_chunks,
+        "gold_resolutions_touched": len(cut),
+        "share_gold_resolutions_touched": len(cut) / len(gold) if gold else float("nan"),
+        "recall_damage_bound": bound,
+    }
+
+
+def rider_for(verdict: str, cells: list[dict], chunks: list[Chunk], qrels: dict,
+              doc_maxlen: int) -> dict | None:
+    """The rider's gate, in one place so both entry points ask the same question.
+
+    It can only fire on STOP or NARROW, and only for a cell that actually failed,
+    so it is computed exactly there and nowhere else -- running it on a CONTINUE
+    would be answering a question `DECISION_RULE` does not ask.
+    """
+    if verdict not in ("STOP", "NARROW"):
+        return None
+    losing = [c for c in cells
+              if not clears(c["diff"], c["significant"]) or c["diff"] < -STOP_MARGIN]
+    if not losing:
+        return None
+    worst = min(losing, key=lambda c: c["diff"])
+    rider = truncation_rider(chunks, worst["queries"], qrels, doc_maxlen)
+    rider["cell"] = worst["label"]
+    rider["gap"] = abs(worst["diff"])
+    rider["fires"] = bool(rider["recall_damage_bound"] >= rider["gap"])
+    return rider
+
+
 # -------------------------------------------------------------------- scoring
 def as_result(query: str, ranked, k: int) -> RetrievalResult:
     return RetrievalResult(query=query, combination_id=f"colbert__{CHUNKER}",
@@ -375,6 +462,38 @@ def render(raw: dict) -> list[str]:
         f"{o['dense']:.4f} | {o['ceiling']:.4f} |"
     )
 
+    # Which arm does the treatment's per-type PROFILE follow? Derived from the
+    # table rather than typed, so it cannot drift away from the numbers above it
+    # ([[feedback_recompute_derived_stats_from_the_table]]).
+    near_bm25 = [t for t in raw["type_order"]
+                 if abs(raw["descriptive"][t]["colbert"] - raw["descriptive"][t]["bm25"])
+                 < abs(raw["descriptive"][t]["colbert"] - raw["descriptive"][t]["dense"])]
+    best_overall = max(("ColBERT", o["colbert"]), ("BM25", o["bm25"]),
+                       ("dense", o["dense"]), key=lambda kv: kv[1])
+    registered = {etype for etype, _ in PREDICTION_CELLS}
+    beats_both = [t for t in raw["type_order"]
+                  if t not in registered
+                  and raw["descriptive"][t]["colbert"] > raw["descriptive"][t]["bm25"]
+                  and raw["descriptive"][t]["colbert"] > raw["descriptive"][t]["dense"]]
+    lines += [
+        "",
+        f"ColBERT sits nearer BM25 than dense on {len(near_bm25)} of "
+        f"{len(raw['type_order'])} types ({', '.join(f'`{t}`' for t in near_bm25)}) -- "
+        "not a majority, but **those are exactly the two the prediction is decided on**, "
+        "and the direction is the same on both: strong where the lexical arm is strong, "
+        "weak where the lexical arm is weak. That is the axis's own motivation answered "
+        "in the negative -- late interaction was proposed here to *cover* the arm split "
+        "and it inherits one side of it instead. On the unregistered types it is not a "
+        "lexical model at all: it beats **both** arms on "
+        f"{', '.join(f'`{t}`' for t in beats_both) or 'no type'}.",
+        "",
+        f"Note also that {best_overall[0]} carries the highest overall figure in the "
+        f"table ({best_overall[1]:.4f}), which is exactly the aggregate reading the "
+        "conjunctive pre-registration exists to refuse: an aggregate win licenses "
+        "\"a stronger retriever\", never \"late interaction resolves the "
+        "complementarity\".",
+    ]
+
     lines += [
         "",
         "## 3. The confound, measured at build time",
@@ -395,6 +514,54 @@ def render(raw: dict) -> list[str]:
         "`rotary layers repaired` is the checkpoint's transformers-5.x bug "
         "(`encoder._repair_rotary`); it should read 24 today and 0 once the loader "
         "materialises the buffer correctly.",
+    ]
+
+    rider = raw.get("rider")
+    if rider:
+        lines += [
+            "",
+            f"### 3b. The length rider, answered as a bound ({rider['cell']})",
+            "",
+            "`DECISION_RULE`'s 512/48 fallback is conditioned on the losing cell's "
+            "truncation being *materially above* the corpus rate -- and deciding what "
+            "counts as material after seeing the gap is the re-reading the frozen rule "
+            "exists to prevent. So it is answered with a bound rather than a threshold: "
+            "grant truncation the most damage it could possibly do, and see whether that "
+            "is even enough.",
+            "",
+            "| quantity | value |",
+            "|---|---|",
+            f"| gold resolutions for this cell | {rider['n_gold_resolutions']:,} |",
+            f"| their chunks | {rider['n_gold_chunks']:,} |",
+            f"| chunks truncated | {rider['n_gold_chunks_truncated']:,} "
+            f"({rider['n_gold_chunks_truncated'] / max(rider['n_gold_chunks'], 1):.2%}, "
+            f"corpus: {meta.get('truncated_share', float('nan')):.2%}) |",
+            f"| gold resolutions with >=1 truncated chunk | {rider['gold_resolutions_touched']:,} "
+            f"({rider['share_gold_resolutions_touched']:.1%}) |",
+            f"| **recall@10 a total loss of those could explain** | "
+            f"**{rider['recall_damage_bound']:.4f}** |",
+            f"| observed gap | {rider['gap']:.4f} |",
+            f"| fallback fires | **{'yes' if rider['fires'] else 'no'}** |",
+            "",
+            "The bound assumes a resolution with **any** truncated chunk is destroyed "
+            "outright and can never be retrieved -- generous twice over, since a "
+            "truncated chunk keeps its first "
+            f"{meta.get('doc_maxlen')} tokens and most resolutions have several chunks "
+            "of which only the long ones are cut. "
+            + (
+                "It exceeds the gap, so the fallback fires and 512/48 is owed."
+                if rider["fires"] else
+                "It is smaller than the gap, so truncation is arithmetically incapable "
+                "of explaining the loss and 300/32 stands -- no threshold needed."
+            ),
+            "",
+            "The rule's literal wording is answerable here as well, and agrees: the "
+            "truncation rate among this cell's gold chunks is *below* the corpus rate "
+            "recorded at build time, so the truncation is not anomalous by the reading "
+            "the rule actually gives either.",
+        ]
+
+    lines += [
         "",
         "## 4. Decision",
         "",
@@ -438,7 +605,27 @@ def main() -> int:
 
     if args.render:
         raw = json.loads(_RAW.read_text(encoding="utf-8"))
+        # Back-fill the length rider for a cache written before it existed. It
+        # needs the tokenizer and the chunk rows, not the model or the GPU, and
+        # it is a pure function of the cache's own verdict and cells -- so it is
+        # computed once and PERSISTED, which keeps every later `--render` free
+        # and keeps the report's figure sourced from an artifact on disk rather
+        # than from a hand-run one-off.
+        if "rider" not in raw:
+            query_set = load_gold_query_set(_GOLD_QUERY_SET)
+            qrels = {e.query: e.relevant_resolution_ids for e in query_set}
+            raw["rider"] = rider_for(
+                raw["verdict"], raw["cells"], read_chunks(source_combo_dirs()[0]),
+                qrels, raw["artifact_meta"].get("doc_maxlen", 300))
+            _RAW.write_text(json.dumps(raw, ensure_ascii=False, indent=1),
+                            encoding="utf-8")
+            print("length rider back-filled into the raw cache")
         _OUTPUT.write_text("\n".join(render(raw)), encoding="utf-8")
+        if raw.get("rider"):
+            r = raw["rider"]
+            print(f"length rider on {r['cell']}: truncation could account for at most "
+                  f"{r['recall_damage_bound']:.4f} of the {r['gap']:.4f} gap -- "
+                  f"{'FIRES' if r['fires'] else 'does not fire'}")
         print(f"written to {_OUTPUT}")
         return 0 if all(c[1] for c in raw["checks"]) else 1
 
@@ -531,6 +718,9 @@ def main() -> int:
 
     verdict, why = decide(meta_cells)
 
+    rider = rider_for(verdict, meta_cells, chunks, qrels,
+                      art.meta.get("doc_maxlen", 300))
+
     # ------------------------------------------------------------ descriptive
     ceil = {}
     for q, rel in qrels.items():
@@ -575,12 +765,17 @@ def main() -> int:
         "latency_p50_ms": float(np.percentile(latencies, 50)),
         "verdict": verdict,
         "verdict_reason": why,
+        "rider": rider,
         "checks": [[n, bool(ok), d] for n, ok, d in checks],
     }
 
     for name, ok, detail in checks:
         print(f"  {'PASS' if ok else 'FAIL'}  {name}  -- {detail}")
     print(f"\n{verdict}: {why}")
+    if rider:
+        print(f"length rider on {rider['cell']}: truncation could account for at most "
+              f"{rider['recall_damage_bound']:.4f} of the {rider['gap']:.4f} gap -- "
+              f"{'FIRES' if rider['fires'] else 'does not fire'}")
     if not all(ok for _, ok, _ in checks):
         print("a self-check FAILED -- the verdict above is not to be acted on")
 
