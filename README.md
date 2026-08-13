@@ -44,9 +44,9 @@ Embedder / Retriever) หลาย strategy ต่อแกน, Streamlit UI ท
 | `APIEmbedder` | มี interface พร้อมใช้ (raise error ชัดเจนเมื่อไม่มี key, ถูก isolate โดย batch runner ไม่ทำให้ทั้ง batch พัง) แต่ยังไม่มีการเรียก API จริง — ต้องเลือก provider แล้วใส่ key ก่อน (ดู comment ปิด issue #7) เป็นการตัดสินใจเชิงขอบเขต: ทั้งโปรเจกต์รันโมเดล local ล้วน ไม่ส่งข้อมูลออกนอกเครื่อง |
 | `HybridEmbedder` | **ไม่ได้สร้าง** — มีแค่ `HybridRetriever` (ผสมอันดับผลลัพธ์จาก Dense + BM25 ด้วย RRF) อย่าสับสนสองอย่างนี้ PRD เลื่อน HybridEmbedder ไว้ตั้งแต่แรก |
 | `SemanticChunker` | `breakpoint_threshold` ค่าเริ่มต้นเป็นจุดเริ่มต้น ไม่ใช่ค่าที่ tune แล้ว — ทดสอบกับ bge-m3 จริงพบว่าอาจไม่เกิด breakpoint เลยในบางข้อความ (ดู comment ปิด issue #11) ภายหลังพบ fragmentation defect และแก้แล้ว (`e8f4b80`) |
-| `HybridRetriever` แบบ `weighted` | มีโค้ดพร้อม (`dense_weight`/`bm25_weight`) แต่**ไม่เคยถูกใช้เลย** — ตัวเลข hybrid ทุกตัวในโปรเจกต์นี้คือ RRF ที่น้ำหนัก 50:50 โดยปริยาย การ sweep ค่านี้เป็นงานที่ค้างอยู่ ไม่ใช่คำถามที่ตอบแล้ว |
-| ประสิทธิภาพตอนค้น | `BM25Okapi` ถูกสร้างใหม่ทุก query และ hybrid ดึงผลทั้งคอร์ปัสก่อน fuse → บวก overhead คงที่ ~1.9–2.0 วินาที/query ยอมรับได้สำหรับงานวิจัย แต่ต้องแก้ก่อนใช้จริง |
-| `QdrantRetriever` | vertical slice ใช้งานได้จริง (filter ระดับ resolution ผ่าน end-to-end) แต่ยังไม่ได้แก้คำเตือน 20k-point ของ embedded mode |
+| `HybridRetriever` แบบ `weighted` | **ยังไม่ได้ ship แต่ไม่ใช่คำถามที่ค้างแล้ว** — ตัวเลข hybrid ที่ตีพิมพ์ทุกตัวคือ RRF 50:50 และ default ก็ยังเป็น 50:50 อยู่ ส่วนที่วัดไปแล้ว: `hybrid_alpha_sweep.py` (2026-08-08) กวาด `alpha` บนสาขา `rrf` และ `hybrid_weighted_fetch_depth.py` (2026-08-12) วัดคู่ `weighted` × `fetch_depth` จนยกการ์ดออกได้ (ที่ F=200 `weighted` เสีย −0.0609 macro recall@10 ≈ 18 เท่าของ `rrf`) |
+| ประสิทธิภาพตอนค้น | แก้ไปครึ่งหนึ่งแล้ว: `BM25Okapi` ถูก memoise ไว้บน `Index.lexical_scorer` (2026-08-09, ตัดออก ~1.0 วินาที/query) และการดึงผลทั้งคอร์ปัสถูกจำกัดด้วย `fetch_depth` ที่**ชั้น query-time เท่านั้น** (Streamlit default F=200; default ของคลาสยังเป็น k=n เพื่อให้ตัวเลขที่ตีพิมพ์ reproduce ได้) → routed hybrid p50 **475.6 ms** ที่ยังค้าง: ไม่มี batching ตอน query และ embedder ถูกโหลดใหม่ทุกครั้งที่เรียก `route_query` ซึ่งเป็นชั้นที่อิ่มตัวก่อนเสมอเมื่อมีผู้ใช้พร้อมกัน |
+| Qdrant | คำเตือน 20k-point ปิดไปแล้วด้วยการวัด — embedded mode เป็น **brute force ไม่ใช่ ANN** จึงไม่เคยเป็นคำถามที่มันตอบได้ ตอนนี้เป็น server จริง (`qdrant/qdrant` 1.18.0) และ `qdrant_hybrid` ถูกต่อเข้ากับ `route_query` ที่ ship จริงแล้ว (2026-08-13, served 0.6827 vs published 0.6835) ที่ยังค้าง: ingest ยังเป็นสคริปต์ต่อ combo, มีแต่ filter `resolution_id_in`, และยัง**ไม่เคยวัดข้าม network hop** — และ **ไม่มีอะไร default มาที่มัน** |
 
 ## สถาปัตยกรรม
 
@@ -73,11 +73,24 @@ Embedder / Retriever) หลาย strategy ต่อแกน, Streamlit UI ท
   `query:`/`passage:`) / `Qwen3` (Qwen3-Embedding-0.6B / -4B) / `JinaV5` ·
   `API` เป็น interface พร้อมใช้ รอ provider + key
 - **Retriever** — `Dense` (cosine) / `BM25` (rank_bm25 + pythainlp tokens) / `Hybrid`
-  (RRF, และมี `weighted` ที่ยังไม่เคยใช้) / `EntityLookup` (ค้นจาก entity tag ตรงๆ
-  ใช้กับโหมด `entity_lookup`/`entity_boost`) / `Qdrant` + `MetadataFilter`
-  (กรองตามปี/คณะ/ครั้งที่ก่อนจัดอันดับ ใช้ร่วมกับ retriever ไหนก็ได้) และมี
+  (RRF, และมี `weighted` ที่ยังไม่ ship) / `EntityLookup` (ค้นจาก entity tag ตรงๆ
+  ใช้กับโหมด `entity_lookup`/`entity_boost`) / `Qdrant` · `QdrantHybrid`
+  (ยิง dense + sparse ไปที่ Qdrant server แล้ว fuse ด้วย `fuse_rrf` ตัวเดียวกับ
+  `HybridRetriever` — collection ถูก resolve ตอน query จาก
+  `Index.provenance["index_dir"]` จึงใช้ spec เดียวครอบทั้ง 4 route) / `MetadataFilter`
+  (กรองตามปี/คณะ/ครั้งที่ก่อนจัดอันดับ ใช้ร่วมกับ retriever ไหนก็ได้ — ยกเว้น
+  retriever ที่ไม่อ่านแถวของ `Index` เอง ซึ่งจะ **ปฏิเสธ** ด้วย `ValueError`
+  แทนที่จะเงียบ) และมี
   `CrossEncoderReranker` เป็น stage เสริมตอน query (วัดแล้ว: **ทำให้ hybrid MRR แย่ลง**
   อย่างมีนัยสำคัญ ดู `docs/reranker-hybrid-interaction-research.md`)
+
+ทับบนแกนทั้งสี่มี **hard routing** (`router.py`): `classify_query` แยกคำถามเป็น 5 route
+(person / program / course / faculty / unmatched) แล้ว `query_service.route_query` ค้นจาก
+index ของ route นั้นตัวเดียว โดยเลือก target จาก `route_targets(retriever_type)` — map
+คนละชุดสำหรับ `dense` กับ `hybrid` เพราะ index ที่ดีที่สุดของแต่ละ route ขึ้นกับ retriever
+**อ่านผลของมันว่าเป็นเรื่อง coverage ไม่ใช่ accuracy**: router 5 route ชนะ router 3 route
+เดิมอย่างมีนัยสำคัญ (+0.0958 dense recall@10) แต่ไม่มี arm ไหนที่ deploy ได้ชนะการใช้ combo
+เดี่ยวที่ดีที่สุดกับทุกคำถามอย่างมีนัยสำคัญ (ดู `data/results/routing_eval.md`)
 
 ความถูกต้องของการค้นตัดสินที่ **ระดับ Resolution (มติ)** ไม่ใช่ระดับ chunk (ดู
 [ADR-0002](docs/adr/0002-resolution-level-relevance.md)) เพราะขอบเขต chunk เปลี่ยนไปตาม
@@ -110,7 +123,9 @@ chunker ที่เลือก แต่ `resolution_id` คงที่เส
 │   ├── loaders/               # Plain / Metadata / NER / EntityTags / Normalized + tagger 4 ชนิด
 │   ├── chunkers/               # FixedSize / Recursive / Sentence / Semantic
 │   ├── embedders/               # Hashing / Local / E5 / Qwen3 / JinaV5 / API
-│   ├── retrievers/               # Dense / BM25 / Hybrid (RRF) / EntityLookup / Qdrant + MetadataFilter
+│   ├── retrievers/               # Dense / BM25 / Hybrid (RRF) / EntityLookup / Qdrant / QdrantHybrid + MetadataFilter
+│   ├── colbert/                 # late interaction (encoder + store + scoring) — วัดแล้วและ**ไม่รับเข้า**
+│   ├── router.py                # classify_query + ROUTE_COMBO_BY_RETRIEVER (hard routing ที่ ship จริง)
 │   ├── pipeline.py, runner.py, query_service.py   # index-build + retrieval + batch
 │   ├── metrics.py, query_sets.py                  # evaluation (silver/gold, recall@k/MRR/nDCG)
 │   └── config.py, factory.py, registries.py       # YAML config + Open/Closed strategy wiring
