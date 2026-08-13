@@ -121,6 +121,38 @@ def across_chunkers(cells, embedder, etype):
     return mean([mean(v) for v in per_q.values()])
 
 
+def load_cells(k: int):
+    """-> `(bm25_cells, dense_cells)` from the persisted top-10 results.
+
+    Factored out of `main` so `colbert_pilot.py` scores its comparator arms from
+    **this** path rather than a second copy of it: the two would eventually
+    disagree about a suffix or an excluded combo, and the disagreement would look
+    like a ColBERT effect.
+    """
+    query_set = load_gold_query_set(_GOLD_QUERY_SET)
+    qrels = {e.query: e.relevant_resolution_ids for e in query_set}
+    raw = yaml.safe_load(_GOLD_QUERY_SET.read_text(encoding="utf-8"))
+    types_by_query = {e["query"]: e.get("entity_type", "unknown") for e in raw}
+
+    combo_ce = build_combo_to_chunker_embedder(_INDEX_DIR)
+    combo_ce = {c[: -len("__dense")]: v for c, v in combo_ce.items()}
+
+    dense = [load_retrieval_result(p) for p in _DENSE_RESULTS_DIR.glob("*.json")]
+    bm25 = [load_retrieval_result(p) for p in _BM25_RESULTS_DIR.glob("*.json")]
+    print(f"loaded {len(dense)} dense + {len(bm25)} bm25 results")
+
+    dense_cells = per_query(dense, combo_ce, "__dense", qrels, types_by_query, k)
+    # BM25 is embedder-agnostic; collapse the embedder axis so the two tables
+    # share one shape. Every combo sharing a chunker holds the same rows, so any
+    # of them carries the identical BM25 result -- keyed "-" to say so.
+    bm25_raw = per_query(bm25, combo_ce, "__bm25", qrels, types_by_query, k)
+    bm25_cells = defaultdict(lambda: defaultdict(dict))
+    for (chunker, _emb), by_type in bm25_raw.items():
+        for t, per_q in by_type.items():
+            bm25_cells[(chunker, "-")][t].update(per_q)
+    return bm25_cells, dense_cells
+
+
 def self_checks(bm25_cells, dense_cells, chunkers, embedders):
     out = []
 
@@ -279,22 +311,7 @@ def main() -> int:
         nq[t] += 1
     ceilings = {t: mean(v) for t, v in ceil_acc.items()}
 
-    combo_ce = build_combo_to_chunker_embedder(_INDEX_DIR)
-    combo_ce = {c[: -len("__dense")]: v for c, v in combo_ce.items()}
-
-    dense = [load_retrieval_result(p) for p in _DENSE_RESULTS_DIR.glob("*.json")]
-    bm25 = [load_retrieval_result(p) for p in _BM25_RESULTS_DIR.glob("*.json")]
-    print(f"loaded {len(dense)} dense + {len(bm25)} bm25 results")
-
-    dense_cells = per_query(dense, combo_ce, "__dense", qrels, types_by_query, k)
-    # BM25 is embedder-agnostic; collapse the embedder axis so the two tables
-    # share one shape. Every combo sharing a chunker holds the same rows, so any
-    # of them carries the identical BM25 result -- keyed "-" to say so.
-    bm25_raw = per_query(bm25, combo_ce, "__bm25", qrels, types_by_query, k)
-    bm25_cells = defaultdict(lambda: defaultdict(dict))
-    for (chunker, _emb), by_type in bm25_raw.items():
-        for t, per_q in by_type.items():
-            bm25_cells[(chunker, "-")][t].update(per_q)
+    bm25_cells, dense_cells = load_cells(k)
 
     chunkers = sorted({c for (c, _e) in dense_cells})
     embedders = sorted({e for (_c, e) in dense_cells})

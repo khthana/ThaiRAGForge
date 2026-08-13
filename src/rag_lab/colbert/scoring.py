@@ -38,7 +38,10 @@ def maxsim(q: np.ndarray, vecs: np.ndarray, lengths: np.ndarray) -> np.ndarray:
             f"{vecs.shape[0]} packed vectors for {int(lengths.sum())} claimed tokens")
     if (lengths <= 0).any():
         raise ValueError("zero-length document: reduceat would borrow the next document's row")
-    sim = vecs.astype(np.float32) @ q.astype(np.float32).T   # (total, query_maxlen)
+    # `asarray`, not `astype`: astype always copies, so scoring N queries against
+    # a stored fp16 artifact would rebuild the same ~4 GB float32 matrix N times.
+    # asarray is a no-op when the caller has already converted it once.
+    sim = np.asarray(vecs, dtype=np.float32) @ np.asarray(q, dtype=np.float32).T
     per_doc = np.maximum.reduceat(sim, offsets_from_lengths(lengths), axis=0)
     return per_doc.sum(axis=1)
 
