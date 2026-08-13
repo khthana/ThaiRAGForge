@@ -210,8 +210,16 @@ EVAL_INPUTS: dict[str, list[str]] = {
     # retriever builds, not of the report's own generator. A change to either
     # makes the report a record of a client that no longer exists.
     "src/rag_lab/retrievers/qdrant_retriever.py": [
-        "qdrant_pilot.md", "qdrant_concurrency.md",
+        "qdrant_pilot.md", "qdrant_concurrency.md", "qdrant_routed_check.md",
     ],
+    # `qdrant_routed_check.md` names four collections and reports a per-route
+    # table, and it derives both from the shipped router rather than from a list
+    # of its own -- `route_targets("hybrid")` + `resolve_index`. So editing
+    # `ROUTE_COMBO_BY_RETRIEVER` (which has happened once already, 2026-08-08)
+    # changes *which* collections the served claim covers while the check's own
+    # generator stays untouched: the report would keep asserting coverage of a
+    # routing that no longer exists.
+    "src/rag_lab/router.py": ["qdrant_routed_check.md"],
     # The concurrency run's `encode` arm is the binding layer in its own verdict,
     # and this class is what that arm times. The edge exists because of a change
     # already made for it: `show_progress_bar` was unconditional, and tqdm writes
@@ -225,7 +233,7 @@ EVAL_INPUTS: dict[str, list[str]] = {
     # sidecar all live here, and none of them is re-derived at query time. It
     # is not the report's generator either, so nothing else on disk would say
     # the measured collection had been rebuilt differently.
-    "tools/eval/qdrant_pilot_ingest.py": ["qdrant_pilot.md"],
+    "tools/eval/qdrant_pilot_ingest.py": ["qdrant_pilot.md", "qdrant_routed_check.md"],
 }
 
 findings: list[tuple[str, str, str]] = []

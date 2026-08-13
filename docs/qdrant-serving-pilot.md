@@ -165,9 +165,14 @@ effect, not a serving artifact.
 - **`indexed_vectors_count` reads 110,422 against 57,174 points** (~1.93×, 6 segments).
   It is a reported counter, not duplicated data: `points_count` equals the index row count
   exactly, the payload/vector alignment check passes 200/200, and every search returns
-  distinct ids. Most likely cross-segment accounting during optimization. **Unexplained,
-  and reported as observed** — it has no effect on any number above, and this note exists
-  so the next reader does not rediscover it as a scare.
+  distinct ids. It was left **unexplained and reported as observed** here, and is
+  **EXPLAINED as of the four-collection check below (§8c, `C6`)**: a point carries **two**
+  vectors, dense and sparse, so the counter is `2N − (dense rows in segments still under
+  `indexing_threshold` = 20,000)`. The bound is `N ≤ indexed ≤ 2N`, and the 1.93× here is
+  3,926 dense rows (6.87%) sitting in small segments that are plain-scanned rather than
+  HNSW-traversed. **That residue is immaterial only because the recommendation is
+  `exact=True`** — an ANN deployment would be silently serving part of its corpus by brute
+  force, which is a correctness-free but latency-relevant fact.
 - **Recall@10 of the dense arm alone (0.3954) is far below the fused 0.5834.** That is the
   published behaviour of this combo, not a pilot defect — `bge-m3` is the person
   specialist and BM25 carries `person` at 0.8147.
@@ -263,10 +268,62 @@ the steady state, and missed S7's pre-chosen 0.35 line at 38.5% — warming each
 own gap brought it to 1.3% **without touching the threshold**. The general shape: when a
 check fails, ask whether the instrument or the system is wrong before adjusting the line.
 
+## 8c. All four routed collections, served end to end (2026-08-13)
+
+With the concurrency question closed, the remaining three routed collections were ingested
+with the same `qdrant_pilot_ingest.py`, and the served stack was checked against the
+shipped router: `tools/eval/qdrant_routed_check.py` → `data/results/qdrant_routed_check.md`
+(106 Gold 73det queries, ~118 s, 7/7 checks PASS). **This is a completion check on the
+ingestion, not an experiment** — no pre-registration, no significance test, no verdict; the
+question is only whether the served stack returns the published answer.
+
+The 5 routes resolve to **4 distinct indices** (`faculty` and `unmatched` share
+`fixed_size × bge-m3`), and route → index comes from the shipped code path
+(`discover_indices` + `route_targets("hybrid")` + `resolve_index`) rather than a hardcoded
+list, so a change to `ROUTE_COMBO_BY_RETRIEVER` moves this check with it.
+
+| arm | macro recall@10 | vs published |
+|---|---|---|
+| published (`routed_fetch_depth_test.md`, F=200) | 0.6835 | — |
+| reference (numpy dense + `BM25Okapi`, this code path) | 0.6835 | +0.0000 |
+| **served (Qdrant `exact=True` + sparse)** | **0.6827** | **−0.0008** |
+
+Per route: `course` 0.6277 → 0.6277, `person` 0.8531 → 0.8531, `program` 0.6545 → 0.6530,
+`faculty` 0.5008 → 0.4975. Worst relative score error over every rank of every query:
+dense **3.63e-07**, sparse **2.27e-07** — the engine is exact on all four, not only on the
+pilot's one.
+
+**`C2` anchors per query, not on the macro.** `routed_fetch_depth_raw.json` holds all 106
+per-query recall@10 at F=200, so the reference arm is gated at *exact equality on every
+query* (106/106) rather than on a mean. A served arm agreeing with a subtly wrong reference
+would otherwise read as a pass.
+
+**The one check that had to be rewritten is the transferable part.** C4 was first written
+as set identity of the dense top-10 and **failed** — `agree@10` 0.7500 on one smoke combo,
+5 ids of 10 differing between two engines both claiming exactness. Diagnosed before
+anything was touched: every differing id carried an *identical* numpy score, and one
+`course` query's entire **top-12** sat at a single score (`0.626616248932`) because a course
+table repeated verbatim across curriculum revisions embeds identically. **Inside a tie group
+the set returned is not defined by either engine**, so a set test asserts an order nobody
+promised — the same correction the pilot's sparse `S3` already needed, arriving on the dense
+side. The rule now has two halves: **C4** = the *score sequence* agrees at every rank, and
+**C4b** = every top-10 id that moved carries the tied reference score (**160 of 1,060 moved,
+160 in-tie, 0 out-of-tie, 0 unresolved**). `agree@10` is demoted to a descriptive column
+printed beside `largest tie group` (recursive **22**, semantic 11, fixed_size 7, sentence 7).
+Fixed at the mechanism; no tolerance was widened.
+
+**`C6` explains `indexed_vectors_count`** — see §7. Dense rows still unindexed:
+fixed_size 0.00%, recursive 0.00%, semantic 5.22%, sentence 6.87%.
+
+What it does **not** establish: one query set, one fetch depth, one fusion, **no network
+hop** (client and server on one box), nothing about ANN (deliberately — the recommendation
+is `exact=True`), and nothing that survives an index rebuild: a rebuild stales the
+collections, so re-ingest and re-run this.
+
 ## 8. What this pilot does NOT establish
 
-- **One collection, one combo, one route.** The other three routed collections are not
-  ingested; nothing here says their numbers transfer.
+- **~~One collection, one combo, one route.~~** Closed 2026-08-13 — all four routed
+  collections are ingested and verified end to end; see §8c.
 - **No significance test.** Every Δ above is descriptive.
 - **~~No concurrency measurement.~~** Closed 2026-08-13 — see §8b. What remains open is
   narrower: no network hop between app, embedder and engine; no bursty arrival process

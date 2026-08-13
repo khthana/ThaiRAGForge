@@ -2394,16 +2394,19 @@ see `docs/adr/`.
   work — which is the resource a faculty VM at 5-50 concurrent users actually runs out of.
   `S2` anchors the whole pilot from an independent path (reference fusion 0.5834 at F=200
   vs persisted `gold_hybrid_73det` **0.5850** at k=n, the gap being the already-measured
-  `fetch_depth` truncation effect). One observation **recorded rather than glossed**:
-  `indexed_vectors_count` reads **110,422** against 57,174 points over 6 segments (~1.93x)
-  — a reported counter, not duplicated data (`points_count` equals the row count exactly,
-  payload/vector alignment passes on every sampled row, searches return distinct ids),
-  most likely cross-segment accounting during optimization, unexplained and affecting no
-  number here. **What this does NOT establish**: one collection / one combo / one route
-  (the other 3 are **not** ingested) and no significance test (every Δ is descriptive).
-  Its third gap, "no concurrency measurement at all", is **CLOSED — see the next
-  bullet.** **Nothing is wired**: `query_service`/`registry` still route to the
-  in-process retrievers.
+  `fetch_depth` truncation effect). One observation **recorded rather than glossed** and
+  since **EXPLAINED**: `indexed_vectors_count` reads **110,422** against 57,174 points
+  over 6 segments (~1.93x) — a reported counter, not duplicated data (`points_count`
+  equals the row count exactly, payload/vector alignment passes on every sampled row,
+  searches return distinct ids). It was left unexplained here and is resolved by `C6` of
+  the four-collection check below: **a point carries two vectors** (dense + sparse), so
+  the counter is `2N − (dense rows in segments still under `indexing_threshold`=20,000)`,
+  bounded `N ≤ indexed ≤ 2N` — the 1.93x is 3,926 dense rows (6.87%) being plain-scanned
+  rather than HNSW-traversed, which is free **only because the recommendation is
+  `exact=True`**. **What this pilot does NOT establish**: no significance test (every Δ is
+  descriptive); its "one collection / one combo / one route" and "no concurrency
+  measurement at all" gaps are both **CLOSED — see the next two bullets.** **Nothing is
+  wired**: `query_service`/`registry` still route to the in-process retrievers.
 - **Qdrant under concurrent load: the engine is NOT the layer that saturates
   (2026-08-13, `tools/eval/qdrant_concurrency_test.py` → `data/results/qdrant_concurrency.md`,
   9/9 self-checks PASS, decision rule frozen in the module before the run).** Run before
@@ -2457,7 +2460,42 @@ see `docs/adr/`.
   top-10s 106/106, S1 pins that concurrent encoding returns bit-identical vectors
   (max |Δ| 0.000e+00), S5 that the harness is 12,989x faster than the system. **Still not
   established**: no network hop between app/embedder/engine, no bursty arrival process (the
-  loop is closed), one collection.
+  loop is closed); "one collection" is closed by the next bullet.
+- **All four routed collections ingested and served end to end (2026-08-13,
+  `tools/eval/qdrant_routed_check.py` → `data/results/qdrant_routed_check.md`, 106 Gold
+  73det queries, ~118 s, 7/7 self-checks PASS).** With the concurrency question answered,
+  the other 3 collections were ingested with the same `qdrant_pilot_ingest.py`. **This is a
+  completion check on the ingestion, not an experiment** — no pre-registration, no
+  significance test, no verdict; the only question is whether the served stack returns the
+  published answer. It does: published `routed_fetch_depth_test.md` F=200 **0.6835**,
+  reference (numpy dense + `BM25Okapi` through this code path) **0.6835**, **served (Qdrant
+  `exact=True` + sparse) 0.6827, −0.0008** — per route `course` +0.0000, `person` +0.0000,
+  `program` −0.0014, `faculty` −0.0033, worst relative score error over every rank of every
+  query dense **3.63e-07** / sparse **2.27e-07**. Route → index is resolved through the
+  shipped path (`discover_indices` + `route_targets("hybrid")` + `resolve_index`), so the 5
+  routes give **4** distinct collections (`faculty` and `unmatched` share
+  `fixed_size × bge-m3`) and a change to `ROUTE_COMBO_BY_RETRIEVER` moves the check with it.
+  Two things worth more than the numbers. (1) **`C2` anchors per query, not on the macro**:
+  `routed_fetch_depth_raw.json` holds all 106 per-query recall@10 at F=200, so the reference
+  arm is gated at exact equality on **106/106** — a served arm agreeing with a subtly wrong
+  reference would otherwise read as a pass. (2) **The dense check had to be rewritten, and
+  it is the sparse arm's own correction arriving on the dense side**: C4 was first written
+  as *set identity* of the top-10 and FAILED at `agree@10` 0.7500 on a smoke combo — yet
+  every differing id carried an **identical** numpy score, and one `course` query's whole
+  **top-12** sat at a single score because a course table repeated verbatim across
+  curriculum revisions embeds identically. **Inside a tie group the returned set is not
+  defined by either engine**, so a set test asserts an order nobody promised
+  ([[feedback_exactness_is_a_claim_about_scores_not_tie_order]]). The rule is now **C4** (the
+  *score sequence* agrees at every rank, < 1e-5 relative) plus **C4b** (every moved top-10 id
+  carries the tied reference score: **160 of 1,060 moved, 160 in-tie, 0 out-of-tie, 0
+  unresolved**), with `agree@10` demoted to a descriptive column beside `largest tie group`
+  (recursive **22**, semantic 11, fixed_size 7, sentence 7). Fixed at the mechanism; **no
+  tolerance was widened**. `C6` is what explains the pilot's ~1.93x `indexed_vectors_count`
+  (see that bullet); dense rows still unindexed: fixed_size 0.00%, recursive 0.00%,
+  semantic 5.22%, sentence 6.87%. **Not established**: one query set, one fetch depth, one
+  fusion, **no network hop**, nothing about ANN (deliberately — the recommendation is
+  `exact=True`). **A collection is a copy of an `Index`'s rows, so any index rebuild stales
+  it**: re-ingest and re-run this. **Nothing is wired.**
 - **Corpus data-quality audit** (`tools/corpus_prep/audit_title_body_agreement.py`,
   2026-07-30): flags manifest titles that disagree with the document's own page-1
   `เรื่อง` subject line. A first version was rejected on measurement (median 0.660,

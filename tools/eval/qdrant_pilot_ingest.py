@@ -1,9 +1,13 @@
 """Ingest one built `Index` into a Qdrant **server** collection (dense + sparse).
 
-Pilot scope (2026-08-13): one collection only -- the `person` route's shipped
-hybrid target, `chunker_compare_full/plain__sentence__local__bf8b7ebb` (sentence
-chunker x BAAI/bge-m3). The other three routed collections wait on the numbers
-this pilot produces.
+Scope: the pilot (2026-08-13) ingested one collection -- the `person` route's
+shipped hybrid target, `chunker_compare_full/plain__sentence__local__bf8b7ebb`
+(sentence chunker x BAAI/bge-m3). The other **three** routed collections were
+ingested with this same script later the same day, on the user's go-ahead after
+the pilot's and the concurrency run's numbers; all four are verified end to end
+against the shipped router by `tools/eval/qdrant_routed_check.py` ->
+`data/results/qdrant_routed_check.md`. Re-run both after any index rebuild:
+a collection is a copy of an `Index`'s rows and goes stale with it.
 
 Three things this script is careful about, each of which would otherwise make the
 subsequent measurement return a clean, plausible, wrong answer:
