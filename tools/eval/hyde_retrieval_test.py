@@ -29,8 +29,16 @@ Design, and why each choice is not free:
   hypothetical **document** arguably belongs on the passage side. So: `raw`
   (baseline, the published path), `hyde` (document embedded as a passage, the
   canonical reading), `hyde_q` (document embedded as a query, the naive
-  drop-in), `concat` (query + document, the standard robustness variant). A null
-  on one formulation is weak evidence; a null on three is the finding.
+  drop-in), `concat` (query + document, the standard robustness variant),
+  `hyde_half` (a prefix of the same document). A null on one formulation is weak
+  evidence; a null on four is the finding.
+* **`hyde_half` exists because every generated document hit the 256-token cap**
+  (285 of 285), so "the cap crippled the treatment" is a live objection to any
+  null. Greedy decoding is a prefix process, so a prefix of the generation is
+  *exactly* what a smaller cap would have produced -- this measures the slope
+  with respect to length using text already on disk, no generation. It bounds
+  the objection rather than settling it: it says which direction length pushes,
+  not what an uncapped document would have scored.
 * **The generation is read from a cache, never produced here.** `temperature=0`
   is not reproducible on this stack, so per-arm generation would unpair the
   comparison. See `hyde_generate.py`.
@@ -132,7 +140,7 @@ PRIMARY_EXPECT = "Qwen/Qwen3-Embedding-0.6B"
 
 # Vector arms. The value is how the dense query vector is built; BM25 always
 # receives the raw query's tokens (the frozen design), except in `poison`.
-VECTOR_ARMS = ["raw", "hyde", "hyde_q", "concat"]
+VECTOR_ARMS = ["raw", "hyde", "hyde_q", "concat", "hyde_half"]
 METRICS = ["recall@10", "mrr", "ndcg@10"]
 
 PREREGISTERED = {
@@ -150,9 +158,9 @@ PREREGISTERED = {
     "decision rule": "P1 stands unless a Holm-adjusted p < 0.05 shows `hyde` BEATING "
                      "`raw` on recall@10 in family 1 on 73det. A tie is reported as a "
                      "BOUND (what it rules out), never as 'no difference'. The other "
-                     "formulations (`hyde_q`, `concat`), the 36-combo macro and the "
-                     "per-embedder table are EXPLORATORY and cannot promote a null to "
-                     "a win.",
+                     "formulations (`hyde_q`, `concat`, `hyde_half`), the 36-combo "
+                     "macro and the per-embedder table are EXPLORATORY and cannot "
+                     "promote a null to a win.",
     "known limitation": "Unrouted. A positive result would need re-measuring against "
                         "the shipped hard router before it meant anything; a negative "
                         "one would not.",
@@ -221,11 +229,20 @@ def build_query_vectors(spec_json: str, queries: list[str], docs: dict[str, str]
     """
     emb_obj = build_embedder(StrategySpec.model_validate(json.loads(spec_json)))
     hyde_texts = [docs[q] for q in queries]
+    # `hyde_half` measures the LENGTH axis for free, and it is not a proxy:
+    # greedy decoding is a prefix process, so a prefix of the generation is
+    # exactly the text a smaller `num_predict` would have produced. Every
+    # document hit the 256-token cap, so "would a longer document have helped?"
+    # is a live objection; this answers the slope of it without generating
+    # anything. Halved by characters, so which cap it corresponds to is
+    # approximate even though the prefix property is exact.
+    half_texts = [t[: len(t) // 2] for t in hyde_texts]
     out = {
         "raw": [emb_obj.embed_query(q) for q in queries],
         "hyde": list(emb_obj.embed(hyde_texts)),
         "hyde_q": [emb_obj.embed_query(t) for t in hyde_texts],
         "concat": [emb_obj.embed_query(q + "\n" + docs[q]) for q in queries],
+        "hyde_half": list(emb_obj.embed(half_texts)),
     }
     release = getattr(emb_obj, "release", None)
     if callable(release):
@@ -318,6 +335,7 @@ def run(set_name: str, smoke: bool, arms: list[str], do_poison: bool) -> dict:
     scores: dict[str, dict[str, dict[str, list[float]]]] = {}
     poison: dict[str, dict[str, list[float]]] = {}
     dense_ok = dense_bad = bm_ok = bm_bad = hyb_ok = hyb_bad = 0
+    bm_combos = 0
     changed = same = 0
     s7: list[tuple[bool, str]] = []
     bm25_cache: dict[str, tuple[list[str], np.ndarray]] = {}
@@ -362,6 +380,7 @@ def run(set_name: str, smoke: bool, arms: list[str], do_poison: bool) -> dict:
         ptop_d = persisted_top10(SETS[set_name]["dense"], combo, "dense")
         ptop_b = persisted_top10(SETS[set_name]["bm25"], combo, "bm25")
         ptop_h = persisted_top10(SETS[set_name]["hybrid"], combo, "hybrid")
+        bm_combos += bool(ptop_b)
 
         per_arm: dict[str, dict[str, list[float]]] = {
             f"{r}_{a}": {m: [] for m in METRICS} for a in arms for r in ("dense", "hybrid")
@@ -442,8 +461,9 @@ def run(set_name: str, smoke: bool, arms: list[str], do_poison: bool) -> dict:
     checks.append((
         "S3 BM25 top-10 reproduces the persisted results",
         bm_bad == 0 and bm_ok > 0,
-        f"{bm_ok} reproduce, {bm_bad} differ, of {possible} query-combo pairs "
-        "(this set does not persist a BM25 arm for every combo)",
+        f"{bm_ok} reproduce, {bm_bad} differ, of {len(queries) * bm_combos} query-combo "
+        f"pairs ({bm_combos} of {len(combos)} combos persist a BM25 arm; BM25 depends "
+        "only on the chunker, so the missing ones are duplicates, not gaps)",
     ))
     checks.append((
         "S3b combos sharing a chunker share chunk rows (licenses the BM25 cache)",
