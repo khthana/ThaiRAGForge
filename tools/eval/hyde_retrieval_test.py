@@ -166,6 +166,73 @@ PREREGISTERED = {
                         "one would not.",
 }
 
+# Section 7 is written by a human against the pre-registration -- but it lives
+# HERE, not in the .md, because `--render` rewrites the whole report and a
+# hand-added paragraph would be silently erased by the next run
+# ([[feedback_provenance_belongs_in_the_generator]]). A set with no entry renders
+# a placeholder saying so, which is honest rather than blank.
+VERDICT: dict[str, str] = {
+    "73det": """\
+**P1 HELD, and not as a tie -- as a significant loss.** The pre-registration
+allowed "ties or degrades"; the measurement is the harder half of that. Dense
+recall@10 goes 0.5034 -> 0.3135, **-0.1898**, CI [-0.2446, -0.1345], Holm-adj
+0.0000, and all six family-1 cells are significantly worse. So there is no bound
+to state here: this is a directional result, not a null.
+
+**P1's specific clause -- worst on `person` -- HELD, and it is the sharpest
+evidence for the stated mechanism.** `person` is the largest drop of the four
+types (**-0.2798**, Holm 0.0000) and in relative terms it is not close: dense
+person recall@10 falls 0.3604 -> **0.0807**, losing 78% of itself, where
+`faculty_adjunct_aggregate` is the one type that does not reach significance
+(-0.0699, Holm 0.0560). **The mechanism is dilution, not deletion, and the
+generation report is what proves it**: 29 of 30 person documents (96.7%) still
+literally contain the queried name, so the token was not lost -- it was averaged
+into ~250 tokens of invented context, which is exactly what
+`docs/hyde-axis-notes.md` predicted when it said the discriminative signal here
+is an exact token and generated filler can only crowd it out.
+
+**P3 HELD, and it was the design's one untested premise.** Feeding the
+hypothetical document to BM25 as well costs a further **-0.2735** recall@10 on
+top of HyDE's own loss (0.5864 -> 0.3128, Holm 0.0000 on all three metrics) --
+larger than the entire dense-arm effect. "Give BM25 the raw query" is now a
+measurement rather than an assertion.
+
+**P4 was NOT triggered.** Nothing improved anywhere: every one of the 9
+embedders loses on dense recall@10, so the primary combo is representative
+rather than unlucky. The correlation r = -0.887 says the damage is *worst on the
+strongest embedders* -- `qwen3_0.6b` -0.2206 against `sct` -0.0613 -- which is
+not a mercy, it is the same dilution story: a weak embedder had little signal to
+destroy.
+
+**The null is about HyDE, not about one way of wiring it.** All four
+formulations lose on the dense arm (`hyde` -0.1898, `hyde_q` -0.1405, `concat`
+-0.0817, `hyde_half` -0.1769), and they order by **how much of the raw query
+survives**: `concat`, the only one that keeps the original question in the
+embedded text, is the least bad and is the only formulation that reaches ns on
+the hybrid arm (-0.0209, Holm 0.1932). Read that as the treatment's damage being
+monotone in how far the vector is moved away from the question, which is the
+opposite of a wiring bug.
+
+**The cap objection is bounded, and it points the wrong way for HyDE.** Every
+document hit `num_predict=256`, so "a longer document would have done better" is
+a live objection. On the arm actually under test the prefix arm is *slightly
+better*, not worse (dense 0.3265 for `hyde_half` vs 0.3135 for `hyde`), so the
+slope with respect to length is if anything downward -- more generated text,
+more dilution. Do not overstate it: the hybrid arm disagrees (0.5582 vs 0.5864),
+neither contrast was pre-registered, and a prefix is only approximately the
+document a smaller cap would have produced (halved by characters, not tokens).
+The honest claim is that nothing in the data suggests length is what is holding
+the treatment back.
+
+**No re-measurement against the shipped hard router is owed.** The
+pre-registration's known-limitation clause makes that follow-up conditional on a
+*positive* unrouted result, precisely so a negative one cannot be kept alive by
+an untested "but maybe with routing". This is negative, so the axis closes here.
+Two anchors say the baseline it lost to is the published one, from an
+independent code path: `hybrid_raw` reproduces the published unrouted hybrid
+**0.6281** and `dense_raw` the published **0.5034**, both exactly.""",
+}
+
 
 def score_top(top_rows, rid_arr, gold: set[str]) -> tuple[float, float, float]:
     """recall@K, reciprocal rank, nDCG@K at the resolution level (ADR-0002).
@@ -689,8 +756,12 @@ def render(d: dict) -> str:
         r = float(np.corrcoef(xs, ys)[0, 1])
         L.append(
             f"Correlation between an embedder's baseline strength and what HyDE does "
-            f"to it: **r = {r:+.3f}**. P2 predicts help concentrates on the weak "
-            f"embedders, i.e. a negative r."
+            f"to it: **r = {r:+.3f}**. Read the sign for what it is, not as a "
+            f"verdict: a negative r says the effect is most NEGATIVE where the "
+            f"baseline is strongest, which on a set where every diff is negative "
+            f"means damage scales with baseline strength, and on a set where some "
+            f"are positive is the shape P2 predicts (help concentrating on the weak "
+            f"embedders). The two readings are the same number and different claims."
         )
         L.append("")
 
@@ -712,7 +783,11 @@ def render(d: dict) -> str:
             L.append(f"| {key} | " + " | ".join(f"{np.mean(src[m]):.4f}" for m in METRICS) + " |")
         L.append("")
         fam_table(L, test_family([
-            ("hybrid_hyde+poison", "hybrid_hyde", d["poison"][m], scores[primary]["hybrid_hyde"][m])
+            # Name the metric in the label. Without it all three rows read
+            # `hybrid_hyde+poison vs hybrid_hyde` and a reader cannot tell which
+            # row is which -- the same defect S3's denominator had, one layer up.
+            (f"hybrid_hyde+poison [{m}]", "hybrid_hyde", d["poison"][m],
+             scores[primary]["hybrid_hyde"][m])
             for m in METRICS
         ], rng), len(METRICS))
 
@@ -724,10 +799,13 @@ def render(d: dict) -> str:
         "`data/results/hyde_generation.md` for what the generator wrote."
     )
     L.append("")
+    verdict = VERDICT.get(d["set"])
     L.append(
-        "_Written by hand after reading the tables above -- deliberately not "
-        "auto-generated, because the point of a pre-registration is that a human "
-        "states whether it held._"
+        verdict if verdict else
+        "_No verdict written yet for this set. It is written by hand after reading "
+        "the tables above -- deliberately not auto-generated, because the point of "
+        "a pre-registration is that a human states whether it held -- and it lives "
+        "in `VERDICT` in the generator, so `--render` cannot erase it._"
     )
     L.append("")
     return "\n".join(L)
