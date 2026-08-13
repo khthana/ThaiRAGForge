@@ -19,10 +19,18 @@ probe that followed found `inv_freq` holding uninitialised memory in every layer
 rotation is the identity. `ColbertEncoder` repairs it at load
 (`_repair_rotary`), and the repair is checked here by **C7**, which compares
 every layer against the checkpoint's own `_compute_inv_freq`. Two earlier,
-weaker checks are kept precisely because each one *missed* this: G1 passed while
-the model was fully blind (the garbage was finite and not identically zero), and
-a behavioural check alone cannot see garbage that happens to be large. So the
-exact check is the decisive one and G2 is the backstop.
+weaker checks are kept precisely because each one *missed* this, and **which one
+missed depends on the load**: the garbage is uninitialised memory, so it differs
+every time the model is built. Three loads, three different layer-0 values and
+three different outcomes -- `[2.6e-29, 1.0e-42, 0]` (G1 **passed**, finite and
+not identically zero; G2 caught it), `[-5.2e+02, 2.1e-42, 0]` (the mirror image:
+G2 **passed** at |d|=4.09e-01, looking position-sensitive while being just as
+wrong; G1 caught it), `[1.3e-01, 1.4e-42, 0]` (both caught it, G2 by |d|=4.79e-02
+against a 5e-02 threshold, i.e. within 5% of passing). C7 caught it all three
+times, because it is the only check whose rule does not depend on what the
+garbage happened to be. **Read the `unrepaired` row below as one sample of one
+load** -- re-running this script will not reproduce its G1/G2 cells, only its C7
+one, and that is the finding rather than flakiness.
 
 **The encoder.** ColBERT has five places to be quietly wrong -- marker
 insertion, query augmentation, attending to the expansion tokens, the 1024->128
@@ -371,9 +379,18 @@ def main() -> int:
         "the real encoder on G2, and the cause was the `gte` bug again: every layer's "
         "`inv_freq` came up as uninitialised memory, so `cos = 1`, `sin = 0` and the "
         "rotation was the identity. `ColbertEncoder._repair_rotary` rebuilds the buffer "
-        "from the checkpoint's own `_compute_inv_freq` at load. Note which check found "
-        "it — **G1 passed** on the corrupt model (the garbage was finite and not "
-        "identically zero), so the only reliable check is the exact one.",
+        "from the checkpoint's own `_compute_inv_freq` at load. **Which check catches "
+        "it is a coin toss, because the garbage is uninitialised memory and differs "
+        "every load.** Three loads gave three layer-0 values and three outcomes: "
+        "`[2.6e-29, 1.0e-42, 0]` — G1 *passed* (finite, not identically zero), G2 "
+        "caught it; `[-5.2e+02, 2.1e-42, 0]` — the mirror image, G2 *passed* at "
+        "|Δ|=4.09e-01 looking position-sensitive while being just as wrong, G1 caught "
+        "it; `[1.3e-01, 1.4e-42, 0]` — both caught it, G2 by |Δ|=4.79e-02 against a "
+        "5e-02 threshold, within 5% of passing. C7 caught it all three times. So read "
+        "the `unrepaired` row above as **one sample of one load**: re-running this "
+        "script will not reproduce its G1/G2 cells, only its C7 one. That is the "
+        "finding, not flakiness — only the exact check is a property of the bug rather "
+        "than of whatever was in memory.",
         "",
         "| variant | " + " | ".join(n.split(" ", 1)[0] for n in names) + " | verdict |",
         "|---|" + "---|" * (len(names) + 1),

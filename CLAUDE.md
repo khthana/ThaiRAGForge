@@ -2109,7 +2109,16 @@ see `docs/adr/`.
   (**C7**) recomputes it per layer. (3) **The corruption is nondeterministic across
   loads** (zeros, then 2.6e-29, then 1.6e-30 in one session), so a one-off probe of
   a buffer says nothing about the next load — the check runs at load time and
-  reports how many layers it rebuilt. (4) **The broken model looked *better***:
+  reports how many layers it rebuilt. **That nondeterminism decides *which weak
+  check fires*, which is why the report's `unrepaired` row must be read as one
+  sample and not as a property of the bug**: over four loads on 2026-08-13, layer 0
+  came up `2.6e-29` (G1 passed, G2 caught it), `-5.2e+02` (**the mirror image** —
+  G2 passed at |Δ| = 4.09e-01, looking position-sensitive while being just as
+  wrong, and G1 caught it), `1.3e-01` (both caught it, G2 by 4.79e-02 against its
+  5e-02 threshold — within 5% of passing) and `-2.7e-23` (both). **C7 fired all
+  four times**, because it is the only one of the three whose rule does not depend
+  on what happened to be in memory. A re-run reproduces `real`'s row exactly (the
+  repair is deterministic) and will *not* reproduce `unrepaired`'s G1/G2 cells. (4) **The broken model looked *better***:
   position-blind it scored the hand-written relevance example **24.4580 vs
   12.7192** against the repaired encoder's 20.7382 vs 17.1936, which is
   [[feedback_qualify_a_model_before_measuring_with_it]] in its purest form.
@@ -2132,12 +2141,49 @@ see `docs/adr/`.
   bought by the setting, and 512/48 is pre-registered as a fallback to execute
   **only if** ColBERT loses and truncation is a plausible cause. Storage across all
   four chunkers is 30.7M tokens / **7.3 GB** at 128-dim fp16: one chunker at a time
-  fits the 12 GB card, four at once does not. Still open: an I1-variant alignment
-  check for the artifact, MaxSim against a genuinely *external* implementation
-  (`maxsim_reference` already reproduces it at max |Δ| 1.9e-06 but is in-repo;
-  pylate pins `transformers<=5.3.0` against the installed 5.12.1 so it needs a
-  throwaway CPU venv), a `ColbertRetriever` registered per ADR-0001, and a
-  **one-chunker pilot with its continuation rule fixed before it runs**.
+  fits the 12 GB card, four at once does not.
+  **The encoder is now cross-checked against pylate, and the check earned its cost
+  by finding a defect none of the 11 gates could** (`tools/eval/colbert_pylate_crosscheck.py`
+  → `data/results/colbert_pylate_crosscheck.md`, 7 self-checks PASS) — pylate cannot
+  go into `.venv` (it pins `transformers<=5.3.0` against 5.12.1), so it ran in a
+  throwaway CPU venv encoding one fixed Thai query + two documents to `.npz`.
+  **That venv is deleted and the check still re-runs**, because the only thing it
+  produced is `data/results/colbert_pylate_ref_t{453,530}.npz` (`--reference` mode
+  writes them, the default mode reads them); `--render` re-derives the report with
+  no model load at all. Persisting it was not tidiness: every figure below was
+  cited in prose while **nothing on disk supported it**, which is exactly the
+  hand-typed-number shape the D-family exists to catch, and D5 duly flagged
+  `0 of 24` as untraceable. Three findings.
+  (A) **The rotary bug reaches the reference library**: pylate reports `24 of 24
+  layers wrong` under transformers **5.3.0** and `0 of 24` under **4.53.2**, so
+  anyone running pylate + `jina-colbert-v2` on 5.x is silently serving a
+  position-blind model — and pinning 4.53.2 is what makes the reference *correct by
+  construction* rather than merely independent. Corollary: **a comparison against a
+  second broken model is not a control**, since the uninitialised buffer differs
+  per load (that cell disagrees at 2.7e-01), so two independently-broken models are
+  not the same model. (B) **The query side matched bitwise** — `max|Δ| = 0.000e+00`,
+  min per-token cosine `1.000000` over (32,128) — which externally validates the
+  marker insertion, augmentation to 32, `attend_to_mask_tokens`, the hand-loaded
+  projection head, L2 **and** `_repair_rotary` at once: the repaired buffer
+  reproduces a correctly-loaded one exactly, so it is restoration, not a
+  self-consistent substitute. (C) **The documents did not match and the cause was
+  ours**: 19/21 vectors against pylate's 21/22, because the two skiplists are
+  **disjoint** — ours used `encode(sym)[0]`, which on SentencePiece is the `▁`
+  boundary marker, so `mask_punctuation=True` masked **whitespace and no
+  punctuation at all**, the inverse of its name (original ColBERT uses both forms
+  and they coincide only on WordPiece). Fixed to `convert_tokens_to_ids(sym)`;
+  all three tensors then agree (`max|Δ|` 1.2e-04, min cosine 0.999936, MaxSim
+  20.8212/17.5484 vs 20.8213/17.5487). **The lesson generalises past ColBERT: an
+  N-check gate is a battery of *self*-consistency tests, and a convention that is
+  uniformly wrong on both sides of every internal comparison is invisible to all of
+  them** — note also that the surprise ran backwards, the *query* path (markers,
+  augmentation, mask attention) matched exactly while the simpler document path
+  held the defect. `tests/colbert/test_colbert_skiplist.py` pins the rule in both
+  directions against a stub tokenizer carrying the property that makes the two
+  disagree, so it states the rule rather than recording today's vocabulary.
+  Still open: an I1-variant alignment check for the artifact, a `ColbertRetriever`
+  registered per ADR-0001, and a **one-chunker pilot with its continuation rule
+  fixed before it runs**.
   **HyDE was the other candidate axis and is DONE and CLOSED — see the next
   bullet.**
 - **HyDE: BUILT, RUN AND CLOSED on both query sets (2026-08-13,

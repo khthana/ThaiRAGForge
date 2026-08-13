@@ -1,7 +1,9 @@
 # ColBERT / late interaction — notes and a pre-registered test
 
 Status: **STARTED 2026-08-13** at the user's request. Encoder + MaxSim written
-(`src/rag_lab/colbert/`), lengths profiled, checkpoint qualified. Nothing is
+(`src/rag_lab/colbert/`), lengths profiled, checkpoint qualified, and the encoder
+cross-checked against pylate — which found a real defect the 11-check gate could
+not (`mask_punctuation` was masking whitespace, not punctuation). Nothing is
 indexed and nothing is measured yet, so **the pre-registered prediction in
 §"A pre-registered prediction" is still open**. See **§"Build log (2026-08-13)"**
 for what is settled so far, and read it *after* the prediction, not before.
@@ -200,16 +202,26 @@ Four things worth keeping, in the order they were learned.
    deterministic function of `(dim, base)` written in the checkpoint's own code,
    so there is a right answer to compare against — **C7** does exactly that, per
    layer, and it is the check that decides.
-3. **A behavioural check alone is not sufficient either.** Uninitialised memory
-   that happened to be *large* would give pseudo-random but stable rotations,
-   under which the model looks position-sensitive while being just as wrong. G2
-   is the backstop, not the gate.
-4. **The corruption is nondeterministic across loads.** An earlier probe found
-   all 24 buffers non-zero and concluded "the gte zeroing did not happen"; the
-   contents were garbage anyway, and successive loads in this session produced
-   zeros, then 2.6e-29, then 1.6e-30. **A one-off probe of a buffer is not
-   evidence about the next load** — the check has to run at load time, which is
-   why the repair lives in `_load()` and reports how many layers it rebuilt.
+3. **A behavioural check alone is not sufficient either — and this stopped being
+   a hypothetical the same day.** The prediction was that uninitialised memory
+   which happened to be *large* would give pseudo-random but stable rotations,
+   under which the model looks position-sensitive while being just as wrong.
+   It was then observed: on a later load layer 0 held `-5.2e+02` and
+   `unrepaired` **passed G2** at |Δ| = 4.09e-01. G2 is the backstop, not the gate.
+4. **The corruption is nondeterministic across loads, and that decides which weak
+   check fires.** An earlier probe found all 24 buffers non-zero and concluded
+   "the gte zeroing did not happen"; the contents were garbage anyway, and
+   successive loads produced zeros, then 2.6e-29, then 1.6e-30. Four full
+   qualification runs on 2026-08-13 make the consequence concrete — layer 0 came
+   up `2.6e-29` (G1 passed, G2 caught it), `-5.2e+02` (the mirror image: G2
+   passed, G1 caught it), `1.3e-01` (both caught it, G2 by 4.79e-02 against its
+   5e-02 threshold, i.e. within 5% of passing) and `-2.7e-23` (both). **C7 fired
+   all four times.** So `colbert_model_qualification.md`'s `unrepaired` row is a
+   sample of one load, not a property of the bug: re-running reproduces `real`'s
+   row exactly (the repair is deterministic) and will not reproduce
+   `unrepaired`'s G1/G2 cells. **A one-off probe of a buffer is not evidence
+   about the next load** — the check has to run at load time, which is why the
+   repair lives in `_load()` and reports how many layers it rebuilt.
 
 `_repair_rotary` recomputes the buffer with the model's own `_compute_inv_freq`
 and invalidates the cos/sin cache (which otherwise rebuilds only when the
@@ -247,24 +259,96 @@ on the check a human would have written first, it looked **better**. That is the
 whole argument for qualifying a model before measuring with it, restated in this
 project's own numbers.
 
-Two smaller things the gate settled, both faithful-to-reference rather than
-convenient: original ColBERT's marker route (tokenize `". " + text`, overwrite
-`ids[:,1]`) assumes `". "` is one token, which is true on WordPiece and **false**
-on this SentencePiece vocabulary — C1 pins that the two routes disagree, leaving
-a stray `.`; and `mask_punctuation` builds its skiplist from the *first* token of
-each ASCII symbol, which on SentencePiece is usually the bare `▁`, so it mostly
-drops whitespace and **keeps** `.` — what pylate does, just not what the name
-suggests.
+One smaller thing the gate settled, faithful-to-reference rather than convenient:
+original ColBERT's marker route (tokenize `". " + text`, overwrite `ids[:,1]`)
+assumes `". "` is one token, which is true on WordPiece and **false** on this
+SentencePiece vocabulary — C1 pins that the two routes disagree, leaving a stray
+`.`. It also recorded a second SentencePiece note, that `mask_punctuation` builds
+its skiplist from the *first* token of each ASCII symbol so it "mostly drops
+whitespace and keeps `.` — what pylate does, just not what the name suggests."
+**The second half of that sentence was wrong, and it was a defect rather than a
+quirk. See the next section.**
+
+### Verified against pylate — which found a defect 11 checks could not
+
+`maxsim_reference` reproduces `maxsim`, but it is in-repo. pylate cannot go into
+`.venv` (it pins `transformers<=5.3.0` against 5.12.1), so it ran in a throwaway
+CPU venv encoding one fixed Thai query and two fixed documents, saved to `.npz`,
+against which our encoder was run on the same texts.
+
+**It is now `tools/eval/colbert_pylate_crosscheck.py` →
+`data/results/colbert_pylate_crosscheck.md` (7 self-checks, all PASS), and the
+throwaway venv is deleted.** The check survives that deletion because the only
+thing the other environment produces is the reference tensors themselves —
+`--reference OUT.npz` writes one (run it there), the default mode reads
+`data/results/colbert_pylate_ref_t{453,530}.npz` and compares, `--render`
+re-derives the report from the cached comparison with no model load. It was
+promoted out of the scratchpad for the reason the D-family exists: all the
+figures below were quoted in three documents while **no artifact on disk
+supported them**, and `audit_doc_claims.py`'s D5 flagged `0 of 24` as
+untraceable the moment it was written down. Both directions are exercised —
+S1 requires the reference to read `0 of 24` (a broken reference is not a
+control) and S6 requires the second cell to *differ*, so a pass there would be
+a finding, not a relief.
+
+**Finding A — the rotary bug reaches the reference library, and pinning
+transformers is what makes an external check possible at all.** pylate on
+**transformers 5.3.0** reports `rotary: 24 of 24 layers wrong; layer holds
+[2233450102784.0, 1.9323905823039227e-42, 0.0]`; on **4.53.2**, `0 of 24`. So
+this is not a bug in our loading — anyone running `pylate` + `jina-colbert-v2` on
+transformers 5.x is silently serving a position-blind model — and 4.53.2 is a
+reference that is *correct by construction* rather than merely independent.
+
+**A comparison against a second broken model is not a control.** The cell built
+to isolate the encoding conventions from the rotary question — `unrepaired` vs
+pylate@5.3.0, both position-blind on identical weights — **cannot work**, because
+the uninitialised buffer differs from load to load (query `max|Δ|` = 2.7e-01).
+Two independently-broken models are not the same model.
+
+**Finding B — the query side matched exactly, and that is five things at once.**
+`repaired` vs pylate@4.53.2: query `max|Δ| = 0.000e+00`, min per-token cosine
+`1.000000` over (32, 128). Bitwise agreement externally validates the marker
+insertion, the augmentation to 32, `attend_to_mask_tokens`, the hand-loaded
+projection head, the L2 step **and** `_repair_rotary` — the repaired buffer
+reproduces the correctly-loaded one exactly, so it is restoration and not merely
+a self-consistent substitute.
+
+**Finding C — the documents did *not* match, and the cause was ours.** Ours
+returned **19 and 21** vectors against pylate's **21 and 22**. The two skiplists
+turned out to be **disjoint**:
+
+| | rule | drops here |
+|---|---|---|
+| ours | `encode(sym)[0]` | `▁` (id 6) — **whitespace**: 2 and 3 tokens |
+| pylate | `convert_tokens_to_ids(sym)` | `.` (id 5) — **punctuation**: 0 and 2 tokens |
+
+Original ColBERT uses both forms and they coincide on WordPiece; on SentencePiece
+encoding a standalone symbol prepends the boundary marker, so `encode(".")[0]`
+is `▁` and never `.`. **`mask_punctuation=True` was masking no punctuation at
+all.** Fixed to the symbol's own id; `tests/colbert/test_colbert_skiplist.py`
+pins the rule in both directions against a stub tokenizer carrying the property
+that makes them disagree, so it states the rule rather than recording today's
+vocabulary. After the fix all three tensors match: `max|Δ|` 1.2e-04 with min
+per-token cosine 0.999936 (fp32, ours batched-and-padded against pylate's
+unpadded singles), MaxSim **20.8212 / 17.5484** against **20.8213 / 17.5487**.
+
+The lesson is the one this project keeps re-learning from a different angle:
+**the 11-check gate is a battery of *self*-consistency tests, and a convention
+that is uniformly wrong on both sides of a comparison is invisible to every one
+of them.** The wrong skiplist produced a plausible number of plausible vectors
+and ranked the relevance example correctly. It took an implementation that had
+never seen our code to see it — and note the direction of the surprise: the
+*query* was where an exact match was least expected (markers, augmentation,
+mask attention) and it matched bitwise, while the documents, the simpler path,
+were where the defect sat.
 
 ### Still open
 
 - An I1-variant alignment check for chunk→token-block (`vecs.shape[0] ==
   lengths.sum()` is asserted in the encoder; the *artifact* needs its own check).
-- `maxsim` against a genuinely external implementation. `maxsim_reference`
-  already reproduces it (max |Δ| = 0.0 synthetic, 1.9e-06 on real vectors) but it
-  is in-repo; pylate cannot be installed into `.venv` (it pins
-  `sentence-transformers==5.3.0` / `transformers<=5.3.0` against 5.6.0 / 5.12.1),
-  so it needs a throwaway CPU venv.
+- ~~`maxsim` against a genuinely external implementation~~ — **done**, see the
+  section above; the encoder matches pylate@4.53.2 exactly on queries and to
+  1.2e-04 on documents, once a real defect it exposed was fixed.
 - `ColbertRetriever` as a registry entry (ADR-0001: new file + register, no
   runner edit), then a **pilot on one chunker with a continuation rule fixed
   before it runs** — 7.3 GB for all four is a real cost and

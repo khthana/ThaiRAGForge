@@ -65,11 +65,19 @@ decisive check is the exact one -- C7 in `tools/eval/qualify_colbert_model.py`
 compares every layer against `_compute_inv_freq` -- with G2 kept as the
 behavioural backstop.
 
-Punctuation masking carries a quirk worth knowing: ColBERT builds its skiplist
-from the *first* token of each ASCII punctuation symbol, and on SentencePiece
-that first token is usually the bare ``▁`` space marker. So `mask_punctuation`
-here mostly drops whitespace tokens and keeps ``.`` -- faithful to the reference
-implementation (pylate does the same), just not what the name suggests.
+A SEVENTH, FOUND ONLY BY COMPARING AGAINST pylate
+-------------------------------------------------
+`mask_punctuation` must build its skiplist with ``convert_tokens_to_ids(symbol)``,
+**not** with the first id of ``encode(symbol)``. Original ColBERT uses both and
+they coincide on BERT WordPiece; on this model's SentencePiece they are
+*disjoint*, because encoding a standalone symbol prepends the word-boundary
+marker. Taking ``encode(".")[0]`` yields ``▁`` (id 6) and never the ``.`` token
+(id 5), so the skiplist ends up masking **whitespace** and keeping every
+punctuation mark -- the exact inverse of what the flag names. It cost 2 and 3
+tokens on two hand-written Thai documents against pylate's 0 and 2, and nothing
+in this file could have caught it: both rules produce a plausible number of
+plausible vectors. Verified against pylate on transformers 4.53.2, where the
+rotary buffer loads correctly by construction.
 """
 from __future__ import annotations
 
@@ -158,11 +166,25 @@ class ColbertEncoder:
         self._linear = w.to(self._device, dtype)
 
         if self.config.mask_punctuation:
-            for sym in string.punctuation:
-                ids = self._tok.encode(sym, add_special_tokens=False)
-                if ids:
-                    self._skiplist.add(ids[0])
+            self._skiplist = self._build_skiplist(self._tok)
         return model
+
+    @staticmethod
+    def _build_skiplist(tok) -> set[int]:
+        """(7) The symbol's OWN id, never the first id of its encoding.
+
+        On SentencePiece `encode(".")` is `▁` + `.`, so the first-id route builds
+        a skiplist of word-boundary markers: it masks whitespace and keeps every
+        punctuation mark, the inverse of what `mask_punctuation` names. Verified
+        against pylate, which uses this rule.
+        """
+        unk = tok.unk_token_id
+        out = set()
+        for sym in string.punctuation:
+            i = tok.convert_tokens_to_ids(sym)
+            if i is not None and i != unk:
+                out.add(i)
+        return out
 
     @staticmethod
     def _repair_rotary(model) -> int:
