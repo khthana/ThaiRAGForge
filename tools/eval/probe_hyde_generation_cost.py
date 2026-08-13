@@ -1,6 +1,6 @@
 """Price one HyDE generation, so the axis is costed by measurement not by analogy.
 
-This is **not** a HyDE implementation and nothing imports it. It answers one
+This is **not** a HyDE implementation. It answers one
 question -- *how long would running the HyDE axis take* -- before any of it is
 built, because the figure this project had on file could not survive being
 looked at: `docs/hyde-axis-notes.md` inherited **15.6 s/query** from the RQ4
@@ -57,7 +57,9 @@ CAP = 256  # num_predict for the capped arm
 # A plausible HyDE prompt for this corpus: write the passage that WOULD answer
 # the question, in the register of the minutes, so the embedding lands near real
 # minutes text. Deliberately unengineered -- this prices the axis, it does not
-# tune it.
+# tune it. `hyde_generate.py` IMPORTS this constant rather than copying it, so
+# the price published here is the price of the prompt the axis actually ran, and
+# a second copy cannot drift away from it.
 PROMPT = """คุณคือผู้ช่วยที่เขียนร่างข้อความในรายงานการประชุมสภาวิชาการของมหาวิทยาลัย
 
 จงเขียนย่อหน้าสั้น ๆ (ไม่เกิน 5 ประโยค) ที่มีลักษณะเหมือนข้อความในรายงานการประชุม
