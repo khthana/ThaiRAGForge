@@ -6,11 +6,15 @@ vectors per chunk and needs its own artifact shape.
 """
 from rag_lab.colbert.encoder import MODEL_NAME, ColbertConfig, ColbertEncoder
 from rag_lab.colbert.scoring import maxsim, maxsim_reference, offsets_from_lengths
+from rag_lab.colbert.store import ColbertArtifact, ColbertStore, verify_alignment
 
 __all__ = [
     "MODEL_NAME",
+    "ColbertArtifact",
     "ColbertConfig",
     "ColbertEncoder",
+    "ColbertStore",
+    "verify_alignment",
     "maxsim",
     "maxsim_reference",
     "offsets_from_lengths",
