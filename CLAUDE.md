@@ -2075,13 +2075,70 @@ see `docs/adr/`.
   a perfect rerank over P=50 is 0.6281 → **0.8249**, and P=1000 buys only 0.8738,
   so the 10-document budget binds, not the pool. Same family as
   [[feedback_state_the_retrieval_budget_in_every_comparison]].
-- **Candidate next axis, written up but not started** — it carries a
-  pre-registered prediction, which is the point of writing it up early:
-  `docs/colbert-late-interaction-notes.md` (ColBERT: motivated by *our own*
-  results — the cross-encoder reranker hurt hybrid MRR, and BM25/dense split
-  person vs program — so an aggregate win can't be mistaken for resolving that
-  split). Not committed to; RQ4, the item that used to block starting it, is
-  complete. **HyDE was the other one and is now DONE and CLOSED — see the next
+- **ColBERT / late interaction: STARTED 2026-08-13 at the user's request, QUALIFIED
+  ONLY — nothing is indexed and nothing is measured
+  (`docs/colbert-late-interaction-notes.md` §"Build log", `src/rag_lab/colbert/`,
+  `tools/eval/colbert_length_profile.py` + `qualify_colbert_model.py`).** The
+  pre-registered prediction is still open and is the point of the axis:
+  *ColBERT-alone ties or beats **BM25** on `person` (0.8147) **and** ties or beats
+  the best dense embedder on `program` (`qwen3_0.6b` 0.6066), in the same run* —
+  motivated by *our own* results (the cross-encoder hurt hybrid MRR; BM25/dense
+  split person vs program), so an aggregate win cannot be mistaken for resolving
+  that split. Everything in the notes before the build log is the untouched
+  2026-07-30 write-up, kept because it is what the prediction was registered
+  against. **The package is deliberately outside `embedders/`**: `BaseEmbedder` is
+  one row per text and `Index` is row-aligned on it (invariant `I1`), while
+  ColBERT is many vectors per chunk and needs its own artifact shape (packed
+  `vecs` + `lengths`).
+  **The checkpoint arrives broken, and the buffer audit could not see it.**
+  `jinaai/jina-colbert-v2` loads `jinaai/xlm-roberta-flash-implementation`, remote
+  code written for transformers 4.43 run here under 5.12 — the same path that made
+  `gte-multilingual-reranker-base` position-blind on 2026-08-09 — and **all 24
+  layers' `RotaryEmbedding.inv_freq` come up as uninitialised memory**, so the
+  rotation is the identity. `ColbertEncoder._repair_rotary` rebuilds it from the
+  model's own `_compute_inv_freq` **and invalidates the cos/sin cache** (that cache
+  refreshes only when the sequence length grows, so a corrected `inv_freq` alone
+  is ignored for every length already seen); it is restoration, not modification,
+  and self-retires to 0 the day transformers loads the buffer correctly. Four
+  things worth keeping. (1) **It was found by a gate failing, not by reasoning** —
+  G2 rejected the encoder at |Δ| = 2.8e-04 between a document and its
+  token-reversal. (2) **G1 passed on the broken model**: its rule was "finite and
+  not identically zero" and the garbage was 30 zeros plus 2.6e-29 and 1.0e-42, so
+  a smell test cannot decide this — `inv_freq` is a deterministic function of
+  `(dim, base)` written in the checkpoint's own code, and the check that decides
+  (**C7**) recomputes it per layer. (3) **The corruption is nondeterministic across
+  loads** (zeros, then 2.6e-29, then 1.6e-30 in one session), so a one-off probe of
+  a buffer says nothing about the next load — the check runs at load time and
+  reports how many layers it rebuilt. (4) **The broken model looked *better***:
+  position-blind it scored the hand-written relevance example **24.4580 vs
+  12.7192** against the repaired encoder's 20.7382 vs 17.1936, which is
+  [[feedback_qualify_a_model_before_measuring_with_it]] in its purest form.
+  Gate: 11 checks × 4 variants, `real` **QUALIFIED**, and three controls built from
+  the same weights each fail the check written for them — `bag_of_words` on G2 at
+  **exactly 0.00e+00**, `unnormalised` on C3, `unrepaired` (the live bug, not a
+  synthetic sabotage) on C7. **G2's exactness is the mechanism, not luck**: MaxSim
+  is permutation-invariant over document tokens, so a position-blind model must
+  score a token-reversal *identically* — and the reversal is done on **ids**, since
+  a word-level reversal retokenizes to a different multiset and the gate would then
+  rest on a threshold.
+  **Lengths are conventions, not limits** (rotary, 8192-token card), so truncation
+  is a choice applied to the treatment alone. Measured with the model's own
+  tokenizer (2.96–2.98 chars/token — a hand-written Thai probe gives 4.79, so
+  sizing from a probe would have under-counted tokens by ~60%): at the checkpoint's
+  own `doc_maxlen=300` truncation is **1.1% (recursive) to 7.4% (semantic)** of
+  chunks and at `query_maxlen=32` it is **8%** of Gold queries by at most 5 tokens;
+  512/48 would cost 0.0–3.3% / 0% for +3.7% storage. **Run at 300/32 and report
+  both rates as confounds** — they point *against* the treatment, so a win is not
+  bought by the setting, and 512/48 is pre-registered as a fallback to execute
+  **only if** ColBERT loses and truncation is a plausible cause. Storage across all
+  four chunkers is 30.7M tokens / **7.3 GB** at 128-dim fp16: one chunker at a time
+  fits the 12 GB card, four at once does not. Still open: an I1-variant alignment
+  check for the artifact, MaxSim against a genuinely *external* implementation
+  (`maxsim_reference` already reproduces it at max |Δ| 1.9e-06 but is in-repo;
+  pylate pins `transformers<=5.3.0` against the installed 5.12.1 so it needs a
+  throwaway CPU venv), a `ColbertRetriever` registered per ADR-0001, and a
+  **one-chunker pilot with its continuation rule fixed before it runs**.
+  **HyDE was the other candidate axis and is DONE and CLOSED — see the next
   bullet.**
 - **HyDE: BUILT, RUN AND CLOSED on both query sets (2026-08-13,
   `tools/eval/hyde_generate.py` → `data/results/hyde_documents.json` +

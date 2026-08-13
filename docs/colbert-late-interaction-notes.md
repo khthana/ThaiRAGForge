@@ -1,9 +1,16 @@
 # ColBERT / late interaction — notes and a pre-registered test
 
-Status: **not started, not committed to.** Written 2026-07-30 so the option is
-recorded with its reasoning while the findings that motivate it are fresh. This
-is a *new research axis*, not a small experiment; the intended order was RQ4
-first.
+Status: **STARTED 2026-08-13** at the user's request. Encoder + MaxSim written
+(`src/rag_lab/colbert/`), lengths profiled, checkpoint qualified. Nothing is
+indexed and nothing is measured yet, so **the pre-registered prediction in
+§"A pre-registered prediction" is still open**. See **§"Build log (2026-08-13)"**
+for what is settled so far, and read it *after* the prediction, not before.
+
+Everything before the build log is the original 2026-07-30 write-up, kept as
+written: it is the motivation the prediction was registered against, and
+rewriting it after the fact would destroy the only reason the prediction means
+anything. This is a *new research axis*, not a small experiment; the intended
+order was RQ4 first.
 
 **2026-08-07 — RQ4 is complete, so the stated blocker is gone; this is still not
 the next thing to do.** Three cheaper items now rank above it, all justified by
@@ -130,6 +137,138 @@ retriever", not "late interaction resolves the complementarity".
 Evaluation cost is low — it reuses `gold_query_set_73det.yaml`, the existing
 paired-bootstrap + Holm machinery, and `bm25_hybrid_entity_type_breakdown.py`
 unchanged. Only the index build and a `ColbertRetriever` are new.
+
+## Build log (2026-08-13)
+
+### What exists
+
+| artifact | what it is |
+|---|---|
+| `src/rag_lab/colbert/encoder.py` | `ColbertEncoder` — marker insertion, query augmentation, the projection head `AutoModel` does not load, L2 normalisation, and the rotary repair below. Deliberately **not** a `BaseEmbedder`: that interface is one row per text and `Index` is row-aligned on it (audit check I1), while ColBERT is many vectors per chunk. |
+| `src/rag_lab/colbert/scoring.py` | `maxsim` (packed `np.maximum.reduceat`) plus `maxsim_reference`, the definition written out one document at a time and kept as an independent check of the optimisation. |
+| `tools/eval/colbert_length_profile.py` → `data/results/colbert_length_profile.md` | what the caps cost this corpus. |
+| `tools/eval/qualify_colbert_model.py` → `data/results/colbert_model_qualification.md` | the gate. Nothing measured with this checkpoint is citable until it passes in both directions. |
+
+### The length decision, and it is a stated confound rather than a default
+
+`doc_maxlen`/`query_maxlen` are **ColBERT conventions, not model limits** — this
+checkpoint is rotary and its card claims 8192 tokens — so truncation here is a
+*choice*, and one applied to the treatment alone: the dense arms ColBERT is
+compared against read the whole chunk (bge-m3 8192, qwen3 32k). Measured with
+the model's own tokenizer over all four chunkers (2.96–2.98 chars/token, not the
+2–3 these notes guessed at, and nothing like the 4.79 a hand-written Thai probe
+sentence gives — sizing from a probe would have under-counted tokens by ~60%):
+
+- **`doc_maxlen=300`** (the checkpoint's own default) truncates **1.1%
+  (recursive) to 7.4% (semantic)** of chunks. 512 would cost 0.0–3.3% for **+3.7%
+  storage** — cheap, and deliberately *not* taken.
+- **`query_maxlen=32`** truncates **8%** of Gold queries, by at most 5 tokens
+  (max 34 and 45 over the two sets). 48 truncates none.
+- Storage at 300 across all four chunkers: 30.7M tokens, **7.3 GB** at 128-dim
+  fp16 — one chunker at a time fits a 12 GB card without residual compression,
+  all four at once does not.
+
+**Run at the checkpoint's own numbers and report both rates as confounds.** Both
+point *against* the treatment, so a ColBERT win is not bought by the setting, and
+a deviation is an *unmeasured* configuration where this project has repeatedly
+found unmeasured to be worse than handicapped. Pre-registered fallback: rerun at
+512/48 **only if** ColBERT loses and truncation is a plausible cause — written
+down now so it cannot become a post-hoc rescue of a bad result.
+
+### The checkpoint arrives broken, and G1 could not see it
+
+`jina-colbert-v2` loads through `jinaai/xlm-roberta-flash-implementation`, remote
+code written for transformers 4.43 and run here under 5.12 — the same path on
+which `gte-multilingual-reranker-base` came back position-blind on 2026-08-09
+([[feedback_qualify_a_model_before_measuring_with_it]]). **It has the same bug.**
+`RotaryEmbedding.inv_freq` is a *non-persistent* buffer, absent from the
+safetensors and rebuilt by `__init__`; 5.x materialises it from the meta device
+and never re-runs that code, so all 24 layers come up holding uninitialised
+memory — `cos = 1`, `sin = 0`, i.e. the rotation is the identity.
+
+Four things worth keeping, in the order they were learned.
+
+1. **It was found by a gate failing, not by reasoning.** The first run rejected
+   the real encoder on G2 (a document and its token-reversal scoring 20.7081 vs
+   20.7078, |Δ| = 2.8e-04 — the same magnitude as fp16 padding noise). Nothing
+   else about the model looked wrong.
+2. **The buffer audit passed on the broken model.** G1's float rule was "finite
+   and not identically zero", and the garbage was 30 zeros plus 2.6e-29 and
+   1.0e-42 — finite, non-zero, arithmetically indistinguishable from zero. G1 now
+   also flags a float buffer whose largest magnitude is under 1e-20, but the
+   lesson stands: **a smell test cannot decide this.** `inv_freq` is a
+   deterministic function of `(dim, base)` written in the checkpoint's own code,
+   so there is a right answer to compare against — **C7** does exactly that, per
+   layer, and it is the check that decides.
+3. **A behavioural check alone is not sufficient either.** Uninitialised memory
+   that happened to be *large* would give pseudo-random but stable rotations,
+   under which the model looks position-sensitive while being just as wrong. G2
+   is the backstop, not the gate.
+4. **The corruption is nondeterministic across loads.** An earlier probe found
+   all 24 buffers non-zero and concluded "the gte zeroing did not happen"; the
+   contents were garbage anyway, and successive loads in this session produced
+   zeros, then 2.6e-29, then 1.6e-30. **A one-off probe of a buffer is not
+   evidence about the next load** — the check has to run at load time, which is
+   why the repair lives in `_load()` and reports how many layers it rebuilt.
+
+`_repair_rotary` recomputes the buffer with the model's own `_compute_inv_freq`
+and invalidates the cos/sin cache (which otherwise rebuilds only when the
+sequence length grows, so a corrected `inv_freq` alone would be ignored). That is
+**restoration, not modification**: no trained information is involved and it is
+exactly what `__init__` would have produced. It is also self-retiring — a future
+transformers that loads the buffer correctly makes it return 0 with nothing else
+changing.
+
+### Gate result: QUALIFIED, in both directions
+
+11 checks × 4 variants. The real encoder passes all 11; three controls built from
+the same weights each fail the check written for them:
+
+| control | is | must fail | did |
+|---|---|---|---|
+| `bag_of_words` | word embeddings only, no attention | G2 | ✓ at **exactly 0.00e+00** |
+| `unnormalised` | no L2 step | C3 | ✓ (max ‖v‖−1 = 31.3) |
+| `unrepaired` | `repair_rotary=False` — the live bug, not a synthetic sabotage | C7 | ✓ 24 of 24 layers |
+
+**G2 is unusually sharp for late interaction and that is not luck — it is the
+mechanism.** MaxSim is permutation-invariant over document tokens, so a
+position-blind model must score a document and its token-reversal *identically*,
+not merely similarly. The reversal is done on **ids**, not on words: a word-level
+reversal retokenizes to a slightly different multiset, so the control would only
+have been *approximately* caught and the gate would have rested on a threshold.
+Reversing ids holds the multiset exactly — hence the control's 0.00e+00 against
+the repaired encoder's 0.767.
+
+**The most useful single number in the report is one of the passes, not the
+failures.** `unrepaired` — fully position-blind — scores the hand-written Thai
+relevance example **24.4580 vs 12.7192**, a *wider* margin than the working
+encoder's 20.7382 vs 17.1936. A broken model did not merely look acceptable here;
+on the check a human would have written first, it looked **better**. That is the
+whole argument for qualifying a model before measuring with it, restated in this
+project's own numbers.
+
+Two smaller things the gate settled, both faithful-to-reference rather than
+convenient: original ColBERT's marker route (tokenize `". " + text`, overwrite
+`ids[:,1]`) assumes `". "` is one token, which is true on WordPiece and **false**
+on this SentencePiece vocabulary — C1 pins that the two routes disagree, leaving
+a stray `.`; and `mask_punctuation` builds its skiplist from the *first* token of
+each ASCII symbol, which on SentencePiece is usually the bare `▁`, so it mostly
+drops whitespace and **keeps** `.` — what pylate does, just not what the name
+suggests.
+
+### Still open
+
+- An I1-variant alignment check for chunk→token-block (`vecs.shape[0] ==
+  lengths.sum()` is asserted in the encoder; the *artifact* needs its own check).
+- `maxsim` against a genuinely external implementation. `maxsim_reference`
+  already reproduces it (max |Δ| = 0.0 synthetic, 1.9e-06 on real vectors) but it
+  is in-repo; pylate cannot be installed into `.venv` (it pins
+  `sentence-transformers==5.3.0` / `transformers<=5.3.0` against 5.6.0 / 5.12.1),
+  so it needs a throwaway CPU venv.
+- `ColbertRetriever` as a registry entry (ADR-0001: new file + register, no
+  runner edit), then a **pilot on one chunker with a continuation rule fixed
+  before it runs** — 7.3 GB for all four is a real cost and
+  [[feedback_scan_before_broad_preprocessing_fix]] applies.
 
 ## Where this belongs in the paper regardless
 
