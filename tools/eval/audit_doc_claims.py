@@ -181,6 +181,27 @@ EVAL_INPUTS: dict[str, list[str]] = {
     # minutes and re-running it is the whole fix.
     "data/results/rq4_prompt_fit_probes.json": ["docs/pipeline-invariant-audit.md"],
     "data/results/rq4_truncated_cells_raw.json": ["docs/pipeline-invariant-audit.md"],
+    # The encoder is the generator of none of these three and the substance of
+    # all of them: the qualification gate is a measurement *of* it, the pylate
+    # cross-check reports how far its tensors sit from a reference
+    # implementation, and every vector the pilot scored came out of it. The
+    # `_repair_rotary` / skiplist shape makes this live rather than theoretical
+    # -- the skiplist fix moved the document vectors while `colbert_pilot.py`
+    # was untouched, which is the `program_loader.py` shape one layer over. It
+    # is also the edge that must reopen the closed axis: the pilot's STOP is a
+    # statement about the encoder that produced it, so repairing the encoder
+    # turns that verdict into a record of a model that no longer exists.
+    "src/rag_lab/colbert/encoder.py": [
+        "colbert_pilot.md", "colbert_pylate_crosscheck.md",
+        "colbert_model_qualification.md",
+    ],
+    # Same argument, narrower: `maxsim` is the pilot's score and the
+    # cross-check's last comparison, and the pilot's S6 pins the packed
+    # implementation against the naive one -- so a change here makes both
+    # reports records of a scoring function that no longer exists.
+    "src/rag_lab/colbert/scoring.py": [
+        "colbert_pilot.md", "colbert_pylate_crosscheck.md",
+    ],
 }
 
 findings: list[tuple[str, str, str]] = []

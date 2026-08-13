@@ -319,9 +319,15 @@ see `docs/adr/`.
   check vacuous — the [[feedback_cleanup_can_break_an_audit]] shape again — and
   the tests pin that no current report (`routing_eval`, `rq4_score`,
   `oracle_union_ceiling`, `power_analysis`, the three 9-way tables) is exempt.
-  Current state: **6 pass / 1 warn / 0 fail** over 7 checks (2026-08-12, D5's
-  first green run), the warn still being D3's 3 known false positives. Was
-  **5 pass / 1 warn / 0 fail** over 6 before D5 landed.
+  Current state: **6 pass / 1 warn / 0 fail** over 7 checks (re-run 2026-08-13
+  after the ColBERT pilot; unchanged from the 08-12 run that was D5's first
+  green one), the warn still being D3's 3 known false positives. Was
+  **5 pass / 1 warn / 0 fail** over 6 before D5 landed. `EVAL_INPUTS` grew to
+  25 (input, report) pairs on 08-13 with the two ColBERT edges, and the new
+  `scoring.py` edge **fired immediately and correctly** — see the ColBERT
+  bullet for why it was discharged by a re-render rather than by an allowlist
+  entry, which is the general answer whenever D4 flags a proxy: re-run the
+  cheap generator and diff, and only allowlist when the re-run is not cheap.
   It went **4 pass / 1 warn / 1 fail** on 2026-08-10 with D4 as a **true
   positive** (`rq4_score.md`/`rq4_score_guarded.md` predating the truncation
   repair in `tools/eval/rq4_generate.py`, i.e. describing answers from a
@@ -2075,16 +2081,51 @@ see `docs/adr/`.
   a perfect rerank over P=50 is 0.6281 → **0.8249**, and P=1000 buys only 0.8738,
   so the 10-document budget binds, not the pool. Same family as
   [[feedback_state_the_retrieval_budget_in_every_comparison]].
-- **ColBERT / late interaction: STARTED 2026-08-13 at the user's request, QUALIFIED
-  ONLY — nothing is indexed and nothing is measured
-  (`docs/colbert-late-interaction-notes.md` §"Build log", `src/rag_lab/colbert/`,
-  `tools/eval/colbert_length_profile.py` + `qualify_colbert_model.py`).** The
-  pre-registered prediction is still open and is the point of the axis:
-  *ColBERT-alone ties or beats **BM25** on `person` (0.8147) **and** ties or beats
-  the best dense embedder on `program` (`qwen3_0.6b` 0.6066), in the same run* —
-  motivated by *our own* results (the cross-encoder hurt hybrid MRR; BM25/dense
-  split person vs program), so an aggregate win cannot be mistaken for resolving
-  that split. Everything in the notes before the build log is the untouched
+- **ColBERT / late interaction: BUILT, PILOTED AND CLOSED 2026-08-13 at the user's
+  request — the pre-registered prediction FAILED and the frozen rule returned STOP
+  (`docs/colbert-late-interaction-notes.md`, `src/rag_lab/colbert/`,
+  `tools/eval/colbert_length_profile.py` + `qualify_colbert_model.py` +
+  `colbert_pylate_crosscheck.py` + `colbert_pilot_baselines.py` + `colbert_pilot.py`
+  → `data/results/colbert_pilot.md`).** The prediction, registered before anything
+  was built: *ColBERT-alone ties or beats **BM25** on `person` (0.8147) **and** ties
+  or beats the best dense embedder on `program` (`qwen3_0.6b` 0.6066), in the same
+  run* — motivated by *our own* results (the cross-encoder hurt hybrid MRR;
+  BM25/dense split person vs program), so an aggregate win cannot be mistaken for
+  resolving that split. **`person` cleared as a TIE (+0.0308, CI [−0.0429,
+  +0.1030], Holm 0.3974) and `program` failed by −0.3331 (Holm 0.0000), 6.7x the
+  STOP margin** — the pilot is `recursive` only, doc300/q32, 106 Gold queries,
+  unrouted, k=10, 7/7 self-checks PASS, build 11.8 min (70,251 chunks →
+  7,364,711 token vectors, `docset_hash 2bebca97fde57268`), query p50 1650.9 ms.
+  **The bars are recomputed AT `recursive`, never the published cross-chunker
+  aggregates** — a one-chunker treatment against a nine-chunker bar is the
+  wrong-pair trap that killed per-`entity_type` alpha and rrf4 — and S1/S2
+  reproduce 0.8147 / 0.6066 exactly from the same code path.
+  **The mechanism is worth more than the verdict, and it is the axis's own
+  motivation answered in the negative**: ColBERT is strong exactly where the
+  lexical arm is strong (`person` 0.8360 ≈ BM25 0.8053 vs dense 0.4281) and weak
+  exactly where the lexical arm is weak (`program` 0.2763 ≈ BM25 0.3230 vs dense
+  0.6094) — it **inherits** one side of the person/program split instead of
+  covering it. Not purely lexical either: on `course` it beats both arms (0.6176
+  vs 0.5759 / 0.4280). **And ColBERT carries the highest overall figure in the
+  table (0.5559 vs BM25 0.5080 / dense 0.5264), which is exactly the aggregate
+  reading the conjunctive pre-registration exists to refuse** — written as an
+  aggregate, this run would have been published as a success.
+  **The 512/48 length rider was executed and does not fire.** It is conditioned on
+  the losing cell's truncation being "materially above" the corpus rate, and
+  choosing what counts as material *after* seeing −0.3331 is the favourable
+  re-reading a frozen rule exists to prevent — so it is answered as an **arithmetic
+  bound** (`truncation_rider`, §3b): grant truncation the most damage possible,
+  i.e. assume a gold resolution with **any** truncated chunk is destroyed outright.
+  Over `program`'s 221 gold resolutions / 7,659 chunks, **32 are truncated (0.42%,
+  below the corpus 1.11%)** touching 14 resolutions (6.3%), and total loss of all
+  14 explains at most **0.0837** against a **0.3331** gap. Both readings agree, 4x
+  short, no threshold needed; 300/32 stands and truncation stays a confound
+  pointing *against* the treatment. `--render` back-fills and persists the rider so
+  the figure is sourced from an artifact, not typed. **What is NOT closed**: this
+  says nothing about ColBERT against the shipped hard router, fused with BM25, or
+  on a second checkpoint — those are new predictions, not a continuation of the
+  failed one, and the axis must not be reopened as one.
+  Everything in the notes before the build log is the untouched
   2026-07-30 write-up, kept because it is what the prediction was registered
   against. **The package is deliberately outside `embedders/`**: `BaseEmbedder` is
   one row per text and `Index` is row-aligned on it (invariant `I1`), while
@@ -2181,9 +2222,26 @@ see `docs/adr/`.
   held the defect. `tests/colbert/test_colbert_skiplist.py` pins the rule in both
   directions against a stub tokenizer carrying the property that makes the two
   disagree, so it states the rule rather than recording today's vocabulary.
-  Still open: an I1-variant alignment check for the artifact, a `ColbertRetriever`
-  registered per ADR-0001, and a **one-chunker pilot with its continuation rule
-  fixed before it runs**.
+  The three items this bullet listed as open are all **done**: the I1-variant
+  alignment check (`store.verify_alignment`, L1a-L6, run as the pilot's S4), a
+  `ColbertRetriever` registered per ADR-0001, and the pilot itself.
+  **The artifact lives at `data/index/colbert/<chunker>__doc300_q32` and is
+  deliberately NOT an `Index`, so `audit_pipeline_invariants.py` does not see
+  it** — `I1` still reads `0 misaligned of 55` and that 55 excludes ColBERT.
+  Read that as scope, not as coverage: the packed `vecs`+`lengths` shape has no
+  row-per-chunk to align, which is why it carries its own L1a-L6 check instead.
+  The two `EVAL_INPUTS` edges in `audit_doc_claims.py`
+  (`src/rag_lab/colbert/{encoder,scoring}.py` → the three ColBERT reports) are
+  the other half of that: the encoder is the *generator* of none of them and the
+  substance of all of them — the skiplist fix moved the document vectors while
+  `colbert_pilot.py` was untouched — so repairing the encoder must turn the STOP
+  into a visibly stale record of a model that no longer exists rather than a
+  silently inherited verdict. Doc-claims after this bullet was written:
+  **6 pass / 1 warn / 0 fail** (2026-08-13; the D4 edge fired once on
+  `colbert_pylate_crosscheck.md` and was discharged by re-rendering it, which
+  reproduced **byte-identically** — the `astype`→`asarray` change it flagged is
+  a copy-avoidance edit with no numeric effect, which is what a staleness proxy
+  cannot know and a re-render can).
   **HyDE was the other candidate axis and is DONE and CLOSED — see the next
   bullet.**
 - **HyDE: BUILT, RUN AND CLOSED on both query sets (2026-08-13,

@@ -140,6 +140,14 @@ Evaluation cost is low — it reuses `gold_query_set_73det.yaml`, the existing
 paired-bootstrap + Holm machinery, and `bm25_hybrid_entity_type_breakdown.py`
 unchanged. Only the index build and a `ColbertRetriever` are new.
 
+> **OUTCOME (2026-08-13): the prediction FAILED — `person` clears as a tie,
+> `program` loses by −0.3331 (Holm 0.0000), verdict STOP.** Everything above this
+> line is the untouched pre-registration; the numbers and the mechanism are in
+> §"The pilot ran" below. The paragraph two above turned out to describe this run
+> exactly: ColBERT *does* carry the best overall figure (0.5559) while keeping the
+> person/program split — so the honest conclusion is "a stronger retriever", which
+> is why it was written down first.
+
 ## Build log (2026-08-13)
 
 ### What exists
@@ -342,17 +350,94 @@ never seen our code to see it — and note the direction of the surprise: the
 mask attention) and it matched bitwise, while the documents, the simpler path,
 were where the defect sat.
 
+### The pilot ran, and the prediction FAILED: verdict STOP
+
+`tools/eval/colbert_pilot.py` → `data/results/colbert_pilot.md`, 2026-08-13.
+`recursive` only, doc300/q32, all 106 Gold queries, unrouted, k=10, ColBERT-alone.
+Build 11.8 min (70,251 chunks → 7,364,711 token vectors, `docset_hash
+2bebca97fde57268`); score run exit 0 with **7/7 self-checks PASS**. The bars are
+recomputed **at `recursive`** by `colbert_pilot_baselines.py` rather than taken
+from the published cross-chunker aggregates — comparing a one-chunker treatment
+against a nine-chunker bar is the wrong-pair trap that killed per-`entity_type`
+alpha and rrf4 — and S1/S2 reproduce those aggregates exactly (0.8147 / 0.6066)
+from the same code path.
+
+| cell | comparator | n | ColBERT | bar | diff | 95% CI | Holm p | verdict |
+|---|---|---:|---:|---:|---:|---|---:|---|
+| `person` | BM25 | 30 | 0.8360 | 0.8053 | **+0.0308** | [−0.0429, +0.1030] | 0.3974 | **clears** |
+| `program` | dense `qwen3_0.6b` | 30 | 0.2763 | 0.6094 | **−0.3331** | [−0.4434, −0.2262] | 0.0000 | fails |
+
+**The prediction is a conjunction and it half-held.** `person` clears — but as a
+*tie*, not a win: the CI spans zero and +0.0308 is inside the bar's own
+cross-chunker spread (0.0283), so by the frozen rider it counts at `recursive`
+only and never as an axis-level claim. `program` fails by **6.7x** the STOP
+margin. Descriptively, across all four types:
+
+| entity_type | n | ColBERT | BM25 | best dense | ceiling |
+|---|---:|---:|---:|---:|---:|
+| course | 33 | 0.6176 | 0.4280 | 0.5759 | 0.8729 |
+| faculty_adjunct_aggregate | 13 | 0.3978 | 0.4517 | 0.4361 | 0.6810 |
+| person | 30 | 0.8360 | 0.8053 | 0.4281 | 0.9760 |
+| program | 30 | 0.2763 | 0.3230 | 0.6094 | 0.8979 |
+| **overall** | 106 | **0.5559** | 0.5080 | 0.5264 | 0.8856 |
+
+**The mechanism is the finding, and it is the axis's own motivation answered in
+the negative.** ColBERT sits nearer BM25 than dense on 2 of 4 types — not a
+majority, but **those two are exactly the cells the prediction is decided on**,
+and the direction is identical on both: strong where the lexical arm is strong
+(`person` 0.8360 ≈ BM25 0.8053, against dense's 0.4281), weak where the lexical
+arm is weak (`program` 0.2763 ≈ BM25 0.3230, against dense's 0.6094). Late
+interaction was proposed here to **cover** the person/program arm split; it
+**inherits one side of it** instead. It is not a purely lexical model either —
+on `course` it beats both arms (0.6176 vs 0.5759 / 0.4280) — which is why the
+per-type table matters more than the verdict line.
+
+**ColBERT carries the highest overall figure in the table (0.5559 vs BM25 0.5080
+and dense 0.5264), and that is precisely the reading the conjunctive
+pre-registration exists to refuse.** An aggregate win licenses "a stronger
+retriever"; it never licenses "late interaction resolves the complementarity".
+Had the prediction been written as an aggregate, this run would have been
+published as a success.
+
+**The length rider was executed and does not fire.** `DECISION_RULE`'s 512/48
+fallback is conditioned on the losing cell's truncation being "materially above"
+the corpus rate — and picking what counts as material *after* seeing −0.3331 is
+the favourable re-reading a frozen rule exists to prevent. So it is answered as
+an arithmetic bound instead (`truncation_rider`, §3b of the report): grant
+truncation the most damage it could possibly do — assume a gold resolution with
+**any** truncated chunk is destroyed outright and can never be retrieved. Over
+`program`'s 221 gold resolutions / 7,659 chunks, **32 are truncated (0.42%,
+below the corpus 1.11%)**, touching 14 resolutions (6.3%), and a total loss of
+all 14 could explain at most **0.0837** of recall@10 against a **0.3331** gap.
+Both readings agree and neither needed a threshold: the bound is 4x short, and
+the cell's own truncation rate is *below* the corpus rate, so the rule's literal
+wording says no too. **300/32 stands and the truncation stays a stated confound
+pointing against the treatment.**
+
+Cost, for the record: 1,650.9 ms query latency p50 (against a 475.6 ms routed
+hybrid query), 1.89 GB fp16 for one chunker.
+
+**What this does and does not close.** It closes the pre-registered question at
+`recursive` and stops the axis under its own frozen cost rule — the other three
+chunkers are not built. It does **not** show late interaction is worthless here:
+the `course` cell and the overall figure both point the other way, and nothing
+was measured against the shipped hard router, under fusion with BM25, or on a
+second checkpoint. Those are new questions with new predictions, not a
+continuation of this one — the asymmetry that lets a null close an axis
+([[project_hyde_axis]] used the same rule).
+
 ### Still open
 
-- An I1-variant alignment check for chunk→token-block (`vecs.shape[0] ==
-  lengths.sum()` is asserted in the encoder; the *artifact* needs its own check).
+- ~~An I1-variant alignment check for chunk→token-block~~ — **done**: `S4` in
+  the pilot runs the L1a–L6 artifact/index alignment check (7/7 PASS).
 - ~~`maxsim` against a genuinely external implementation~~ — **done**, see the
   section above; the encoder matches pylate@4.53.2 exactly on queries and to
   1.2e-04 on documents, once a real defect it exposed was fixed.
-- `ColbertRetriever` as a registry entry (ADR-0001: new file + register, no
-  runner edit), then a **pilot on one chunker with a continuation rule fixed
-  before it runs** — 7.3 GB for all four is a real cost and
-  [[feedback_scan_before_broad_preprocessing_fix]] applies.
+- ~~`ColbertRetriever` as a registry entry, then a pilot on one chunker with a
+  continuation rule fixed before it runs~~ — **done, and the pilot returned
+  STOP** (above).
+- Nothing is owed. Anything further on this axis needs a *new* pre-registered
+  prediction; do not reopen it as a continuation of the one that failed.
 
 ## Where this belongs in the paper regardless
 
