@@ -82,6 +82,7 @@ ARTIFACT_FILES = [
     Path("docs/program-matcher-absorption.md"),
     Path("docs/program-tag-regeneration.md"),
     Path("docs/rq4-prompt-truncation.md"),
+    Path("docs/qdrant-serving-pilot.md"),
 ]
 
 # A 4-decimal figure is this project's universal format for a metric, an effect
@@ -202,6 +203,19 @@ EVAL_INPUTS: dict[str, list[str]] = {
     "src/rag_lab/colbert/scoring.py": [
         "colbert_pilot.md", "colbert_pylate_crosscheck.md",
     ],
+    # The serving pilot's whole subject is what these two classes send to the
+    # engine: `qdrant_pilot.md`'s Q1 rests on `SearchParams(exact=..., hnsw_ef=...)`
+    # being constructed exactly as measured, and its Q2 is a claim that the
+    # sparse arm reproduces `BM25Okapi` -- which is a property of the query the
+    # retriever builds, not of the report's own generator. A change to either
+    # makes the report a record of a client that no longer exists.
+    "src/rag_lab/retrievers/qdrant_retriever.py": ["qdrant_pilot.md"],
+    # The ingestion is the other half of that claim: the precomputed BM25
+    # weights, the floored-IDF table they are built from and the vocabulary
+    # sidecar all live here, and none of them is re-derived at query time. It
+    # is not the report's generator either, so nothing else on disk would say
+    # the measured collection had been rebuilt differently.
+    "tools/eval/qdrant_pilot_ingest.py": ["qdrant_pilot.md"],
 }
 
 findings: list[tuple[str, str, str]] = []

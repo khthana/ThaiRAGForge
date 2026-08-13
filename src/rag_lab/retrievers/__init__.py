@@ -4,7 +4,7 @@ from rag_lab.retrievers.colbert import ColbertRetriever
 from rag_lab.retrievers.dense import DenseRetriever
 from rag_lab.retrievers.entity_lookup import EntityLookupRetriever
 from rag_lab.retrievers.hybrid import HybridRetriever
-from rag_lab.retrievers.qdrant_retriever import QdrantRetriever
+from rag_lab.retrievers.qdrant_retriever import QdrantRetriever, QdrantSparseRetriever
 
 __all__ = [
     "BaseRetriever",
@@ -13,5 +13,6 @@ __all__ = [
     "ColbertRetriever",
     "HybridRetriever",
     "QdrantRetriever",
+    "QdrantSparseRetriever",
     "EntityLookupRetriever",
 ]

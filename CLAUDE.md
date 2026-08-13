@@ -2342,6 +2342,69 @@ see `docs/adr/`.
   identical streak) rather than typed, which is the only reason it did not end up
   asserting determinism on the strength of those three
   ([[feedback_temperature_zero_is_not_reproducible]]).
+- **Qdrant serving pilot (2026-08-13, `tools/eval/qdrant_pilot_{ingest,test}.py` →
+  `data/results/qdrant_pilot.md`; narrative `docs/qdrant-serving-pilot.md`)** — the first
+  work here aimed at **deployment rather than the paper**
+  ([[project_real_deployment_intent]]). **The pilot had to change shape before it could
+  start, and that is the first thing to know: embedded Qdrant is exact brute force, not
+  ANN** — `LocalCollection.search` scores every vector and `argsort`s it, and the
+  `HnswConfig` it reports back is a fabricated default. So the 2026-07-16 vertical slice
+  could not have answered "does ANN change the answer" however it was read, and its
+  20k-point warning was about a code path that does no approximate search. This pilot
+  therefore runs a real `qdrant/qdrant` **server container** (v1.18.0, `rag-qdrant`,
+  named volume), client and server pinned to the **same** version — the first ingest ran
+  1.18.0 against 1.15.1 and the warning was closed by matching the image and re-ingesting
+  onto a clean volume, not by silencing the check. One collection
+  (`plain__sentence__local__bf8b7ebb`, the `person` route's shipped target), 57,174
+  chunks, 106 Gold queries, K=10, `fetch_depth=200`. **Q1 is measured as THREE dense arms,
+  not two**, because numpy-vs-ANN bundles two causes: `numpy_exact` vs `qdrant_exact`
+  (`SearchParams(exact=True)`) isolates storage/arithmetic, `qdrant_exact` vs
+  `qdrant_ann_ef*` isolates HNSW traversal alone. **Storage and arithmetic are free**
+  (0.3954 → 0.3957, **+0.0003**, agree@10 0.9858, residual is tie-break convention), and
+  **HNSW costs accuracy while buying almost nothing here**: monotone in `ef` but still
+  **-0.0028** at ef=1024, against `qdrant_exact`'s **17.8** ms p50 vs ANN's 10-13.
+  **RECOMMENDATION: serve dense with `exact=True`** — fused end to end it reproduces the
+  reference (0.5834 → **0.5851**, **+0.0017**, inside tie-break noise) where ANN at ef=512
+  loses **-0.0199**, and it needs no `ef` retuning when `fetch_depth` moves. **The `ef` <
+  `limit` trap is worth more than the table and it was MY confound, caught after a full
+  run had been read**: the beam holds `ef` candidates, so asking for 200 results at ef=128
+  is beam-starved *by construction* and the **-0.0421** there says the request was
+  malformed, not that the graph is inaccurate; the first grid topped out at 256 and I read
+  that number as an ANN cost. The grid was widened past `FETCH_DEPTH` and the run
+  repeated. **Those rows stay in the published table on purpose** — ef=128 is Qdrant's own
+  default, i.e. exactly what an operator gets by configuring nothing, so deleting it would
+  hide the most likely real misconfiguration behind a clean curve. **Any deployment
+  raising `fetch_depth` must raise `hnsw_ef` with it**, and only one of those two lives in
+  this repo. **Q2 is exact BY CONSTRUCTION and is therefore a check, not a result**:
+  ingestion precomputes each chunk's BM25 weights from `BM25Okapi`'s *own floored IDF
+  table*, the query sends term counts, the engine takes a plain sparse dot product, and
+  `Modifier.IDF` is deliberately unused (Qdrant's IDF is not this project's IDF); the
+  vocabulary is an explicit sorted enumeration sidecar (78,333 terms), not a hash. Result:
+  identical recall (0.5034 both), score sequence agreeing to **2.00e-07** relative at
+  every rank, **zero** id disagreements wherever scores actually differ. **The check had
+  to be corrected and that is the lesson**: its first version demanded rank-for-rank
+  identical `chunk_id`s and failed 3/3 — every differing id sat inside an exact BM25 tie
+  group (four chunks at 50.677741 on one query; tie groups are large on this corpus), and
+  numpy's `argsort` and Qdrant's scan settle a tie differently with **neither more
+  correct**. So "exact by construction" is a claim about the **score sequence**, never
+  about tie order. The check was wrong; the ingestion was right. Latency, **within-process
+  only** (the numpy arms pay no network hop, the Qdrant arms pay REST serialization, so
+  the deployable figure is the served total): dense exact **195.0 → 17.8** ms p50, lexical
+  **219.7 → 8.8**, i.e. ~0.4 s of per-query Python scoring replaced by ~27 ms of engine
+  work — which is the resource a faculty VM at 5-50 concurrent users actually runs out of.
+  `S2` anchors the whole pilot from an independent path (reference fusion 0.5834 at F=200
+  vs persisted `gold_hybrid_73det` **0.5850** at k=n, the gap being the already-measured
+  `fetch_depth` truncation effect). One observation **recorded rather than glossed**:
+  `indexed_vectors_count` reads **110,422** against 57,174 points over 6 segments (~1.93x)
+  — a reported counter, not duplicated data (`points_count` equals the row count exactly,
+  payload/vector alignment passes on every sampled row, searches return distinct ids),
+  most likely cross-segment accounting during optimization, unexplained and affecting no
+  number here. **What this does NOT establish**: one collection / one combo / one route
+  (the other 3 are **not** ingested), no significance test (every Δ is descriptive), and
+  **no concurrency measurement at all** — it ran one query at a time in one process, so it
+  says nothing about throughput, contention, or the embedder living on a different machine
+  from the engine. **Nothing is wired**: `query_service`/`registry` still route to the
+  in-process retrievers.
 - **Corpus data-quality audit** (`tools/corpus_prep/audit_title_body_agreement.py`,
   2026-07-30): flags manifest titles that disagree with the document's own page-1
   `เรื่อง` subject line. A first version was rejected on measurement (median 0.660,
