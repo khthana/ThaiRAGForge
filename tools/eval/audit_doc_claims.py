@@ -209,7 +209,17 @@ EVAL_INPUTS: dict[str, list[str]] = {
     # sparse arm reproduces `BM25Okapi` -- which is a property of the query the
     # retriever builds, not of the report's own generator. A change to either
     # makes the report a record of a client that no longer exists.
-    "src/rag_lab/retrievers/qdrant_retriever.py": ["qdrant_pilot.md"],
+    "src/rag_lab/retrievers/qdrant_retriever.py": [
+        "qdrant_pilot.md", "qdrant_concurrency.md",
+    ],
+    # The concurrency run's `encode` arm is the binding layer in its own verdict,
+    # and this class is what that arm times. The edge exists because of a change
+    # already made for it: `show_progress_bar` was unconditional, and tqdm writes
+    # to stderr under a lock, so a bar per query would serialise the very path
+    # being measured. Anything touching batching, normalisation or the progress
+    # bar changes the plateau the verdict is read off, while `qdrant_concurrency.py`
+    # itself stays untouched -- nothing else on disk would say so.
+    "src/rag_lab/embedders/local_st_embedder.py": ["qdrant_concurrency.md"],
     # The ingestion is the other half of that claim: the precomputed BM25
     # weights, the floored-IDF table they are built from and the vocabulary
     # sidecar all live here, and none of them is re-derived at query time. It

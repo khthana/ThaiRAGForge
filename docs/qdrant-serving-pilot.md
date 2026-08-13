@@ -174,15 +174,104 @@ effect, not a serving artifact.
 - The `hnsw_ef` grid is **not inert**: 293 distinct top-10s across 6 `ef` values × 106
   queries, so HNSW really is being traversed and the ANN arms are not silently exact.
 
+## 8b. Concurrency (2026-08-13) — the engine is not the layer that saturates
+
+§8's "no concurrency measurement" was the one open item that could still invalidate the
+serving design above, so it was closed before ingesting anything further.
+`tools/eval/qdrant_concurrency_test.py` → `data/results/qdrant_concurrency.md`, 9/9
+self-checks PASS, decision rule frozen in the module before the run.
+
+**Five arms, because "numpy vs Qdrant" is not the question a deployment asks.** `null`
+(harness alone), `qdrant` (engine only — vector and term counts precomputed, so the GPU
+is out of the loop), `encode` (embedder alone), `glue` (tokenize + this repo's RRF over
+cached rankings — pure Python), `end_to_end` (the composition). Closed-loop: C worker
+threads each issuing the next query the moment the previous returns, `threading.Barrier`
+start, 106 Gold queries replayed, C ∈ {1, 2, 5, 10, 25, 50}.
+
+| arm | plateau q/s | at C | shape |
+|---|---|---|---|
+| `qdrant` | **82.40** | 10 | rises 38.81 → 82.40, then eases to 72.52 at C=50 |
+| `encode` | **68.46** | 1 | *falls* to ~41 from C=5 on |
+| `glue` | 3693.42 | 2 | flat everywhere |
+| `end_to_end` | **29.51** | 2 | flat 25-30 across the whole grid |
+
+**Verdict: ENCODE-BOUND, and by more than the plateau row shows.** The rule compares each
+arm's best level, which is the conservative reading (68.46 vs 82.40). The operationally
+important comparison is *at matched C*: from C=5 the GPU delivers ~41 q/s against the
+engine's 72-82, i.e. **the engine has roughly 2× the headroom of the embedder at every
+level a deployment would actually sit at**. One Qdrant is plenty; the number to size is
+the GPU server.
+
+**The reason is worth more than the verdict: the two layers scale in opposite
+directions.** Qdrant *gains* from concurrency (2.1× from C=1 to C=10 — more cores, more
+in-flight segments), while the embedder *loses* (68.46 → 40.59, −41%). A GPU is one
+device: concurrent requests do not overlap on it, they queue, and each one pays the
+scheduling. So **batching, not concurrency, is the only lever on the GPU side** — five
+threads sending one query each cost more than one thread sending five. Nothing in this
+repo batches at query time, and that is the first thing to change if the plateau binds.
+
+**Composition holds** — `predicted(C) = 1/(1/encode + 1/qdrant + 1/glue)` at matched C,
+because a worker runs the stages serially so residence times add. Measured/predicted is
+**0.973** at C\* and stays in 0.855–1.036 across the grid, so there is no hidden app-layer
+cost: the end-to-end curve is fully explained by its three parts. `glue` contributes
+**0.83%** of the harmonic sum — this repo's Python fusion is not a layer.
+
+**Against the stated target.** Arrival rate is unknown, so it is answered by inversion:
+U users at one query every T seconds need U/T q/s. 50 users at T=10 s is 5 q/s against a
+measured 29.51 — capacity is not the constraint at this scale; **latency is**. p50 goes
+46 ms at C=1 → 1,961 ms at C=50, which is queueing on the GPU, not engine time (the
+`qdrant` arm's own p50 at C=50 is 654 ms).
+
+**What does not transfer**, stated so it is not read as a capacity promise: the embedder
+runs in-process on an RTX 3060 here and the target has a *separate* GPU server, so the
+`encode` curve is a substitutable parameter, not a result — which is exactly why it was
+measured alone. In-process encoding also bundles GIL contention with request handling
+that a network hop would separate, so this rig **understates** the app layer's real
+headroom. Closed loop means no bursty-arrival queueing behaviour. One collection.
+
+### The correction this run owes `cost_latency_pareto.md`
+
+Its published `bge_m3` encode p50 of **82.94 ms** and this run's C=1 `encode` arm (13.8 ms)
+disagree ~6× on the same model, box and query set. Neither is wrong: **encode cost on this
+card is a function of how long the GPU sat idle beforehand.** Control 4 measures it
+directly by inserting a fixed sleep before each encode — p50 **13.62 → 181.00 ms (13.3×)**
+across gaps of 0.0/0.5/1.0/1.8 s, with nothing else changed. The pareto loop leaves
+~0.26 s and ~1.46 s of retrieval between its two encodes, which brackets that range. So
+82.94 ms is **encode-after-an-idle-GPU — the low-load regime**, while this arm is encode
+under sustained load — the serving regime. Cite the pareto figure for a lightly loaded
+system and this one for a busy one; neither supersedes the other. S7 anchors the control's
+zero-gap row against the `encode` arm (1.3% apart) and S8 gates that the effect exists at
+all, so §5b rests on data rather than prose.
+
+### Four harness defects the smoke slice caught, all fixed at the mechanism
+
+Recorded because each was the *instrument* misreporting, and each would have published a
+plausible number. (1) Dispatch sat behind a `threading.Lock`; a thread blocking on it can
+wait a full GIL switch interval (5 ms) — nothing against a 25 ms retrieval, several times
+`glue`'s own 0.3 ms — so the harness reported its own dispatch cost as concurrency that
+never happened (Little's law came out 1.30 at C=4). Now `itertools.count()`, atomic under
+the GIL, no mutex. (2) After that fix S4 still failed on `glue` alone, and it is **not a
+bug**: 0.3 ms of residence is an order of magnitude *below* one scheduler quantum, so the
+identity is unresolvable there by construction. S4's domain is now taken from
+`sys.getswitchinterval()` rather than picked to clear the arm that failed, and **S9 makes
+the exemption safe by measurement** — `glue` is 0.83% of the harmonic sum, so mismeasuring
+it cannot move the verdict. (3) The repeat-C=1 control had no warm-up while every sweep
+level did, so it compared a warmed measurement against a cold one and called the
+difference drift (35.5%, now 4.3%). (4) The idle-gap rows were not warmed *at their own
+gap*, so the zero-gap row measured the transition from whatever ran before it rather than
+the steady state, and missed S7's pre-chosen 0.35 line at 38.5% — warming each row at its
+own gap brought it to 1.3% **without touching the threshold**. The general shape: when a
+check fails, ask whether the instrument or the system is wrong before adjusting the line.
+
 ## 8. What this pilot does NOT establish
 
 - **One collection, one combo, one route.** The other three routed collections are not
   ingested; nothing here says their numbers transfer.
 - **No significance test.** Every Δ above is descriptive.
-- **No concurrency measurement.** The stated deployment target is 5-50 concurrent users
-  on a faculty VM with a separate GPU server; this pilot ran one query at a time in one
-  process, so it says nothing about throughput, contention, or what happens when the
-  embedder is on a different machine from the engine.
+- **~~No concurrency measurement.~~** Closed 2026-08-13 — see §8b. What remains open is
+  narrower: no network hop between app, embedder and engine; no bursty arrival process
+  (the loop is closed); and the `encode` curve is this machine's RTX 3060, not the
+  faculty GPU server.
 - **Nothing is wired.** `query_service`/`registry` still route to the in-process
   retrievers; adopting Qdrant in the serving path is a separate decision that has not been
   taken.

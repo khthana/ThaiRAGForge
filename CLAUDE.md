@@ -2400,11 +2400,64 @@ see `docs/adr/`.
   payload/vector alignment passes on every sampled row, searches return distinct ids),
   most likely cross-segment accounting during optimization, unexplained and affecting no
   number here. **What this does NOT establish**: one collection / one combo / one route
-  (the other 3 are **not** ingested), no significance test (every Δ is descriptive), and
-  **no concurrency measurement at all** — it ran one query at a time in one process, so it
-  says nothing about throughput, contention, or the embedder living on a different machine
-  from the engine. **Nothing is wired**: `query_service`/`registry` still route to the
+  (the other 3 are **not** ingested) and no significance test (every Δ is descriptive).
+  Its third gap, "no concurrency measurement at all", is **CLOSED — see the next
+  bullet.** **Nothing is wired**: `query_service`/`registry` still route to the
   in-process retrievers.
+- **Qdrant under concurrent load: the engine is NOT the layer that saturates
+  (2026-08-13, `tools/eval/qdrant_concurrency_test.py` → `data/results/qdrant_concurrency.md`,
+  9/9 self-checks PASS, decision rule frozen in the module before the run).** Run before
+  ingesting the other 3 collections, because it was the one open item that could still
+  invalidate the serving design. **Five arms, since "numpy vs Qdrant" is not the question a
+  deployment asks**: `null` (harness alone), `qdrant` (engine only — vector and term counts
+  precomputed, GPU out of the loop), `encode` (embedder alone), `glue` (tokenize + this
+  repo's RRF over cached rankings, pure Python), `end_to_end`. Closed loop, C ∈ {1,2,5,10,25,50}
+  worker threads replaying the 106 Gold queries. Plateaus: `qdrant` **82.40** q/s (at C=10),
+  `encode` **68.46** (at **C=1**), `glue` 3,693, `end_to_end` **29.51** (at C=2).
+  **Verdict ENCODE-BOUND — and the plateau row understates it, which is the part to cite.**
+  The rule compares each arm's own best level (the conservative reading); *at matched C* the
+  GPU delivers ~41 q/s from C=5 on against the engine's 72–82, i.e. **the engine has ~2x the
+  headroom of the embedder at every level a deployment sits at**. **The mechanism is that the
+  two layers scale in opposite directions**: Qdrant *gains* 2.1x from C=1→10 (more cores,
+  more in-flight segments) while the embedder *loses* 41% (68.46 → 40.59) — a GPU is one
+  device, so concurrent requests queue rather than overlap. **Corollary: batching, not
+  concurrency, is the only lever on the GPU side**, and nothing in this repo batches at query
+  time. **Composition holds** — `predicted(C) = 1/(1/encode + 1/qdrant + 1/glue)` at matched
+  C (a worker runs the stages serially, so residence times add) — ratio **0.973** at C\*=2 and
+  0.855–1.036 across the grid, so no hidden app-layer cost; `glue` is **0.83%** of the
+  harmonic sum, i.e. this repo's Python fusion is not a layer. Target answered by
+  **inversion**, since the arrival rate is unknown: 50 users need T ≥ **1.7 s** between
+  queries at this plateau; 50 at T=10 s is 5 q/s against 29.51, so **capacity is not the
+  constraint at this scale, latency is** (p50 46 ms at C=1 → 1,961 ms at C=50, which is
+  queueing on the GPU — the `qdrant` arm's own p50 there is 654 ms). **The `encode` curve
+  does NOT transfer** (RTX 3060 in-process vs a separate faculty GPU server) and is measured
+  alone precisely so another GPU's plateau can be substituted without re-running anything;
+  in-process encoding also bundles GIL contention with request handling that a network hop
+  would separate, so this rig **understates** the app layer's headroom.
+  **A correction is owed to `cost_latency_pareto.md` and it is measured, not argued**: its
+  published `bge_m3` encode p50 **82.94 ms** disagrees ~6x with this run's 13.8 ms on the
+  same model/box/queries, because **encode cost on this card is a function of how long the
+  GPU sat idle beforehand** — control 4 inserts a fixed sleep and p50 goes
+  **13.62 → 76.08 → 80.77 → 181.00 ms (13.3x)** at gaps 0/0.5/1.0/1.8 s, and the pareto loop
+  leaves ~0.26 s and ~1.46 s between its encodes. So 82.94 ms is **encode-after-an-idle-GPU,
+  the low-load regime**; cite the pareto figure for a lightly loaded system and this one for
+  a busy one, neither supersedes the other. **Four harness defects were caught by the smoke
+  slice and every one was the instrument, not the system** — each fixed at the mechanism,
+  never by moving a threshold, which is what licenses the numbers: (1) dispatch behind a
+  `threading.Lock` reported the harness's own dispatch cost as concurrency that never
+  happened (Little's law 1.30 at C=4) → `itertools.count()`, atomic under the GIL; (2) S4
+  then failed on `glue` alone and **that is a resolution limit, not a defect** — 0.3 ms of
+  residence is an order of magnitude below CPython's 5 ms switch interval, so S4's domain now
+  comes from `sys.getswitchinterval()` (not from whatever clears the failing arm) and **S9
+  makes the exemption safe by measurement** rather than assertion; (3) the repeat-C=1 control
+  had no warm-up while every sweep level did, so it compared warm against cold and called it
+  drift (35.5% → 4.3%); (4) the idle-gap rows were not warmed *at their own gap*, so the
+  zero-gap row measured a transition rather than steady state and missed S7's pre-chosen 0.35
+  line at 38.5% → **1.3%, threshold untouched**. Anchors: S2 reproduces the pilot's cached
+  top-10s 106/106, S1 pins that concurrent encoding returns bit-identical vectors
+  (max |Δ| 0.000e+00), S5 that the harness is 12,989x faster than the system. **Still not
+  established**: no network hop between app/embedder/engine, no bursty arrival process (the
+  loop is closed), one collection.
 - **Corpus data-quality audit** (`tools/corpus_prep/audit_title_body_agreement.py`,
   2026-07-30): flags manifest titles that disagree with the document's own page-1
   `เรื่อง` subject line. A first version was rejected on measurement (median 0.660,

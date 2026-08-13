@@ -69,7 +69,13 @@ class LocalSTEmbedder(BaseEmbedder):
             # the whole call, which looks indistinguishable from a hang to
             # anything watching for output (same reasoning as pipeline.py's
             # chunking-loop tqdm).
-            show_progress_bar=True,
+            #
+            # Off for a single text, which is what `embed_query` sends: one
+            # item cannot look like a hang, and a bar per query is not merely
+            # noise -- tqdm writes to stderr under a lock, so under concurrent
+            # querying it serialises the very path being measured
+            # (`qdrant_concurrency_test.py`'s `encode` arm).
+            show_progress_bar=len(texts) > 1,
         ).astype(np.float32)
 
     def release(self) -> None:
