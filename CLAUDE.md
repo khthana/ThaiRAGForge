@@ -2075,20 +2075,67 @@ see `docs/adr/`.
   a perfect rerank over P=50 is 0.6281 → **0.8249**, and P=1000 buys only 0.8738,
   so the 10-document budget binds, not the pool. Same family as
   [[feedback_state_the_retrieval_budget_in_every_comparison]].
-- **Candidate next axes, written up but not started** — both carry a
-  pre-registered prediction, which is the point of writing them up early:
+- **Candidate next axis, written up but not started** — it carries a
+  pre-registered prediction, which is the point of writing it up early:
   `docs/colbert-late-interaction-notes.md` (ColBERT: motivated by *our own*
   results — the cross-encoder reranker hurt hybrid MRR, and BM25/dense split
   person vs program — so an aggregate win can't be mistaken for resolving that
-  split) and `docs/hyde-axis-notes.md` (HyDE, predicted to **fail** on 73det:
-  BM25 alone scores 0.8147 on `person`, so the signal is an exact token and
-  generated filler dilutes it; the generator has never seen these people or
-  programmes, and unlike RQ4 it generates *before* retrieval with nothing to
-  ground it, so hallucinated entities get embedded — feed the dense arm only,
-  give BM25 the raw query. Real chance only on thematic, where BM25 collapses to
-  0.2990). Neither is committed to; RQ4, the item that used to block starting
-  ColBERT, is complete.
-  **HyDE's price is now measured, and the correction is the reusable part
+  split). Not committed to; RQ4, the item that used to block starting it, is
+  complete. **HyDE was the other one and is now DONE and CLOSED — see the next
+  bullet.**
+- **HyDE: BUILT, RUN AND CLOSED on both query sets (2026-08-13,
+  `tools/eval/hyde_generate.py` → `data/results/hyde_documents.json` +
+  `hyde_generation.md`, then `tools/eval/hyde_retrieval_test.py` →
+  `hyde_retrieval_73det.md` / `hyde_retrieval_thematic.md`; 40.6 min generation +
+  20.4 / 32.1 min retrieval, 36 combos × 106 and × 179 queries, 8 and 9
+  self-checks PASS).** Verdict and narrative: `docs/hyde-axis-notes.md`
+  §"What actually happened". **P1 held in the harder half of its own wording** —
+  the pre-registration allowed "ties or degrades" and the result is a
+  significant loss: dense recall@10 **0.5034 → 0.3135, −0.1898**, Holm-adj
+  **0.0000**, all six family-1 cells worse; nothing to state as a bound, it is
+  directional. **P2 was REFUTED**: thematic, the set these notes said was HyDE's
+  only real chance, loses too (**0.4469 → 0.3733, −0.0736**, Holm **0.0008**, all
+  9 embedders down). **But P2's reasoning survives its own prediction, and that
+  is the transferable part** — the argument was that damage comes from diluting
+  an exact-token signal, so it should be smaller where BM25 is weak, and it is:
+  −0.0736 against −0.1898 (2.6x), P3 −0.0462 against −0.2735 (~6x), correlation
+  r = −0.282 against −0.887. **Cite it as "HyDE is less harmful where the lexical
+  signal is weak", never as "HyDE helps thematic"; less to lose is not something
+  to gain.** Four things worth keeping beyond the verdict. (1) **The `person`
+  mechanism is now evidence, not reasoning**: `person` is the worst type
+  (**−0.2798**, 0.3604 → **0.0807**) yet 29 of 30 generated documents *still
+  literally contain the queried name* — it is **dilution, not deletion**, the
+  token averaged into ~250 tokens of invented context. (2) **P3 was this
+  design's one untested premise and is now the largest single effect in the
+  table**: "feed the dense arm only, give BM25 the raw query" was an assertion;
+  poisoning BM25 with the same document costs a further **−0.2735** on top of
+  HyDE's own loss, i.e. more than the entire dense-arm effect. Anyone
+  re-proposing HyDE must keep the split. (3) **The four formulations order by how
+  much of the raw query survives** (`concat` −0.0817, `hyde_q` −0.1405,
+  `hyde_half` −0.1769, `hyde` −0.1898), which is the shape of a real effect
+  rather than a bug; `concat` is the only arm reaching ns anywhere (73det hybrid
+  −0.0209; thematic dense **−0.0250**, Holm 0.2316) and it is exploratory by the
+  frozen rule, so read it as a bound — best case, dense recall@10 loses no more
+  than 0.0576 and gains no more than 0.0061, for 7.85 s/query against a 475.6 ms
+  routed hybrid query. (4) **The 100%-cap-hit objection is bounded, for free**:
+  greedy decoding is a prefix process, so a prefix *is* what a smaller cap would
+  have produced — `hyde_half` costs no extra generation and does not unpair the
+  comparison. Over four cells (2 sets × 2 retrievers) `hyde_half` lands at
+  **0.3265 / 0.5582** (73det dense/hybrid) against `hyde`'s **0.3135 / 0.5864**,
+  and **0.3653 / 0.3937** (thematic) against **0.3733 / 0.3937** — **no
+  consistent sign**, every gap under 0.03 against a treatment effect of −0.1898.
+  Length is not the constraint. **No re-measurement
+  against the shipped hard router is owed**: the known-limitation clause made
+  that follow-up conditional on a *positive* unrouted result, precisely so a
+  negative one could not be kept alive by an untested "but maybe with routing" —
+  the asymmetry that lets a null close an axis. Anchors, from an independent code
+  path: `hybrid_raw` reproduces the published unrouted **0.6281** and `dense_raw`
+  the published **0.5034**, both exactly. **§7 of each report is written by hand
+  and lives in a `VERDICT` dict in the generator, not in the `.md`** — `--render`
+  rewrites the whole file, so a hand-added paragraph would be erased by the next
+  run ([[feedback_provenance_belongs_in_the_generator]]); a set with no entry
+  renders a placeholder saying so.
+  **HyDE's price was measured first, and the correction is the reusable part
   (2026-08-12, `tools/eval/probe_hyde_generation_cost.py` →
   `data/results/hyde_generation_cost.md`).** The notes had inherited **15.6
   s/query** from the RQ4 generation log; an RQ4 prompt carries ~8k tokens of

@@ -231,6 +231,54 @@ an untested "but maybe with routing". This is negative, so the axis closes here.
 Two anchors say the baseline it lost to is the published one, from an
 independent code path: `hybrid_raw` reproduces the published unrouted hybrid
 **0.6281** and `dense_raw` the published **0.5034**, both exactly.""",
+    "thematic": """\
+**P2 was REFUTED, on both of its halves.** It predicted that on thematic HyDE
+"may improve, most for the weak embedders". Neither happened. Dense recall@10
+goes 0.4469 -> 0.3733, **-0.0736**, CI [-0.1139, -0.0326], Holm-adj **0.0008**,
+and all six family-1 cells are significantly WORSE -- the same direction as
+73det, on the set that was supposed to be HyDE's best case. All 9 embedders lose,
+and the weakest of them (`m2v`, baseline 0.1923) takes one of the largest losses
+(-0.1042), which is the opposite of help concentrating on the weak.
+
+**But the REASONING behind P2 survives its own prediction, and that distinction
+is the finding here.** The argument was that 73det is an exact-token regime (BM25
+0.8147 on `person`) which HyDE can only dilute, while thematic has no name to
+match (BM25 0.2990) so there is room for semantic elaboration. If that argument
+is right, the damage should be much smaller here -- and it is: **-0.0736 against
+-0.1898**, a 2.6x smaller loss on the same arm, with the same pattern in P3
+(poisoning BM25 costs **-0.0462** here against **-0.2735** on 73det, ~6x less,
+because there is no exact token left to destroy). The mechanism was identified
+correctly and its magnitude was mis-extrapolated. **Cite that as the correction:
+HyDE is less harmful where the lexical signal is weak -- never that it helps
+there.**
+
+**The only ties are in the formulations that keep the question, and they are
+bounds, not wins.** `concat` reaches ns on both retrievers (dense -0.0250, Holm
+0.2316; hybrid -0.0195, 0.2316), as do `hyde_q` and `hyde_half` on hybrid. The
+best case anywhere in this table is therefore that dense recall@10 loses no more
+than **0.0576** and gains no more than **0.0061** -- for 7.85 s of generation per
+query against a 475.6 ms routed hybrid query. A tie bought at ~17x the query cost
+is not a result to build on, and it is exploratory besides: per the decision rule
+these arms cannot promote a null in family 1 to anything.
+
+**r = -0.282 must not be read as P2's shape.** The correlation is far weaker than
+73det's -0.887, which does say the damage is much less concentrated on the strong
+embedders -- consistent with there being less exact-token signal to dilute. But
+on a set where *every* diff is negative, a negative r only means damage scales
+mildly with baseline strength; P2 needed positive diffs at the weak end, and
+there are none.
+
+**The length axis is now settled across both sets, and it is not the
+constraint.** `hyde_half` vs `hyde` moves the result by +0.0130 / -0.0282 (73det
+dense / hybrid) and -0.0080 / 0.0000 (thematic dense / hybrid): four cells, no
+consistent sign, largest magnitude 0.0282 against a treatment effect of -0.1898.
+The 100% cap-hit rate is bounded, not an escape hatch -- an uncapped document is
+not the missing ingredient.
+
+**One cross-check worth keeping, from a script not written to test it**: on
+thematic `hybrid_raw` (0.4262) sits *below* `dense_raw` (0.4469), reproducing
+this project's published thematic finding that BM25 collapses here so RRF taxes
+the stronger arm.""",
 }
 
 

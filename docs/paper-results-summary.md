@@ -523,6 +523,72 @@ cite `T vs C` without the control's number beside it.
 **Nothing is wired into `query_service`.** The cost side (~1.2 s/query, 50 extra
 fetches) is a separate decision, and the control is now a third option at zero cost.
 
+## Resolved 2026-08-13: HyDE — a pre-registered negative result on both query sets
+
+The prediction was frozen in `docs/hyde-axis-notes.md` on 2026-08-07, six days
+before anything was built, and is reproduced verbatim in §0 of both reports so the
+outcome cannot be read without what was expected beside it. Reports:
+`data/results/hyde_retrieval_73det.md`, `hyde_retrieval_thematic.md`, and
+`hyde_generation.md` for what the generator actually wrote. Method: one
+hypothetical document per query, generated once by `phi4` and cached, because
+`temperature=0` is not reproducible on this stack — every arm reads the same
+cache, so the comparison is paired by construction. HyDE feeds the **dense arm
+only**; BM25 receives the raw query.
+
+| set | dense recall@10, raw → HyDE | diff | Holm-adj |
+|---|---|---|---|
+| 73det (106 q, entity-anchored) | 0.5034 → 0.3135 | **−0.1898** | **0.0000** |
+| thematic (179 q) | 0.4469 → 0.3733 | **−0.0736** | **0.0008** |
+
+All six pre-registered cells are significantly worse on each set (2 retrievers ×
+3 metrics, m=6), and all 9 embedders lose on both. **P1 held in the harder half of
+its own wording** — it allowed "ties or degrades" and the result is directional, so
+there is no bound to state. **P2 was refuted**: thematic, the one regime the
+pre-registration said HyDE might genuinely help, loses too.
+
+**The mechanism is now evidence rather than reasoning, and it is dilution, not
+deletion.** `person` is the worst entity type (**−0.2798**, 0.3604 → **0.0807**),
+yet 29 of 30 generated documents still literally contain the queried name: the
+discriminative token is not lost, it is averaged into ~250 tokens of invented
+context. That is exactly the argument the prediction rested on — 73det is an
+exact-token regime (BM25 alone scores **0.8147** on `person`) which semantic
+elaboration can only dilute.
+
+**P2's reasoning survives its own refuted forecast, and that is the transferable
+finding.** If damage comes from diluting a lexical signal, it should be smaller
+where that signal is weak (BM25 collapses to **0.2990** on thematic against
+**0.4930** entity-anchored) — and it is: 2.6x smaller on the primary arm, ~6x
+smaller for BM25 poisoning (**−0.0462** vs **−0.2735**), with the correlation
+between an embedder's baseline strength and HyDE's damage falling from r = −0.887
+to r = −0.282. **Cite this as *HyDE is less harmful where the lexical signal is
+weak*, never as *HyDE helps thematic*: less to lose is not something to gain.**
+
+**The null belongs to HyDE, not to one wiring.** Four formulations were measured
+and they order by how much of the raw query survives into the embedded text —
+`concat` **−0.0817**, `hyde_q` **−0.1405**, `hyde_half` **−0.1769**, `hyde`
+**−0.1898**. Damage monotone in distance from the question is the shape of a real
+effect, not of an implementation bug. `concat` is the only arm reaching ns
+anywhere (73det hybrid −0.0209; thematic dense **−0.0250**, Holm 0.2316) and is
+exploratory by the frozen decision rule, so it is a bound: at best dense recall@10
+loses no more than **0.0576** and gains no more than **0.0061**, for 7.85 s of
+generation per query against a 475.6 ms routed hybrid query.
+
+**Two premises that were assertions until now.** Feeding the same document to BM25
+as well costs a further **−0.2735** recall@10 on top of HyDE's own loss — larger
+than the entire dense-arm effect — so the dense-only split is measured, not
+assumed. And every document hit the 256-token cap, which greedy decoding lets us
+bound for free: a prefix of a generation *is* what a smaller cap would have
+produced, so the `hyde_half` arm costs no second generation run and does not
+unpair the comparison. Across four cells (2 sets × 2 retrievers) it moves the
+result with no consistent sign and by under 0.03 — length is not the constraint.
+
+**No re-measurement against the shipped hard router is owed.** The
+pre-registration made that follow-up conditional on a *positive* unrouted result,
+precisely so a negative one could not be kept alive by an untested "but maybe with
+routing". Anchors, from an independent numpy code path: `hybrid_raw` reproduces
+the published unrouted hybrid **0.6281** and `dense_raw` the published **0.5034**,
+both exactly.
+
 ## Resolved 2026-07-21: ConGen/SCT max_seq_length — investigated, model-specific answer found
 
 Both `congen` and `sct` (PhayaThaiBERT-backbone, kornwtp) ship
