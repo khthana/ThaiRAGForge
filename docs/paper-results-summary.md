@@ -589,6 +589,91 @@ routing". Anchors, from an independent numpy code path: `hybrid_raw` reproduces
 the published unrouted hybrid **0.6281** and `dense_raw` the published **0.5034**,
 both exactly.
 
+## Resolved 2026-08-13: ColBERT / late interaction — a pre-registered negative result, and a separate ship decision
+
+The prediction was frozen in `docs/colbert-late-interaction-notes.md` before
+anything was built, and it was a **conjunction** on purpose: *ColBERT-alone ties or
+beats **BM25** on `person` **and** ties or beats the best dense embedder on
+`program`, in the same run.* It is motivated by this project's own results — BM25
+carries `person` and dense carries `program` (see the per-`entity_type` breakdown
+below) — so the question is whether late interaction *covers* that split, and an
+aggregate win must not be allowed to answer it. Report: `data/results/colbert_pilot.md`
+(+ `colbert_pilot_baselines.md`, `colbert_pylate_crosscheck.md`,
+`colbert_model_qualification.md`, `colbert_length_profile.md`). Pilot: `recursive`
+chunker only, doc300/q32, 106 Gold queries, unrouted, k=10, 7/7 self-checks PASS.
+
+| cell | comparator | ColBERT | bar | diff | Holm-adj | |
+|---|---|---|---|---|---|---|
+| `person` | BM25 | 0.8360 | 0.8053 | **+0.0308** | 0.3974 | clears (tie) |
+| `program` | dense `qwen3_0.6b` | 0.2763 | 0.6094 | **−0.3331** | **0.0000** | fails |
+
+`person` clears as a **tie**, with the CI ruling out ColBERT beating BM25 by more
+than **0.1030** or losing by more than **0.0429**; `program` fails by 6.7x the STOP
+margin. **The bars are recomputed at `recursive`, never taken from the published
+cross-chunker aggregates** — a one-chunker treatment against a nine-chunker bar is
+the wrong-pair trap that killed per-`entity_type` alpha and rrf4 — and S1/S2
+reproduce the published **0.8147** / **0.6066** exactly from the same code path.
+
+**The mechanism is worth more than the verdict, and it answers the axis's own
+motivation in the negative.** ColBERT is strong exactly where the lexical arm is
+strong (`person` 0.8360 ≈ BM25 0.8053 against dense 0.4281) and weak exactly where
+the lexical arm is weak (`program` 0.2763 ≈ BM25 0.3230 against dense 0.6094): it
+**inherits** one side of the person/program split instead of covering it. It is not
+purely lexical either — on `course` it beats both arms (0.6176 vs 0.5759 / 0.4280).
+
+**And it carries the highest overall figure in its own table — 0.5559, against BM25
+0.5080 and dense 0.5264.** Written as an aggregate, this run would have been
+published as a success. That is precisely what a conjunctive pre-registration exists
+to refuse, and it is the clearest example in this project of why the cells the
+mechanism lives in must be named in advance.
+
+**The 512/48 length rider was executed and did not fire, answered as a bound rather
+than a threshold.** The frozen rule conditions the fallback on the losing cell's
+truncation being "materially above" the corpus rate, and choosing what counts as
+material *after* seeing −0.3331 is the favourable re-reading a frozen rule exists to
+prevent. So truncation was granted the most damage arithmetically possible — a gold
+resolution with *any* truncated chunk is destroyed outright. Over `program`'s 221
+gold resolutions / 7,659 chunks, **32 chunks are truncated (0.42%, below the corpus
+rate of 1.11%)** touching 14 resolutions, and total loss of all 14 explains at most
+**0.0837** against a **0.3331** gap. Both readings agree, 4x short; 300/32 stands and
+truncation remains a confound pointing *against* the treatment.
+
+**The checkpoint arrives broken, which is a methods finding independent of the
+verdict.** `jinaai/jina-colbert-v2` loads remote code written for `transformers`
+4.43 under 5.12, and all 24 layers' rotary `inv_freq` come up as uninitialised
+memory, making the rotation the identity. It was caught by a qualification gate
+failing, not by reasoning, and **the broken model scored the hand-written relevance
+example *better* than the repaired one** — a position-blind model returning plausible
+numbers is the danger, not a crash. The repair (`_repair_rotary`) is restoration, not
+modification: an independent pylate reference pinned to `transformers` 4.53.2
+reproduces our query vectors **bitwise** (max|Δ| 0.000e+00). That same cross-check
+found a defect all 11 internal gates were structurally unable to see —
+`mask_punctuation` was masking whitespace and no punctuation at all, because the two
+skiplists were built by different tokenizer calls; after the fix the document tensors
+agree to min cosine **0.999936** and MaxSim **20.8212** vs pylate's 20.8213.
+
+**Ship decision: do not adopt** — a *separate* decision from the axis verdict, since
+the frozen rule only governs whether to spend more GPU on the question. Four grounds,
+heaviest first. (1) **The failed cell is the one the shipped system depends on**:
+`program` is where the router hands off to a dense specialist *because* BM25
+collapses there (0.3230), so adopting ColBERT trades away a capability the system has
+in order to buy one BM25 already supplies free — and `person`, the cell it cleared,
+only ties. (2) **It was never shown to beat what ships, and was never measured
+against it either** — hybrid at the same chunker was never a bar and neither was the
+router; indicatively (**not** like-for-like, different chunker/embedder systems)
+unrouted hybrid publishes 0.6281 and routed 0.6831 against 0.5559, and for a ship
+decision the burden sits on the candidate anyway. (3) **Cost**: query p50 **1650.9 ms**
+against a routed hybrid query's 475.6 ms (~3.5x), 1.89 GB fp16 per chunker (7.3 GB
+for four, which will not co-reside on a 12 GB card), plus `_repair_rotary` as a
+standing maintenance liability keyed to a `transformers` version. (4) The `course` win
+is a **per-`entity_type` repair**, and that shape has died against the hard router
+twice here already — it is a hypothesis needing its own pre-registration, never a
+result to read off this table.
+
+**What is not closed**: ColBERT against the shipped hard router, fused with BM25, or
+on a second checkpoint. Those are *new* predictions, not a continuation of the failed
+one, and the axis must not be reopened as one.
+
 ## Resolved 2026-07-21: ConGen/SCT max_seq_length — investigated, model-specific answer found
 
 Both `congen` and `sct` (PhayaThaiBERT-backbone, kornwtp) ship
@@ -2754,6 +2839,51 @@ k=n. The UI is where 0.72 s is felt; the eval harness is where reproducibility
 is. Nothing an eval reads is touched — the invariant audit already classifies
 `mode_b`/`mode_b_routed` as write-only UI dirs.
 
+### The same knob under `weighted` fusion — measured, and it does not transfer (2026-08-12)
+
+*(`tools/eval/hybrid_weighted_fetch_depth.py` → `data/results/hybrid_weighted_fetch_depth.md`;
+36 combos × 106 queries = 3,816 pairs, 16 min. The fusion is **imported** from
+`hybrid_fetch_depth_sweep.py` rather than reimplemented, so this run's `rrf` columns are a
+cross-artifact anchor and reproduce that sweep at all 11 depths.)*
+
+Everything above is the `rrf` branch. `HybridRetriever` also has a `weighted` score-fusion
+branch, and from 2026-08-11 to 08-12 that pair *raised* rather than running — containment
+for an unmeasured configuration, with its exit condition written into it. The measurement
+was run against a decision rule frozen in the script before the run, and the rule returned
+**LIFT**: the raise is gone, and a test pins that permitting the pair did not quietly make
+truncation a no-op.
+
+**LIFT is not a recommendation, and the number is the point.** At F=200 `weighted` loses
+**−0.0609** macro recall@10 against its own k=n — about **18x** `rrf`'s −0.0033 at the same
+depth — and unlike `rrf` it does **not** recover with depth: at F=10,000 of ~75,000 chunks
+it is still **−0.0112** against `rrf`'s −0.0005. For `weighted`, "deep enough" is essentially
+n, so the knob buys nothing. What licenses permitting it anyway is that this codebase bans an
+*unmeasured* configuration from passing as measured, not a measured-but-worse one.
+
+**The mechanism, corrected by the run's own data.** Truncation does not mildly *add* the
+intersection signal `weighted` structurally lacks — it makes intersection membership nearly
+decisive. Max-normalized cosine is flat (0.9491 at rank 10, **0.2699** at rank n), so a cut
+arm still forfeits a large term, where `rrf` at rank 1,000 forfeits only ≈0.0005. So
+`weighted`'s top-10 goes **8.25/10** in-both-arms at F=200 and **9.99/10** at F=1,000 (`rrf`
+7.41 / 8.30): it becomes an intersection-only ranker and evicts what one arm alone found.
+That lands exactly where a single arm carries a type — `person` **−0.1965** at F=200 (BM25
+carries person at 0.8147) against `program` **+0.0212**.
+
+Two further results worth carrying. The pre-registered guess that a cut merely zeroes terms
+that were already zero was **refuted**: `BM25Okapi` floors negative IDF so the last-ranked
+chunk really does score 0, but only **0.1%** of the zeroed terms were already 0, because a
+~20-token Thai query has common tokens reaching nearly every chunk (BM25 carries 88,301 of
+dense's 121,437 zeroed mass at F=50, and only 2 of 157,717 dense terms are promoted). And
+descriptively, at F=n `weighted` scores **above** `rrf` — 0.5442 vs 0.5204, **+0.0239** macro
+recall@10 — which is a **hypothesis, never a result**: no significance test, macro over 36
+combos, unrouted, and nothing ships `weighted`. The wrong-pair trap that killed
+per-`entity_type` alpha and rrf4 applies to it too.
+
+**A method note that generalises past this run**: the smoke slice (2 combos × 8 queries)
+*reversed the sign of the headline* — `weighted` appeared to **gain** from truncation, peaking
+0.7708 at F=100 against 0.5938 at k=n, which is the opposite branch of the frozen rule. A
+smoke run checks that the code runs; it is not a small version of the answer.
+
 ## Open items (not yet done, needed before the numbers above are "final")
 
 1. ~~Per-chunker point comparison of BM25 vs. embedder (not averaged across
@@ -3370,9 +3500,11 @@ is. Nothing an eval reads is touched — the invariant audit already classifies
 - `tools/eval/residual_relevance_decompose.py` — corrected the first (retracted)
   judging pass by reapplying `build_gold_candidates.py`'s own per-entity-type
   matching rule directly against each candidate's full text
-- `tools/eval/audit_pipeline_invariants.py` — 23-check sweep across corpus/index/eval
-  for silent-corruption invariants (Open item #15); read-only, exits 1 on FAIL,
-  report at `docs/pipeline-invariant-audit.md`. Run it before trusting an eval refresh
+- `tools/eval/audit_pipeline_invariants.py` — sweep across corpus/index/eval for
+  silent-corruption invariants (Open item #15); **28 checks as of 2026-08-13**, a count
+  that grows as new classes are found (23 when this line was first written), so read it
+  as a dated snapshot and take the live figure from the report; read-only, exits 1 on
+  FAIL, report at `docs/pipeline-invariant-audit.md`. Run it before trusting an eval refresh
 - `tools/corpus_prep/audit_resolution_ids.py` — `resolution_id` uniqueness audit
   (Open item #14); read-only, exits 1 on any clash, reports manifest-title vs.
   filename vs. body-heading agreement and whether the files share a source PDF
