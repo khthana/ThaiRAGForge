@@ -2125,6 +2125,26 @@ see `docs/adr/`.
   says nothing about ColBERT against the shipped hard router, fused with BM25, or
   on a second checkpoint — those are new predictions, not a continuation of the
   failed one, and the axis must not be reopened as one.
+  **SHIP DECISION: do not adopt** (2026-08-13, notes §"Should it ship?") — a
+  separate decision from the axis verdict, since `DECISION_RULE` only stops us
+  spending more GPU on the *question*. Four grounds, heaviest first. (1) The
+  failed cell is the one the shipped system depends on: `program` is where the
+  router hands off to a dense specialist *because* BM25 collapses there (0.3230),
+  so adopting ColBERT trades away a capability we have to buy one BM25 already
+  gives free — `person` only **ties**. (2) **It was never shown to beat what
+  ships, and was never *measured* against it either** — the bars were BM25 and
+  best-dense at `recursive` by pre-registration; hybrid at the same chunker was
+  never a bar and neither was the router. State that precisely rather than as "it
+  loses"; indicatively (**not** like-for-like, different chunker/embedder systems)
+  unrouted hybrid publishes 0.6281 and routed 0.6831 against 0.5559, and for a
+  ship decision the burden is on the candidate anyway. (3) Cost: **1,650.9 ms p50
+  vs 475.6 ms** (~3.5x), 1.89 GB fp16 per chunker (7.3 GB for four, which will not
+  co-reside on a 12 GB card), plus `_repair_rotary` as a permanent maintenance
+  liability keyed to a `transformers` version. (4) The `course` win (0.6176 vs
+  0.5759 / 0.4280) is a **per-`entity_type` repair**, and that shape has died
+  against the hard router twice here (per-type alpha, rrf4) by the same mechanism —
+  it is a hypothesis needing its own pre-registration, never a result to read off
+  this table.
   Everything in the notes before the build log is the untouched
   2026-07-30 write-up, kept because it is what the prediction was registered
   against. **The package is deliberately outside `embedders/`**: `BaseEmbedder` is

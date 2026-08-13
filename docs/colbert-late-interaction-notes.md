@@ -426,6 +426,54 @@ second checkpoint. Those are new questions with new predictions, not a
 continuation of this one — the asymmetry that lets a null close an axis
 ([[project_hyde_axis]] used the same rule).
 
+### Should it ship? No — and the decisive reason is the failed cell, not the cost
+
+Recorded 2026-08-13 because "the axis is closed" and "do not deploy it" are two
+different decisions and only the first one is what `DECISION_RULE` answers. The
+rule stops us *spending more GPU on the question*; it says nothing by itself
+about putting the artifact in front of users. The recommendation is **do not
+adopt**, on four grounds in descending order of weight.
+
+**1. The cell it fails is the one the shipped system depends on.** `program`
+loses by −0.3331 at Holm 0.0000, and `program` is precisely where the shipped
+router hands the query to a dense specialist because BM25 collapses there
+(0.3230). Adopting ColBERT as the retriever would trade away the capability the
+system already has, to buy a capability it already has for free from BM25 —
+`person` only **ties** (+0.0308, CI spans zero). That is the inherit-not-cover
+mechanism above, restated as a deployment consequence.
+
+**2. It was never shown to beat the shipped system, and — say this precisely —
+it was never *measured* against it either.** The pilot's bars are BM25 and
+best-dense at `recursive`, by pre-registration; **hybrid at the same chunker was
+never a bar**, and neither was the router. So the claim is *not* "ColBERT loses
+to what we ship". It is that the only two comparisons it won are against two
+single arms, and the shipped configuration is neither of them. Indicatively —
+**not** like-for-like, since these are different chunker/embedder systems —
+unrouted hybrid publishes 0.6281 and the shipped routed hybrid 0.6831 against
+ColBERT's 0.5559. For a ship decision that asymmetry is already enough: the
+burden is on the candidate to beat the incumbent, and it has not been asked to.
+
+**3. Cost points the same way.** 1,650.9 ms p50 against the shipped routed
+hybrid's 475.6 ms (~3.5x), 1.89 GB fp16 for **one** chunker (7.3 GB for all
+four, which does not co-reside on a 12 GB card), plus a permanent maintenance
+liability: the checkpoint arrives with all 24 rotary layers uninitialised and
+`_repair_rotary` has to restore them at load time, keyed to how a given
+`transformers` version materialises buffers.
+
+**4. The one genuinely interesting residue is a hypothesis, and its prior is
+bad.** ColBERT beats both arms on `course` (0.6176 vs 0.5759 / 0.4280). But that
+is a *per-`entity_type` repair*, and per-type repairs have died against the hard
+router twice in this project — per-`entity_type` alpha and rrf4 — by the same
+mechanism both times: routing already hands each route a specialist that has no
+weak spot there. Anyone proposing "route `course` to ColBERT" is proposing a new
+pre-registered experiment against arm C, not reading a result off this table.
+
+For completeness, what a reader should be told to do *instead* is nothing
+expensive: the only intervention that has beaten the shipped router is the
+reranker fine-tuned on hybrid-fused candidates (+0.0654, Holm 0.0000), and its
+own free lexical control sits **0.0043 behind it (ns)** — so on current evidence
+no GPU-heavy component has earned a place in the serving path.
+
 ### Still open
 
 - ~~An I1-variant alignment check for chunk→token-block~~ — **done**: `S4` in
