@@ -1,0 +1,24 @@
+experiment_name: rq3_chunksize_sweep
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+  limit: null
+output_dir: data/index/rq3_chunksize_sweep
+loaders:
+- type: plain
+  params: {}
+chunkers:
+- type: fixed_size
+  params:
+    chunk_size: 1024
+    chunk_overlap: 50
+embedders:
+- type: local
+  params:
+    model_name: BAAI/bge-m3
+retrievers:
+- type: dense
+  params: {}
+rerankers: []
+run_mode: cartesian
+seed: 42

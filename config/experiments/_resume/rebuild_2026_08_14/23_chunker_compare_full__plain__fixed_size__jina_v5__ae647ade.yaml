@@ -1,0 +1,24 @@
+experiment_name: chunker_compare_full
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+  limit: null
+output_dir: data/index/chunker_compare_full
+loaders:
+- type: plain
+  params: {}
+chunkers:
+- type: fixed_size
+  params:
+    chunk_size: 512
+    chunk_overlap: 50
+embedders:
+- type: jina_v5
+  params:
+    model_name: jinaai/jina-embeddings-v5-text-small-retrieval
+retrievers:
+- type: dense
+  params: {}
+rerankers: []
+run_mode: cartesian
+seed: 42

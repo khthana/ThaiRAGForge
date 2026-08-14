@@ -1,0 +1,24 @@
+experiment_name: chunker_compare_full
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+  limit: null
+output_dir: data/index/chunker_compare_full
+loaders:
+- type: plain
+  params: {}
+chunkers:
+- type: recursive
+  params:
+    chunk_size: 512
+    chunk_overlap: 50
+embedders:
+- type: e5
+  params:
+    model_name: intfloat/multilingual-e5-small
+retrievers:
+- type: dense
+  params: {}
+rerankers: []
+run_mode: cartesian
+seed: 42

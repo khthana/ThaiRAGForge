@@ -1,0 +1,23 @@
+experiment_name: rq3_normalize_ablation
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+  limit: null
+output_dir: data/index/rq3_normalize_ablation
+loaders:
+- type: normalized
+  params: {}
+chunkers:
+- type: semantic
+  params:
+    breakpoint_threshold: 0.5
+embedders:
+- type: local
+  params:
+    model_name: BAAI/bge-m3
+retrievers:
+- type: dense
+  params: {}
+rerankers: []
+run_mode: cartesian
+seed: 42

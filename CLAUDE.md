@@ -174,9 +174,17 @@ see `docs/adr/`.
   against a corpus last edited 2026-08-09 09:53, i.e. the `2566/ครั้งที่ 3`
   re-download + re-OCR earlier that day. **Unlike the title repair, that one is a
   text change, so a relabel cannot discharge it** — those indices genuinely hold
-  the old OCR of that file. It is left standing rather than waived because a
-  16.4h rebuild is not worth it here: 0 gold entries in either gold set cite any
-  resolution from that meeting, so no published metric can have moved. It was 41
+  the old OCR of that file. It was left standing rather than waived because a
+  16.4h rebuild is not worth it *for correctness*: 0 gold entries in either gold
+  set cite any resolution from that meeting, so no published metric can have
+  moved. **The user elected to clear it anyway on 2026-08-14 (rebuild #4), and
+  it is IN PROGRESS — 7 of 40 combos rebuilt, 33 remaining**; until it finishes
+  the index tree is deliberately *mixed*, some combos on the new OCR and some on
+  the old, which is harmless for the reason just given but means **an eval
+  refresh must wait for the whole 40, not for a convenient stopping point**.
+  Resume with `tools/make_residual_rebuild_config.py` (it derives what is left
+  from manifest timestamps, so nothing has to be tracked by hand); state and
+  protocol live in [[project_index_rebuild_pending]]. It was 41
   until 2026-08-12, when the `entity_tags_full` rebuild took that index out of the
   list — a rebuild, not a waiver, which is the check behaving as intended. The
   previous state was **24 pass / 0 warn / 1 fail** (that lone FAIL being the

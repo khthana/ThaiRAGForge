@@ -1,0 +1,23 @@
+experiment_name: chunker_compare_full
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+  limit: null
+output_dir: data/index/chunker_compare_full
+loaders:
+- type: plain
+  params: {}
+chunkers:
+- type: sentence
+  params:
+    chunk_size: 512
+embedders:
+- type: local
+  params:
+    model_name: kornwtp/ConGen-BGE_M3-model-phayathaibert
+retrievers:
+- type: dense
+  params: {}
+rerankers: []
+run_mode: cartesian
+seed: 42

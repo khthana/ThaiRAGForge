@@ -1,0 +1,23 @@
+experiment_name: chunker_compare_full
+corpus:
+  input_dir: academic_resolutions
+  subset: full
+  limit: null
+output_dir: data/index/chunker_compare_full
+loaders:
+- type: plain
+  params: {}
+chunkers:
+- type: sentence
+  params:
+    chunk_size: 512
+embedders:
+- type: local
+  params:
+    model_name: Thaweewat/jina-embedding-v3-m2v-1024
+retrievers:
+- type: dense
+  params: {}
+rerankers: []
+run_mode: cartesian
+seed: 42
