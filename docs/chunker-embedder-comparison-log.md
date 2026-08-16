@@ -2143,3 +2143,80 @@ liveness check เอง และงานแต่ละก้อนสั้�
 **หมายเหตุระหว่างที่ยังไม่จบ**: ต้นไม้ index อยู่ในสภาพ *ผสม* บาง combo เป็น OCR ใหม่
 บางตัวเป็นของเก่า — ไม่เป็นอันตรายด้วยเหตุผลข้างบน แต่ **การ refresh eval ต้องรอให้ครบ
 ทั้ง 40 ไม่ใช่รอจุดที่หยุดพอดี**
+
+## Rebuild #4 ต่อ — 10 combo ในหนึ่งวัน ไม่ตายเลย และแบบจำลองเวลาที่ผมสร้างเองผิด 2 ครั้ง (2026-08-16)
+
+โปรโตคอลใหม่ (รันครั้งละ 1-2 combo แบบเฝ้าดู ผู้ใช้เป็นคนสั่งทีละก้อน) ถูกใช้จริงเต็มวัน:
+**16 → 26 จาก 40 combo, 6 ก้อน, ไม่มีก้อนไหนล้ม** · `semantic` ปิดครบ 9/9 · `recursive`
+ปิดครบ 9/9 · `sentence` 8/9 · เหลือ `fixed_size` 9 ตัว + RQ3 4 ตัว + `sentence` อีก 1 = **14**
+
+ทุกก้อนผ่าน gate 3 ชั้นเดิม — `Done: N/N combos built` ใน stdout, stderr ไม่มี `[error]` /
+`Traceback` / `CUDA out of memory`, และ manifest ใหม่ต้องมี `docset_hash 091b7a0ad8a5cfbe`
+กับ `n_resolutions 2854` · **exit code ไม่ใช่สัญญาณความสำเร็จ** (`rag_lab.cli run` คืน 0
+ได้แม้ combo จะล้ม) จึงต้องดูทั้งสามอย่าง ไม่ใช่อย่างเดียว
+
+| combo | chunker × embedder | จริง (นาที) | ที่ประเมินไว้ |
+|---|---|---|---|
+| 10 | recursive × Qwen3-4B | **107** | 109.5 |
+| 11 | recursive × qwen3-0.6B | **22.5** | ~40 |
+| 12 | sentence × e5-large | **21.4** | ~25 |
+| 13 | sentence × e5-small | **5.5** | ~3 |
+| 14 | sentence × jina_v5 | **25.0** | ~18 |
+| 15 | sentence × SCT | **8.9** | ~8 |
+| 16 | sentence × ConGen | **6.6** | ~6 |
+| 17 | sentence × bge-m3 | **23.6** | ~25 |
+| 18 | sentence × m2v | **3.3** | ~1-2 |
+| 19 | sentence × Qwen3-4B | **126** | ~123 |
+
+### สิ่งที่เจอ 1 — ตัวกำหนดเวลาคือ chunker ไม่ใช่ embedder (สำหรับ combo ที่ไม่ใช่ 4B)
+
+ผมประเมิน combo 11 (`recursive × qwen3-0.6B`) ไว้ ~40 นาที ของจริง **22.5** — ผิดเกือบเท่าตัว
+เพราะสเกลมาจาก combo 02 (`semantic × qwen3-0.6B`, 61 นาที) โดยสมมติว่า **embedder** เป็นตัวขับ
+ต้นทุน · ตัวเลขที่วัดได้ปฏิเสธข้อสมมตินั้นทันที: `recursive × qwen3-0.6B` (22.5) ≈
+`recursive × e5-large` (22.0) ทั้งที่คนละ embedder คนละขนาด — สิ่งที่ทำให้ combo 02 แพงคือ
+**`SemanticChunker` ซึ่ง embed ทุกประโยคเพื่อหาจุดตัด** ไม่ใช่ตัวโมเดล · กฎที่ใช้ได้จริง:
+ในกลุ่ม non-4B ให้ประเมินจาก **chunker** ก่อน แล้วค่อยปรับด้วย embedder
+
+### สิ่งที่เจอ 2 — จำนวน chunk ไม่ทำนายเวลา ต้นทุนอยู่ที่ token รวม
+
+ครั้งที่สองผมผิดคนละทาง: `sentence` ให้ **57,172** chunk ส่วน `recursive` ให้ **70,250**
+(อัตราส่วน 0.81) ผมจึงคูณ 0.81 ลงไปในก้อน 13+14 — **ทั้งคู่ใช้เวลาเกิน** (30.5 นาทีจริง เทียบ
+21 ที่ประเมิน) · เหตุผลตรงไปตรงมาเมื่อมองย้อน: `sentence` ตัดที่ขอบประโยคจึงได้ chunk ที่
+**ยาวกว่า**โดยเฉลี่ย — chunk น้อยลงไม่ได้แปลว่างานน้อยลง เพราะต้นทุน embedding ขึ้นกับ
+**จำนวน token รวม** ไม่ใช่จำนวนแถว · แทนที่ด้วยตัวคูณ **~1.15 เทียบ `recursive`** ซึ่งจากนั้น
+ใช้ได้ทั้งก้อน 15+16 (15.5 จริง / 14 ประเมิน), 17+18 (26.9 / 26) และ 19 (126 / ~123) ·
+combo สั้น ๆ ยังเหวี่ยงกว่าเปอร์เซ็นต์ที่ควรเป็น เพราะต้นทุนคงที่ (~2 นาที: CUDA startup +
+สร้าง lexical index) กินสัดส่วนใหญ่เมื่อฐานเล็ก
+
+### สิ่งที่เจอ 3 — 4B ผ่านทั้งสองตัวของวันนี้ ยืนยันว่าการตายเป็นของ `semantic × qwen3` โดยเฉพาะ
+
+combo 10 (`recursive × Qwen3-4B`, 107 นาที) และ combo 19 (`sentence × Qwen3-4B`, 126 นาที)
+ผ่านสะอาดทั้งคู่ ไม่มี `nvlddmkm` ไม่มีการหยุดกลางทาง · นี่เป็นหลักฐานใหม่ที่แยก **"โมเดล 4B"**
+ออกจาก **"`semantic` × 4B"** ได้: การตาย 5 ครั้งจาก 5 ที่บันทึกไว้เมื่อ 14 ส.ค. ไม่ใช่เพราะ
+4B ต่อ VRAM 12 GB เฉย ๆ แต่เพราะ `SemanticChunker` บังคับให้ 4B วิ่งเป็น **ลูปต่อประโยค**
+ยาวหลายชั่วโมง ซึ่งเป็นภาระ GPU ต่อเนื่องที่หนักที่สุดในโปรเจกต์ · เหลือ 4B อีกตัวเดียวคือ
+combo **28** (`fixed_size × Qwen3-4B`) — ตัดตามกฎ ไม่ต้องเรียก GPU ตอน chunk เช่นกัน
+
+### สิ่งที่เจอ 4 — combo 17 ทำให้ Qdrant collection แรกที่ stale จริงเกิดขึ้นแล้ว
+
+combo 17 คือ `plain__sentence__local__bf8b7ebb` ซึ่งเป็น **collection เดียวกับที่ Qdrant pilot
+ingest ไว้** และเป็น target ของ route `person` ที่ ship อยู่ · มัน rebuild เสร็จ 2026-08-16
+18:59 น. — ตั้งแต่วินาทีนั้น collection ใน Qdrant เป็นสำเนาของแถวที่ไม่มีอยู่แล้ว · ไล่ผ่าน
+`route_targets("hybrid")` พบว่า **3 ใน 4 collection stale ไปแล้ว**: `person` = combo 17,
+`program` = `semantic × qwen3-0.6B` (combo 02), `course` = `recursive × qwen3-0.6B` (combo 11)
+· เหลือ `faculty`/`unmatched` = `fixed_size × bge-m3` (combo 26) ที่ยังไม่ stale — **และไม่ stale
+เพียงเพราะกลุ่ม `fixed_size` ยังไม่ได้เริ่ม** · จึง **ไม่ re-ingest ตอนนี้**: combo 26 กำลังจะมา
+การ ingest วันนี้คือการซื้อ collection ที่ stale เพิ่มอีกใบ แทนที่จะรอครบ 40 แล้วทำครั้งเดียว
+พร้อมรัน `qdrant_routed_check.py` ซ้ำ
+
+### บันทึกเพิ่ม — qualify `jina_v5` ก่อนเชื่อ index ที่มันสร้าง
+
+โปรเจกต์นี้เจอ checkpoint ของ jinaai มาถึงในสภาพ **position-blind** ภายใต้ transformers 5.x
+มาแล้วสองครั้ง (`gte-multilingual-reranker-base` 9 ส.ค., `jina-colbert-v2` 13 ส.ค. — remote code
+เขียนสำหรับ 4.x, 5.x materialise non-persistent buffer จาก meta device เป็นหน่วยความจำที่ยังไม่
+initialise) และ **ทั้งสองครั้งไม่ crash แต่คืนตัวเลขที่ดูสมเหตุสมผล** · combo 05 กับ 14 ใช้
+`jinaai/jina-embeddings-v5-text-small-retrieval` จึงรัน gate 4 ข้อผ่าน **code path เดียวกับที่
+สร้าง index** (`JinaV5Embedder.embed`, `prompt_name="document"`): G1 buffer เป็นอนุกรมเรขาคณิต
+ที่เป็นไปได้ · G2 **position sensitivity** — สลับลำดับคำต้องได้เวกเตอร์ต่างกัน (ตัวที่จับสองเคสก่อน
+หน้าได้) · G3 ทิศทาง relevance · G4 determinism · ผล **QUALIFIED** ทั้ง 4 ข้อ, G2 delta =
+3.214e-02 (เกณฑ์ FAIL คือ ≤ 1e-3) · **combo 23 (`fixed_size × jina_v5`) จึงไม่ต้อง probe ซ้ำ**

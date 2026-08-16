@@ -178,13 +178,24 @@ see `docs/adr/`.
   16.4h rebuild is not worth it *for correctness*: 0 gold entries in either gold
   set cite any resolution from that meeting, so no published metric can have
   moved. **The user elected to clear it anyway on 2026-08-14 (rebuild #4), and
-  it is IN PROGRESS — 7 of 40 combos rebuilt, 33 remaining**; until it finishes
+  it is IN PROGRESS — 26 of 40 combos rebuilt, 14 remaining as of 2026-08-16**
+  (`semantic` 9/9 and `recursive` 9/9 closed, `sentence` 8/9, `fixed_size` 0/9,
+  RQ3 0/4); until it finishes
   the index tree is deliberately *mixed*, some combos on the new OCR and some on
   the old, which is harmless for the reason just given but means **an eval
   refresh must wait for the whole 40, not for a convenient stopping point**.
   Resume with `tools/make_residual_rebuild_config.py` (it derives what is left
   from manifest timestamps, so nothing has to be tracked by hand); state and
-  protocol live in [[project_index_rebuild_pending]]. It was 41
+  protocol live in [[project_index_rebuild_pending]]. **A consequence has
+  already landed and is easy to miss: 3 of the 4 ingested Qdrant collections are
+  now stale.** Resolved through `route_targets("hybrid")`, they are `person` =
+  `sentence × bge-m3` (combo 17, rebuilt 2026-08-16 18:59 — the exact collection
+  the pilot ingested), `program` = `semantic × qwen3-0.6B` (combo 02) and
+  `course` = `recursive × qwen3-0.6B` (combo 11), all three rebuilt on 08-16;
+  only `faculty`/`unmatched` = `fixed_size × bge-m3` (combo 26) is untouched, and
+  it is untouched only because that group has not started. **Re-ingest and re-run
+  `qdrant_routed_check.py` after all 40, not now** — combo 26 is still coming, so
+  re-ingesting today buys one stale collection instead of four. It was 41
   until 2026-08-12, when the `entity_tags_full` rebuild took that index out of the
   list — a rebuild, not a waiver, which is the check behaving as intended. The
   previous state was **24 pass / 0 warn / 1 fail** (that lone FAIL being the
@@ -327,9 +338,17 @@ see `docs/adr/`.
   check vacuous — the [[feedback_cleanup_can_break_an_audit]] shape again — and
   the tests pin that no current report (`routing_eval`, `rq4_score`,
   `oracle_union_ceiling`, `power_analysis`, the three 9-way tables) is exempt.
-  Current state: **6 pass / 1 warn / 0 fail** over 7 checks (re-run 2026-08-13
-  after the ColBERT pilot; unchanged from the 08-12 run that was D5's first
-  green one), the warn still being D3's 3 known false positives. Was
+  Current state: **6 pass / 1 warn / 0 fail** over 7 checks (re-run 2026-08-16
+  after this file's rebuild-#4 progress edit; unchanged from the 08-13 run after
+  the ColBERT pilot, itself unchanged from the 08-12 run that was D5's first
+  green one), the warn still being D3's 3 known false positives. **D5 caught that
+  edit and the entry it got is worth reading as a pattern**: `26 of 40` is the one
+  allowlisted count whose source is the **index tree** rather than a report —
+  `make_residual_rebuild_config.py` re-derives it from I6's rule over manifest
+  timestamps, and writing it to a snapshot report would manufacture exactly the
+  stale second artifact the D family exists to catch. Keyed on the exact string,
+  so every batch of rebuild #4 re-flags it and the count has to be re-derived
+  rather than inherited. Was
   **5 pass / 1 warn / 0 fail** over 6 before D5 landed. `EVAL_INPUTS` grew to
   25 (input, report) pairs on 08-13 with the two ColBERT edges, and the new
   `scoring.py` edge **fired immediately and correctly** — see the ColBERT
@@ -2504,7 +2523,10 @@ see `docs/adr/`.
   semantic 5.22%, sentence 6.87%. **Not established**: one query set, one fetch depth, one
   fusion, **no network hop**, nothing about ANN (deliberately — the recommendation is
   `exact=True`). **A collection is a copy of an `Index`'s rows, so any index rebuild stales
-  it**: re-ingest and re-run this.
+  it**: re-ingest and re-run this. **No longer hypothetical — rebuild #4 staled 3 of the 4
+  (`person`, `program`, `course`) on 2026-08-16**; the `I6` paragraph in the invariant-audit
+  bullet names which combo each one is and why the re-ingest waits for all 40 rather than
+  chasing each rebuilt combo.
   **IT IS NOW WIRED (2026-08-13, `src/rag_lab/retrievers/qdrant_hybrid.py`,
   `docs/qdrant-serving-pilot.md` §8d) — the served path is the shipped `route_query`, not a
   script.** `qdrant_hybrid` is a registered retriever taking an all-scalar
