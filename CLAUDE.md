@@ -177,25 +177,30 @@ see `docs/adr/`.
   the old OCR of that file. It was left standing rather than waived because a
   16.4h rebuild is not worth it *for correctness*: 0 gold entries in either gold
   set cite any resolution from that meeting, so no published metric can have
-  moved. **The user elected to clear it anyway on 2026-08-14 (rebuild #4), and
-  it is IN PROGRESS — 26 of 40 combos rebuilt, 14 remaining as of 2026-08-16**
-  (`semantic` 9/9 and `recursive` 9/9 closed, `sentence` 8/9, `fixed_size` 0/9,
-  RQ3 0/4); until it finishes
-  the index tree is deliberately *mixed*, some combos on the new OCR and some on
-  the old, which is harmless for the reason just given but means **an eval
-  refresh must wait for the whole 40, not for a convenient stopping point**.
-  Resume with `tools/make_residual_rebuild_config.py` (it derives what is left
-  from manifest timestamps, so nothing has to be tracked by hand); state and
-  protocol live in [[project_index_rebuild_pending]]. **A consequence has
-  already landed and is easy to miss: 3 of the 4 ingested Qdrant collections are
-  now stale.** Resolved through `route_targets("hybrid")`, they are `person` =
-  `sentence × bge-m3` (combo 17, rebuilt 2026-08-16 18:59 — the exact collection
-  the pilot ingested), `program` = `semantic × qwen3-0.6B` (combo 02) and
-  `course` = `recursive × qwen3-0.6B` (combo 11), all three rebuilt on 08-16;
-  only `faculty`/`unmatched` = `fixed_size × bge-m3` (combo 26) is untouched, and
-  it is untouched only because that group has not started. **Re-ingest and re-run
-  `qdrant_routed_check.py` after all 40, not now** — combo 26 is still coming, so
-  re-ingesting today buys one stale collection instead of four. It was 41
+  moved. **The user elected to clear it anyway on 2026-08-14 (rebuild #4), and it
+  is COMPLETE as of 2026-08-17 20:50 — 40 of 40 combos rebuilt, 0 remaining**
+  (`semantic`/`recursive`/`sentence`/`fixed_size` all 9/9, RQ3 4/4);
+  `make_residual_rebuild_config.py` reports `already current: 40  remaining: 0`,
+  which is I6's own rule over manifest timestamps and therefore the same evidence
+  I6 reports. **Every index now holds the 2026-08-09 re-OCR, so the eval refresh
+  chain is UNBLOCKED and nothing downstream has been re-run yet** — until it is,
+  every persisted result, report and published table describes the *old* indices,
+  which is the mixed state one layer down. Order: BM25/hybrid persisted results +
+  the seconds-level significance tests, the thematic arm (~5 h), RQ4 contexts
+  (~4 h), `cost_latency_pareto.py` / `power_analysis.py` /
+  `reranker_significance_test.py`, then `audit_pipeline_invariants.py` to confirm
+  `I6` 0 and `E4` still 0. State and protocol live in
+  [[project_index_rebuild_pending]]. **The consequence that is easiest to miss:
+  all 4 ingested Qdrant collections are now stale**, since a collection is a copy
+  of an `Index`'s rows — `person` = `sentence × bge-m3` (combo 17, the exact
+  collection the pilot ingested), `program` = `semantic × qwen3-0.6B` (combo 02),
+  `course` = `recursive × qwen3-0.6B` (combo 11) and `faculty`/`unmatched` =
+  `fixed_size × bge-m3` (combo 26). **Re-ingest all four and re-run
+  `qdrant_routed_check.py` once**, not per combo. The rebuild also settled what
+  killed the five earlier runs: **all four Qwen3-4B combos passed** (01 `semantic`,
+  10 `recursive` 107 min, 19 `sentence` 126, 28 `fixed_size` 106), so the 5-of-5
+  death pattern belongs to `semantic` × 4B specifically — the sustained
+  per-sentence embed loop — not to running a 4B model on a 12 GB card. It was 41
   until 2026-08-12, when the `entity_tags_full` rebuild took that index out of the
   list — a rebuild, not a waiver, which is the check behaving as intended. The
   previous state was **24 pass / 0 warn / 1 fail** (that lone FAIL being the
@@ -342,8 +347,9 @@ see `docs/adr/`.
   after this file's rebuild-#4 progress edit; unchanged from the 08-13 run after
   the ColBERT pilot, itself unchanged from the 08-12 run that was D5's first
   green one), the warn still being D3's 3 known false positives. **D5 caught that
-  edit and the entry it got is worth reading as a pattern**: `26 of 40` is the one
-  allowlisted count whose source is the **index tree** rather than a report —
+  edit and the entry it got is worth reading as a pattern**: rebuild #4's
+  combos-rebuilt count (`N of 40`) is the one allowlisted figure whose source is
+  the **index tree** rather than a report —
   `make_residual_rebuild_config.py` re-derives it from I6's rule over manifest
   timestamps, and writing it to a snapshot report would manufacture exactly the
   stale second artifact the D family exists to catch. Keyed on the exact string,

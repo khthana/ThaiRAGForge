@@ -33,13 +33,13 @@ numbers:
 # exact string, so changing "0 of 239" to "0 of 241" stops matching and re-flags.
 counts:
   - doc: CLAUDE.md
-    figure: "26 of 40"
-    checked: 2026-08-16
+    figure: "40 of 40"
+    checked: 2026-08-17
     reason: >-
-      Rebuild #4's progress, and the one figure here whose source is the index
+      Rebuild #4's final state, and the one figure here whose source is the index
       tree rather than a report: `tools/make_residual_rebuild_config.py` re-derives
       it from I6's own rule over manifest timestamps and prints
-      "already current: 26  remaining: 14". Deliberately not written to a report —
+      "already current: 40  remaining: 0". Deliberately not written to a report —
       a snapshot file would be the stale-second-artifact this project keeps getting
       hurt by, while the generator reads the indices themselves. The entry is keyed
       on the exact string on purpose: every batch moves the count, so the next one
