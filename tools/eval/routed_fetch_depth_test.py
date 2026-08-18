@@ -97,8 +97,50 @@ DEPTHS = [10, 20, 50, 100, 200, 500, 1000, 5000]
 F_REGISTERED = 200
 N_BOOT = 10_000
 SEED = 42
-# routing_eval.md (hybrid, `routed (shipped)`) and reranker_rrf_signal_test.md
-PUBLISHED = {"routed": 0.6831, "unrouted": 0.6281}
+# S2/S3 anchor on routing_eval.md's hybrid section, and the two values are
+# PARSED from it rather than frozen here. They were literals (0.6831 / 0.6281)
+# until 2026-08-18, when the rebuild-#4 refresh legitimately moved both to
+# 0.6811 / 0.6229 and the checks went red against a report the live code in
+# fact reproduced exactly -- a cross-artifact anchor written as a constant
+# stops anchoring the moment the artifact moves, and then blames the wrong
+# side. An unparseable anchor FAILS rather than skipping: a check that cannot
+# find its counterpart must not pass quietly.
+_ROUTING_EVAL = REPO / "data" / "results" / "routing_eval.md"
+
+
+def published_hybrid_anchors() -> dict[str, float | None]:
+    """`routed (shipped)` and `best single combo` recall@10 from routing_eval.md.
+
+    Scoped to the *hybrid* half of the report -- the dense half carries rows
+    with identical labels, so an unscoped search silently anchors on the wrong
+    retriever."""
+    out: dict[str, float | None] = {"routed": None, "unrouted": None}
+    if not _ROUTING_EVAL.exists():
+        return out
+    txt = _ROUTING_EVAL.read_text(encoding="utf-8")
+    start = txt.find("## 3. Routed system vs single-combo baselines -- hybrid")
+    if start < 0:
+        return out
+    section = txt[start:]
+    end = section.find("\n## ", 1)
+    if end > 0:
+        section = section[:end]
+    for line in section.splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 3 or cells[0] != "recall@10":
+            continue
+        try:
+            value = float(cells[2])
+        except ValueError:
+            continue
+        if cells[1] == "routed (shipped)":
+            out["routed"] = value
+        elif cells[1].startswith("best single combo ="):
+            out["unrouted"] = value
+    return out
+
+
+PUBLISHED = published_hybrid_anchors()
 # paper-results-summary.md: mean(min(1, k/n_relevant)) over the 106-query set
 QRELS_CEILING = 0.8856
 
@@ -399,14 +441,20 @@ def main() -> int:
     u_base = float(np.mean([u_sc[-1]["recall@10"][q] for q in queries]))
     checks.append((
         "S2 the routed k=n arm is routing_eval.md's `routed (shipped)` hybrid",
-        abs(r_base - PUBLISHED["routed"]) < 5e-5 or args.smoke,
-        f"{r_base:.4f} vs published {PUBLISHED['routed']:.4f}"
+        (PUBLISHED["routed"] is not None
+         and abs(r_base - PUBLISHED["routed"]) < 5e-5) or args.smoke,
+        f"{r_base:.4f} vs published "
+        f"{PUBLISHED['routed']:.4f}" if PUBLISHED['routed'] is not None
+        else f"{r_base:.4f} vs published UNPARSEABLE (routing_eval.md missing or its hybrid section changed shape)"
         + ("  [smoke: subset]" if args.smoke else ""),
     ))
     checks.append((
         "S3 the unrouted k=n arm reproduces the published single-combo hybrid",
-        abs(u_base - PUBLISHED["unrouted"]) < 5e-5 or args.smoke,
-        f"{u_base:.4f} vs published {PUBLISHED['unrouted']:.4f}"
+        (PUBLISHED["unrouted"] is not None
+         and abs(u_base - PUBLISHED["unrouted"]) < 5e-5) or args.smoke,
+        f"{u_base:.4f} vs published "
+        f"{PUBLISHED['unrouted']:.4f}" if PUBLISHED['unrouted'] is not None
+        else f"{u_base:.4f} vs published UNPARSEABLE (routing_eval.md missing or its hybrid section changed shape)"
         + ("  [smoke: subset]" if args.smoke else ""),
     ))
 

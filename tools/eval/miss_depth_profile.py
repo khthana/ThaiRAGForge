@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import collections
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -316,19 +317,34 @@ def main() -> int:
     found10_all = {p for p, v in best_all.items() if v is not None and v <= K}
     unfound_all = [p for p in pairs if p not in found10_all]
 
-    # S5: this has to agree with the ceiling report, which counted the same
-    # thing from persisted top-10s by a completely different code path.
+    # S5/S6: these have to agree with the ceiling report, which counts the same
+    # two things from persisted top-10s by a completely different code path.
+    # The expected values are PARSED from that report rather than frozen as
+    # literals. They were literals (84 / 164) until 2026-08-18, when rebuild #4
+    # legitimately moved both and the check went red against a report it in fact
+    # agreed with -- a cross-artifact anchor written as a constant stops
+    # anchoring the moment the artifact moves, and then reports the wrong side
+    # as broken. A failed parse is a FAIL, never a skip: an anchor that cannot
+    # find its counterpart must not pass quietly.
     ceiling_txt = CEILING.read_text(encoding="utf-8") if CEILING.exists() else ""
+    exp_hyb = exp_all = None
+    m = re.search(r"คู่ทั้งหมด:\s*\*\*([\d,]+)\*\*.*?union ของทุกระบบเจอ\s*\*\*([\d,]+)\*\*", ceiling_txt)
+    if m:
+        exp_hyb = int(m.group(1).replace(",", "")) - int(m.group(2).replace(",", ""))
+    m = re.search(r"\|\s*hybrid \+ dense \+ BM25[^|]*\|(?:[^|]*\|){4}\s*([\d,]+)\s*\|", ceiling_txt)
+    if m:
+        exp_all = int(m.group(1).replace(",", ""))
     checks.append((
         "S5 pairs unfound at k=10 by any arm agrees with oracle_union_ceiling.md",
-        len(unfound_all) == 84,
-        f"{len(unfound_all)} unfound here; the ceiling report says 84"
-        f"{'' if '84' in ceiling_txt else ' (report not found or changed)'}",
+        exp_all is not None and len(unfound_all) == exp_all,
+        f"{len(unfound_all)} unfound here; the ceiling report says "
+        f"{exp_all if exp_all is not None else 'UNPARSEABLE (report missing or its §6 table changed shape)'}",
     ))
     checks.append((
         "S6 hybrid-only unfound count agrees with the ceiling report",
-        len(pairs) - len(found10_hyb) == 164,
-        f"{len(pairs) - len(found10_hyb)} unfound under hybrid alone; the report says 164",
+        exp_hyb is not None and len(pairs) - len(found10_hyb) == exp_hyb,
+        f"{len(pairs) - len(found10_hyb)} unfound under hybrid alone; the report says "
+        f"{exp_hyb if exp_hyb is not None else 'UNPARSEABLE (report missing or its §2 summary line changed shape)'}",
     ))
 
     lines: list[str] = []

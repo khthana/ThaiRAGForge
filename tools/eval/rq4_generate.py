@@ -60,6 +60,31 @@ from pathlib import Path
 import ollama
 
 REPO = Path(__file__).resolve().parents[2]
+# A hung server request blocks the whole run: on 2026-08-18 one ollama.chat
+# call never returned and 3.7 h of GPU time was lost after 64 of 233 answers,
+# with nothing in the log because stdout was block-buffered. `ollama.chat`'s
+# default client has no timeout, so the failure mode is a silent stall rather
+# than an error. A bounded timeout + retry turns it into a recorded error --
+# the answer file is still written, carrying `error`, so a stall is visible in
+# the artifact instead of only in the wall clock.
+_REQUEST_TIMEOUT_S = 900
+_MAX_ATTEMPTS = 3
+_CLIENT = ollama.Client(timeout=_REQUEST_TIMEOUT_S)
+
+
+def chat_with_retry(**kwargs):
+    """ollama.chat with a timeout and bounded retries; re-raises the last error."""
+    last = None
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        try:
+            return _CLIENT.chat(**kwargs)
+        except Exception as exc:  # httpx.ReadTimeout, ConnectError, ...
+            last = exc
+            print(f"  [retry {attempt}/{_MAX_ATTEMPTS}] {type(exc).__name__}: {exc}", flush=True)
+            time.sleep(5)
+    raise last
+
+
 _CONTEXTS = REPO / "data" / "rq4" / "contexts"
 _OUT = REPO / "data" / "rq4" / "answers"
 
@@ -414,7 +439,7 @@ def main() -> int:
             ctx = json.loads(path.read_text(encoding="utf-8"))
             t1 = time.time()
             try:
-                resp = ollama.chat(
+                resp = chat_with_retry(
                     model=args.model,
                     messages=[{"role": "user", "content": build_prompt(ctx, args.variant)}],
                     options={"temperature": 0.0, "num_ctx": args.num_ctx},

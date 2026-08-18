@@ -105,7 +105,30 @@ ROUTED_RAW = REPO / "data" / "results" / "routed_fetch_depth_raw.json"
 
 K = 10
 FETCH_DEPTH = 200
-PUBLISHED_F200 = 0.6835  # routed_fetch_depth_test.md, routed arm, F=200
+# Parsed from routed_fetch_depth_test.md's §1 table rather than frozen here.
+# It was the literal 0.6835 until 2026-08-18, when the rebuild-#4 refresh moved
+# that report to 0.6815 and this file kept printing a figure its own source no
+# longer contained -- the check itself was never wrong (C2 compares per-query
+# values from routed_fetch_depth_raw.json), but the number it *reported* was.
+# A cross-artifact figure has to be read from the artifact, every run.
+_ROUTED_FETCH_REPORT = REPO / "data" / "results" / "routed_fetch_depth_test.md"
+
+
+def published_f200() -> float | None:
+    """Routed macro recall@10 at F=200, from routed_fetch_depth_test.md's §1 row."""
+    if not _ROUTED_FETCH_REPORT.exists():
+        return None
+    for line in _ROUTED_FETCH_REPORT.read_text(encoding="utf-8").splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) >= 3 and cells[0] == "200":
+            try:
+                return float(cells[2])
+            except ValueError:
+                return None
+    return None
+
+
+PUBLISHED_F200 = published_f200()
 # The pilot measured served-vs-reference at +0.0017 end to end on one
 # collection, attributed to tie-break convention (two exact engines settle an
 # exact tie differently and neither is more correct). This is a tolerance on a
@@ -504,7 +527,8 @@ def checks(raw: dict, an: dict) -> list[tuple[str, bool, str]]:
             "(routed_fetch_depth_raw.json), all 106",
             len(shared) == len(an["ref"]) and not differ,
             f"{len(shared) - len(differ)}/{len(shared)} queries identical; "
-            f"macro {an['ref_macro']:.4f} vs published {PUBLISHED_F200:.4f}"
+            f"macro {an['ref_macro']:.4f} vs published "
+            + (f"{PUBLISHED_F200:.4f}" if PUBLISHED_F200 is not None else "UNPARSEABLE")
             + (f"; {len(differ)} differ" if differ else ""),
         ))
 
@@ -640,7 +664,8 @@ def render(raw: dict) -> str:
         "|---|---|---|",
     ]
     L.append(
-        f"| published (`routed_fetch_depth_test.md`, F=200) | {PUBLISHED_F200:.4f} | -- |"
+        f"| published (`routed_fetch_depth_test.md`, F=200) | "
+        + (f"{PUBLISHED_F200:.4f}" if PUBLISHED_F200 is not None else "n/a") + " | -- |"
     )
     L.append(
         f"| reference (numpy dense + `BM25Okapi`, this code path) | "
