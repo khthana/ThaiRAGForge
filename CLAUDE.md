@@ -1572,6 +1572,55 @@ see `docs/adr/`.
   build phases: `docs/rq4-design.md`. **Refreshed against `chunker_compare_full`
   rebuild #3 on 2026-08-07** — see the currency paragraph at the end of this bullet
   before citing anything here; two findings below are corrected there.
+  **CURRENCY, 2026-08-19: the rebuild-#4 refresh is HALF DONE and every RQ4 number
+  on disk is therefore mixed.** Rebuild #4 changed **233 of 742** contexts (checked
+  byte-for-byte, because `q097`'s old and new contexts share block count *and*
+  character total and are still different files); the 233 were regenerated and the
+  other 509 frozen, per the paired rule. `phi4` is complete for all three variants
+  (424/424 each, 0 errors); **`gemma4:e4b`'s two variants are untouched at 191/424**,
+  so `rq4_score_gemma4*.md` describes the old indices while `rq4_score*.md` will
+  describe the new ones. Resume with `tools/eval/rq4_supervisor.sh`, which skips
+  finished jobs; nothing has been re-scored yet. **`num_predict` is now capped at
+  4,096 and that IS part of the measurement, unlike a timeout** — with it unset
+  (−1) plus ollama context-shifting a request has no end, and one cell really did
+  generate 5,007 tokens of `๒ ๒ ๑ ๒ ๒ ๑ …` past a 3,600 s timeout. The cap is
+  **1.40x the longest answer this project ever published**, and that maximum is
+  *proven* rather than sampled: `tokens ≤ UTF-8 bytes` for any byte-level BPE, so
+  only the 139 of 1,761 answers above 2,935 bytes could beat 2,935 tokens and all
+  139 were measured. **Characters do not stand in for tokens** — realized ratios run
+  1.04–2.68, so the longest answer by characters (5,001) is 1,869 tokens while the
+  longest by tokens (2,935) is 3,189 characters, and both wrong diagnoses that day
+  came from assuming ~1 char/token. `done_reason`/`num_predict` are recorded per
+  answer and `tools/eval/rq4_status.py` counts the capped ones: **3 of 1,272** phi4
+  cells so far, all `รายวิชา` course queries breaking where a Thai meeting number is
+  written, at mid-range prompt sizes (prompt length is not the trigger) — `q083`
+  broke under two variants and two arms, so the trigger is the *query*. **Quote that
+  count with any number from this run**: a capped answer never reaches its
+  `อ้างอิง:` line and scores as *cited nothing*, i.e. a generator failure that reads
+  like a retrieval result. **RE-SCORED 2026-08-19 — 7 verdict flips of 57 in
+  `rq4_score.md`, 5 of 57 guarded, 1 of 14 entity; the two `gemma4:e4b` reports were
+  deliberately NOT re-scored** (their answers are still half-old, so re-running them
+  would mix indices inside one table), while `rq4_score_entity.md` WAS, because its
+  comparison arm `hybrid` moved even though both entity arms' contexts are
+  byte-identical. **The headline movement is family 2's dense arm: `sentence_cap vs
+  cite_all` citation recall +0.1095 (Holm 0.0000) → +0.0407 (Holm 0.6610), i.e. the
+  cell is now a bound ruling out a loss beyond 0.0133** — and the mechanism is
+  legible rather than a loss of signal, because the *baseline* rose (0.2261 →
+  0.2738) while the treatment fell (0.3356 → 0.3145): the re-OCR gave the dense arm
+  better contexts, which is exactly what shrinks the marginal value of telling the
+  model to cite everything. **The ablation holds on 2 of 3 answering arms**
+  (`hybrid` +0.0871, `bm25` +0.0789, both Holm 0.0000), so the superseded
+  +0.1181/+0.1005/+0.0734 and +0.1095/+0.0696 figures quoted later in this bullet
+  are pre-rebuild-#4 history. 4 of the 7 flips run `no → yes`, i.e. the refreshed
+  contexts SEPARATE arms that used to tie. **The entity-arm gating decision is
+  unchanged**: `entity_lookup` −0.2384 Holm 0.0000 (was −0.2523), `entity_boost` ns
+  at +0.0505 Holm 0.1040 (was +0.0366), so edges B/C stay unbuilt with the bound now
+  "at most +0.1114" (was +0.0942). Every flip is one cell against a generator whose
+  noise floor is 14/24 identical citation sets at temperature 0 — treat an isolated
+  flip as inconclusive. Adding an "Arabic numerals" prompt rule is deliberately
+  NOT done (a fourth variant, ~12 h of regeneration, and the failing cells already
+  ignored `ไม่เกิน 3 ประโยค` in the same prompt) but is worth testing for the
+  *shipped* prompt. Details: `docs/rq4-design.md` (last section).
   **READ THIS BEFORE CITING ANY RQ4 NUMBER: every answer on disk was generated at
   `num_ctx=8192`, and 80 of the 1,590 published (query, arm, variant) cells had
   their prompt silently TRUNCATED (2026-08-10, `docs/rq4-prompt-truncation.md`).**

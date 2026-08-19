@@ -33,6 +33,80 @@ numbers:
 # exact string, so changing "0 of 239" to "0 of 241" stops matching and re-flags.
 counts:
   - doc: CLAUDE.md
+    figure: "5 of 57"
+    checked: 2026-08-19
+    reason: >-
+      Verdict flips in rq4_score_guarded.md after the rebuild-#4 re-score. The
+      source is a COMPARISON, not a report: `tools/eval/diff_significance_reports.py`
+      re-derives it from the report and its pre-refresh snapshot under
+      data/results/_pre_2026_08_18_rebuild4_refresh/. Deliberately not written to a
+      report — a flip count is a property of two files, and persisting it would
+      create the stale second artifact the D family exists to catch. The sibling
+      figure "7 of 57" (rq4_score.md) traces on its own; this one and "1 of 14"
+      do not, which is D5's strict-pair rule behaving as designed.
+
+  - doc: CLAUDE.md
+    figure: "1 of 14"
+    checked: 2026-08-19
+    reason: >-
+      Verdict flips in rq4_score_entity.md after the rebuild-#4 re-score; same
+      evidence and same re-derivation as the "5 of 57" entry above.
+
+  - doc: CLAUDE.md
+    figure: "3 of 1,272"
+    checked: 2026-08-19
+    reason: >-
+      Capped RQ4 cells after the rebuild-#4 refresh. Same shape as the "40 of 40"
+      entry below: the source is the ANSWER TREE, not a report —
+      `tools/eval/rq4_status.py` re-derives it by counting answers whose recorded
+      `done_reason` is "length" over the 4 arms x 106 queries x 3 phi4 variants.
+      Writing it to a snapshot report would manufacture the stale second artifact
+      the D family exists to catch, while the helper reads the answers themselves.
+      Keyed on the exact string on purpose: the gemma half is still unrun, so the
+      count must move and re-flag rather than be inherited.
+
+  - doc: docs/rq4-design.md
+    figure: "3 of 1,272"
+    checked: 2026-08-19
+    reason: >-
+      Same figure, same evidence as the CLAUDE.md entry above — a separate entry
+      because allowlist entries are keyed per document on purpose, so clearing it
+      in one doc must not silently clear it in another.
+
+  - doc: CLAUDE.md
+    figure: "233 of 742"
+    checked: 2026-08-19
+    reason: >-
+      Contexts changed by rebuild #4, re-derivable by hashing
+      `data/rq4/contexts` against `data/rq4/_pre_2026_08_18_refresh/contexts`.
+      Deliberately not written to a report: it is a property of two directories
+      on disk, and the comparison is the evidence.
+
+  - doc: docs/rq4-design.md
+    figure: "233 of 742"
+    checked: 2026-08-19
+    reason: >-
+      Same figure and evidence as the CLAUDE.md entry above; kept separate
+      because entries are keyed per document.
+
+  - doc: CLAUDE.md
+    figure: "139 of 1,761"
+    checked: 2026-08-19
+    reason: >-
+      Answers whose UTF-8 byte length exceeds 2,935 and therefore COULD hold more
+      than 2,935 tokens — the candidate set that had to be measured to prove the
+      longest published answer. Re-derivable from the answer tree by byte length
+      alone (no model needed); the measurement itself needs phi4 and is recorded
+      in docs/rq4-design.md's last section.
+
+  - doc: docs/rq4-design.md
+    figure: "139 of 1,761"
+    checked: 2026-08-19
+    reason: >-
+      Same figure and evidence as the CLAUDE.md entry above; kept separate
+      because entries are keyed per document.
+
+  - doc: CLAUDE.md
     figure: "40 of 40"
     checked: 2026-08-17
     reason: >-

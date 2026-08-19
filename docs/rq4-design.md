@@ -1010,3 +1010,120 @@ they invent meeting numbers *and* citation labels with zero documents supplied,
 so the detector is right. And **`--out` is mandatory when scoring another
 model**: the guard protecting the published `rq4_score.md` keys on `--arms`, not
 on `--model`, so a default-path run with a non-default model would clobber it.
+
+## Refresh against rebuild #4 (2026-08-19): phi4 complete, and a generation cap
+
+Rebuild #4 (see the `I6` paragraph in `CLAUDE.md`) changed **233 of 742**
+contexts. Verified byte-for-byte against `data/rq4/_pre_2026_08_18_refresh/
+contexts` before regenerating anything, because the two obvious summaries lie:
+`hybrid_qwen3_0.6b_semantic/q097`'s old and new contexts hold the same block
+count (10) and the same character total (11,983) and are still different files.
+The paired rule of `docs/rq4-design.md` therefore held — only the 233 changed
+cells were regenerated, the other 509 frozen byte-for-byte.
+
+**State: `phi4` is complete for all three variants (424/424 each, 0 errors);
+`gemma4:e4b`'s two variants are untouched at 191/424.** Re-running
+`tools/eval/rq4_supervisor.sh` resumes there and skips the finished phi4 jobs.
+
+Generation rate is a measurable consequence of the prompt ablation, and is the
+number to plan the next run with: `sentence_cap` 30–49 s/answer, `cite_all`
+73–98, `cite_all_guarded` 66–109. The phi4 half cost ~13.5 h of GPU.
+
+### `num_predict` is now capped at 4,096, and that IS part of the measurement
+
+Three runs died on one cell, and the first two diagnoses were wrong the same
+way. `q097` was never hung: streaming it showed 2,538 tokens at 6.05 tok/s and
+still going, and ollama's own server log settles it — `task.n_tokens = 4436`
+in, `n_tokens = 9443` out, i.e. **5,007 tokens generated** before a 3,600 s
+client timeout cut it. The answer opens with a correct Thai sentence and
+collapses into `๒ ๒ ๑ ๒ ๒ ๑ …`; a second cell counts Thai numerals *upward* to
+๖๐๘, which is why `repeat_penalty` (1.000 in phi4's ollama defaults) is not the
+lever — every token there is new.
+
+With `num_predict` unset (−1) and ollama context-shifting, such a request has
+**no end**, so no timeout is a fix: raising 900 s to 3,600 s only moved where
+the loss landed. The bound has to be on tokens.
+
+4,096 is **1.40× the longest answer this project has ever published**, and that
+maximum is *proven* rather than sampled: `tokens ≤ UTF-8 bytes` holds for any
+byte-level BPE, so only the 139 of 1,761 answers above 2,935 bytes could beat
+2,935 tokens, and all 139 were measured against phi4 itself. **Characters
+cannot stand in for tokens here** — realized ratios run 1.04–2.68, so the
+longest answer *by characters* (5,001) is 1,869 tokens while the longest *by
+tokens* (2,935) is 3,189 characters; sorting by characters does not sort by
+tokens, and both wrong diagnoses came from assuming ~1 char/token.
+
+Unlike a timeout, the cap cannot have bound on any published answer but **can**
+bind on a new one, so `done_reason` and `num_predict` are recorded per answer
+and `tools/eval/rq4_status.py` counts them. **Quote that count with any number
+derived from this run.** It stands at **3 of 1,272** phi4 cells (0.24%): a
+capped answer never reaches its trailing `อ้างอิง:` line and therefore scores as
+*cited nothing* — a generator failure that reads like a retrieval result.
+
+| variant / arm | prompt tokens | tail |
+|---|---|---|
+| `sentence_cap` / hybrid / q097 | 4,436 | `๒ ๒ ๑ ๒ ๒ ๑ …` |
+| `sentence_cap` / m2v / q083 | 4,710 | `๕๙๔ ๕๙๕ … ๖๐๘` |
+| `cite_all` / hybrid / q083 | 4,098 | repetition |
+
+All three are `รายวิชา` (course) queries breaking where a Thai meeting number
+is written, at mid-range prompt sizes — **prompt length is not the trigger**.
+`q083` broke under two variants and two arms, so the trigger is the **query**,
+not one context. Counter-intuitively `sentence_cap` produced two of the three
+while `cite_all`, whose answers are ~3× longer, produced one; n=3 supports no
+explanation for that.
+
+**Deliberately not done: adding "write numerals in Arabic digits" to the
+prompt.** The prompt is RQ4's treatment variable, so this would be a fourth
+variant needing ~12 h of regeneration to stay comparable, to repair 0.24% of
+cells — and the failing cells already ignored `ตอบสั้น ๆ ไม่เกิน 3 ประโยค` in
+the very same prompt, so there is in-sample evidence that another
+natural-language constraint would not bind (the same finding
+`hyde_generation_cost.md` reports for "ไม่เกิน 5 ประโยค"). It is worth testing
+for the **shipped** prompt, where comparability does not apply.
+
+### Re-scored 2026-08-19: 7 verdict flips of 57, and the ablation's dense arm
+
+Three reports re-scored from the new phi4 answers (`rq4_score.md`,
+`rq4_score_guarded.md`, `rq4_score_entity.md`). **The two `gemma4:e4b` reports
+were deliberately NOT re-scored** — their answers are still 191/424 old, so
+re-running them would mix indices inside one table. `rq4_score_entity.md` *was*
+re-run even though both entity arms' contexts are byte-identical, because its
+comparison arm (`hybrid`) is not.
+
+| report | verdict flips |
+|---|---|
+| `rq4_score.md` | **7 of 57** |
+| `rq4_score_guarded.md` | **5 of 57** |
+| `rq4_score_entity.md` | **1 of 14** |
+
+**The headline movement is family 2's dense arm: `sentence_cap vs cite_all`
+citation recall goes +0.1095 (Holm 0.0000, significant) → +0.0407 (Holm 0.6610,
+not significant).** The mechanism is visible in the two means and is not a loss
+of signal: the *baseline* rose (0.2261 → **0.2738**) while the treatment fell
+slightly (0.3356 → **0.3145**). Rebuild #4's re-OCR gave the dense arm better
+contexts, and a better context is exactly what shrinks the marginal value of
+telling the model to cite everything. **The ablation itself survives** —
+`hybrid` +0.0871 and `bm25` +0.0789, both Holm 0.0000, unchanged verdicts; only
+the arm whose retrieval improved most lost its cell. Report it as *the prompt
+ablation holds on 2 of 3 answering arms, and the third is now a bound ruling out
+a loss beyond 0.0133*, not as a refutation.
+
+Family 1's flips run the other way — 4 of the 7 are `no → yes`, i.e. the
+refreshed contexts **separate arms that used to tie** (`dense vs m2v` recall,
+`bm25 vs m2v` precision, and under `cite_all` both `hybrid vs dense` cells).
+
+**The entity-arm gating decision is unchanged and needs no re-reading**:
+`entity_lookup` still loses decisively (−0.2384, Holm 0.0000, was −0.2523) and
+`entity_boost` is still ns against hybrid (+0.0505, Holm 0.1040, was +0.0366) —
+so edges B/C stay unbuilt, with the bound now "at most **+0.1114** citation
+recall" (was +0.0942). The one flip there is `hybrid vs entity_lookup`
+*precision* going `yes → no`, i.e. one circular-metric cell losing separation.
+
+Phantom citations did not move: the dense `cite_all` arm still shows **4**, on a
+denominator that changed (391 → 378).
+
+Every one of these is a single cell against a generator whose measured noise
+floor is 14/24 identical citation sets at temperature 0, so treat any *isolated*
+flip as inconclusive; the dense family-2 cell is quotable because its point
+estimate moved by a factor of 2.7 and the mechanism is legible in the means.
