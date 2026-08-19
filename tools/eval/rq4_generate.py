@@ -67,8 +67,44 @@ REPO = Path(__file__).resolve().parents[2]
 # than an error. A bounded timeout + retry turns it into a recorded error --
 # the answer file is still written, carrying `error`, so a stall is visible in
 # the artifact instead of only in the wall clock.
-_REQUEST_TIMEOUT_S = 900
-_MAX_ATTEMPTS = 3
+# 3600 s, not 900. The timeout is insurance against a wedged server, and it must
+# never bind on a slow-but-working generation -- otherwise it silently changes
+# WHICH answers exist, and every published answer was generated with no timeout
+# at all. The bound is arithmetic: nothing can emit more than
+# `num_ctx - prompt_tokens` tokens, i.e. at most ~14,000 here, and the slowest
+# generation rate measured on this box is ~6 tok/s (2,538 tokens in 420 s,
+# `hybrid_qwen3_0.6b_semantic/q097`, 2026-08-19), so ~2,400 s is the worst a
+# healthy request can take. 900 s bound on exactly that answer and cost two runs.
+# `num_predict` is deliberately NOT capped instead: that IS a generation setting,
+# so capping it would change the answers rather than the waiting.
+_REQUEST_TIMEOUT_S = 5400
+_MAX_ATTEMPTS = 2
+
+# **A generation cap, and it IS part of the measurement -- read this before
+# changing it.** Left unset, `num_predict` is -1 and ollama context-shifts, so a
+# model that never emits a stop token generates without end: on 2026-08-19
+# `hybrid_qwen3_0.6b_semantic/q097` (prompt 4,436 tokens) reached 5,007 generated
+# tokens and was still going when a 3,600 s client timeout cut it, having decayed
+# from 6.05 tok/s at 2,500 tokens to 1.39 tok/s on average as the KV cache spilled
+# further onto the CPU. No timeout is a principled fix for that -- the request has
+# no end -- so the bound has to be on tokens.
+#
+# 4,096 is 1.40x the longest answer this project has ever published, and that
+# maximum is PROVEN rather than sampled: tokens <= UTF-8 bytes for any byte-level
+# BPE vocabulary, so only the 139 of 1,761 answers holding more than 2,935 bytes
+# could possibly beat 2,935 tokens, and all 139 were measured against phi4 itself
+# (max 2,935, `gemma4_e4b_cite_all_guarded/dense_qwen3_0.6b_semantic/q003`).
+# Characters cannot stand in for tokens here -- realized ratios run 1.04-2.68, so
+# the longest answer by characters (5,001 chars) is only 1,869 tokens while the
+# longest by tokens is 3,189 chars. Two wrong estimates this morning came from
+# assuming ~1 char/token ([[feedback_an_observed_extreme_is_not_a_bound]]).
+#
+# So the cap cannot have bound on any published answer, but it CAN bind on a new
+# one, and that is a real change of measurement rather than a waiting policy:
+# `done_reason` is recorded per answer so a capped cell reads "length" and is
+# countable, instead of vanishing into a stall. Report that count with any number
+# derived from a run that used it.
+_MAX_GEN_TOKENS = 4096
 _CLIENT = ollama.Client(timeout=_REQUEST_TIMEOUT_S)
 
 
@@ -442,13 +478,15 @@ def main() -> int:
                 resp = chat_with_retry(
                     model=args.model,
                     messages=[{"role": "user", "content": build_prompt(ctx, args.variant)}],
-                    options={"temperature": 0.0, "num_ctx": args.num_ctx},
+                    options={"temperature": 0.0, "num_ctx": args.num_ctx,
+                             "num_predict": _MAX_GEN_TOKENS},
                     **chat_kwargs,
                 )
                 answer, error = resp["message"]["content"].strip(), None
                 n_prompt = resp.get("prompt_eval_count")
+                done_reason = resp.get("done_reason")
             except Exception as exc:
-                answer, error, n_prompt = "", str(exc), None
+                answer, error, n_prompt, done_reason = "", str(exc), None, None
             if n_prompt == truncated_to(args.num_ctx):
                 truncated += 1
                 print(f"  [truncated] {arm}/{path.name}: fed {n_prompt:,} tokens "
@@ -472,6 +510,16 @@ def main() -> int:
                 # why their damage had to be re-measured prompt by prompt
                 "num_ctx": args.num_ctx,
                 "prompt_eval_count": n_prompt,
+                # why generation stopped. "stop" = the model finished; "length"
+                # = it ran into num_ctx and the answer is CUT, which for this
+                # prompt shape can remove the `อ้างอิง:` line and score as "no
+                # citations" rather than as a truncated answer. 0 of the 1,761
+                # answers on disk record it, which is why q097's runaway had to
+                # be diagnosed by streaming it by hand.
+                "done_reason": done_reason,
+                # the cap that was in force; a run with a different one is not
+                # comparable to this one on answer length
+                "num_predict": _MAX_GEN_TOKENS,
                 # same reasoning as num_ctx: a generation setting that changes the
                 # answer must be readable off the answer, not inferred from the
                 # date. `think=False` is not cosmetic -- on gemma4:e4b it changes
