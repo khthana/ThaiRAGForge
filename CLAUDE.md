@@ -875,32 +875,44 @@ see `docs/adr/`.
   reorder, so **alpha=0.50 is rank-order-identical to plain RRF** and every
   published number is reproduced exactly at the grid's midpoint
   (`tests/retrievers/test_hybrid_retriever.py` pins this as a regression guard).
-  Findings: (a) **a single global alpha is worth nothing** where 0.50 was already
-  sane (+0.0016 / +0.0189 recall@10, both ns, and both are *oracle* values fitted on
-  the test set); (b) **a per-`entity_type` alpha is worth +0.0350 recall@10 /
-  +0.0360 nDCG@10 and survives leave-one-out** (Holm-adj 0.0252 / 0.0210, m=9, on
-  `sentence+qwen3_0.6b`) — **MRR is ns, don't include it**; (c) the per-type optima
-  are so far apart that `person` (best 0.15, plateau 0.00-0.35) and `program` (best
-  0.75, plateau 0.40-1.00) have **disjoint** non-degrading ranges and the shipped
-  0.50 sits *outside* `person`'s; (d) **the gain is conditional** — it needs the two
+  **Re-run 2026-08-20 against rebuild #4, and the headline lost half of itself.**
+  Findings, at current values: (a) **a single global alpha is worth nothing** where
+  0.50 was already sane (+0.0066 / +0.0217 recall@10, both ns, and both are *oracle*
+  values fitted on the test set); (b) **a per-`entity_type` alpha now survives
+  leave-one-out on nDCG@10 ONLY — +0.0333, Holm-adj 0.0392 (m=9, on
+  `sentence+qwen3_0.6b`) — while recall@10 went ns at +0.0281, Holm 0.0870.** It was
+  +0.0350 at 0.0252 before the rebuild, so **the "+0.0350 recall@10" this bullet
+  published is withdrawn**; MRR is still ns (+0.0369, 0.5016) — don't include it.
+  Read the surviving claim as *a per-type alpha reorders the top-10 better without
+  putting more gold into it*, which is what an nDCG-only win means. The oracle
+  `per-type best` arm is significant on all three (+0.0456 / +0.0547 / +0.0560),
+  MRR newly so — **but an oracle is not a system**, so that is a ceiling; (c) the
+  per-type optima are so far apart that `person` (best 0.15, plateau 0.00-0.35) and
+  `program` (best **0.70**, plateau **0.45**-1.00) have **disjoint** non-degrading
+  ranges and the shipped
+  0.50 sits *outside* `person`'s — **this survived and the gap widened** (program's
+  plateau used to start at 0.40); (d) **the gain is conditional** — it needs the two
   arms' relative strength to *invert* across query types, so `semantic+bge_m3` gains
-  nothing (ns everywhere; it is the `person` specialist, its dense arm has no
+  nothing (ns everywhere, and its per-type LOO arm is now *negative* on MRR and
+  nDCG@10; it is the `person` specialist, its dense arm has no
   per-type weak spot) and `fixed_size+m2v` wants alpha=0.00 outright (drop the
-  broken arm; per-type adds only +0.0105 over global). Report **ranges, not a single
+  broken arm; per-type adds only **+0.0110** over global). Report **ranges, not a single
   best value** — tuning alpha on the 106 queries it is reported on is overfitting,
   which is what the LOO arm exists to bound. Nothing is changed in shipped defaults;
   `HybridRetriever` still ships 0.5/0.5. **Decided 2026-08-08 not to wire a
   per-`entity_type` alpha into `query_service` at all**, and the reason is a
-  wrong-pair trap worth remembering: the motivating +0.0350 is measured against *no
+  wrong-pair trap worth remembering: the motivating gain (then +0.0350 recall@10,
+  now the nDCG-only +0.0333) is measured against *no
   routing*, which stopped being the shipped configuration the same day. Against the
   hard router that now ships it shows **no gain on any metric** (recall@10 −0.0202,
-  MRR +0.0182, nDCG@10 +0.0066, all ns, m=12) and the entire remaining headroom is
-  the oracle gap **+0.0071**. Mechanism, so this isn't read as a power problem:
+  MRR +0.0182, nDCG@10 +0.0066, all ns, m=12 — pre-rebuild-#4 figures; the decision
+  only got safer when the motivating recall gain went ns) and the entire remaining
+  headroom is the oracle gap **+0.0071**. Mechanism, so this isn't read as a power problem:
   per-type alpha repairs a per-type weak dense arm, and hard routing already hands
   each route a specialist index that doesn't have one (`person` alpha* moves
   0.15 → 0.30, *toward* neutral, once routed). **The one branch that flips it** is
   deployment cost: if 5 indices is too many, the move is to *replace* hard routing
-  with soft (arm B, one index, 0.6631, ns vs hard) — a cost decision, not an
+  with soft (arm B, one index, **0.6510**, ns vs hard) — a cost decision, not an
   accuracy one. Never both. Two things worth reusing: the sweep caches
   each arm's rank vector once and re-fuses in numpy (21 alphas for the cost of 1
   retrieval pass, since the ~1.9s/query `BM25Okapi` rebuild dominates), and its
@@ -951,18 +963,29 @@ see `docs/adr/`.
   the same per-type weak dense arm. **Family-size
   trap, worth reading before citing:** this script's arms A/B reproduce
   `hybrid_alpha_sweep.py` to 4 decimals from an independent code path, yet the
-  `recall@10` **verdict** differs (Holm-adj 0.0252 at m=9 there, **0.1960** at m=12
-  here). **And that cross-check is currently BROKEN, which is a finding, not a
-  footnote**: `hybrid_alpha_sweep.md` dates from 2026-08-08 and was **not** re-run
-  against rebuild #4, so arm B's effect sizes no longer match it (**+0.0281** here
-  against **+0.0350** there) while `soft_vs_hard_routing.py` still *prints* that they
-  "reproduce it to 4 decimal places" — and it hardcodes the **0.0252** as a literal.
-  It is therefore the **fourth** frozen cross-artifact anchor of the kind `561102e`
-  replaced with parsers in three other scripts, and the one that sweep missed. Two
-  jobs, in this order: **re-run `hybrid_alpha_sweep.py` against rebuild #4** (it
-  needs the GPU, and every per-`entity_type`-alpha number in the bullet above is
-  pre-rebuild-#4 until it is), then make that paragraph *read* the report rather
-  than assert agreement with it, so a future divergence prints as a divergence.
+  `recall@10` **verdict** differed (Holm-adj 0.0252 at m=9 there, **0.1960** at m=12
+  here) — **and as of 2026-08-20 it no longer does, so this paragraph has lost the
+  example it was built on**: the sweep re-run puts that cell at **0.0870**, ns at
+  both family sizes. The rule is unchanged and still worth quoting — a Holm p is a
+  property of its *family*, not of the pair, so state m with any p from either table
+  — it simply has no live illustration here now, and the report says so in those
+  words rather than pretending otherwise. **Both jobs behind that are done, and the
+  reason they were needed is the reusable part.** `hybrid_alpha_sweep.md` had dated
+  from 2026-08-08 and was not re-run, so arm B's effect sizes silently stopped
+  matching it (**+0.0281** here against **+0.0350** there) while
+  `soft_vs_hard_routing.py` went on *printing* that they "reproduce it to 4 decimal
+  places" — **an assertion, not a check** — with the `0.0252` frozen as a literal:
+  the **fourth** cross-artifact anchor of the kind `561102e` replaced in three other
+  scripts, and the one that sweep missed. Now `parse_alpha_sweep_loo` reads the
+  report's `per-type (loo)` rows, the paragraph **compares and reports disagreement**
+  instead of claiming agreement, and a missing or renamed report prints "the
+  cross-check could not be made" rather than passing silently
+  ([[feedback_a_traceability_check_shares_its_haystacks_rot]]). Pinned in both
+  directions by `tests/tools/test_report_anchor_parsers.py`, whose fixture repeats
+  the same table under two combo headings — verified to discriminate by running two
+  plausible wrong parsers against it, both of which return the *other* combo's row.
+  Re-rendering changed **only** that paragraph: all 12 significance rows and every
+  arm mean reproduced exactly.
   Cite the sweep's m=9 for "is a per-route alpha worth anything"; cite this table's
   m=12 only for its own four comparisons.
 - `strip_course_comparison_tables` (`src/rag_lab/loaders/common.py`, commit
@@ -1712,7 +1735,8 @@ see `docs/adr/`.
   indices inside one table), while `rq4_score_entity.md` WAS re-scored, because its
   comparison arm `hybrid` moved even though both entity arms' contexts are
   byte-identical. **The gemma pair was then re-scored 2026-08-20 once its answers
-  were complete — 1 verdict flip of 12 under `cite_all`, 0 of 12 guarded** (see the
+  were complete — 1 verdict flip of 12 under `cite_all`, none at all under the
+  guard** (see the
   second-generator paragraph below for what that does to the cross-generator claim). **The headline movement is family 2's dense arm: `sentence_cap vs
   cite_all` citation recall +0.1095 (Holm 0.0000) → +0.0407 (Holm 0.6610), i.e. the
   cell is now a bound ruling out a loss beyond 0.0133** — and the mechanism is
@@ -1877,7 +1901,8 @@ see `docs/adr/`.
   **REFRESHED AGAINST REBUILD #4 (2026-08-20): the conclusion is unchanged and
   better supported, but two of its supporting figures are not.** All 466 changed
   gemma cells were regenerated and re-scored — **1 verdict flip of 12 under
-  `cite_all`, 0 of 12 under the guard.** Post-rebuild, the four-position precision
+  `cite_all`, and none at all under the guard.** Post-rebuild, the four-position
+  precision
   ordering claim above **no longer holds for gemma**: `cite_all` reads dense
   **0.7314** > hybrid **0.7277** > bm25 0.6879 > m2v 0.6270, i.e. the top two
   swapped, and phi4 still puts hybrid first (0.7185 > 0.6381). **Verdict agreement

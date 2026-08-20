@@ -253,8 +253,45 @@ a dense embedder significantly beats BM25 outright**: `bm25 − qwen3_0.6b` MRR
 cell, and that cell (`qwen3_0.6b` under `semantic`) strengthened from one metric
 to all three.
 
+**Alpha sweep re-run 2026-08-20 — the per-`entity_type` alpha result is now
+nDCG-only, and the section below is superseded on that point.** Its headline was
+"+0.0350 recall@10 / +0.0360 nDCG@10, both surviving leave-one-out (Holm-adj
+0.0252 / 0.0210, m=9)". Against rebuild #4, on the same combo
+(`sentence × qwen3_0.6b`), the citable `per-type (loo)` arm reads:
+
+| metric | before | after |
+|---|---|---|
+| recall@10 | +0.0350, Holm 0.0252 — **significant** | +0.0281, Holm **0.0870** — ns |
+| nDCG@10 | +0.0360, Holm 0.0210 — significant | +0.0333, Holm **0.0392** — significant |
+| MRR | ns | +0.0369, Holm 0.5016 — ns |
+
+**So "+0.0350 recall@10" is withdrawn.** What survives is *a per-type alpha
+reorders the top-10 better without putting more gold into it* — which is exactly
+what an nDCG-only win means, and a narrower claim than the one this document
+made. The oracle `per-type best` arm is significant on all three (+0.0456 /
++0.0547 / +0.0560, MRR newly so), but an oracle is a ceiling, not a system.
+
+Three parts of the section held. A single **global** alpha is still worth nothing
+(+0.0066 / +0.0217, both ns, both oracle). The **disjoint plateau** finding
+survived and the gap widened — `person` best 0.15 (plateau 0.00–0.35) against
+`program` best **0.70** (plateau **0.45**–1.00), so the shipped 0.50 still sits
+outside `person`'s range. And `fixed_size × m2v` still wants alpha=0.00 outright,
+with per-type adding only **+0.0110** over global.
+
+**Nothing about the ship decision changes** — per-`entity_type` alpha was already
+not wired, on the grounds that its motivating gain was measured against *no*
+routing and vanishes against the hard router that ships. A motivating gain that
+has itself gone ns on recall@10 only strengthens that.
+
+**One casualty worth recording: the family-size trap paragraph lost its
+example.** It contrasted Holm-adj 0.0252 (m=9, the sweep) with 0.1960 (m=12,
+soft-vs-hard) on identical data — same difference, larger family, opposite
+verdict. Post-rebuild that is **0.0870 vs 0.1960, ns at both**. The rule stands
+(a Holm p is a property of its family, not of the pair — always quote m), but
+there is no live illustration of it in these reports today.
+
 **Not yet re-run against rebuild #4, so every figure in these sections is
-pre-rebuild-#4:** the per-`entity_type` alpha sweep, both `fetch_depth` sweeps
+pre-rebuild-#4:** both `fetch_depth` sweeps
 (the *routed* one **is** current — it is the one the ship decision rests on), the
 whole reranker family including the trained cross-encoder, HyDE, ColBERT, the
 Qdrant pilot and concurrency runs, all three RQ3 ablations (this document's own
@@ -1386,7 +1423,7 @@ figures once quoted for it ("indistinguishable on recall@10, t=0.59; RRF +15% MR
 came from the retired 252-query/3-route eval and no script reproduces them; they
 are withdrawn.
 
-## Resolved 2026-08-08: The hybrid fusion weight — one global alpha is worth nothing, a per-`entity_type` alpha is worth +0.0350
+## Resolved 2026-08-08, superseded in part 2026-08-20: The hybrid fusion weight — one global alpha is worth nothing, a per-`entity_type` alpha is worth +0.0333 nDCG@10 (recall@10 went ns)
 
 Report: `data/results/hybrid_alpha_sweep.md` (`tools/eval/hybrid_alpha_sweep.py`).
 21-point grid (step 0.05) × 106 queries × 3 combos, live re-retrieval against

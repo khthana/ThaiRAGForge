@@ -26,6 +26,7 @@ sys.path.insert(0, str(REPO / "tools" / "eval"))
 from miss_depth_profile import parse_ceiling_anchors  # noqa: E402
 from qdrant_routed_check import parse_f200  # noqa: E402
 from routed_fetch_depth_test import parse_hybrid_anchors  # noqa: E402
+from soft_vs_hard_routing import parse_alpha_sweep_loo  # noqa: E402
 
 
 # --------------------------------------------------------------------------
@@ -183,3 +184,79 @@ def test_f200_none_when_the_row_is_gone():
 
 def test_f200_none_on_empty_text():
     assert parse_f200("") is None
+
+
+# --------------------------------------------------------------------------
+# hybrid_alpha_sweep.md -> the `per-type (loo)` row per metric, per combo
+#
+# The fourth frozen anchor, found 2026-08-20: `soft_vs_hard_routing.py` held
+# `0.0252` as a literal AND asserted that its own arms reproduced that report
+# "to 4 decimal places". Rebuild #4 moved one side and not the other, so the
+# published report claimed agreement while the two scripts read +0.0281 and
+# +0.0350. The scoping test matters as much as here as it does above: this
+# report carries the same table three times, once per combo.
+# --------------------------------------------------------------------------
+
+ALPHA_SWEEP = """\
+# Hybrid alpha sweep
+
+### Is a tuned alpha worth adopting? -- sentence+qwen3_0.6b
+
+| metric | arm | mean | vs alpha=0.50 | 95% CI | Holm-adj p | significant |
+|---|---|---|---|---|---|---|
+| recall@10 | global best | 0.6296 | +0.0066 | [-0.0161, +0.0269] | 1.0000 | no |
+| recall@10 | per-type best | 0.6686 | +0.0456 | [+0.0226, +0.0716] | 0.0000 | **yes** |
+| recall@10 | per-type (loo) | 0.6510 | +0.0281 | [+0.0040, +0.0551] | 0.0870 | no |
+| ndcg@10 | per-type (loo) | 0.7294 | +0.0333 | [+0.0106, +0.0581] | 0.0392 | **yes** |
+
+### Is a tuned alpha worth adopting? -- semantic+bge_m3
+
+| metric | arm | mean | vs alpha=0.50 | 95% CI | Holm-adj p | significant |
+|---|---|---|---|---|---|---|
+| recall@10 | per-type (loo) | 0.9999 | +0.9999 | [+0.9999, +0.9999] | 0.9999 | no |
+"""
+
+
+def test_alpha_sweep_reads_the_loo_row_not_the_oracle_or_global_one():
+    """Three arms share the metric label; only `per-type (loo)` is citable."""
+    got = parse_alpha_sweep_loo(ALPHA_SWEEP, "sentence+qwen3_0.6b")
+    assert got["recall@10"] == (0.0281, 0.0870)
+    assert got["ndcg@10"] == (0.0333, 0.0392)
+
+
+def test_alpha_sweep_is_scoped_to_its_combo_section():
+    """Every combo repeats the same table with the same row labels."""
+    got = parse_alpha_sweep_loo(ALPHA_SWEEP, "semantic+bge_m3")
+    assert got["recall@10"] == (0.9999, 0.9999)
+    assert "ndcg@10" not in got  # that row belongs to the other combo
+
+
+def test_alpha_sweep_returns_empty_for_an_unknown_combo():
+    assert parse_alpha_sweep_loo(ALPHA_SWEEP, "fixed_size+m2v") == {}
+
+
+def test_alpha_sweep_returns_empty_when_the_heading_is_renamed():
+    text = ALPHA_SWEEP.replace("Is a tuned alpha worth adopting?", "Adoption")
+    assert parse_alpha_sweep_loo(text, "sentence+qwen3_0.6b") == {}
+
+
+def test_alpha_sweep_returns_empty_when_the_arm_label_is_renamed():
+    """Never a plausible wrong number: the oracle rows must not stand in."""
+    text = ALPHA_SWEEP.replace("per-type (loo)", "per-type (cv)")
+    assert parse_alpha_sweep_loo(text, "sentence+qwen3_0.6b") == {}
+
+
+def test_alpha_sweep_on_empty_text():
+    """A missing report must not look like a report that agrees."""
+    assert parse_alpha_sweep_loo("", "sentence+qwen3_0.6b") == {}
+
+
+def test_alpha_sweep_matches_the_live_report():
+    """The parser is an anchor only while it still finds the real artifact."""
+    report = REPO / "data" / "results" / "hybrid_alpha_sweep.md"
+    if not report.exists():
+        pytest.skip("hybrid_alpha_sweep.md not built in this checkout")
+    got = parse_alpha_sweep_loo(report.read_text(encoding="utf-8"),
+                                "sentence+qwen3_0.6b")
+    assert set(got) == {"recall@10", "mrr", "ndcg@10"}
+    assert all(isinstance(v, tuple) and len(v) == 2 for v in got.values())

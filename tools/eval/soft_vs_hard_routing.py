@@ -80,6 +80,7 @@ from rag_lab.router import classify_query, route_targets  # noqa: E402
 GOLD_PATH = REPO / "config" / "eval" / "gold_query_set_73det.yaml"
 INDEX_DIR = REPO / "data" / "index" / "chunker_compare_full"
 OUTPUT = REPO / "data" / "results" / "soft_vs_hard_routing.md"
+ALPHA_SWEEP_REPORT = REPO / "data" / "results" / "hybrid_alpha_sweep.md"
 K = 10
 N_BOOT = 10_000
 SEED = 42
@@ -128,6 +129,37 @@ def score_grid(
             out[(a, m)] = {q: fn(results[q], qrels[q]) for q in queries}
     return out
 
+
+
+def parse_alpha_sweep_loo(text: str, combo: str) -> dict[str, tuple[float, float]]:
+    """The `per-type (loo)` row per metric from hybrid_alpha_sweep.md, for one combo.
+
+    This used to be a hardcoded `0.0252` plus a sentence asserting that our arms
+    "reproduce it to 4 decimal places". Both went wrong silently at rebuild #4:
+    the sweep was not re-run, so the two scripts disagreed (+0.0281 here against
+    +0.0350 there) while this report went on claiming agreement. Reading the
+    artifact is the fix -- but a parser is only an anchor while it keeps finding
+    its counterpart, so this returns {} when the report moves and the caller says
+    so out loud rather than printing a number it could not source.
+
+    Returns {metric: (diff_vs_alpha_0.50, holm_adj_p)}.
+    """
+    head = "### Is a tuned alpha worth adopting? -- " + combo
+    if head not in text:
+        return {}
+    body = text.split(head, 1)[1]
+    for stop in ("\n## ", "\n### "):
+        if stop in body:
+            body = body.split(stop, 1)[0]
+    out: dict[str, tuple[float, float]] = {}
+    for line in body.splitlines():
+        cells = [c.strip() for c in line.split("|")[1:-1]]
+        if len(cells) == 7 and cells[1] == "per-type (loo)":
+            try:
+                out[cells[0]] = (float(cells[3]), float(cells[5]))
+            except ValueError:
+                continue
+    return out
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
@@ -314,17 +346,53 @@ def main() -> None:
         for m, (hi, lo, d, _p, _ci, adj, _s) in zip(mlabels, corrected)
         if hi.startswith("B") and lo.startswith("A")
     }
+    # The counterpart figures are READ from hybrid_alpha_sweep.md, never frozen
+    # here. A literal is what let this paragraph claim agreement through a whole
+    # index generation while the two scripts had drifted apart.
+    sweep_txt = (ALPHA_SWEEP_REPORT.read_text(encoding="utf-8")
+                 if ALPHA_SWEEP_REPORT.exists() else "")
+    sweep = parse_alpha_sweep_loo(sweep_txt, "sentence+qwen3_0.6b")
     out("**Cross-check, and a family-size warning.** Arms A and B here are the same")
-    out("two systems `hybrid_alpha_sweep.py` compared on `sentence+qwen3_0.6b`, and")
-    out("the three B-vs-A effect sizes reproduce it to 4 decimal places ("
-        + " / ".join(f"{ba[m][0]:+.4f}" for m in METRICS)
-        + ") -- two independent scripts, same folds, same numbers. The")
-    out("**verdict** on `recall@10` nonetheless differs: Holm-adj **0.0252** there")
-    out(f"(m=9) and **{ba['recall@10'][1]:.4f}** here (m={len(corrected)}). Same data, "
-        "same difference,")
-    out("larger family. Neither is wrong. Cite the sweep's m=9 for \"is a per-route")
-    out("alpha worth anything\" -- that is the family built to answer it -- and cite")
-    out("this table's m=12 only for the four comparisons it exists to make.")
+    out("two systems `hybrid_alpha_sweep.py` compared on `sentence+qwen3_0.6b`.")
+    if not sweep:
+        out("")
+        out("**The cross-check could not be made**: `hybrid_alpha_sweep.md` is missing")
+        out("or its `per-type (loo)` rows no longer parse, so there is nothing here to")
+        out("compare against. Re-run that sweep -- do not read this as agreement.")
+    else:
+        drift = [m for m in METRICS
+                 if m in sweep and abs(sweep[m][0] - ba[m][0]) >= 5e-5]
+        if drift:
+            out("**They no longer agree, so one of the two reports is stale.**")
+            out("B-vs-A here " + " / ".join(f"{ba[m][0]:+.4f}" for m in METRICS)
+                + " against the sweep's "
+                + " / ".join(f"{sweep[m][0]:+.4f}" if m in sweep else "?"
+                             for m in METRICS)
+                + ".")
+            out("The sweep reuses this script's own `fuse`, so a real disagreement")
+            out("means different indices, not different arithmetic -- re-run whichever")
+            out("is older before citing either.")
+        else:
+            out("The three B-vs-A effect sizes reproduce it to 4 decimal places ("
+                + " / ".join(f"{ba[m][0]:+.4f}" for m in METRICS)
+                + ") -- two independent scripts, same folds, same numbers,")
+            out("**checked against that report rather than asserted**.")
+        if "recall@10" in sweep:
+            there_p, here_p = sweep["recall@10"][1], ba["recall@10"][1]
+            out("")
+            out(f"On `recall@10` the sweep reports Holm-adj **{there_p:.4f}** (m=9)")
+            out(f"against **{here_p:.4f}** here (m={len(corrected)}). Same data, same")
+            if (there_p < 0.05) == (here_p < 0.05):
+                out("difference, larger family -- and, as of this run, the **same**")
+                out("verdict, so this paragraph currently has no live example of the")
+                out("trap it warns about. The rule stands regardless: a Holm p is a")
+                out("property of its family, not of the pair, so quote the family size")
+                out("with any p taken from either table.")
+            else:
+                out("difference, larger family, **different verdict**. Neither is wrong.")
+                out("Cite the sweep's m=9 for \"is a per-route alpha worth anything\" --")
+                out("that is the family built to answer it -- and cite this table's m=12")
+                out("only for the four comparisons it exists to make.")
     out("")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
