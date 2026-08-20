@@ -195,8 +195,16 @@ see `docs/adr/`.
   of an `Index`'s rows — `person` = `sentence × bge-m3` (combo 17, the exact
   collection the pilot ingested), `program` = `semantic × qwen3-0.6B` (combo 02),
   `course` = `recursive × qwen3-0.6B` (combo 11) and `faculty`/`unmatched` =
-  `fixed_size × bge-m3` (combo 26). **Re-ingest all four and re-run
-  `qdrant_routed_check.py` once**, not per combo. The rebuild also settled what
+  `fixed_size × bge-m3` (combo 26). **This is DONE and was already done on
+  2026-08-18 — the pending item above outlived its own discharge, which is the
+  same prose rot the currency block describes.** A 2026-08-20 re-ingest of all
+  four plus a re-run reproduced 8/8 self-checks, and three independent facts say
+  the collections had *already* been current on 08-18: `points_count` matched the
+  rebuilt indices exactly, `C4`/`C5` agreed with numpy/`BM25Okapi` at **1e-7**
+  (a stale vector set could not), and `sentence` read 57,172 rows against the
+  pilot's 57,174 — i.e. the re-OCR's row-count change was already in the
+  collection. **Re-ingest all four and re-run `qdrant_routed_check.py` once**,
+  not per combo, whenever an index actually is rebuilt. The rebuild also settled what
   killed the five earlier runs: **all four Qwen3-4B combos passed** (01 `semantic`,
   10 `recursive` 107 min, 19 `sentence` 126, 28 `fixed_size` 106), so the 5-of-5
   death pattern belongs to `semantic` × 4B specifically — the sustained
@@ -2720,10 +2728,22 @@ see `docs/adr/`.
   semantic 5.22%, sentence 6.87%. **Not established**: one query set, one fetch depth, one
   fusion, **no network hop**, nothing about ANN (deliberately — the recommendation is
   `exact=True`). **A collection is a copy of an `Index`'s rows, so any index rebuild stales
-  it**: re-ingest and re-run this. **No longer hypothetical — rebuild #4 staled 3 of the 4
-  (`person`, `program`, `course`) on 2026-08-16**; the `I6` paragraph in the invariant-audit
-  bullet names which combo each one is and why the re-ingest waits for all 40 rather than
-  chasing each rebuilt combo.
+  it**: re-ingest and re-run this. **Rebuild #4 staled 3 of the 4
+  (`person`, `program`, `course`) on 2026-08-16 and all four were re-ingested on
+  2026-08-18**; the `I6` paragraph in the invariant-audit bullet names which combo each
+  one is and why the re-ingest waited for all 40 rather than chasing each rebuilt combo.
+  **Re-verified 2026-08-20 by re-ingesting all four again and re-running: 8/8 pass,
+  reference 0.6815 reproducing the published per-query F=200 figures on 106/106, served
+  0.6829 (+0.0014), worst relative score error dense 3.24e-07 / sparse 2.15e-07.** Two
+  things worth keeping from that. (a) **The re-ingest was redundant and the report is what
+  says so** — `points_count` already matched the rebuilt indices on 08-18 and `C4`/`C5`
+  agreed at 1e-7, which a stale vector set cannot do; the pending item in this file had
+  simply outlived its own discharge. (b) **Served recall moved 0.6810 → 0.6829 across two
+  ingests of identical data**, and that is the tie-order point one layer up: re-ingesting
+  changes Qdrant's segment layout, so which member of a tie group is returned changes
+  (`C4b`: 167 of 1,060 top-10 positions moved, **167 inside a tie group, 0 outside**).
+  **Do not read a sub-0.002 movement in this table as a data change**
+  ([[feedback_exactness_is_a_claim_about_scores_not_tie_order]]).
   **IT IS NOW WIRED (2026-08-13, `src/rag_lab/retrievers/qdrant_hybrid.py`,
   `docs/qdrant-serving-pilot.md` §8d) — the served path is the shipped `route_query`, not a
   script.** `qdrant_hybrid` is a registered retriever taking an all-scalar
