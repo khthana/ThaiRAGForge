@@ -130,8 +130,20 @@ else:
         ),
     )
 retriever = st.sidebar.selectbox(
-    "Retriever", ["dense", "bm25", "hybrid", "qdrant_hybrid"], index=0, key="retriever",
+    "Retriever",
+    ["dense", "bm25", "hybrid", "lexical_containment", "qdrant_hybrid"],
+    index=0, key="retriever",
     help=(
+        "'lexical_containment' is arm L\u2032: run 'hybrid', then stably "
+        "partition its top-50 by whether the entity detect_entities() finds in "
+        "your query literally appears in the chunk. No GPU and no model. It "
+        "beats the shipped router significantly on every metric (recall@10 "
+        "+0.0489, MRR +0.0437, nDCG@10 +0.0714, Holm-adj 0.0000/0.0084/0.0000) "
+        "-- but the person/program/faculty qrels were THEMSELVES derived by "
+        "string containment, so that score partly measures this arm's own rule. "
+        "A query naming no entity the dictionaries know falls through to plain "
+        "hybrid order, unchanged. Adds ~100ms/query for detection. See "
+        "data/results/reranker_trained_test.md, family 3. "
         "'hybrid' fuses in-process numpy + rank_bm25. 'qdrant_hybrid' fuses the "
         "SAME two arms served by a Qdrant server (dense exact=True + precomputed "
         "BM25 sparse vectors), with the identical RRF -- data/results/"
@@ -143,7 +155,7 @@ retriever = st.sidebar.selectbox(
     ),
 )
 _ENGINE_RETRIEVERS = {"qdrant_hybrid"}
-_FUSED_RETRIEVERS = {"hybrid", "qdrant_hybrid"}
+_FUSED_RETRIEVERS = {"hybrid", "lexical_containment", "qdrant_hybrid"}
 _WHOLE_CORPUS = "ทั้งคลัง (k=n)"
 qdrant_url = st.sidebar.text_input(
     "Qdrant URL", "http://localhost:6333", key="qdrant_url",
@@ -166,6 +178,13 @@ fetch_depth = st.sidebar.selectbox(
         "data/results/routed_fetch_depth_test.md."
     ),
 )
+if retriever == "lexical_containment":
+    st.sidebar.caption(
+        "Pool fixed at 50 \u2014 the depth arm L\u2032 was measured at. It is not a "
+        "widget because the arm's other pool depths were never measured for the "
+        "detected-entity variant, and an unmeasured setting offered beside a "
+        "measured one reads as though both were."
+    )
 _engine_depth_unavailable = retriever in _ENGINE_RETRIEVERS and fetch_depth == _WHOLE_CORPUS
 if _engine_depth_unavailable:
     st.sidebar.warning(
@@ -196,7 +215,7 @@ def _retriever_spec() -> StrategySpec:
         if fetch_depth != _WHOLE_CORPUS:
             params["fetch_depth"] = int(fetch_depth)
         return StrategySpec(type=retriever, params=params)
-    if retriever != "hybrid" or fetch_depth == _WHOLE_CORPUS:
+    if retriever not in _FUSED_RETRIEVERS or fetch_depth == _WHOLE_CORPUS:
         return StrategySpec(type=retriever)
     return StrategySpec(type=retriever, params={"fetch_depth": int(fetch_depth)})
 k = st.sidebar.slider("top-k", min_value=1, max_value=20, value=5, key="k")
