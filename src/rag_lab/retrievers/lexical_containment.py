@@ -79,7 +79,8 @@ class LexicalContainmentRetriever(BaseRetriever):
         dense_weight: float = 0.5,
         bm25_weight: float = 0.5,
         fetch_depth: int | None = None,
-        entity_detector=detect_entities,
+        entity_detector=None,
+        include_field_matches: bool = True,
     ) -> None:
         if pool < 1:
             raise ValueError(f"pool must be >= 1, got {pool}")
@@ -93,7 +94,27 @@ class LexicalContainmentRetriever(BaseRetriever):
         )
         # Injectable so tests can substitute a fake without loading the real
         # dictionaries, the same convention router.detect_entities itself uses.
-        self._detect = entity_detector
+        #
+        # `include_field_matches` defaults ON *here* and OFF in
+        # `detect_entities` itself. A person types the field
+        # ("วิศวกรรมคอมพิวเตอร์"), not the 60-character canonical, and without
+        # it this arm has no signal to apply and silently degrades to plain
+        # hybrid on exactly the queries a deployment sees most. It stays off in
+        # `detect_entities` because that function also feeds `entity_lookup`
+        # and `EntityFilter`, whose published numbers were measured without it.
+        # Measured -- and it did NOT change nothing until it was narrowed.
+        # This comment asserted "changes nothing on the Gold set" before anyone
+        # ran it; gated on `not programs` the fallback fired on 5 of the 106
+        # queries (the faculty ones whose faculty name contains a programme
+        # field) and would have moved the published arm L' silently. The
+        # fallback now fires only when the query resolved to nothing at all, so
+        # the claim holds BY CONSTRUCTION (all 106 detect something) and is
+        # pinned in both directions by tests/test_program_field_matching.py.
+        # What remains is a deployment fix the eval is structurally unable to
+        # score, not an improvement it declined to show.
+        self._detect = entity_detector or (
+            lambda text: detect_entities(text, include_field_matches=include_field_matches)
+        )
 
     @property
     def name(self) -> str:

@@ -287,3 +287,64 @@ class TestAllowlistLiveness:
         check, status, _ = adc.findings[before]
         assert check.startswith("D6")
         assert status in {"PASS", "WARN"}
+
+
+class TestInputsAllowlistIsKeyedOnContent:
+    """D4's `inputs` exemptions, and why they are not keyed on the pair alone.
+
+    `EVAL_INPUTS` holds edges like `program_loader.py -> relation-graph.md`
+    that exist *because* a matcher repair moved a report without touching its
+    generator. A pair-keyed exemption clears such an edge forever, which is the
+    "an exemption list is the easiest way to make a check vacuous" failure D1c
+    was written for, one section down. So an entry may carry `src_sha` and is
+    honoured only while the source still hashes to it.
+
+    Exercised in BOTH directions: the passing direction alone would be
+    satisfied by a `_inputs_cleared` that ignored `src_sha` entirely.
+    """
+
+    def test_every_inputs_entry_names_a_declared_edge(self):
+        for e in adc._allowlist("inputs"):
+            assert e["src"] in adc.EVAL_INPUTS, e
+            assert e["report"] in adc.EVAL_INPUTS[e["src"]], e
+
+    def test_every_inputs_entry_carries_a_reason_and_a_date(self):
+        for e in adc._allowlist("inputs"):
+            assert e.get("reason", "").strip(), e
+            assert e.get("checked"), e
+
+    def test_a_matching_sha_clears_the_pair(self, monkeypatch):
+        entry = {"src": "a.py", "report": "r.md", "src_sha": "cafe", "checked": "x",
+                 "reason": "y"}
+        monkeypatch.setattr(adc, "_allowlist", lambda s: [entry] if s == "inputs" else [])
+        monkeypatch.setattr(adc, "_sha", lambda p: "cafe")
+        monkeypatch.setattr(Path, "exists", lambda self: True)
+        cleared, dead = adc._inputs_cleared()
+        assert cleared == {("a.py", "r.md")} and dead == []
+
+    def test_a_STALE_sha_does_not_clear_and_is_reported_dead(self, monkeypatch):
+        entry = {"src": "a.py", "report": "r.md", "src_sha": "cafe", "checked": "x",
+                 "reason": "y"}
+        monkeypatch.setattr(adc, "_allowlist", lambda s: [entry] if s == "inputs" else [])
+        monkeypatch.setattr(adc, "_sha", lambda p: "f00d")
+        monkeypatch.setattr(Path, "exists", lambda self: True)
+        cleared, dead = adc._inputs_cleared()
+        assert cleared == set(), "a moved source must re-flag, not inherit its clearance"
+        assert len(dead) == 1 and "f00d" in dead[0] and "cafe" in dead[0]
+
+    def test_a_legacy_entry_without_a_sha_still_clears(self, monkeypatch):
+        """`src_sha` is optional on purpose: backfilling one today would bless a
+        source state nobody verified, which is the opposite of its point."""
+        entry = {"src": "a.py", "report": "r.md", "checked": "x", "reason": "y"}
+        monkeypatch.setattr(adc, "_allowlist", lambda s: [entry] if s == "inputs" else [])
+        cleared, dead = adc._inputs_cleared()
+        assert cleared == {("a.py", "r.md")} and dead == []
+
+    def test_the_program_loader_edges_are_sha_keyed(self):
+        """The three that would otherwise be disarmed permanently."""
+        sha_keyed = {
+            (e["src"], e["report"]) for e in adc._allowlist("inputs") if e.get("src_sha")
+        }
+        for report in ("docs/relation-graph.md", "docs/program-matcher-absorption.md",
+                       "docs/program-tag-regeneration.md"):
+            assert ("src/rag_lab/loaders/program_loader.py", report) in sha_keyed

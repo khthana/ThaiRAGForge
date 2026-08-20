@@ -495,3 +495,69 @@ inputs:
       depths against post-edit code -- 11 of 11 reproduce exactly. That is a
       stronger discharge than re-rendering would be, since re-rendering only
       moves an mtime ([[feedback_a_staleness_check_is_only_a_proxy]]).
+
+  - src: src/rag_lab/loaders/program_loader.py
+    report: docs/program-matcher-absorption.md
+    checked: 2026-08-20
+    src_sha: 9e34028128210518
+    reason: >-
+      The 2026-08-20 edit is PURELY ADDITIVE -- `git diff --numstat` reads
+      143 insertions / 0 deletions in a single hunk appended after the
+      ProgramLoader class -- so `match_programs`, the only function this report
+      consumes, is byte-identical. Checked by execution as well as by
+      construction: running `match_programs` over 400 randomly sampled corpus
+      files under this version and under f78ed5e gives 0 of 400 differing
+      results. The added `programme_groups` / `match_programs_by_field` have no
+      caller inside `match_programs`.
+      Cleared by content: `src_sha` re-flags this pair the moment the loader
+      changes again, because this edge exists precisely to catch a matcher
+      repair moving the report without touching its generator.
+
+  - src: src/rag_lab/loaders/program_loader.py
+    report: docs/relation-graph.md
+    checked: 2026-08-20
+    src_sha: 9e34028128210518
+    reason: >-
+      The 2026-08-20 edit is PURELY ADDITIVE -- `git diff --numstat` reads
+      143 insertions / 0 deletions in a single hunk appended after the
+      ProgramLoader class -- so `match_programs`, the only function this report
+      consumes, is byte-identical. Checked by execution as well as by
+      construction: running `match_programs` over 400 randomly sampled corpus
+      files under this version and under f78ed5e gives 0 of 400 differing
+      results. The added `programme_groups` / `match_programs_by_field` have no
+      caller inside `match_programs`.
+      Cleared by content: `src_sha` re-flags this pair the moment the loader
+      changes again, because this edge exists precisely to catch a matcher
+      repair moving the report without touching its generator.
+
+  - src: src/rag_lab/loaders/program_loader.py
+    report: docs/program-tag-regeneration.md
+    checked: 2026-08-20
+    src_sha: 9e34028128210518
+    reason: >-
+      The 2026-08-20 edit is PURELY ADDITIVE -- `git diff --numstat` reads
+      143 insertions / 0 deletions in a single hunk appended after the
+      ProgramLoader class -- so `match_programs`, the only function this report
+      consumes, is byte-identical. Checked by execution as well as by
+      construction: running `match_programs` over 400 randomly sampled corpus
+      files under this version and under f78ed5e gives 0 of 400 differing
+      results. The added `programme_groups` / `match_programs_by_field` have no
+      caller inside `match_programs`.
+      Cleared by content: `src_sha` re-flags this pair the moment the loader
+      changes again, because this edge exists precisely to catch a matcher
+      repair moving the report without touching its generator.
+
+  - src: src/rag_lab/router.py
+    report: qdrant_routed_check.md
+    checked: 2026-08-20
+    src_sha: eb19a6fdea0956f9
+    reason: >-
+      The 2026-08-20 edit adds a LAST branch to `classify_query` (bare-field
+      program matching) and an opt-in `include_field_matches` keyword to
+      `detect_entities`, default False. This report reads `classify_query` and
+      `route_targets`; the latter is untouched, and the new branch is reached by
+      0 of the 106 Gold queries -- measured, not argued: `classify_query` over
+      the whole set returns the identical label for 106 of 106 under this
+      version and under f78ed5e, and `detect_entities` likewise 106 of 106.
+      Cleared by content, so a future router change re-flags rather than
+      inheriting this.

@@ -1871,6 +1871,70 @@ see `docs/adr/`.
      generator than to "relevance" — defensible to ship only because the corpus owner's
      domain judgement is that for this query shape relevance genuinely requires the entity
      to appear, and never citable as *lexical beats learned ranking*.
+     **BARE-FIELD MATCHING (2026-08-20) — the deployment gap arm L′ opened, and the
+     rule that was REJECTED is worth more than the one that shipped.** A person types
+     the field (`วิศวกรรมคอมพิวเตอร์`), not the 60-character canonical
+     (`หลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาวิศวกรรมคอมพิวเตอร์`), so `match_programs`
+     found nothing, `classify_query` returned `unmatched`, and arm L′ silently degraded
+     to plain hybrid on exactly the queries a deployment sees most.
+     `match_programs_by_field` resolves a bare field to **every** programme offering it
+     — all four for that field, never a guess at the degree level, which would be the
+     degree-swap error `match_programs`' own 2026-08-11 guard exists to prevent. Wired in
+     three places, each deliberately scoped: `detect_entities(include_field_matches=...)`
+     **OFF by default** (it also feeds `entity_lookup`/`EntityFilter`, whose published
+     numbers were measured without it), **ON** in `LexicalContainmentRetriever`, and a
+     **last** branch in `classify_query` before `ROUTE_UNMATCHED`.
+     **Four things measured rather than argued.** (1) **The branch's last position is
+     load-bearing and was placed on evidence**: 0 of the 106 Gold queries reach it, so it
+     cannot move a published routing number by construction — and **5 of the 13 faculty
+     queries contain a programme field inside their faculty name**
+     (`คณะบริหารธุรกิจ` → the 3 `บริหารธุรกิจ` programmes), so anywhere above
+     `match_faculties` it would steal them. (2) **The same 5 queries caught a real defect
+     one layer down, by running a claim this file had already written down as
+     measured.** `detect_entities`' fallback was first gated on `not programs`, and the
+     retriever's own docstring asserted "changes nothing on the 106 Gold queries" —
+     **false**: it fired on those 5, widening an already-resolved faculty query and
+     moving arm L′'s published number silently. It now fires only when the query resolved
+     to **nothing at all**, which is the case the feature exists for and makes the claim
+     true **by construction** (all 106 detect something), pinned in both directions.
+     [[feedback_an_asserted_invariant_is_not_a_check]] again, in a docstring I wrote the
+     same hour. (3) **`programme_groups` collapses 253 dictionary entries → 250**, exactly
+     the 3 KOSEN associate-degree renames (`วิศวกรรมคอมพิวเตอร์`,
+     `วิศวกรรมแมคคาทรอนิกส์`, `วิศวกรรมไฟฟ้าและอิเล็กทรอนิกส์`), where the degree title
+     was renamed in 2568 — `2569/3` amends *"ฉบับปี พ.ศ. ๒๕๖๗"*, i.e. the very curriculum
+     `2567/2` approved under the older name. The discriminator needs **two** signals, not
+     one: disjoint years alone flagged 5 pairs of which **3 were spurious** (a master's
+     and a doctorate in one field simply do not co-occur in a 6-year window), so a rename
+     also requires one degree name to be the other **extended**. (4) **The rejected rule,
+     and it must stay rejected**: the symmetric-looking *same degree, one field extends
+     the other* branch collapsed **28** entries including `วิศวกรรมไฟฟ้า` with
+     `วิศวกรรมไฟฟ้าสื่อสารและเครือข่าย` and `ภาษาญี่ปุ่น` with `ภาษาญี่ปุ่นธุรกิจ` —
+     **a longer field name is normally a DIFFERENT programme**, the prefix-group problem
+     `program_loader`'s own docstring opens with. It was caught by **reading the groups,
+     not the count**, and the one real case it was written for is a single 2566 manifest
+     title that dropped `วิศวกรรม` from `สาขาวิชาวิศวกรรมแมคคาทรอนิกส์` — a typo costing
+     one `count=1` entry, not worth a rule that cannot tell it from a real programme. So
+     the collapse is **7 entries → 4, not the 7 → 3 asked for**, and the difference is
+     stated rather than quietly delivered. `tests/test_program_field_matching.py` pins
+     every negative, and was **verified to fail on the rejected rule** before being
+     trusted (reinstating it fails exactly the 2 tests written to forbid it). **The Gold
+     set is structurally unable to score any of this** — all 30 program queries name a
+     full canonical — so it is a deployment fix, and no retrieval number may be claimed
+     for it in either direction. **No report emits any count in this paragraph, so
+     `tests/test_program_field_matching.py` IS their source** — 253→250, the 3 KOSEN
+     pairs, the 0-of-106 and the 5-of-13 are each pinned by a named test and re-derived
+     on every `pytest` run, which is the same rule the rebuild-#4 combo count follows
+     (derived from the artifact, never copied into a snapshot report that would then
+     rot). The `program_loader.py`/`router.py` edits also tripped `D4` on four reports;
+     all four are cleared **by content, not by pair** — `doc_claims_allowlist.yaml`'s
+     `inputs` section now takes an optional `src_sha`, and the exemption holds only
+     while the source still hashes to it, so a future matcher repair re-flags rather
+     than inheriting today's clearance. That mattered here: the
+     `program_loader → relation-graph.md` edge exists *because* a matcher repair moved
+     that report twice without touching its generator, and a permanent pair-keyed
+     exemption would have disarmed it. `D6` now audits the section, and the mechanism
+     was exercised in the failing direction before being trusted (a one-byte change to
+     the loader re-flags all three pairs and marks all three entries dead).
      **REFRESHED AGAINST REBUILD #4 (2026-08-20) — pools re-minted, model retrained, and
      two defects in the harness came out of it that matter more than the numbers.**
      (1) **The training pools had no way of naming the indices they came from.** The

@@ -363,3 +363,146 @@ class ProgramLoader(BaseLoader):
             title=title,
             metadata=metadata,
         )
+
+
+# --------------------------------------------------------------------------
+# Bare-field matching, and the programme identity it needs first.
+#
+# `match_programs` matches a full canonical name ("หลักสูตร<degree>
+# สาขาวิชา<field>"). A person searching types the field alone --
+# "วิศวกรรมคอมพิวเตอร์" -- which matches nothing and routes to `unmatched`.
+# That gap is invisible to the Gold set, whose 30 program queries all name a
+# full canonical, so nothing here can be validated by the published eval; it
+# is a deployment fix, measured only by its blast radius being zero.
+#
+# Resolving a field to programmes needs one prior step, because a field does
+# not identify a programme: 40 of 200 fields carry more than one entry. Most of
+# that is real (a bachelor's, a master's and a PhD in one field are three
+# programmes), but some of it is ONE programme recorded under two names, and
+# those must not be returned twice to a caller that counts.
+#
+# Two such causes exist in this corpus, both KOSEN, both verified against the
+# manifest titles the dictionary was generated from:
+#
+#   * the degree title was renamed in 2568, so the same programme appears as
+#     `หลักสูตรอนุปริญญา สาขาวิชา<field>` (2565-2567) and
+#     `หลักสูตรอนุปริญญาวิศวกรรมศาสตร์ สาขาวิชา<field>` (2568-2569). 2569/3
+#     amends "ฉบับปี พ.ศ. ๒๕๖๗", i.e. the curriculum 2567/2 approved under the
+#     older name -- so it is one programme, not two;
+#   * one 2566 title dropped `วิศวกรรม` from the field itself
+#     (`สาขาวิชาแมคคาทรอนิกส์` for `สาขาวิชาวิศวกรรมแมคคาทรอนิกส์`), which
+#     mints a third entry for the same programme.
+#
+# Both are collapsed by rule rather than by an explicit list of the seven
+# entries: a hard-coded list would silently stop covering the corpus the next
+# time a manifest is added, which is this project's recurring failure shape.
+# The rules are deliberately narrow -- one degree name extending the other, or
+# one field name extending the other -- because the pair of signals is what
+# distinguishes a rename from two real programmes. Disjoint publication years
+# alone does NOT: a master's and a PhD in one field routinely fail to co-occur
+# in a six-year window, and testing on that alone flags three such pairs as
+# renames.
+#
+# ALL surface forms are kept in the group. Collapsing must never delete a
+# spelling: a document titled with the retired name has to keep matching, and
+# for containment scoring more spellings is strictly better.
+
+_DEGREE_FAMILY_ANCHOR = "อนุปริญญา"
+
+
+def _one_extends_the_other(a: str, b: str) -> bool:
+    a, b = (a or ""), (b or "")
+    return bool(a) and bool(b) and a != b and (a.startswith(b) or b.startswith(a))
+
+
+def _same_programme(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Are these two dictionary entries one programme under two names?
+
+    Requires the two entries to agree on one of {field, degree} and for the
+    other to be an extension of its partner. Never merges two entries that
+    differ on both, and never merges two entries that differ on neither
+    (they would be the same canonical).
+    """
+    fa, fb = a.get("field") or "", b.get("field") or ""
+    da, db = a.get("degree") or "", b.get("degree") or ""
+    if fa == fb and _one_extends_the_other(da, db):
+        # a renamed degree title. Narrowed to the associate-degree family: a
+        # bachelor's is not a renamed master's, and "บัณฑิต" is a suffix of
+        # "มหาบัณฑิต", so an unrestricted rule here would merge degree levels
+        # -- the exact error the 2026-08-11 degree guard exists to prevent.
+        return _DEGREE_FAMILY_ANCHOR in da and _DEGREE_FAMILY_ANCHOR in db
+    # NOTE: there is deliberately NO "same degree, one field extends the other"
+    # rule. It looks symmetric with the one above and it is not: a longer field
+    # name is normally a DIFFERENT programme, which is the prefix-group problem
+    # this module's own docstring opens with. Tried and rejected on its output,
+    # not on reasoning -- it collapsed 28 entries, among them
+    # `วิศวกรรมไฟฟ้า` with `วิศวกรรมไฟฟ้าสื่อสารและเครือข่าย`, `ภาษาญี่ปุ่น`
+    # with `ภาษาญี่ปุ่นธุรกิจ`, and `วิศวกรรมอุตสาหการ` with three siblings.
+    # The one real instance it was written for is a single 2566 title that
+    # dropped `วิศวกรรม` from `สาขาวิชาวิศวกรรมแมคคาทรอนิกส์`; that is a typo in
+    # one manifest, costing one count=1 entry, and it is not worth a rule that
+    # cannot tell it from a real programme.
+    return False
+
+
+def programme_groups(
+    dictionary: list[dict[str, Any]] | None = None,
+) -> list[list[dict[str, Any]]]:
+    """Dictionary entries grouped into one list per real programme.
+
+    Order is stable (dictionary order) so a caller may treat the first entry of
+    a group as its representative without the choice drifting between runs.
+    """
+    entries = list(load_dictionary() if dictionary is None else dictionary)
+    parent = list(range(len(entries)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i in range(len(entries)):
+        for j in range(i + 1, len(entries)):
+            if _same_programme(entries[i], entries[j]):
+                ri, rj = find(i), find(j)
+                if ri != rj:
+                    parent[max(ri, rj)] = min(ri, rj)
+
+    grouped: dict[int, list[dict[str, Any]]] = {}
+    for i, e in enumerate(entries):
+        grouped.setdefault(find(i), []).append(e)
+    return [grouped[k] for k in sorted(grouped)]
+
+
+def match_programs_by_field(
+    text: str, dictionary: list[dict[str, Any]] | None = None
+) -> list[str]:
+    """Every canonical whose FIELD appears in `text`, deduped and sorted.
+
+    For a query naming a bare field this returns every programme offering it --
+    all of them, never a guess at which degree level was meant. A field maps to
+    up to four entries here, and picking one would be the degree-swap error
+    `match_programs`' own guard was added to prevent.
+
+    Grouping does not reduce what is returned; it exists so a caller can report
+    how many *programmes* were matched without counting a renamed one twice.
+    Use `programme_groups` for that count.
+
+    A field is matched as a standalone phrase, so `แมคคาทรอนิกส์` does not fire
+    inside `วิศวกรรมแมคคาทรอนิกส์` and mint a spurious second programme; the
+    longest field wins where several match at the same position.
+    """
+    from rag_lab.text_match import collapse_ws, contains_phrase
+
+    entries = list(load_dictionary() if dictionary is None else dictionary)
+    hay = collapse_ws(text)
+    fields = {e["field"] for e in entries if e.get("field")}
+    hit_fields = {f for f in fields if contains_phrase(hay, f)}
+    # drop a field that is only matching as part of a longer matched field
+    hit_fields = {
+        f for f in hit_fields if not any(f != o and f in o for o in hit_fields)
+    }
+    return sorted(
+        {e["canonical"] for e in entries if e.get("field") in hit_fields}
+    )

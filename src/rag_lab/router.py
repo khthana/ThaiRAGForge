@@ -43,7 +43,11 @@ from dataclasses import dataclass
 from rag_lab.loaders.course_loader import match_courses, match_courses_by_name
 from rag_lab.loaders.faculty_loader import match_faculties
 from rag_lab.loaders.person_loader import match_people, match_people_by_dictionary
-from rag_lab.loaders.program_loader import load_dictionary, match_programs
+from rag_lab.loaders.program_loader import (
+    load_dictionary,
+    match_programs,
+    match_programs_by_field,
+)
 from rag_lab.schema import RankedChunk, RetrievalResult
 
 # Present in essentially every canonical program name's template
@@ -218,6 +222,22 @@ def classify_query(query: str) -> str:
         return ROUTE_PROGRAM
     if match_faculties(query):
         return ROUTE_FACULTY
+    # LAST, and the position is measured rather than chosen. A person types the
+    # FIELD ("วิศวกรรมคอมพิวเตอร์"), which no branch above matches -- the
+    # dictionary is keyed on full canonicals and the fallback above wants the
+    # literal marker `สาขาวิชา`. Resolving the bare field rescues those queries
+    # from `unmatched`.
+    #
+    # It must come after `match_faculties`, not before: 5 of the 13 faculty Gold
+    # queries contain a program field inside their faculty name
+    # (`คณะเทคโนโลยีสารสนเทศ` holds the field `เทคโนโลยีสารสนเทศ`), so an earlier
+    # position would steal them and break the no-cross-firing property.
+    #
+    # In last place it can only fire where the router already gave up, and that
+    # is checked, not argued: 0 of the 106 Gold queries reach here, so this
+    # branch cannot move any published routing number by construction.
+    if match_programs_by_field(query):
+        return ROUTE_PROGRAM
     return ROUTE_UNMATCHED
 
 
@@ -229,6 +249,7 @@ def detect_entities(
     program_matcher=_default_program_matcher,
     course_matcher=_default_course_matcher,
     faculty_matcher=match_faculties,
+    include_field_matches: bool = False,
 ) -> dict[str, list[str]]:
     """kind -> canonical values actually found in `query` (empty kinds
     omitted). Used by the entity-lookup retrieval mode and the keyword/
@@ -260,6 +281,30 @@ def detect_entities(
     programs = program_matcher(query)
     courses = course_matcher(query)
     faculties = faculty_matcher(query)
+    if include_field_matches and not (people or programs or courses or faculties):
+        # A person searching types the FIELD ("วิศวกรรมคอมพิวเตอร์"), not the
+        # 60-character canonical, and the field alone matches nothing. Resolve
+        # it to every programme offering that field -- all of them, never a
+        # guess at the degree level, which would be the degree-swap error
+        # program_loader's own guard exists to prevent.
+        #
+        # OFF by default, and that is not timidity: this function feeds
+        # `entity_lookup` and `EntityFilter`, whose published numbers
+        # (gold_entity_lookup_73det_report.md) were measured without it. The
+        # Gold set cannot validate the change either -- all 30 program queries
+        # name a full canonical -- so it ships where it is needed
+        # (LexicalContainmentRetriever) rather than as a new default.
+        #
+        # It is a LAST-RESORT fallback over every kind, not just programs, and
+        # that was narrowed after measuring rather than reasoned: gated on
+        # `not programs` alone it fired on 5 of the 106 Gold queries -- the
+        # faculty ones whose faculty name CONTAINS a programme field
+        # ("คณะบริหารธุรกิจ" -> the 3 บริหารธุรกิจ programmes), silently widening
+        # an already-resolved query and moving a published arm. Firing only
+        # when the query resolved to nothing at all is the case the feature
+        # exists for, and it makes "this changes nothing on the Gold set" true
+        # by construction (all 106 detect something) instead of by luck.
+        programs = match_programs_by_field(query)
 
     detected: dict[str, list[str]] = {}
     if people:

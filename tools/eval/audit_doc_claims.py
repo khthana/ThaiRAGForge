@@ -41,6 +41,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 
 import sys
@@ -681,9 +682,49 @@ def audit_significance_wording() -> None:
         print(f"        {b}")
 
 
+def _sha(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+
+
+def _inputs_cleared() -> tuple[set[tuple[str, str]], list[str]]:
+    """(cleared pairs, dead entries) for D4's allowlist section.
+
+    An `inputs` entry may carry `src_sha`, and when it does the exemption holds
+    **only while the source still hashes to it**. Without that an entry is
+    keyed on the (src, report) pair alone and is therefore permanent: the
+    program_loader -> relation-graph edge exists precisely because a matcher
+    repair moved that report twice without touching its generator, and a
+    pair-keyed exemption would disarm it for every future repair. Content-keying
+    is the same rule the `counts` section already follows -- change either half
+    of a cleared figure and it re-flags rather than staying silently cleared.
+
+    `src_sha` is OPTIONAL, and legacy entries deliberately do not get one
+    backfilled: hashing them today would bless a source state nobody verified,
+    which is the opposite of what the field is for.
+    """
+    cleared: set[tuple[str, str]] = set()
+    dead: list[str] = []
+    for e in _allowlist("inputs"):
+        want = e.get("src_sha")
+        if want:
+            f = REPO / e["src"]
+            if not f.exists():
+                dead.append(f"inputs: {e['src']} no longer exists (entry for {e['report']})")
+                continue
+            got = _sha(f)
+            if got != want:
+                dead.append(
+                    f"inputs: {e['src']} now hashes {got}, entry says {want} "
+                    f"(checked {e.get('checked', '?')}) -- re-verify before re-clearing"
+                )
+                continue
+        cleared.add((e["src"], e["report"]))
+    return cleared, dead
+
+
 # ------------------------------------------------------------------- D4
 def audit_eval_inputs() -> None:
-    cleared = {(e["src"], e["report"]) for e in _allowlist("inputs")}
+    cleared, _dead = _inputs_cleared()
     stale, missing, exempt = [], [], 0
     for src, reports in EVAL_INPUTS.items():
         p = REPO / src
@@ -754,8 +795,12 @@ def audit_allowlist_liveness() -> None:
         nums_of[rel] = set(NUM.findall(body))
         counts_of[rel] = {f"{n} of {m}" for n, m in COUNT_PROSE.findall(_unemph(body))}
 
-    dead: list[str] = []
-    total = 0
+    # `inputs` entries are audited by content, not by figure: see
+    # `_inputs_cleared`. An entry whose source has moved on since it was checked
+    # exempts a pair that D4 is now re-flagging anyway, so it is dead in exactly
+    # the sense this check means.
+    inputs_cleared, dead = _inputs_cleared()
+    total = len(_allowlist("inputs"))
     for section, key, table in (("numbers", "number", nums_of),
                                 ("counts", "figure", counts_of)):
         for e in _allowlist(section):
@@ -769,8 +814,9 @@ def audit_allowlist_liveness() -> None:
                             f"(checked {e.get('checked', '?')})")
     record(
         "D6 every allowlist entry still exempts something", not dead,
-        f"{len(dead)} of {total} numbers/counts entries no longer match a figure "
-        "their doc yields",
+        f"{len(dead)} of {total} allowlist entries exempt nothing today "
+        f"(numbers/counts: no longer a figure their doc yields; inputs: source "
+        f"moved past its src_sha)",
         warn=True,
     )
     for d in dead[:15]:
