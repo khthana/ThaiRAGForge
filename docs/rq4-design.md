@@ -878,6 +878,16 @@ string containment over-counts relevance for this query shape** — the threat
 `docs/eval-validity-threats.md` §3 argues for the entity arms, here visible in a
 measurement instead.
 
+> **CURRENCY (2026-08-20): the figures in the next two paragraphs are the original
+> 2026-08-10 run and were superseded twice** — by the 2026-08-12 `match_programs`
+> re-measurement and again by the rebuild-#4 re-score of 2026-08-19. The current
+> values are in `data/results/rq4_score_entity.md`, and the two that changed a
+> *verdict* are: `hybrid vs entity_lookup` **precision** went significant → **ns**
+> (−0.1351, Holm 0.0508), and `hybrid vs entity_boost` **precision** went ns →
+> **significant** (+0.0973, Holm 0.0138). **The gating decision is unchanged**: the
+> gating metric is recall, still ns at +0.0505 (Holm 0.1040), bound **+0.1114**.
+> Read the numbers below as the record of what the 08-10 run said.
+
 **And what separates the two entity arms is ranking, which is worth more here than the
 dictionaries are.** Both draw on the same dictionaries and both fill the budget with
 entity-bearing documents (density 0.6448 vs 0.7814); `entity_boost` orders them by
@@ -891,11 +901,16 @@ dictionaries know.
 **So cite `entity_boost` as the arm that actually answers the gating question**: same
 dictionaries, but ranked (hybrid ordering with an entity boost). It is the **numerically
 best arm in the whole RQ4 table on both metrics** — recall 0.4379 vs hybrid's 0.3962,
-precision 0.8048 vs 0.7268 — and **neither clears Holm** (0.1652 and 0.1192, m=6).
+precision 0.8048 vs 0.7268 (superseded: 0.8248 vs 0.7185) — and **neither clears
+Holm** (0.1652 and 0.1192, m=6).
+*(Superseded — see the currency note above: the current figures are recall 0.4328 vs
+0.3823 at Holm 0.1040, precision 0.8248 vs 0.7185 at Holm 0.0138, so the precision half
+of "neither clears Holm" no longer holds.)*
 **State it as a bound**: with the dictionaries ranked properly, and scored on qrels
 partly derived from those same dictionaries, the end-to-end gain over shipped hybrid is
-**at most +0.1001 citation recall / +0.1337 precision**, and the point estimate
-(+0.0417) sits inside the generator's own measured noise floor
+**at most +0.1001 citation recall / +0.1337 precision** (superseded: **+0.1114** /
+**+0.1643**), and the point estimate
+(+0.0417, now +0.0505) sits inside the generator's own measured noise floor
 ([[feedback_temperature_zero_is_not_reproducible]]: 14/24 identical citation sets at
 temperature 0 under this variant).
 

@@ -60,9 +60,34 @@ ALLOWLIST = REPO / "tools/eval/doc_claims_allowlist.yaml"
 # The prose under audit. Only files that make *claims about measurements* belong
 # here -- narrative logs (docs/*-log.md) are deliberately append-only records of
 # what was believed at a point in time, so a stale number in one is the point.
+#
+# Widened from 2 files to 10 on 2026-08-20. It was 2 for a long time and that gap
+# was known; what unblocked it was measuring the cost first -- 8 of the 10 add
+# **zero** residue, and the 6 the other two surfaced were all genuine stale
+# figures (the RQ4 entity arms, superseded twice, carrying two unrecorded verdict
+# flips). Three files are deliberately still OUT, each for a reason that would
+# otherwise make this check vacuous rather than thorough:
+#   * docs/chunker-embedder-comparison-log.md -- append-only, 49 residue by
+#     design: a stale number in a log IS the record.
+#   * docs/reranker-hybrid-interaction-research.md -- 211 figures quoted from the
+#     LITERATURE, which no report of ours can ever source.
+#   * docs/rq4-design.md's and reranker-trained-on-hybrid-design.md's
+#     pre-registration sections state PREDICTIONS; those are in (their outcome
+#     halves make live claims) but a prediction that no longer matches the
+#     outcome is the point of writing it down, so triage them as such.
 DOCS = [
     Path("CLAUDE.md"),
     Path("docs/paper-results-summary.md"),
+    Path("docs/project-journey.html"),
+    Path("docs/colbert-late-interaction-notes.md"),
+    Path("docs/hyde-axis-notes.md"),
+    Path("docs/rq4-second-generator-check.md"),
+    Path("docs/rq4-design.md"),
+    Path("docs/reranker-trained-on-hybrid-design.md"),
+    Path("docs/eval-validity-threats.md"),
+    Path("docs/research-framework-gap-analysis.md"),
+    Path("README.md"),
+    Path("docs/code-explained.html"),
 ]
 
 # Script outputs a number may legitimately come from. Deliberately **.md only**:

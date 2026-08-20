@@ -10,6 +10,17 @@
 
 # D2: a figure in the prose that no report prints literally.
 numbers:
+
+  - doc: docs/project-journey.html
+    number: "0.7790"
+    checked: 2026-08-20
+    reason: >-
+      Not a published metric and never will be: it is the WRONG ceiling that S9 of
+      reranker_pool_source_test.py caught -- what the undeduplicated oracle produced
+      before chunks sharing a resolution_id were collapsed (0.7790 instead of the
+      published 0.8249, unrouted pool at P=50). A report emits the corrected value
+      only, so the defect figure is untraceable BY CONSTRUCTION. It is quoted here,
+      and in CLAUDE.md, precisely because the lesson is the gap between the two.
   - doc: docs/paper-results-summary.md
     number: "0.4650"
     checked: 2026-08-08

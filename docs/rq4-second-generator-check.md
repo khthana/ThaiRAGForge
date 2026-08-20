@@ -74,6 +74,10 @@ swap.**
 
 ### Verdict agreement
 
+*(Superseded by the 2026-08-20 refresh at the end of this file — the counts moved
+in both directions, to 7 of 12 and 8 of 12. The table below is the original
+2026-08-12 record.)*
+
 | variant | cells agreeing | significant (phi4) | significant (gemma) |
 |---|---|---|---|
 | `cite_all` | **10 of 12** | 8 | 8 |

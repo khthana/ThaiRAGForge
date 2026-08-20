@@ -369,6 +369,57 @@ see `docs/adr/`.
   bullet for why it was discharged by a re-render rather than by an allowlist
   entry, which is the general answer whenever D4 flags a proxy: re-run the
   cheap generator and diff, and only allowlist when the re-run is not cheap.
+  **DOCS WIDENED 2 → 12 (2026-08-20), and the negative results are worth more than
+  the widening.** The docs side had been two files for a long time and the gap was
+  known. What unblocked it was **measuring the cost before paying it**: 8 of the 10
+  candidates add **zero** D2 residue, so the coverage was nearly free. Three files
+  stay **out**, each because including them makes the check *vacuous rather than
+  thorough* — `chunker-embedder-comparison-log.md` is append-only (49 residue by
+  design: a stale number in a log **is** the record),
+  `reranker-hybrid-interaction-research.md` quotes **211** figures from the
+  *literature* that no report of ours can source, and pre-registration sections state
+  **predictions**, where a figure that no longer matches the outcome is the point of
+  having written it down. Current: **D2 traces every figure across all 12 docs**;
+  D5's residue is about a tenth of its figures, i.e. *below* its own documented
+  ~36% base rate — that is D5's designed state, not a regression from the 0 it read
+  when it watched two files. **Neither count is written here on purpose**: both move
+  whenever this paragraph is edited, and writing them cost two self-inflicted D5
+  flags on the first attempt. Re-derive them by running the script.
+  **What the widening found, and it is the class this file keeps getting hurt by —
+  one layer disagreeing with another.** (1) **The RQ4 entity arms were stale in three
+  layers at once and carried TWO verdict flips nobody had recorded**: CLAUDE.md's own
+  entity bullet still held the 08-12 figures while its RQ4 currency paragraph held the
+  re-scored ones — *this file contradicted itself* — and `docs/rq4-design.md` and
+  `project-journey.html` held the **08-10** originals. The flips: `hybrid vs
+  entity_lookup` **precision** went significant → **ns** (−0.1351, Holm 0.0508) and
+  `hybrid vs entity_boost` **precision** went ns → **significant** (+0.0973, Holm
+  0.0138). The **gating decision is unchanged** — the gating metric is recall, still
+  ns at +0.0505 with the bound now **+0.1114**. (2) the orphaned-archive count written as 240 where the report says
+  **239** — the identical defect D5 caught in CLAUDE.md on 2026-08-12, **never
+  propagated to the journey layer**, which is [[feedback_a_closed_axis_is_recorded_in_fewer_layers]]
+  applied to a correction rather than to a finding. (3) The gemma verdict-agreement
+  table stating 10-of-12 / 7-of-12 while the same file's refresh section says they
+  moved to 7 and 8.
+  **FOUR candidate checks for "the docs disagree" were built and ALL FOUR were
+  refuted — do not re-propose them.** (a) *Filter D2's haystack by report currency*
+  (the fix CLAUDE.md itself floated as option (b)): **cleared both real cases**,
+  because a fresh report legitimately quotes registered, anchored and superseded
+  values — `0.6066` is in a *current* report precisely because the ColBERT baseline
+  fix renders `_REGISTERED`. (b) *Cross-layer near-neighbour* (the same quantity at
+  0.6831 in one layer and 0.6811 in another): **1,740 candidate pairs** at the epsilon
+  the real cases need, with the closest hits pure coincidence (0.0003 vs 0.0004) —
+  D5's V2/V3 trap exactly. (c) *Citation-scoped traceability* (every figure in a block
+  citing one report must be in that report): good precision but under a tenth of
+  blocks covered, and its residue was false positives that its own narrower
+  exemption window created. (d) D2/D5 themselves, already clean. **The root cause is structural: D2 is
+  a bag of numbers, not a quantity→value map**, so *no* filter over that haystack can
+  distinguish "this is the current value of X" from "some table contains this number".
+  The sharpest proof is here: `−0.1557` passed D2 for eight days on an alibi from
+  `map_precision_significance_test.md` and `power_analysis.md`, **two unrelated tables
+  that merely happen to contain the same value**. So the working method stays what
+  actually caught these — **re-run the report, then sweep the prose**, per
+  [[feedback_a_traceability_check_shares_its_haystacks_rot]] — plus convention (c),
+  date the claim.
   It went **4 pass / 1 warn / 1 fail** on 2026-08-10 with D4 as a **true
   positive** (`rq4_score.md`/`rq4_score_guarded.md` predating the truncation
   repair in `tools/eval/rq4_generate.py`, i.e. describing answers from a
@@ -2104,8 +2155,13 @@ see `docs/adr/`.
   these arms (see the paragraph at the end of this bullet for what moved; the
   superseded 08-10 originals are in `docs/rq4-design.md`). **The primary
   comparison failed in the *opposite* direction**: `entity_lookup` vs hybrid citation
-  recall **−0.2523**, CI [−0.3213, −0.1805], Holm **0.0000** (precision −0.1557,
-  Holm 0.0156) — decisively worse, not merely no better. **But the stated reason for
+  recall **−0.2384**, CI [−0.3083, −0.1680], Holm **0.0000** — decisively worse,
+  not merely no better. **Its precision cell flipped at the rebuild-#4 re-score and
+  nothing had recorded it until 2026-08-20**: −0.1557 at Holm 0.0156 (significant)
+  → **−0.1351, CI [−0.2535, −0.0182], Holm 0.0508 — no longer significant**, so
+  `entity_lookup` is now decisively worse on *recall alone* and precision is a bound
+  ruling out a loss beyond 0.2535. Sign unchanged; read the flip as power, not
+  reversal ([[feedback_a_replication_disagrees_by_sign_not_verdict]]). **But the stated reason for
   the inference does not survive, which matters more than the verdict**
   (`tools/eval/rq4_entity_arm_diagnosis.py` → `data/results/rq4_entity_arm_diagnosis.md`,
   descriptive, no GPU): `entity_lookup`'s contexts hold a **higher** gold density than
@@ -2122,14 +2178,15 @@ see `docs/adr/`.
   more than the dictionaries' own margin. **So cite `entity_boost` as the arm that
   answers the gating question**: it is the numerically best arm in the whole RQ4 table
   (**precision 0.8248**, the highest ever measured here, recall **0.4328**, only 5
-  missed). **The gating metric is recall and it is still ns** (+0.0366, Holm 0.2140),
-  so **state it as a bound** — ranked dictionary use buys at most **+0.0942** citation
+  missed). **The gating metric is recall and it is still ns** (+0.0505, Holm 0.1040),
+  so **state it as a bound** — ranked dictionary use buys at most **+0.1114** citation
   recall over shipped hybrid, the point estimate sits inside the measured generator
   noise floor ([[feedback_temperature_zero_is_not_reproducible]]), and the bound is
   **optimistic** because of the circularity. Edges B/C are therefore not
   built. **Precision is the one cell the 08-12 re-measurement moved, and it does not
   reopen the gate**: +0.0847, CI [+0.0215, +0.1510], Holm 0.1192 → **0.0164, now
-  significant**. Read it as power, not reversal
+  significant** — and it held through the rebuild-#4 re-score at **+0.0973, CI
+  [+0.0305, +0.1643], Holm 0.0138**. Read it as power, not reversal
   ([[feedback_a_replication_disagrees_by_sign_not_verdict]]) — the sign never changed
   (+0.0635 → +0.0847) and the movement is **located** rather than assumed: the 56
   frozen `entity_boost` cells score 0.8778 before and after by construction, the 50
