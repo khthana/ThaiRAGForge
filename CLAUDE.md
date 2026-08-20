@@ -1820,9 +1820,57 @@ see `docs/adr/`.
      2e-7 agreement with ST independently confirms it — a random head could not match), and
      ST caps the tokenizer at the *config's* `max_position_embeddings`, so the trained arm
      scores at the same **8192** as every published arm despite training at max_len 1024
-     (49 of 25,250 training pairs truncated, 0.19%). **Nothing is wired** — per §3, and the
-     cost side now has a sharper competitor than it did (~1.2 s/query and 50 extra fetches,
-     against arm L at zero and 0.0043 behind).
+     (49 of 25,250 training pairs truncated, 0.19%). **The trained model is not wired**
+     — per §3, and the cost side has a sharper competitor than it did (~1.2 s/query and
+     50 extra fetches, against a control at zero cost).
+     **ARM L′ IS WIRED (2026-08-20, `src/rag_lab/retrievers/lexical_containment.py`,
+     registered `lexical_containment`), and the reason it is L′ and not the published
+     arm L is the finding.** `lexical_cache` reads the entity out of the **gold YAML**, so
+     arm L is handed the very string the qrels were derived from while arms C/D/T see only
+     the query text — **it is not merely free of GPU, it is fed an input no other arm gets
+     and no deployment has.** The deployable form recovers the entity with the shipped
+     `router.detect_entities`; a new **arm L′** measures exactly that, in its own Holm
+     family (**family 3, m=9, exploratory**) so no published p in families 1–2 moves.
+     Three results, and the third corrects this file's own wording from earlier the same
+     day. (1) **Losing the oracle string is cheap**: `L′ vs L` is ns on all three
+     (−0.0138 / −0.0186 / −0.0135, Holm 0.1950) — cite it as ruling out a loss worse
+     than **0.0304** recall@10. (2) **The deployable arm still beats the shipped router
+     significantly on every metric**: arm L′ **0.7300** vs C 0.6811, `L′ vs C`
+     **+0.0489** recall@10 (Holm 0.0000), +0.0437 MRR (0.0084), +0.0714 nDCG@10 (0.0000),
+     at **no GPU cost** — the layer that actually saturates under load. (3) **`T vs L′`
+     IS significant on all three** (+0.0241 / +0.0516 / +0.0423, Holm 0.0290 / 0.0424 /
+     0.0042) where `T vs L` is significant on none. Not a contradiction (T−L +0.0103,
+     L−L′ +0.0138, T−L′ +0.0241) but the reading changes: **"the fine-tune is not
+     separable from string containment" holds only against the ORACLE-FED control; against
+     the deployable one it separates everywhere**, so part of what the training buys is
+     *not needing an entity extractor*. `S11` pins that the two arms really are fed
+     different strings (**63 of 106** — `person` 30/30 title-stripped, which still matches
+     as a substring; `course` 33/33 returning the **8-digit code** instead of the name,
+     which is a *different signal*, not a degraded one) so family 3 cannot be a tautology
+     reported as a measurement. Two implementation notes. **`w` is 1.00 on all 106 LOO
+     folds** (oracle-on-all 1.00, no fitting premium), and at w=1.00 the hybrid term is
+     annihilated, so the arm reduces to a **stable partition** of the hybrid top-50 by
+     containment — the class implements the partition directly and
+     `tests/retrievers/test_lexical_containment.py` pins it against a *transcription* of
+     `fuse_grid` (not an import of it, which would let the test agree with itself), plus
+     the w=0.00 end that must be plain hybrid, so a future re-run picking w<1 cannot
+     silently decouple the shipped class from the measured arm. And **`contains_phrase`
+     moved to `src/rag_lab/text_match.py`**: it lived in `tools/eval/`, which the core
+     package must not import (ADR-0001), and two copies of a matching rule would diverge
+     the way two copies of RRF would. The move was checked in both directions —
+     16,084,108 haystack×needle pairs with **0** disagreements (the sole intended change
+     is an empty needle now returning False instead of True, unreachable from any caller),
+     and re-running `audit_gold_anchor_ambiguity.py` moved **only** its `union จริง`
+     column, which is retrieval and belongs to rebuild #4; every containment-derived
+     column is byte-identical. Cost to state with it: `detect_entities` ~100 ms/query
+     (the course matcher is ~75 ms of that) plus fetching 50 instead of 10, i.e. ~+20% on
+     a 475 ms routed query and **no GPU**. **Nothing defaults to it** — `dense`/`hybrid`
+     ship unchanged and this is opt-in by name, the same rule `qdrant_hybrid` follows.
+     **Read it with the circularity**: the `person`/`program`/`faculty` qrels were
+     themselves derived by string containment, so this arm is closer to the labelling
+     generator than to "relevance" — defensible to ship only because the corpus owner's
+     domain judgement is that for this query shape relevance genuinely requires the entity
+     to appear, and never citable as *lexical beats learned ranking*.
      **REFRESHED AGAINST REBUILD #4 (2026-08-20) — pools re-minted, model retrained, and
      two defects in the harness came out of it that matter more than the numbers.**
      (1) **The training pools had no way of naming the indices they came from.** The

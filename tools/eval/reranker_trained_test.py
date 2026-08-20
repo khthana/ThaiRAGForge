@@ -110,7 +110,7 @@ sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "tools" / "eval"))
 
 from rag_lab.query_service import discover_indices, resolve_index  # noqa: E402
-from rag_lab.router import classify_query, route_targets  # noqa: E402
+from rag_lab.router import classify_query, detect_entities, route_targets  # noqa: E402
 from embedder_matrix_9way import bootstrap_pvalue, holm_correct  # noqa: E402
 from audit_gold_anchor_ambiguity import contains_phrase  # noqa: E402
 
@@ -202,6 +202,40 @@ def lexical_cache(queries, entity_of, r_top, r_cid, r_text) -> dict:
             for rank, i in enumerate(int(x) for x in r_top[q][:P_MAX])
         }
     return out
+
+
+def lexical_cache_detected(queries, r_top, r_cid, r_text) -> tuple[dict, dict]:
+    """Arm L-prime: arm L with the one input a deployed system does not have.
+
+    `lexical_cache` reads the entity straight out of the gold YAML, so arm L is
+    handed the ground-truth string that the qrels were derived from. Arms C, D
+    and T see only the query text. That asymmetry is invisible in the published
+    table and it is the whole reason this arm exists: the deployable form must
+    RECOVER the entity from the query, which is what `detect_entities` (the
+    shipped extractor, used by entity_lookup and EntityFilter) does.
+
+    A chunk scores 1.0 if *any* detected canonical appears in it -- `any`, not
+    `all`, because detection legitimately returns several candidates for one
+    query (two course codes for an `ENGLISH FOR ...` name) and requiring all of
+    them would punish the arm for the matcher's recall rather than measure the
+    signal. Same tie-break as arm L, so the two differ in exactly one thing.
+
+    Returns (cache, detected) so the caller can report WHAT was recovered; a
+    query where nothing is detected scores every candidate 0 and therefore falls
+    back to the hybrid order -- which is the honest deployed behaviour, not a
+    failure to be hidden."""
+    cache, detected = {}, {}
+    for q in queries:
+        found = detect_entities(q)
+        ents = [v for vals in found.values() for v in vals]
+        detected[q] = ents
+        txt = r_text[q]
+        cache[q] = {
+            r_cid[q][i]: float(any(contains_phrase(_WS.sub(" ", txt[i]), e) for e in ents))
+            - 1e-6 * rank
+            for rank, i in enumerate(int(x) for x in r_top[q][:P_MAX])
+        }
+    return cache, detected
 
 
 def rank_agreement(a: dict, b: dict, top: dict, cid: dict, queries, P: int) -> dict:
@@ -363,17 +397,37 @@ def main() -> int:
     ))
 
     l_cache = lexical_cache(queries, entity_of, r_top, r_cid, r_text)
+    l2_cache, detected = lexical_cache_detected(queries, r_top, r_cid, r_text)
 
     # ---- arms ----------------------------------------------------------------
     sc_T = fuse_grid(r_top, r_h, t_cache, r_cid, r_rid, r_page, grid, pools, queries, qrels)
     sc_D = fuse_grid(r_top, r_h, d_cache, r_cid, r_rid, r_page, grid, pools, queries, qrels)
     sc_L = fuse_grid(r_top, r_h, l_cache, r_cid, r_rid, r_page, grid, pools, queries, qrels)
+    sc_L2 = fuse_grid(r_top, r_h, l2_cache, r_cid, r_rid, r_page, grid, pools, queries, qrels)
+
+    # S11: the two lexical arms must not be silently the same arm. If detection
+    # returned the gold string on every query this whole family would be a
+    # tautology reported as a measurement.
+    n_diff = sum(1 for q in queries if detected[q] != [entity_of[q]])
+    by_t = defaultdict(lambda: [0, 0])
+    for q in queries:
+        b = by_t[type_of[q]]
+        b[1] += 1
+        b[0] += int(detected[q] != [entity_of[q]])
+    checks.append((
+        "S11 the deployable arm really is fed a different string from arm L",
+        n_diff > 0,
+        f"{n_diff} of {len(queries)} queries · "
+        + " · ".join(f"{t} {v[0]}/{v[1]}" for t, v in sorted(by_t.items()))
+        + f" · nothing detected on {sum(1 for q in queries if not detected[q])}",
+    ))
 
     wi0 = grid.index(0.0)
     arm_C = {m: sc_T[P_REGISTERED][m][wi0] for m in _METRICS}
     arm_T, picks_T, w_or_T = loo_select(sc_T[P_REGISTERED], grid, len(queries))
     arm_D, picks_D, w_or_D = loo_select(sc_D[P_REGISTERED], grid, len(queries))
     arm_L, picks_L, w_or_L = loo_select(sc_L[P_REGISTERED], grid, len(queries))
+    arm_L2, picks_L2, w_or_L2 = loo_select(sc_L2[P_REGISTERED], grid, len(queries))
 
     checks.append((
         "S3 arm C reproduces routing_eval.md's `routed (shipped)` hybrid",
@@ -440,14 +494,17 @@ def main() -> int:
         True,
         f"trained: {len(set(picks_T))} distinct w (modal {max(set(picks_T), key=picks_T.count):.2f}, "
         f"oracle-on-all {w_or_T:.2f}) · off-the-shelf: modal "
-        f"{max(set(picks_D), key=picks_D.count):.2f} · lexical: modal "
-        f"{max(set(picks_L), key=picks_L.count):.2f}",
+        f"{max(set(picks_D), key=picks_D.count):.2f} · lexical (gold entity): modal "
+        f"{max(set(picks_L), key=picks_L.count):.2f} · lexical (detected, DEPLOYABLE): "
+        f"{len(set(picks_L2))} distinct w, modal "
+        f"{max(set(picks_L2), key=picks_L2.count):.2f}, oracle-on-all {w_or_L2:.2f}",
     ))
 
     if args.smoke:
         for name, ok, detail in sorted(checks, key=_check_no):
             print(f"[{'PASS' if ok else 'FAIL'}] {name} -- {detail}")
-        for lab, a in (("C", arm_C), ("D", arm_D), ("T", arm_T), ("L", arm_L)):
+        for lab, a in (("C", arm_C), ("D", arm_D), ("T", arm_T), ("L", arm_L),
+                       ("L'", arm_L2)):
             print(f"  arm {lab}  recall@{K} {a['recall@10'].mean():.4f}  "
                   f"MRR {a['mrr'].mean():.4f}  nDCG {a['ndcg@10'].mean():.4f}")
         print(f"\nsmoke ({len(queries)} queries, {time.time()-t0:.0f}s) — nothing written")
@@ -478,6 +535,23 @@ def main() -> int:
             observed, p, ci = bootstrap_pvalue(a[m] - b[m], rng, args.n_boot)
             rows2.append((label, m, observed, p, ci))
     fam2 = holm_correct(rows2, alpha=args.alpha)
+
+    # ---- family 3: arm L-prime -- EXPLORATORY, and its OWN Holm --------------
+    # Arm L is handed the gold entity string; arms C/D/T see only the query. So
+    # arm L is not merely "free", it is fed an input no other arm gets, and the
+    # deployable question is what survives when that input has to be RECOVERED.
+    # Kept in a separate family so families 1 and 2 -- and therefore every
+    # published p -- are untouched by adding this arm.
+    rows3 = []
+    for label, a, b in (
+            ("L' vs L   (detected entity vs the gold entity it was measured with)", arm_L2, arm_L),
+            ("L' vs C   (the DEPLOYABLE lexical arm, on top of routing)", arm_L2, arm_C),
+            ("T vs L'   (trained model vs the deployable control)", arm_T, arm_L2)):
+        for m in _METRICS:
+            observed, p, ci = bootstrap_pvalue(a[m] - b[m], rng, args.n_boot)
+            rows3.append((label, m, observed, p, ci))
+    fam3 = holm_correct(rows3, alpha=args.alpha)
+
 
     tlog = json.loads(TRAIN_LOG.read_text(encoding="utf-8")) if TRAIN_LOG.exists() else {}
     L: list[str] = []
@@ -528,7 +602,8 @@ def main() -> int:
     for lab, desc, a in (("C", "ไม่มี (router ที่ ship อยู่)", arm_C),
                          ("D", "cross-encoder สำเร็จรูป", arm_D),
                          ("**T**", "**cross-encoder ที่เทรนแล้ว**", arm_T),
-                         ("L", "ตรงตัวอักษร (control, ไม่ใช้ GPU)", arm_L)):
+                         ("L", "ตรงตัวอักษร — entity จาก gold (ไม่ deploy ได้)", arm_L),
+                         ("L′", "ตรงตัวอักษร — entity จาก detect_entities (**deploy ได้**)", arm_L2)):
         st = "**" if "T" in lab else ""
         fetch = f"{K} / {K}" if lab == "C" else f"{P_REGISTERED} / {K}"
         w_(f"| {lab} | {desc} | {st}{a['recall@10'].mean():.4f}{st} | {a['mrr'].mean():.4f} | "
@@ -561,6 +636,32 @@ def main() -> int:
     for a, b, diff, p, ci, hp, sig in sorted(fam2, key=lambda x: x[5]):
         w_(f"| {a} | {b} | {diff:+.4f} | [{ci[0]:+.4f}, {ci[1]:+.4f}] | {p:.4f} | {hp:.4f} | "
            f"{'**ใช่**' if sig else 'ไม่'} |")
+    w_()
+
+    w_(f"**Family 3 (m={len(fam3)}) — arm L\u2032 คือ arm L ที่ deploy ได้จริง · "
+       f"สำรวจ คนละ Holm อีกตระกูล**")
+    w_()
+    w_("**อ่านย่อหน้านี้ก่อนอ้าง arm L ว่า \"ฟรี\"** — `lexical_cache` อ่าน entity "
+       "ออกมาจาก gold YAML ตรง ๆ แปลว่า arm L **ถูกป้อนสตริงที่ qrels สร้างมาจากมันเอง** "
+       "ขณะที่ arm C / D / T เห็นแค่ข้อความคำถาม · มันจึงไม่ได้ฟรีแค่ GPU แต่ได้ *input* "
+       "ที่ arm อื่นไม่ได้ และระบบจริงก็ไม่มีให้ · arm L\u2032 เปลี่ยนสิ่งเดียวคือให้ "
+       "`detect_entities` (ตัวสกัดที่ ship อยู่ ใช้โดย `entity_lookup`/`EntityFilter`) "
+       "กู้ entity จากคำถามเอง — คำถามที่สกัดไม่ได้เลยจะได้คะแนน 0 ทุก candidate "
+       "แล้วตกกลับไปใช้ลำดับ hybrid ซึ่งคือพฤติกรรมจริงตอน deploy ไม่ใช่ความล้มเหลวที่ต้องซ่อน")
+    w_()
+    w_("| เทียบ | metric | diff | 95% CI | raw p | Holm-adj p | นัยสำคัญ |")
+    w_("|---|---|---|---|---|---|---|")
+    for a, b, diff, p, ci, hp, sig in sorted(fam3, key=lambda x: x[5]):
+        w_(f"| {a} | {b} | {diff:+.4f} | [{ci[0]:+.4f}, {ci[1]:+.4f}] | {p:.4f} | {hp:.4f} | "
+           f"{'**ใช่**' if sig else 'ไม่'} |")
+    w_()
+    _nd = sum(1 for q in queries if detected[q] != [entity_of[q]])
+    _nz = sum(1 for q in queries if not detected[q])
+    w_(f"สตริงที่ป้อนต่างจาก arm L บน **{_nd} จาก {len(queries)}** คำถาม "
+       f"(สกัดไม่ได้เลย {_nz}) — ดู S11 สำหรับการแยกตามชนิด · "
+       f"ความต่างสองแบบที่ไม่เหมือนกัน: `person` คืนชื่อที่**ตัดคำนำหน้าออก** "
+       f"(ยังเป็น substring ของเอกสาร จึงยัง match) ส่วน `course` คืน**รหัส 8 หลัก** "
+       f"ไม่ใช่ชื่อ ซึ่งเป็น*สัญญาณคนละตัว* ไม่ใช่สัญญาณเดิมที่แย่ลง")
     w_()
 
     for P in pools:

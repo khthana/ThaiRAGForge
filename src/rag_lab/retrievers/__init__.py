@@ -4,6 +4,9 @@ from rag_lab.retrievers.colbert import ColbertRetriever
 from rag_lab.retrievers.dense import DenseRetriever
 from rag_lab.retrievers.entity_lookup import EntityLookupRetriever
 from rag_lab.retrievers.hybrid import HybridRetriever
+from rag_lab.retrievers.lexical_containment import (  # noqa: E402  (after hybrid)
+    LexicalContainmentRetriever,
+)
 from rag_lab.retrievers.qdrant_retriever import QdrantRetriever, QdrantSparseRetriever
 from rag_lab.retrievers.qdrant_hybrid import QdrantHybridRetriever  # noqa: E402  (after its two arms)
 
@@ -13,6 +16,7 @@ __all__ = [
     "BM25Retriever",
     "ColbertRetriever",
     "HybridRetriever",
+    "LexicalContainmentRetriever",
     "QdrantRetriever",
     "QdrantSparseRetriever",
     "QdrantHybridRetriever",

@@ -79,6 +79,8 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
+
+from rag_lab.text_match import contains_phrase  # noqa: E402
 sys.path.insert(0, str(REPO / "tools" / "eval"))
 
 from embedder_matrix_9way import _EXCLUDED_COMBO_DIRS  # noqa: E402
@@ -98,35 +100,12 @@ K = 10
 FLAG_ANCHOR_PRECISION = 0.5
 COURSE_TEMPLATE = re.compile(r"รายวิชา\s+(.+?)\s+ถูกกล่าวถึง")
 
-# Same rule as course_loader.match_courses_by_name: only the immediate
-# neighbours are inspected, never regex \b.
-_ALNUM = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+# `contains_phrase` moved to src/rag_lab/text_match.py when
+# LexicalContainmentRetriever needed it: the core package must not import from
+# tools/ (ADR-0001), and two copies of a matching rule would eventually
+# disagree. Imported here so this audit and the shipped retriever are decided by
+# the same code. `_WS` stays local -- callers below collapse haystacks with it.
 _WS = re.compile(r"\s+")
-
-
-def contains_phrase(haystack: str, needle: str) -> bool:
-    """Case-insensitive containment of `needle` as a standalone phrase.
-
-    `haystack` must already be whitespace-collapsed (the caller collapses each
-    document once rather than once per name -- 33 names x 2,853 documents makes
-    that the difference between seconds and minutes). The needle is collapsed
-    here.
-
-    Why collapse at all: OCR'd minutes wrap a long course name across a line,
-    and matching raw text calls 3 genuine mentions absent -- measured, e.g.
-    `ENGLISH FOR ARCHITECTURAL PRESENTATION` gains a naming document and loses
-    its only apparently-silent one. Collapsing is the conservative direction,
-    since an inflated `gold_not_naming` would invent a second failure mechanism
-    that isn't there.
-    """
-    needle = _WS.sub(" ", needle)
-    for m in re.finditer(re.escape(needle), haystack, re.IGNORECASE):
-        before = haystack[m.start() - 1] if m.start() > 0 else ""
-        after = haystack[m.end()] if m.end() < len(haystack) else ""
-        if before in _ALNUM or after in _ALNUM:
-            continue
-        return True
-    return False
 
 
 def load_ranked(results_dir: Path, arm: str, qrels: dict) -> dict[str, dict[str, list[str]]]:

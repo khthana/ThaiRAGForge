@@ -650,8 +650,44 @@ back* **no longer has a significant cell to rest on**. Cite `T vs D` without qua
 both arms are cross-encoders under the same labelling rule, so it cancels — and never
 cite `T vs C` without the control's number beside it.
 
-**Nothing is wired into `query_service`.** The cost side (~1.2 s/query, 50 extra
-fetches) is a separate decision, and the control is now a third option at zero cost.
+**The control was given an input no other arm had, and the deployable version of
+it is now what ships (2026-08-20).** `lexical_cache` reads the entity out of the
+gold query set, so arm L is handed the very string the qrels were derived from
+while arms C, D and T see only the query text — it is not merely free of GPU, it
+is *better informed*. **Arm L′** removes that asymmetry by recovering the entity
+with the shipped extractor (`router.detect_entities`), which returns a different
+string on **63 of 106** queries (`person` title-stripped, `course` an 8-digit code
+rather than a name). Three results, in their own exploratory Holm family (m=9) so
+no figure above moves:
+
+| comparison | recall@10 | MRR | nDCG@10 |
+|---|---|---|---|
+| L′ vs L — the cost of losing the oracle string | −0.0138 (ns) | −0.0186 (ns) | −0.0135 (ns) |
+| **L′ vs C — the deployable arm vs the shipped router** | **+0.0489** | **+0.0437** | **+0.0714** |
+| T vs L′ — trained model vs the *deployable* control | **+0.0241** | **+0.0516** | **+0.0423** |
+
+Losing the oracle is cheap (CI rules out a loss worse than 0.0304 recall@10), the
+deployable arm still beats the router significantly on every metric at zero GPU
+cost, and — the correction that matters — **`T vs L′` is significant on all three
+where `T vs L` is significant on none.** The claim that the fine-tune is not
+separable from string containment therefore holds only against the *oracle-fed*
+control; against the deployable one it separates everywhere, so part of what the
+training buys is not needing an entity extractor.
+
+**What is wired.** Arm L′ ships as the `lexical_containment` retriever
+(`src/rag_lab/retrievers/lexical_containment.py`), opt-in by name; `dense` and
+`hybrid` are unchanged and nothing defaults to it. Its leave-one-out weight is
+1.00 on all 106 folds, at which the hybrid term is annihilated, so the arm reduces
+to a stable partition of the hybrid top-50 by containment. Cost: ~100 ms/query for
+entity detection plus fetching 50 instead of 10 (~+20% on a 475 ms routed query),
+no GPU. **The trained cross-encoder is still not wired** — its ~1.2 s/query buys
++0.0241 recall@10 over an arm that costs nothing.
+
+Read all of it with the circularity: the `person`/`program`/`faculty` qrels were
+themselves derived by string containment, so this arm is closer to the labelling
+generator than to relevance. It is defensible to ship because the corpus owner's
+domain judgement is that for this query shape relevance genuinely requires the
+entity to appear — never because lexical matching beats learned ranking.
 
 ## Resolved 2026-08-13: HyDE — a pre-registered negative result on both query sets
 
