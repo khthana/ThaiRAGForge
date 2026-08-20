@@ -600,7 +600,7 @@ outcome for the last one: `docs/reranker-trained-on-hybrid-design.md`.
 | **the wiring** — reranker as a 4th RRF signal instead of truncate-and-replace | beats unrouted hybrid **+0.0392** recall@10 (Holm 0.0108), but **not** the hard router (**−0.0098**, Holm 0.9768 — the point estimate is now *negative*, and the CI rules out its adding more than **+0.0037**) |
 | **the model** — 4 qualified cross-encoders on one routed pool | spread **0.0262** recall@10, and the anchor is the **worst** of the four (the only one below the router); the *older* `bge-reranker-v1-large` is best |
 | **the ceiling** — oracle over the same routed P=50 pool | pool holds **0.9054**, a perfect selection of 10 delivers **0.8331** = **+0.1520** over the router |
-| **the weights** — fine-tuned on hybrid-fused candidates from this corpus | **+0.0654** over the router, **+0.0637** over the off-the-shelf model, all six pre-registered tests Holm **0.0000** |
+| **the weights** — fine-tuned on hybrid-fused candidates from this corpus | **+0.0730** over the router, **+0.0828** over the off-the-shelf model, all six pre-registered tests Holm **0.0000** |
 
 Read row 2 as *the model is a real variable*, never as a model recommendation: the winner is an
 argmax over four models on the same 106 queries, its pre-registered recall@10 family separates 0
@@ -608,36 +608,45 @@ of 3, and it is dominated outright by the free control described at the end of t
 Confirming it on a fresh query set is deliberately **not** owed — the reasons are recorded in
 `docs/reranker-hybrid-interaction-research.md`.
 
-**The headline result.** A cross-encoder that starts from the published anchor's
-own weights and is fine-tuned for 68 minutes on 505 routed-hybrid P=50 pools drawn
-from this corpus — entities disjoint from the eval set, checkpoint selected on
-held-out *training* queries — reaches **0.7485** recall@10 against the shipped
-router's **0.6831** and the off-the-shelf model's **0.6847**. Because only the
+**The headline result** (re-run 2026-08-20 against index rebuild #4; the 08-12
+originals are named wherever a claim changed). A cross-encoder that starts from the
+published anchor's own weights and is fine-tuned for 57 minutes on 506 routed-hybrid
+P=50 pools drawn from this corpus — entities disjoint from the eval set, checkpoint
+selected on held-out *training* queries — reaches **0.7541** recall@10 against the
+shipped router's **0.6811** and the off-the-shelf model's **0.6713**. `T vs D` grew
+(+0.0637 to **+0.0828**) mostly because the off-the-shelf arm *fell* at the rebuild
+(0.6847 to 0.6713), not because training improved — state the two separately. Because only the
 weights vary (pool, routing, fusion, the `w` grid, P, k, metrics and bootstrap are
 all held at published values), `T vs D` is a within-model paired before/after: the
 difference cannot be attributed to model size, tokenizer or language coverage.
 **This is the first reranker intervention in the study to survive the hard router**,
 and it explains the earlier nulls rather than contradicting them — `program`, the
 route the off-the-shelf model actively *damaged*, is where training pays most
-(**+0.1089** over the router, **+0.1723** over the untrained model).
+(**+0.1118** over the router, **+0.1562** over the untrained model).
 
-**Two limits to state with it.** The trained model captures **44%** of the oracle's
-+0.1500 (off-the-shelf: 1%), so the axis is narrowed rather than closed. And
-`faculty` is the one route that gets *worse*: only one faculty entity survives the
-disjointness filter, so 13 of 106 eval queries sit on a route the fine-tune never
-learned — its held-out training recall for that route is **0.5000** in every epoch
-including epoch 0.
+**Two limits to state with it.** The trained model captures **48%** of the oracle's
++0.1520 (off-the-shelf: **−6%**, i.e. it now sits *below* the router), so the axis is
+narrowed rather than closed. And `faculty` is the one route that gets *worse*
+(**−0.0064**): only one faculty entity survives the disjointness filter, so 13 of 106
+eval queries sit on a route the fine-tune never learned — its held-out training
+recall for that route is **0.5000** in every epoch including epoch 0.
 
 **The caveat a reviewer will raise, measured in advance.** A pre-registered control
 that scores candidates purely by *whether the query's entity string appears in the
-chunk* — no GPU, no training — fused through the identical path reaches **0.7442**.
-`T vs L` recall@10 is **+0.0043**, not significant (CI rules out more than
-**0.0229**), while `T vs L` MRR **+0.0409** (Holm 0.0150) and nDCG@10 **+0.0271**
-(Holm 0.0432) *are* significant, and the control alone beats the router on all three
-metrics. Training labels and eval qrels come from the same string-containment
-generator (`docs/eval-validity-threats.md` §2), so **recall@10 on these qrels is
-largely a containment test**, and the fine-tune's separable contribution over that
-is **ordering, not which documents come back**. Cite `T vs D` without qualification —
+chunk* — no GPU, no training — fused through the identical path reaches **0.7438**.
+**Rebuild #4 took away the two cells that used to bound this, and that is the one
+claim in this section withdrawn rather than restated.** At 2026-08-12 `T vs L` was
+significant on MRR (+0.0409, Holm 0.0150) and nDCG@10 (+0.0271, Holm 0.0432); it is
+now **not significant on any metric** — recall@10 **+0.0103** (Holm 0.2896), MRR
+**+0.0330** (0.1368), nDCG@10 **+0.0288** (0.0930). Every sign is unchanged and the
+nDCG effect even grew, so this is **power, not reversal** — but it must now be cited
+as a bound: **T beats L by at most 0.0298 recall@10, and L beats T by at most
+0.0089**. The control alone still beats the router significantly on all three
+(+0.0627 / +0.0623 / +0.0849). Training labels and eval qrels come from the same
+string-containment generator (`docs/eval-validity-threats.md` §2), so **recall@10 on
+these qrels is largely a containment test** — and the earlier claim that the
+fine-tune's separable contribution over that is *ordering, not which documents come
+back* **no longer has a significant cell to rest on**. Cite `T vs D` without qualification —
 both arms are cross-encoders under the same labelling rule, so it cancels — and never
 cite `T vs C` without the control's number beside it.
 

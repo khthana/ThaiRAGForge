@@ -644,7 +644,7 @@ def main() -> int:
     w_()
     w_(f"เวลารวม {time.time()-t0:.0f} วินาที · cross-encoder {ce_ms:.2f} ms/คู่ "
        f"(batch_size={CE_BATCH}) · แคชที่ `{SCORE_CACHE.relative_to(REPO).as_posix()}` "
-       f"— re-render ซ้ำได้โดยไม่ใช้ GPU ด้วย `--reuse-scores`")
+       f"— `--reuse-scores` ข้าม cross-encoder ได้ แต่**ยังใช้ GPU** เพราะ `rank_one_index` โหลด embedder ต่อ routed index — ห้ามรันซ้อนกับงาน GPU อื่น")
 
     OUT.write_text("\n".join(L), encoding="utf-8")
     print("\n".join(L))

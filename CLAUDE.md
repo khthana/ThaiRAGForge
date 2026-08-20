@@ -463,13 +463,15 @@ see `docs/adr/`.
   `hybrid_alpha_sweep.md` (the whole per-`entity_type`-alpha result), the two
   `fetch_depth` sweeps (`hybrid_fetch_depth_sweep.md`, `hybrid_weighted_fetch_depth.md`
   — note `routed_fetch_depth_test.md`, the one the ship decision rests on, **is**
-  current), **most of the reranker family** — `reranker_trained_test.md`, the three
-  `reranker_training_*`/`_pool_source`/`_rrf_*`/`_model_comparison` reports — but
-  **not `reranker_significance_test.md`, which was re-run 08-18 and IS current**, and
-  not `reranker_model_qualification.md`, which is corpus-independent (it gates models
-  on hand-written examples, so no rebuild can stale it). *"The entire reranker family"
-  was the wording here until 2026-08-20 and it over-claimed on both counts; a currency
-  list is itself a claim to check against timestamps.* Also stale: the
+  current). **THE WHOLE RERANKER FAMILY IS NOW CURRENT (re-run 2026-08-20) and is off
+  this list** — `_pool_source`, `_rrf_signal`, `_rrf_routed`, `_model_comparison`,
+  `_training_data`, `_training_run` and `_trained_test` were all re-run in that order
+  (each depends on the previous), plus `reranker_significance_test.md` (08-18) and
+  `reranker_model_qualification.md`, which is corpus-independent (it gates models on
+  hand-written examples, so no rebuild can stale it). *This list has now been wrong in
+  both directions inside four days — "the entire reranker family" over-claimed on
+  2026-08-20 morning, and by that evening the family was current; a currency list is
+  itself a claim to re-check against timestamps, never to inherit.* Also stale: the
   entire **HyDE** family, `qdrant_pilot.md` / `qdrant_concurrency.md`,
   `gold_anchor_ambiguity.md`, `residual_relevance.md`, and both `gold_entity_*` reports.
   **The `rq3_*` and ColBERT families are no longer on this list — both were refreshed
@@ -1513,7 +1515,7 @@ see `docs/adr/`.
   1. **Cross-encoder reranking hurts hybrid — but the finding belongs to
      *truncate-and-replace* and to the *off-the-shelf model*, not to reranking.**
      **This item is no longer a null: follow-up (a) — a cross-encoder fine-tuned on
-     hybrid-fused candidates — beats the shipped hard router (+0.0654 recall@10, Holm
+     hybrid-fused candidates — beats the shipped hard router (+0.0730 recall@10, Holm
      0.0000) and is the FIRST intervention in this whole line to do so. Read its
      paragraph at the end of this item before citing anything above it as settled.**
      Two earlier corrections still stand: fusing the same model's scores in as a fourth
@@ -1708,10 +1710,10 @@ see `docs/adr/`.
      claim is *at least one qualified model does materially better*, never *use bge-v1-large*
      — that would need a fresh query set, and **that confirmation is CLOSED as dominated
      (2026-08-12): do not re-propose it.** Three reasons no measurement would change. (i) The
-     outcome has no decision attached — follow-up (a) reaches 0.7485 and its **free** lexical
-     control 0.7442, so `bge-v1-large`'s 0.7027 is dominated by an arm costing no GPU. (ii) The
+     outcome has no decision attached — follow-up (a) reaches 0.7541 and its **free** lexical
+     control 0.7438, so `bge-v1-large`'s 0.6975 is dominated by an arm costing no GPU. (ii) The
      claim it served (*the model is the weak part, not the axis*) already holds from two
-     independent routes, the oracle column and (a) capturing 44% of that gap at Holm 0.0000.
+     independent routes, the oracle column and (a) capturing 48% of that gap at Holm 0.0000.
      (iii) No clean fresh set exists: the 179 thematic queries move query *shape* and retrieval
      regime together (BM25 collapses there), so a non-replication could not be attributed —
      the wrong-pair trap that killed per-`entity_type` alpha and rrf4 — and the only same-shape
@@ -1759,35 +1761,55 @@ see `docs/adr/`.
      values, and the fine-tune **starts from the anchor's own weights** so the headline is a
      within-model paired before/after — a difference can't be attributed to model size,
      tokenizer or language coverage, the three things `reranker_model_comparison.py` showed
-     matter more here. **T vs D +0.0637 recall@10 / T vs C +0.0654, all six pre-registered
-     tests Holm 0.0000 (m=6)**; arm T 0.7485 vs C 0.6831, D 0.6847. **The §3 prediction
+     matter more here. **REFRESHED AGAINST REBUILD #4 (2026-08-20) — every figure in this
+     paragraph is the re-run's; the 08-12 original is named wherever a claim changed, and
+     one of them is withdrawn outright.** **T vs D +0.0828 recall@10 / T vs C +0.0730, all
+     six pre-registered tests Holm 0.0000 (m=6)**; arm T 0.7541 vs C 0.6811, D 0.6713.
+     **`T vs D` grew (+0.0637 → +0.0828) mostly because arm D FELL** (0.6847 → 0.6713,
+     the off-the-shelf model's own rebuild-#4 loss — see the routed bullet above), not
+     because training got better; state the two separately. **The §3 prediction
      (small positive, ns) was wrong in the positive direction**, recorded in advance as the
      informative failure. It **explains the earlier nulls rather than contradicting them**:
      the oracle column and the 4-model swap had already said *this cross-encoder is weak,
      not the headroom is gone*, and (a) names the weakness — `program`, the route the
-     off-the-shelf model actively **damaged** (−0.0633), is where training pays most
-     (**+0.1089** over the router, +0.1723 over D), and the w grid separates them
-     qualitatively (T rises to w=0.65 and holds to 1.00; **D declines monotonically past
-     0.40** to 0.6000). Trained captures **44%** of the routed P=50 oracle's +0.1500 against
-     off-the-shelf's 1%, so **the axis is narrowed, not closed**. **`faculty` gets worse
-     (−0.0077)** exactly as pre-registered: one faculty entity survives the disjointness
+     off-the-shelf model actively **damaged** (−0.0445 at rebuild #4, was −0.0633), is where
+     training pays most (**+0.1118** over the router, +0.1562 over D), and the w grid
+     separates them qualitatively (T rises to **w=0.90** and stays above C all the way to
+     1.00; **D peaks at w=0.10 and declines** to 0.5987). Trained captures **48%** of the
+     routed P=50 oracle's +0.1520 against off-the-shelf's **−6%** — the off-the-shelf
+     arm now sits *below* the router, so the gap it leaves is the whole ceiling. **The axis
+     is narrowed, not closed.** **`faculty` gets worse
+     (−0.0064)** exactly as pre-registered: one faculty entity survives the disjointness
      filter, so 13 of 106 queries sit on a route the fine-tune never learned — dev recall
      there is **0.5000 in every epoch including epoch 0**. **THE CONTROL IS THE PART TO
      READ BEFORE CITING THE HEADLINE.** A free lexical-containment scorer fused through the
-     identical rrf4 path (arm L, no GPU, no training) reaches **0.7442** against T's 0.7485.
-     An **exploratory, not pre-registered** family 2 bounds it: **`T vs L` recall@10 +0.0043,
-     Holm 0.6426 — ns, CI rules out more than 0.0229**, while `T vs L` **MRR +0.0409**
-     (0.0150) and **nDCG@10 +0.0271** (0.0432) *are* significant and `L vs C` is significant
-     on all three (+0.0611/+0.0623/+0.0834). So the fine-tune's separable contribution over
-     string containment is **ordering, not which documents come back**, and recall@10 on
+     identical rrf4 path (arm L, no GPU, no training) reaches **0.7438** against T's 0.7541.
+     An **exploratory, not pre-registered** family 2 bounds it — and **rebuild #4 took
+     away the two cells that used to carry it, which is the one claim here that is
+     WITHDRAWN rather than restated.** `T vs L` was significant on **MRR** (+0.0409, Holm
+     0.0150) and **nDCG@10** (+0.0271, 0.0432); it is now **ns on all three** — recall@10
+     **+0.0103** (Holm 0.2896), MRR **+0.0330** (0.1368), nDCG@10 **+0.0288** (0.0930). So
+     *the fine-tune's separable contribution over string containment is **ordering, not
+     which documents come back*** is **withdrawn**: nothing separates the two on any
+     metric now. **Read it as power, not reversal** — every sign is unchanged and the
+     nDCG effect even *grew* (+0.0271 → +0.0288) while its Holm p doubled, which is the
+     bootstrap widening, not a direction changing
+     ([[feedback_a_replication_disagrees_by_sign_not_verdict]]) — and therefore **cite it
+     as a bound: T beats L by at most 0.0298 recall@10, L beats T by at most 0.0089.**
+     `L vs C` is still significant on all three (+0.0627/+0.0623/+0.0849), so the free
+     control genuinely beats the shipped router. And recall@10 on
      these qrels is largely a containment test — the shared-labelling circularity §5
      pre-registered, arriving in the form it was written to detect. **Cite `T vs D` cleanly**
      (both arms are cross-encoders against the same qrels, so the shared rule cancels — and
      it is the test (a) is named after); **never cite `T vs C` without arm L's number beside
      it.** §4.1's own prediction was **refuted** too and that is a second finding: L was
      predicted weakest on `course` (qrels keyed on the 8-digit code, query supplies the
-     name) and instead **beats T there** (0.7214 vs 0.7145) and on `person`; its real weak
-     route is `faculty`. Two more things worth keeping. **S7 surfaced a threat the
+     name) and instead **beats T on `person`** (0.9033 vs 0.8816); its real weak route is
+     `faculty` (0.4773). **The `course` half of that illustration is withdrawn at rebuild
+     #4**: L is unmoved there (0.7214) while T rose to 0.7328, so L no longer beats it.
+     The refutation itself stands, because it rests on which route L is *weakest* on, not
+     on which routes it happens to win — the same distinction the `mmarco` withdrawal
+     above turns on. Two more things worth keeping. **S7 surfaced a threat the
      pre-registration missed**: 0 shared queries and 0 shared entities, but **325 resolutions
      are relevant to both sets** — unavoidable in one corpus, never a label the model saw,
      and structurally invisible to an entity-level disjointness argument. And **the

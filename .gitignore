@@ -40,3 +40,8 @@ docs/code-explained.pdf
 # the source of truth, the PDF is a build artifact.
 docs/project-journey.pdf
 data/rq4/
+
+# Superseded artifacts set aside by a refresh (moved, not deleted, per ADR-0004).
+# Deliberately OUTSIDE data/results/ so a stale copy cannot serve as an alibi for a
+# stale prose figure in audit_doc_claims.py D2 -- see CLAUDE.md, doc-claims bullet.
+data/_superseded/
