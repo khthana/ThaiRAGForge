@@ -411,6 +411,19 @@ see `docs/adr/`.
   **The `rq3_*` and ColBERT families are no longer on this list — both were refreshed
   2026-08-20** (see their own bullets; RQ3 0 verdict flips, ColBERT verdict STOP
   unchanged).
+  **The HyDE family is on this list DELIBERATELY AND PERMANENTLY — do not re-propose
+  running it, and this is the distinction the list otherwise hides.** "Stale" is a fact
+  about a report's date; "worth refreshing" is a separate judgement, and lumping the two
+  together is how a list nobody can ever clear ends up being a list nobody reads. HyDE's
+  margins are **−0.1898** (Holm 0.0000) and **−0.0736** (0.0008) against the ~0.002-0.010
+  that rebuild #4 actually moved comparable quantities by — 10x to 27x — so no verdict
+  can flip; and because both results are **directional losses**, the bullet states no
+  bound of the form "rules out more than X" that a refresh could sharpen. Its figures are
+  dated 2026-08-13 at the head of their own bullet, which is convention (c) below, and
+  that is the whole remedy owed. **Contrast the reranker family, which is on this list
+  for a reason that does bite**: its `D vs C` (≤ **+0.0212**) and `T vs L` (≤ **0.0229**)
+  are *bounds* the same size as the drift, so refreshing them would genuinely move a
+  published number — that one is a real decision, HyDE is not.
   **The ColBERT refresh exposed a second, sharper instance of the D2 hole below, and it
   is the one worth reading.** `qwen3_0.6b` `program` dense recall@10 moved
   **0.6066 → 0.6034** at rebuild #4, and the current per-`entity_type` report has said
