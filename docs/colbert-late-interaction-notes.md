@@ -140,11 +140,12 @@ Evaluation cost is low — it reuses `gold_query_set_73det.yaml`, the existing
 paired-bootstrap + Holm machinery, and `bm25_hybrid_entity_type_breakdown.py`
 unchanged. Only the index build and a `ColbertRetriever` are new.
 
-> **OUTCOME (2026-08-13): the prediction FAILED — `person` clears as a tie,
-> `program` loses by −0.3331 (Holm 0.0000), verdict STOP.** Everything above this
+> **OUTCOME (2026-08-13, re-run 2026-08-20 against rebuild #4 with the verdict
+> unchanged): the prediction FAILED — `person` clears as a tie, `program` loses
+> by −0.3337 (Holm 0.0000), verdict STOP.** Everything above this
 > line is the untouched pre-registration; the numbers and the mechanism are in
 > §"The pilot ran" below. The paragraph two above turned out to describe this run
-> exactly: ColBERT *does* carry the best overall figure (0.5559) while keeping the
+> exactly: ColBERT *does* carry the best overall figure (0.5555) while keeping the
 > person/program split — so the honest conclusion is "a stronger retriever", which
 > is why it was written down first.
 
@@ -352,20 +353,22 @@ were where the defect sat.
 
 ### The pilot ran, and the prediction FAILED: verdict STOP
 
-`tools/eval/colbert_pilot.py` → `data/results/colbert_pilot.md`, 2026-08-13.
+`tools/eval/colbert_pilot.py` → `data/results/colbert_pilot.md`. **Re-run
+2026-08-20 against rebuild #4** (figures below are that run; the 2026-08-13
+originals are in `data/results/_pre_2026_08_18_rebuild4_refresh/`).
 `recursive` only, doc300/q32, all 106 Gold queries, unrouted, k=10, ColBERT-alone.
-Build 11.8 min (70,251 chunks → 7,364,711 token vectors, `docset_hash
-2bebca97fde57268`); score run exit 0 with **7/7 self-checks PASS**. The bars are
+Build 11.8 min (70,250 chunks → 7,364,358 token vectors, `docset_hash
+091b7a0ad8a5cfbe`); score run exit 0 with **7/7 self-checks PASS**. The bars are
 recomputed **at `recursive`** by `colbert_pilot_baselines.py` rather than taken
 from the published cross-chunker aggregates — comparing a one-chunker treatment
 against a nine-chunker bar is the wrong-pair trap that killed per-`entity_type`
-alpha and rrf4 — and S1/S2 reproduce those aggregates exactly (0.8147 / 0.6066)
+alpha and rrf4 — and S1/S2 reproduce those aggregates exactly (0.8147 / 0.6034)
 from the same code path.
 
 | cell | comparator | n | ColBERT | bar | diff | 95% CI | Holm p | verdict |
 |---|---|---:|---:|---:|---:|---|---:|---|
 | `person` | BM25 | 30 | 0.8360 | 0.8053 | **+0.0308** | [−0.0429, +0.1030] | 0.3974 | **clears** |
-| `program` | dense `qwen3_0.6b` | 30 | 0.2763 | 0.6094 | **−0.3331** | [−0.4434, −0.2262] | 0.0000 | fails |
+| `program` | dense `qwen3_0.6b` | 30 | 0.2749 | 0.6086 | **−0.3337** | [−0.4433, −0.2278] | 0.0000 | fails |
 
 **The prediction is a conjunction and it half-held.** `person` clears — but as a
 *tie*, not a win: the CI spans zero and +0.0308 is inside the bar's own
@@ -376,23 +379,23 @@ margin. Descriptively, across all four types:
 | entity_type | n | ColBERT | BM25 | best dense | ceiling |
 |---|---:|---:|---:|---:|---:|
 | course | 33 | 0.6176 | 0.4280 | 0.5759 | 0.8729 |
-| faculty_adjunct_aggregate | 13 | 0.3978 | 0.4517 | 0.4361 | 0.6810 |
+| faculty_adjunct_aggregate | 13 | 0.3978 | 0.4477 | 0.4375 | 0.6810 |
 | person | 30 | 0.8360 | 0.8053 | 0.4281 | 0.9760 |
-| program | 30 | 0.2763 | 0.3230 | 0.6094 | 0.8979 |
-| **overall** | 106 | **0.5559** | 0.5080 | 0.5264 | 0.8856 |
+| program | 30 | 0.2749 | 0.3278 | 0.6086 | 0.8979 |
+| **overall** | 106 | **0.5555** | 0.5088 | 0.5264 | 0.8856 |
 
 **The mechanism is the finding, and it is the axis's own motivation answered in
 the negative.** ColBERT sits nearer BM25 than dense on 2 of 4 types — not a
 majority, but **those two are exactly the cells the prediction is decided on**,
 and the direction is identical on both: strong where the lexical arm is strong
 (`person` 0.8360 ≈ BM25 0.8053, against dense's 0.4281), weak where the lexical
-arm is weak (`program` 0.2763 ≈ BM25 0.3230, against dense's 0.6094). Late
+arm is weak (`program` 0.2749 ≈ BM25 0.3278, against dense's 0.6086). Late
 interaction was proposed here to **cover** the person/program arm split; it
 **inherits one side of it** instead. It is not a purely lexical model either —
 on `course` it beats both arms (0.6176 vs 0.5759 / 0.4280) — which is why the
 per-type table matters more than the verdict line.
 
-**ColBERT carries the highest overall figure in the table (0.5559 vs BM25 0.5080
+**ColBERT carries the highest overall figure in the table (0.5555 vs BM25 0.5088
 and dense 0.5264), and that is precisely the reading the conjunctive
 pre-registration exists to refuse.** An aggregate win licenses "a stronger
 retriever"; it never licenses "late interaction resolves the complementarity".
@@ -401,20 +404,20 @@ published as a success.
 
 **The length rider was executed and does not fire.** `DECISION_RULE`'s 512/48
 fallback is conditioned on the losing cell's truncation being "materially above"
-the corpus rate — and picking what counts as material *after* seeing −0.3331 is
+the corpus rate — and picking what counts as material *after* seeing −0.3337 is
 the favourable re-reading a frozen rule exists to prevent. So it is answered as
 an arithmetic bound instead (`truncation_rider`, §3b of the report): grant
 truncation the most damage it could possibly do — assume a gold resolution with
 **any** truncated chunk is destroyed outright and can never be retrieved. Over
 `program`'s 221 gold resolutions / 7,659 chunks, **32 are truncated (0.42%,
 below the corpus 1.11%)**, touching 14 resolutions (6.3%), and a total loss of
-all 14 could explain at most **0.0837** of recall@10 against a **0.3331** gap.
+all 14 could explain at most **0.0837** of recall@10 against a **0.3337** gap.
 Both readings agree and neither needed a threshold: the bound is 4x short, and
 the cell's own truncation rate is *below* the corpus rate, so the rule's literal
 wording says no too. **300/32 stands and the truncation stays a stated confound
 pointing against the treatment.**
 
-Cost, for the record: 1,650.9 ms query latency p50 (against a 475.6 ms routed
+Cost, for the record: 1,578.9 ms query latency p50 (against a 475.6 ms routed
 hybrid query), 1.89 GB fp16 for one chunker.
 
 **What this does and does not close.** It closes the pre-registered question at
@@ -435,9 +438,9 @@ about putting the artifact in front of users. The recommendation is **do not
 adopt**, on four grounds in descending order of weight.
 
 **1. The cell it fails is the one the shipped system depends on.** `program`
-loses by −0.3331 at Holm 0.0000, and `program` is precisely where the shipped
+loses by −0.3337 at Holm 0.0000, and `program` is precisely where the shipped
 router hands the query to a dense specialist because BM25 collapses there
-(0.3230). Adopting ColBERT as the retriever would trade away the capability the
+(0.3278). Adopting ColBERT as the retriever would trade away the capability the
 system already has, to buy a capability it already has for free from BM25 —
 `person` only **ties** (+0.0308, CI spans zero). That is the inherit-not-cover
 mechanism above, restated as a deployment consequence.
@@ -449,12 +452,12 @@ never a bar**, and neither was the router. So the claim is *not* "ColBERT loses
 to what we ship". It is that the only two comparisons it won are against two
 single arms, and the shipped configuration is neither of them. Indicatively —
 **not** like-for-like, since these are different chunker/embedder systems —
-unrouted hybrid publishes 0.6281 and the shipped routed hybrid 0.6831 against
-ColBERT's 0.5559. For a ship decision that asymmetry is already enough: the
+unrouted hybrid publishes 0.6229 and the shipped routed hybrid 0.6811 against
+ColBERT's 0.5555. For a ship decision that asymmetry is already enough: the
 burden is on the candidate to beat the incumbent, and it has not been asked to.
 
-**3. Cost points the same way.** 1,650.9 ms p50 against the shipped routed
-hybrid's 475.6 ms (~3.5x), 1.89 GB fp16 for **one** chunker (7.3 GB for all
+**3. Cost points the same way.** 1,578.9 ms p50 against the shipped routed
+hybrid's 475.6 ms (~3.3x), 1.89 GB fp16 for **one** chunker (7.3 GB for all
 four, which does not co-reside on a 12 GB card), plus a permanent maintenance
 liability: the checkpoint arrives with all 24 rotary layers uninitialised and
 `_repair_rotary` has to restore them at load time, keyed to how a given
@@ -486,6 +489,11 @@ no GPU-heavy component has earned a place in the serving path.
   STOP** (above).
 - Nothing is owed. Anything further on this axis needs a *new* pre-registered
   prediction; do not reopen it as a continuation of the one that failed.
+- ~~The artifact predates rebuild #4~~ — **done 2026-08-20**: rebuilt and re-scored,
+  verdict and ship decision unchanged. Only 3 of the 5 ColBERT scripts read the
+  corpus at all (`colbert_length_profile`, `colbert_pilot`, `colbert_pilot_baselines`);
+  `colbert_pylate_crosscheck` and `qualify_colbert_model` run on a hand-written query
+  and hand-written documents, so a rebuild cannot stale them and they were not re-run.
 
 ## Where this belongs in the paper regardless
 

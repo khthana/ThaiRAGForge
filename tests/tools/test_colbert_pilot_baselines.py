@@ -20,9 +20,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "eval"))
 from colbert_pilot_baselines import (  # noqa: E402
     _PREDICTION_EMBEDDER,
+    _PUBLISHED,
     across_chunkers,
     self_checks,
 )
+
+# Read the anchors from the module rather than retyping them. `_PUBLISHED` is a
+# CODE-PATH anchor that has to be re-pointed after an index rebuild (it moved
+# 0.6066 -> 0.6034 at rebuild #4), and a fixture carrying its own copy would
+# turn every such re-point into two unrelated test failures -- the fixture
+# drifting from the constant it exists to exercise.
+_BM25_PERSON = _PUBLISHED[("bm25", "person")]
+_DENSE_PROGRAM = _PUBLISHED[(_PREDICTION_EMBEDDER, "program")]
 
 CHUNKERS = ["fixed_size", "recursive", "semantic", "sentence"]
 EMBEDDERS = [_PREDICTION_EMBEDDER, "bge_m3"]
@@ -38,9 +47,9 @@ def _cells(values: dict[tuple[str, str], dict[str, float]], nq: int = 30):
 
 def _good():
     """A run shaped like the real one: the named embedder is the argmax."""
-    bm25 = _cells({(c, "-"): {"person": 0.8147} for c in CHUNKERS})
+    bm25 = _cells({(c, "-"): {"person": _BM25_PERSON} for c in CHUNKERS})
     dense = _cells({
-        (c, e): {"program": 0.6066 if e == _PREDICTION_EMBEDDER else 0.5}
+        (c, e): {"program": _DENSE_PROGRAM if e == _PREDICTION_EMBEDDER else 0.5}
         for c in CHUNKERS
         for e in EMBEDDERS
     })
@@ -81,7 +90,7 @@ def test_s3_catches_a_chunker_scored_on_fewer_queries():
     """A short combo lowers a bar by averaging over less, and never crashes."""
     bm25, dense = _good()
     bm25 = deepcopy(bm25)
-    bm25[("semantic", "-")]["person"] = {"q0": 0.8147}
+    bm25[("semantic", "-")]["person"] = {"q0": _BM25_PERSON}
     assert _verdicts(bm25, dense)["S3"] is False
 
 

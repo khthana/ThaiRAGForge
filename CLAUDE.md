@@ -398,19 +398,29 @@ see `docs/adr/`.
 - **REBUILD #4 CURRENCY — which published numbers describe the current indices, and
   which do not (2026-08-20).** Rebuild #4 finished 2026-08-17 (all 40 combos hold the
   2026-08-09 re-OCR). The downstream refresh chain has been run **in part**, so
-  `data/results/` is a **mixed** directory: **27 of 78 reports are dated 2026-08-18 or
-  later and describe the new indices; 51 are older.** Many of those 51 are legitimately
+  `data/results/` is a **mixed** directory: **36 of 78 reports are dated 2026-08-18 or
+  later and describe the new indices; 42 are older.** Many of those 51 are legitimately
   superseded snapshots, but these are **live claims measured against indices that no
   longer exist** — treat every figure in them as pre-rebuild-#4 and say so when citing:
   `hybrid_alpha_sweep.md` (the whole per-`entity_type`-alpha result), the two
   `fetch_depth` sweeps (`hybrid_fetch_depth_sweep.md`, `hybrid_weighted_fetch_depth.md`
   — note `routed_fetch_depth_test.md`, the one the ship decision rests on, **is**
   current), the entire **reranker** family including `reranker_trained_test.md`, the
-  entire **HyDE** and **ColBERT** families, `qdrant_pilot.md` / `qdrant_concurrency.md`,
-  `gold_anchor_ambiguity.md`, `residual_relevance.md`, both `gold_entity_*` reports, and
-  **all three `rq3_*` reports** — that last one is not a judgement call, this file
-  already states the rule ("if `chunker_compare_full` is rebuilt again, treat RQ3 as
-  stale until re-run") and rebuild #4 met its condition. **`rq4_score_gemma4*.md` is
+  entire **HyDE** family, `qdrant_pilot.md` / `qdrant_concurrency.md`,
+  `gold_anchor_ambiguity.md`, `residual_relevance.md`, and both `gold_entity_*` reports.
+  **The `rq3_*` and ColBERT families are no longer on this list — both were refreshed
+  2026-08-20** (see their own bullets; RQ3 0 verdict flips, ColBERT verdict STOP
+  unchanged).
+  **The ColBERT refresh exposed a second, sharper instance of the D2 hole below, and it
+  is the one worth reading.** `qwen3_0.6b` `program` dense recall@10 moved
+  **0.6066 → 0.6034** at rebuild #4, and the current per-`entity_type` report has said
+  0.6034 since 2026-08-18 — yet this file and `paper-results-summary.md` went on saying
+  0.6066 and D2 kept passing, **because the stale ColBERT reports still carried the old
+  value**. So the prose was traceable to precisely the artifacts that were wrong for the
+  same reason. Both were corrected 2026-08-20, along with the ceiling-attainment row it
+  feeds (`program` 0.6165/68.7% → **0.6098/67.9%**). Note the direction this cuts:
+  **refreshing a stale report is what made the stale prose detectable**, so a refresh is
+  not only a currency fix, it is the thing that removes a figure's false alibi. **`rq4_score_gemma4*.md` is
   stale for a different reason** (its answers were half-regenerated when it was last
   scored), see the RQ4 bullet.
   **The reusable part is why no audit caught this, because it is a real hole in the D
@@ -1403,13 +1413,13 @@ see `docs/adr/`.
   hybrid win, and one caveat to it.** BM25 alone scores **0.8147** on `person` queries —
   beating every embedder's dense-alone person score (best `bge_m3` 0.5735) outright —
   while collapsing to **0.3497** on `program`, where dense nearly doubles it
-  (`qwen3_0.6b` 0.6066). **BM25 carries person (exact name match), dense carries program**;
+  (`qwen3_0.6b` 0.6034). **BM25 carries person (exact name match), dense carries program**;
   that is direct evidence for the complementarity the Open item #2 proxies never
   established. Caveat: **"hybrid never hurts" is an aggregate claim, not a per-category
   one** — on `person` specifically hybrid sits *below* BM25-alone for most embedders
   (`qwen3_0.6b` 0.7264, `qwen3` 0.7342, `jina_v5` 0.7382), only `bge_m3` (0.8220) exceeding
-  it. Measured against the structural ceiling, hybrid reaches 84.2% on `person`, 72.5%
-  `faculty_adjunct_aggregate`, 68.7% `program`, 65.6% `course` — **this reverses the old
+  it. Measured against the structural ceiling (2026-08-18 figures), hybrid reaches 84.2%
+  on `person`, 72.5% `faculty_adjunct_aggregate`, 67.9% `program`, 65.6% `course` — **this reverses the old
   "person has the most addressable headroom" reading, which was dense-alone-specific;
   `course` now has the most.** Also settled the same day: MAP and precision@1 are
   significance-tested at last (`tools/eval/map_precision_significance_test.py`, run at both
@@ -2365,33 +2375,33 @@ see `docs/adr/`.
   run* — motivated by *our own* results (the cross-encoder hurt hybrid MRR;
   BM25/dense split person vs program), so an aggregate win cannot be mistaken for
   resolving that split. **`person` cleared as a TIE (+0.0308, CI [−0.0429,
-  +0.1030], Holm 0.3974) and `program` failed by −0.3331 (Holm 0.0000), 6.7x the
+  +0.1030], Holm 0.3974) and `program` failed by −0.3337 (Holm 0.0000), 6.7x the
   STOP margin** — the pilot is `recursive` only, doc300/q32, 106 Gold queries,
-  unrouted, k=10, 7/7 self-checks PASS, build 11.8 min (70,251 chunks →
-  7,364,711 token vectors, `docset_hash 2bebca97fde57268`), query p50 1650.9 ms.
+  unrouted, k=10, 7/7 self-checks PASS, build 11.8 min (70,250 chunks →
+  7,364,358 token vectors, `docset_hash 091b7a0ad8a5cfbe`), query p50 1578.9 ms.
   **The bars are recomputed AT `recursive`, never the published cross-chunker
   aggregates** — a one-chunker treatment against a nine-chunker bar is the
   wrong-pair trap that killed per-`entity_type` alpha and rrf4 — and S1/S2
-  reproduce 0.8147 / 0.6066 exactly from the same code path.
+  reproduce 0.8147 / 0.6034 exactly from the same code path.
   **The mechanism is worth more than the verdict, and it is the axis's own
   motivation answered in the negative**: ColBERT is strong exactly where the
   lexical arm is strong (`person` 0.8360 ≈ BM25 0.8053 vs dense 0.4281) and weak
-  exactly where the lexical arm is weak (`program` 0.2763 ≈ BM25 0.3230 vs dense
-  0.6094) — it **inherits** one side of the person/program split instead of
+  exactly where the lexical arm is weak (`program` 0.2749 ≈ BM25 0.3278 vs dense
+  0.6086) — it **inherits** one side of the person/program split instead of
   covering it. Not purely lexical either: on `course` it beats both arms (0.6176
   vs 0.5759 / 0.4280). **And ColBERT carries the highest overall figure in the
-  table (0.5559 vs BM25 0.5080 / dense 0.5264), which is exactly the aggregate
+  table (0.5555 vs BM25 0.5088 / dense 0.5264), which is exactly the aggregate
   reading the conjunctive pre-registration exists to refuse** — written as an
   aggregate, this run would have been published as a success.
   **The 512/48 length rider was executed and does not fire.** It is conditioned on
   the losing cell's truncation being "materially above" the corpus rate, and
-  choosing what counts as material *after* seeing −0.3331 is the favourable
+  choosing what counts as material *after* seeing −0.3337 is the favourable
   re-reading a frozen rule exists to prevent — so it is answered as an **arithmetic
   bound** (`truncation_rider`, §3b): grant truncation the most damage possible,
   i.e. assume a gold resolution with **any** truncated chunk is destroyed outright.
   Over `program`'s 221 gold resolutions / 7,659 chunks, **32 are truncated (0.42%,
   below the corpus 1.11%)** touching 14 resolutions (6.3%), and total loss of all
-  14 explains at most **0.0837** against a **0.3331** gap. Both readings agree, 4x
+  14 explains at most **0.0837** against a **0.3337** gap. Both readings agree, 4x
   short, no threshold needed; 300/32 stands and truncation stays a confound
   pointing *against* the treatment. `--render` back-fills and persists the rider so
   the figure is sourced from an artifact, not typed. **What is NOT closed**: this
@@ -2402,19 +2412,19 @@ see `docs/adr/`.
   separate decision from the axis verdict, since `DECISION_RULE` only stops us
   spending more GPU on the *question*. Four grounds, heaviest first. (1) The
   failed cell is the one the shipped system depends on: `program` is where the
-  router hands off to a dense specialist *because* BM25 collapses there (0.3230),
+  router hands off to a dense specialist *because* BM25 collapses there (0.3278),
   so adopting ColBERT trades away a capability we have to buy one BM25 already
   gives free — `person` only **ties**. (2) **It was never shown to beat what
   ships, and was never *measured* against it either** — the bars were BM25 and
   best-dense at `recursive` by pre-registration; hybrid at the same chunker was
   never a bar and neither was the router. State that precisely rather than as "it
   loses"; indicatively (**not** like-for-like, different chunker/embedder systems)
-  unrouted hybrid publishes 0.6281 and routed 0.6831 against 0.5559, and for a
-  ship decision the burden is on the candidate anyway. (3) Cost: **1,650.9 ms p50
-  vs 475.6 ms** (~3.5x), 1.89 GB fp16 per chunker (7.3 GB for four, which will not
+  unrouted hybrid publishes 0.6229 and routed 0.6811 against 0.5555, and for a
+  ship decision the burden is on the candidate anyway. (3) Cost: **1,578.9 ms p50
+  vs 475.6 ms** (~3.3x), 1.89 GB fp16 per chunker (7.3 GB for four, which will not
   co-reside on a 12 GB card), plus `_repair_rotary` as a permanent maintenance
   liability keyed to a `transformers` version. (4) The `course` win (0.6176 vs
-  0.5759 / 0.4280) is a **per-`entity_type` repair**, and that shape has died
+  0.5759 / 0.4280, all three unmoved by rebuild #4) is a **per-`entity_type` repair**, and that shape has died
   against the hard router twice here (per-type alpha, rrf4) by the same mechanism —
   it is a hypothesis needing its own pre-registration, never a result to read off
   this table.

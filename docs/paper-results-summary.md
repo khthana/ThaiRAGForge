@@ -716,28 +716,36 @@ aggregate win must not be allowed to answer it. Report: `data/results/colbert_pi
 (+ `colbert_pilot_baselines.md`, `colbert_pylate_crosscheck.md`,
 `colbert_model_qualification.md`, `colbert_length_profile.md`). Pilot: `recursive`
 chunker only, doc300/q32, 106 Gold queries, unrouted, k=10, 7/7 self-checks PASS.
+**Re-run 2026-08-20 against rebuild #4** (figures below are that run; the 2026-08-13
+originals are in `data/results/_pre_2026_08_18_rebuild4_refresh/`). The verdict, the
+ship decision and every conclusion below are unchanged — `person`, `course` and
+`faculty` ColBERT scores are byte-identical and only `program` moved.
 
 | cell | comparator | ColBERT | bar | diff | Holm-adj | |
 |---|---|---|---|---|---|---|
 | `person` | BM25 | 0.8360 | 0.8053 | **+0.0308** | 0.3974 | clears (tie) |
-| `program` | dense `qwen3_0.6b` | 0.2763 | 0.6094 | **−0.3331** | **0.0000** | fails |
+| `program` | dense `qwen3_0.6b` | 0.2749 | 0.6086 | **−0.3337** | **0.0000** | fails |
 
 `person` clears as a **tie**, with the CI ruling out ColBERT beating BM25 by more
 than **0.1030** or losing by more than **0.0429**; `program` fails by 6.7x the STOP
 margin. **The bars are recomputed at `recursive`, never taken from the published
 cross-chunker aggregates** — a one-chunker treatment against a nine-chunker bar is
 the wrong-pair trap that killed per-`entity_type` alpha and rrf4 — and S1/S2
-reproduce the published **0.8147** / **0.6066** exactly from the same code path.
+reproduce the published **0.8147** / **0.6034** exactly from the same code path.
+(The `program` anchor read **0.6066** before rebuild #4; the `person` one is unmoved.
+The value the prediction was *registered* against is kept separately in
+`_REGISTERED` and rendered in `colbert_pilot_baselines.md`, so re-pointing an anchor
+after a rebuild cannot silently re-base the pre-registration.)
 
 **The mechanism is worth more than the verdict, and it answers the axis's own
 motivation in the negative.** ColBERT is strong exactly where the lexical arm is
 strong (`person` 0.8360 ≈ BM25 0.8053 against dense 0.4281) and weak exactly where
-the lexical arm is weak (`program` 0.2763 ≈ BM25 0.3230 against dense 0.6094): it
+the lexical arm is weak (`program` 0.2749 ≈ BM25 0.3278 against dense 0.6086): it
 **inherits** one side of the person/program split instead of covering it. It is not
 purely lexical either — on `course` it beats both arms (0.6176 vs 0.5759 / 0.4280).
 
-**And it carries the highest overall figure in its own table — 0.5559, against BM25
-0.5080 and dense 0.5264.** Written as an aggregate, this run would have been
+**And it carries the highest overall figure in its own table — 0.5555, against BM25
+0.5088 and dense 0.5264.** Written as an aggregate, this run would have been
 published as a success. That is precisely what a conjunctive pre-registration exists
 to refuse, and it is the clearest example in this project of why the cells the
 mechanism lives in must be named in advance.
@@ -745,12 +753,12 @@ mechanism lives in must be named in advance.
 **The 512/48 length rider was executed and did not fire, answered as a bound rather
 than a threshold.** The frozen rule conditions the fallback on the losing cell's
 truncation being "materially above" the corpus rate, and choosing what counts as
-material *after* seeing −0.3331 is the favourable re-reading a frozen rule exists to
+material *after* seeing −0.3337 is the favourable re-reading a frozen rule exists to
 prevent. So truncation was granted the most damage arithmetically possible — a gold
 resolution with *any* truncated chunk is destroyed outright. Over `program`'s 221
 gold resolutions / 7,659 chunks, **32 chunks are truncated (0.42%, below the corpus
 rate of 1.11%)** touching 14 resolutions, and total loss of all 14 explains at most
-**0.0837** against a **0.3331** gap. Both readings agree, 4x short; 300/32 stands and
+**0.0837** against a **0.3337** gap. Both readings agree, 4x short; 300/32 stands and
 truncation remains a confound pointing *against* the treatment.
 
 **The checkpoint arrives broken, which is a methods finding independent of the
@@ -771,14 +779,14 @@ agree to min cosine **0.999936** and MaxSim **20.8212** vs pylate's 20.8213.
 the frozen rule only governs whether to spend more GPU on the question. Four grounds,
 heaviest first. (1) **The failed cell is the one the shipped system depends on**:
 `program` is where the router hands off to a dense specialist *because* BM25
-collapses there (0.3230), so adopting ColBERT trades away a capability the system has
+collapses there (0.3278), so adopting ColBERT trades away a capability the system has
 in order to buy one BM25 already supplies free — and `person`, the cell it cleared,
 only ties. (2) **It was never shown to beat what ships, and was never measured
 against it either** — hybrid at the same chunker was never a bar and neither was the
 router; indicatively (**not** like-for-like, different chunker/embedder systems)
-unrouted hybrid publishes 0.6281 and routed 0.6831 against 0.5559, and for a ship
-decision the burden sits on the candidate anyway. (3) **Cost**: query p50 **1650.9 ms**
-against a routed hybrid query's 475.6 ms (~3.5x), 1.89 GB fp16 per chunker (7.3 GB
+unrouted hybrid publishes 0.6229 and routed 0.6811 against 0.5555, and for a ship
+decision the burden sits on the candidate anyway. (3) **Cost**: query p50 **1578.9 ms**
+against a routed hybrid query's 475.6 ms (~3.3x), 1.89 GB fp16 per chunker (7.3 GB
 for four, which will not co-reside on a 12 GB card), plus `_repair_rotary` as a
 standing maintenance liability keyed to a `transformers` version. (4) The `course` win
 is a **per-`entity_type` repair**, and that shape has died against the hard router
@@ -2041,7 +2049,7 @@ system per category; `% of ceiling` = recall ÷ ceiling):
 |---|---|---|---|---|---|---|---|---|
 | person | 0.9760 | bge_m3 | 0.8220 | **84.2%** | bge_m3 (0.5735) | 58.8% | 0.8147 | **83.5%** |
 | faculty_adjunct_aggregate | 0.6810 | jina_v5 | 0.4939 | **72.5%** | qwen3 (0.4729) | 69.4% | 0.4234 | 62.2% |
-| program | 0.8979 | qwen3_0.6b | 0.6165 | **68.7%** | qwen3_0.6b (0.6066) | 67.6% | 0.3497 | 38.9% |
+| program | 0.8979 | qwen3_0.6b | 0.6098 | **67.9%** | qwen3_0.6b (0.6034) | 67.2% | 0.3497 | 38.9% |
 | course | 0.8729 | qwen3_0.6b | 0.5723 | **65.6%** | qwen3_0.6b (0.5514) | 63.2% | 0.3585 | 41.1% |
 
 *(Refreshed 2026-08-06 against `chunker_compare_full` rebuild #3's corrected
@@ -2070,7 +2078,7 @@ second open question.
    BM25 alone reaches **0.8147** on `person` — beating *every* dense
    embedder's dense-alone person score (best: bge_m3 0.5735) by a wide
    margin — while collapsing to **0.3497** on `program`, where dense
-   nearly doubles it (qwen3_0.6b 0.6066). **BM25 carries person queries
+   nearly doubles it (qwen3_0.6b 0.6034). **BM25 carries person queries
    (exact name match); dense carries program queries.** This is the
    mechanistic explanation for the hybrid-beats-both result, and it is
    *direct* evidence, unlike the indirect proxies (rescue rate, union

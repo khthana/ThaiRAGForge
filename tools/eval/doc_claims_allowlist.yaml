@@ -46,7 +46,7 @@ counts:
       do not, which is D5's strict-pair rule behaving as designed.
 
   - doc: CLAUDE.md
-    figure: "27 of 78"
+    figure: "36 of 78"
     checked: 2026-08-20
     reason: >-
       Reports under data/results/*.md dated 2026-08-18 or later, out of all such
