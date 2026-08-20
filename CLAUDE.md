@@ -1801,6 +1801,36 @@ see `docs/adr/`.
      (49 of 25,250 training pairs truncated, 0.19%). **Nothing is wired** — per §3, and the
      cost side now has a sharper competitor than it did (~1.2 s/query and 50 extra fetches,
      against arm L at zero and 0.0043 behind).
+     **REFRESHED AGAINST REBUILD #4 (2026-08-20) — pools re-minted, model retrained, and
+     two defects in the harness came out of it that matter more than the numbers.**
+     (1) **The training pools had no way of naming the indices they came from.** The
+     builder's `input_fingerprint()` covers dicts/tags/manifests — the **label** side, which
+     is all a minted candidate's *labels* depend on — but a pool is a **retrieval result**,
+     so rebuild #4 left the 2026-08-12 `train_pools.json` stale with every fingerprint field
+     unmoved and nothing on disk saying so. It now records `docset_hash` per routed index
+     (read from the index's own `manifest.json`, **not** from `IndexRef.provenance`, which
+     `discover_indices` leaves `{}` — recording that would have written four rows of `None`
+     and looked like provenance), and `train_hybrid_reranker.py` gates on it as **C6**, with
+     *no provenance recorded* classified as **unmeasured**, never as current
+     ([[feedback_undefined_is_not_zero]], [[feedback_identify_the_artifact_not_rename_it]]).
+     (2) **C2 was asserting tie order and had to be rewritten** — the third instance of that
+     shape here, after BM25 and dense ([[feedback_exactness_is_a_claim_about_scores_not_tie_order]]).
+     Written as *the same top-K ids* it FAILED on 1 of 3 probe pools at
+     `max |sigmoid(logit) − ST score| = 1.23e-06`; diagnosed from the artifact first, this
+     path scored the two divergent candidates **2.0239624977 and 2.0239624977, a gap of
+     exactly 0.000e+00**, while sentence-transformers separated them by **2.98e-07** of its
+     own float noise and `argsort` broke the tie by index. **The rule is now: score both
+     delivered sets under both paths and require the sorted score vectors to agree** —
+     0.000e+00 here and 2.980e-07 under ST, i.e. the sets are *interchangeable*, which is
+     sharper than "the scores are close"; `pools ordering identically` is demoted to a
+     descriptive column, as `agree@10` was. `_TIE_TOL = 1e-5` is **not** a number chosen to
+     clear the failure: this file had already measured that fp32 at batch 16 vs batch 8
+     moves values ~6e-6 through BLAS reduction order alone. The rewrite was **exercised in
+     both directions before the retrain was launched** (passes the real pools, FAILS a
+     monkeypatched non-tied disagreement at 3.27) — a check relaxed to make today's failure
+     pass, and never shown to still fail anything, is not a check. **Five more frozen
+     literals** in `reranker_trained_test.py` (`PUBLISHED`, incl. truncate-and-replace 0.6000
+     → 0.5987) are now parsed from `reranker_rrf_routed_test.md`.
   2. **RQ3 preprocessing ablations: normalization and word-aware segmentation do nothing;
      only chunk size matters, and only at 1024.** Configs `config/experiments/rq3_*.yaml`,
      scripts `tools/eval/rq3_*`. Thai normalization (Thai digits + `pythainlp.util.normalize()`)
@@ -2433,7 +2463,7 @@ see `docs/adr/`.
   `detect_entities`/`entity_lookup`. **`courses.json` is deliberately not
   shrunk** — `router._default_course_matcher` reads it, so the gate belongs in
   `build_gold_candidates.py`, which now annotates each course candidate with
-  `anchor_status` ∈ `ok`/`ambiguous`/`no_name_evidence` (**414 / 66 / 198** of 678).
+  `anchor_status` ∈ `ok`/`ambiguous`/`no_name_evidence` (**414 / 66 / 198** of 678). **That split is UNVERIFIED as of 2026-08-20 and needs re-deriving before it is relied on**: the denominator reproduces from `gold_candidates_report.md`, but the on-disk `gold_candidates.json` carries **no `anchor_status` key anywhere** — the artifact predates the annotation the code now writes, so nothing on disk confirms 414/66/198. Found by `audit_doc_claims.py`'s `D5` the day its extractor stopped being blind to inline emphasis, which is what made the figure visible at all.
   **That third bucket is why the classification is three-way, not a number**: with
   zero naming documents the ratio is *undefined*, not zero, and collapsing them
   reported 264 flags of which 198 were OCR-garbled dictionary names, burying the

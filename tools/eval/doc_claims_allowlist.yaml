@@ -44,6 +44,34 @@ numbers:
 # exact string, so changing "0 of 239" to "0 of 241" stops matching and re-flags.
 counts:
   - doc: CLAUDE.md
+    figure: "1 of 3"
+    checked: 2026-08-20
+    reason: >-
+      A DEFECT RECORD, and untraceable by construction like the 0.7790 entry in
+      numbers:. It is how many of C2's three probe pools failed under the rule
+      train_hybrid_reranker.py used before 2026-08-20 -- "the same top-K ids",
+      which asserts tie order. The rewritten check gates on the delivered SCORES
+      and passes 3 of 3, so the regenerated reranker_training_run.md states the
+      passing figure and no report can ever carry the failing one. Quoted in
+      CLAUDE.md precisely because the lesson is the gap between the two.
+
+  - doc: CLAUDE.md
+    figure: "198 of 678"
+    checked: 2026-08-20
+    reason: >-
+      NOT VERIFIED, and recorded as such rather than cleared. The denominator
+      reproduces (academic_resolutions/entity_tags/gold_candidates_report.md:
+      "Course-anchored candidates: 678"), but the three-way anchor_status split
+      414 / 66 / 198 does not: build_gold_candidates.py writes that field
+      (line ~398) and the on-disk gold_candidates.json contains NO anchor_status
+      key anywhere in its structure, so the artifact predates the annotation and
+      cannot confirm the counts. Exempted only so D5's residue stays honest about
+      what it has examined; re-derive by regenerating gold_candidates.json before
+      relying on the split. Became visible on 2026-08-20 when COUNT_PROSE stopped
+      being blind to inline emphasis -- the figure is written "**414 / 66 / 198**
+      of 678".
+
+  - doc: CLAUDE.md
     figure: "5 of 57"
     checked: 2026-08-19
     reason: >-
