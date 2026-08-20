@@ -118,7 +118,18 @@ def published_f200() -> float | None:
     """Routed macro recall@10 at F=200, from routed_fetch_depth_test.md's §1 row."""
     if not _ROUTED_FETCH_REPORT.exists():
         return None
-    for line in _ROUTED_FETCH_REPORT.read_text(encoding="utf-8").splitlines():
+    return parse_f200(_ROUTED_FETCH_REPORT.read_text(encoding="utf-8"))
+
+
+def parse_f200(text: str) -> float | None:
+    """Same, from the report's text -- split out so a test can pin it.
+
+    Keyed on the depth cell being exactly "200": the table carries a row per
+    fetch depth, so a substring match would take whichever depth happens to be
+    first. None means the row is gone, which the caller must surface rather
+    than quietly anchoring on a stale literal.
+    """
+    for line in text.splitlines():
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         if len(cells) >= 3 and cells[0] == "200":
             try:

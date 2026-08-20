@@ -109,15 +109,21 @@ _ROUTING_EVAL = REPO / "data" / "results" / "routing_eval.md"
 
 
 def published_hybrid_anchors() -> dict[str, float | None]:
-    """`routed (shipped)` and `best single combo` recall@10 from routing_eval.md.
-
-    Scoped to the *hybrid* half of the report -- the dense half carries rows
-    with identical labels, so an unscoped search silently anchors on the wrong
-    retriever."""
-    out: dict[str, float | None] = {"routed": None, "unrouted": None}
+    """`routed (shipped)` and `best single combo` recall@10 from routing_eval.md."""
     if not _ROUTING_EVAL.exists():
-        return out
-    txt = _ROUTING_EVAL.read_text(encoding="utf-8")
+        return {"routed": None, "unrouted": None}
+    return parse_hybrid_anchors(_ROUTING_EVAL.read_text(encoding="utf-8"))
+
+
+def parse_hybrid_anchors(txt: str) -> dict[str, float | None]:
+    """Same, from the report's text -- split out so a test can pin the scoping.
+
+    Scoped to the *hybrid* half of the report: the dense half carries rows with
+    identical labels (`recall@10 | routed (shipped) | ...`), so an unscoped
+    search silently anchors on the wrong retriever and the whole check compares
+    the right numbers against the wrong published ones.
+    """
+    out: dict[str, float | None] = {"routed": None, "unrouted": None}
     start = txt.find("## 3. Routed system vs single-combo baselines -- hybrid")
     if start < 0:
         return out

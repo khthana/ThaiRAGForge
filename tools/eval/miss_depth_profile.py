@@ -80,6 +80,32 @@ BM25_RES = REPO / "data" / "results" / "gold_bm25_73det"
 HYB_RES = REPO / "data" / "results" / "gold_hybrid_73det"
 GOLD = REPO / "config" / "eval" / "gold_query_set_73det.yaml"
 CEILING = REPO / "data" / "results" / "oracle_union_ceiling.md"
+def parse_ceiling_anchors(text: str) -> tuple[int | None, int | None]:
+    """(hybrid-only unfound, all-arm unfound) as oracle_union_ceiling.md states them.
+
+    Split out of the self-checks so it can be tested against a fixture rather
+    than by re-writing the same regexes in a test, which would pin nothing. Both
+    values are PARSED rather than frozen: they were the literals 84 / 164 until
+    2026-08-18, when rebuild #4 legitimately moved both and the check went red
+    against a report it in fact agreed with. Either may come back None, and the
+    caller must treat that as a FAIL rather than a skip -- an anchor that cannot
+    find its counterpart must not pass quietly.
+
+    §2 states the hybrid figure only as a subtraction (total minus what the union
+    found), so that arithmetic lives here too.
+    """
+    exp_hyb = exp_all = None
+    m = re.search(
+        r"คู่ทั้งหมด:\s*\*\*([\d,]+)\*\*.*?union ของทุกระบบเจอ\s*\*\*([\d,]+)\*\*", text)
+    if m:
+        exp_hyb = int(m.group(1).replace(",", "")) - int(m.group(2).replace(",", ""))
+    m = re.search(
+        r"\|\s*hybrid \+ dense \+ BM25[^|]*\|(?:[^|]*\|){4}\s*([\d,]+)\s*\|", text)
+    if m:
+        exp_all = int(m.group(1).replace(",", ""))
+    return exp_hyb, exp_all
+
+
 OUT = REPO / "data" / "results" / "miss_depth_profile.md"
 
 K = 10
@@ -327,13 +353,7 @@ def main() -> int:
     # as broken. A failed parse is a FAIL, never a skip: an anchor that cannot
     # find its counterpart must not pass quietly.
     ceiling_txt = CEILING.read_text(encoding="utf-8") if CEILING.exists() else ""
-    exp_hyb = exp_all = None
-    m = re.search(r"คู่ทั้งหมด:\s*\*\*([\d,]+)\*\*.*?union ของทุกระบบเจอ\s*\*\*([\d,]+)\*\*", ceiling_txt)
-    if m:
-        exp_hyb = int(m.group(1).replace(",", "")) - int(m.group(2).replace(",", ""))
-    m = re.search(r"\|\s*hybrid \+ dense \+ BM25[^|]*\|(?:[^|]*\|){4}\s*([\d,]+)\s*\|", ceiling_txt)
-    if m:
-        exp_all = int(m.group(1).replace(",", ""))
+    exp_hyb, exp_all = parse_ceiling_anchors(ceiling_txt)
     checks.append((
         "S5 pairs unfound at k=10 by any arm agrees with oracle_union_ceiling.md",
         exp_all is not None and len(unfound_all) == exp_all,
