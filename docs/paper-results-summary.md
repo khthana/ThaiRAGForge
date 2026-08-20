@@ -241,6 +241,15 @@ quoted below).
 | hybrid-union ceiling (36 combos, 360 docs) | 0.8948 | **0.8916** |
 | BM25 alone, aggregate recall@10 | 0.4930 | **0.4863** |
 
+**RQ3 re-evaluated 2026-08-20: 0 verdict flips.** Its 4 treatment indices turned
+out to be part of rebuild #4's 40 (rebuilt 2026-08-17, carrying the same
+`docset_hash` as both baselines), so the confound this document warns about never
+opened and only the eval was owed. Every RQ3 claim stands; three point estimates
+moved and are refreshed in `CLAUDE.md`: the dense nDCG@10 256-vs-1024 near-miss is
+now Holm **0.0948** (was 0.0828, still ns), 256-vs-512 dense recall@10 is 0.4117 vs
+**0.4139** at Holm **0.9338** (still a flat tie), and 256's one win — hybrid
+recall@10 over 512 — strengthened to +**0.0533** at Holm **0.0076**.
+
 **Three smaller movements worth knowing.** (1) `bge-m3` came **back into** the
 semantic top-5 tie cluster on MRR (its closest cell, vs `qwen3`, is Holm 0.0940)
 and against `jina_v5`/`e5_small` on recall@10 — it is now separated only from the
@@ -294,8 +303,7 @@ there is no live illustration of it in these reports today.
 pre-rebuild-#4:** both `fetch_depth` sweeps
 (the *routed* one **is** current — it is the one the ship decision rests on), the
 whole reranker family including the trained cross-encoder, HyDE, ColBERT, the
-Qdrant pilot and concurrency runs, all three RQ3 ablations (this document's own
-rule says a `chunker_compare_full` rebuild stales them), `gold_anchor_ambiguity`,
+Qdrant pilot and concurrency runs, `gold_anchor_ambiguity`,
 `residual_relevance`, and both `gold_entity_*` reports.
 
 ## Resolved 2026-07-23: RQ3 ablation results (normalization / segmentation / chunk-size)

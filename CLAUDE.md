@@ -1678,10 +1678,11 @@ see `docs/adr/`.
      (Holm-adj p≥0.335 / ≥0.264). Chunk size **is** significant but the citable claim stays
      narrow: **1024 loses significantly to 512** on dense recall@10/nDCG@10 and hybrid
      recall@10/nDCG@10, and to **256** on dense recall@10 and hybrid recall@10/nDCG@10 (the
-     dense nDCG@10 256-vs-1024 cell is a near-miss, Holm-adj p=0.0828, **not** significant —
+     dense nDCG@10 256-vs-1024 cell is a near-miss, Holm-adj p=**0.0948**, **not**
+     significant —
      don't fold it into "256 beats 1024 on every metric"). **256 vs 512 is a flat tie on
-     every dense metric** (recall@10 0.4117 vs 0.4129, Holm-adj p=0.9676) **and on hybrid
-     MRR — 256 only wins on hybrid recall@10** (+0.0481, Holm-adj p=0.0154). **Do not cite
+     every dense metric** (recall@10 0.4117 vs **0.4139**, Holm-adj p=**0.9338**) **and on
+     hybrid MRR — 256 only wins on hybrid recall@10** (+**0.0533**, Holm-adj p=**0.0076**). **Do not cite
      "smaller is monotonically better" or "256 is best"**; the project's 512 default is not
      shown to be suboptimal, only 1024 is shown to be wrong. These ablations' treatment
      indices reuse `chunker_compare_full` combos as their *baseline* arm, so an index rebuild
@@ -1689,10 +1690,25 @@ see `docs/adr/`.
      GPU rebuilds after a corpus change, not just a re-eval, and this happened twice: once
      for the 2026-07-28 OCR-remediation rebuild (fixed 2026-07-29) and again for
      `chunker_compare_full` rebuild #3 (2026-08-05T07:56). **Both times, fixing it meant a
-     real GPU rebuild of all 3 RQ3 treatment indices, not just a re-eval** — most recently
-     done 2026-08-05 (`data/logs/run_rq3_rebuild_2026_08_05.sh`, ~2.5h, exit=0). **No known
-     confound remains as of 2026-08-05; the numbers above are current and citable.** If
-     `chunker_compare_full` is rebuilt again, treat RQ3 as stale again until re-run.
+     real GPU rebuild of all 3 RQ3 treatment indices, not just a re-eval** —
+     `data/logs/run_rq3_rebuild_2026_08_05.sh`, ~2.5h, exit=0. **Rebuild #4 was the
+     third time, and it was already handled: the 4 RQ3 treatment indices are part of
+     its 40** (36 chunker x embedder + 4 RQ3), rebuilt 2026-08-17T12:01-13:50, and
+     they carry the same `docset_hash 091b7a0ad8a5cfbe` as both baselines — so no
+     confound. **Only the eval was owed, and it ran 2026-08-20** (14 min, no GPU
+     rebuild): **0 verdict flips across all three reports**, so every claim in this
+     bullet holds with the point estimates above refreshed. Two things worth keeping.
+     **Read a treatment index's currency off `manifest["timestamp"]`, never off the
+     directory mtime** — those folders still read 2026-08-08 while their contents are
+     from 08-17, and taking the folder at face value nearly bought a 2.5-hour rebuild
+     that was already done (the same read-the-artifact's-own-provenance lesson as
+     `E0`, and the same shape as the Qdrant re-ingest that had also already happened).
+     And **`diff_significance_reports.py` keys 0 rows on
+     `rq3_chunksize_sweep_report.md`** — it has no verdict-bearing key that differ
+     recognises, so "0 flips" there came from a hand diff of all 18 significance
+     cells, not from the tool ([[feedback_verdict_diffing_misses_number_drift]]).
+     If `chunker_compare_full` is rebuilt again *without* RQ3 in the batch, treat RQ3
+     as stale until re-run.
 - **RQ4 (end-to-end answer quality) is FULLY COMPLETE (2026-08-03)** — generation,
   the prompt ablation, and the `cite_all` extension all done and committed
   (`f3c04f1`/`f107469`/`f7add7d`/`44817bf`). 5 arms (hybrid/dense/bm25/m2v/closed-book,
