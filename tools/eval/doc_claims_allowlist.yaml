@@ -46,6 +46,41 @@ counts:
       do not, which is D5's strict-pair rule behaving as designed.
 
   - doc: CLAUDE.md
+    figure: "27 of 78"
+    checked: 2026-08-20
+    reason: >-
+      Reports under data/results/*.md dated 2026-08-18 or later, out of all such
+      reports. Its source is the FILESYSTEM, not a report -- the same case as the
+      rebuild-#4 "N of 40" entry below: writing it to a snapshot report would
+      manufacture exactly the stale second artifact the D family exists to catch,
+      and it would go wrong the moment one more generator is re-run. Re-derive
+      with: python -c "import glob,os,datetime as d; f=glob.glob('data/results/*.md');
+      print(sum(1 for x in f if d.datetime.fromtimestamp(os.path.getmtime(x)) >=
+      d.datetime(2026,8,18)), 'of', len(f))". Keyed on the exact string, so it
+      re-flags the moment either half moves.
+
+  - doc: CLAUDE.md
+    figure: "90 of 91"
+    checked: 2026-08-20
+    reason: >-
+      All-arm misses inside the top 1,000, from data/results/miss_depth_profile.md
+      section 1, table "รวมทั้ง 3 arm — หาไม่เจอ 91 คู่ จาก 1046": 71 (11-50) +
+      11 (51-100) + 8 (101-1000) = 90 of 91, the complement of the single 1001+
+      row. Correct but stated as a four-row distribution rather than as a pair,
+      which is what D5's strict-pair rule is built to flag rather than to clear
+      silently.
+
+  - doc: CLAUDE.md
+    figure: "74 of 91"
+    checked: 2026-08-20
+    reason: >-
+      From data/results/miss_depth_profile.md section 5 ("arm ไหนเข้าใกล้ที่สุด"),
+      row `dense`: 74 pairs where dense achieves the best rank, against the 91
+      all-arm misses that table is computed over. The 91 is stated in section 1
+      and the 74 in section 5, so the pair spans two tables and D5 cannot see it
+      as one shape.
+
+  - doc: CLAUDE.md
     figure: "1 of 14"
     checked: 2026-08-19
     reason: >-

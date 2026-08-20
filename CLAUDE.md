@@ -387,6 +387,38 @@ see `docs/adr/`.
   0 truncated) rather than by an estimator. General rule: **a staleness
   check is a proxy; when it is carrying a real finding, add the check that reads
   the thing itself.**
+- **REBUILD #4 CURRENCY — which published numbers describe the current indices, and
+  which do not (2026-08-20).** Rebuild #4 finished 2026-08-17 (all 40 combos hold the
+  2026-08-09 re-OCR). The downstream refresh chain has been run **in part**, so
+  `data/results/` is a **mixed** directory: **27 of 78 reports are dated 2026-08-18 or
+  later and describe the new indices; 51 are older.** Many of those 51 are legitimately
+  superseded snapshots, but these are **live claims measured against indices that no
+  longer exist** — treat every figure in them as pre-rebuild-#4 and say so when citing:
+  `hybrid_alpha_sweep.md` (the whole per-`entity_type`-alpha result), the two
+  `fetch_depth` sweeps (`hybrid_fetch_depth_sweep.md`, `hybrid_weighted_fetch_depth.md`
+  — note `routed_fetch_depth_test.md`, the one the ship decision rests on, **is**
+  current), the entire **reranker** family including `reranker_trained_test.md`, the
+  entire **HyDE** and **ColBERT** families, `qdrant_pilot.md` / `qdrant_concurrency.md`,
+  `gold_anchor_ambiguity.md`, `residual_relevance.md`, both `gold_entity_*` reports, and
+  **all three `rq3_*` reports** — that last one is not a judgement call, this file
+  already states the rule ("if `chunker_compare_full` is rebuilt again, treat RQ3 as
+  stale until re-run") and rebuild #4 met its condition. **`rq4_score_gemma4*.md` is
+  stale for a different reason** (its answers were half-regenerated when it was last
+  scored), see the RQ4 bullet.
+  **The reusable part is why no audit caught this, because it is a real hole in the D
+  family.** `audit_doc_claims.py`'s **D2** asks whether a 4-decimal figure in the prose
+  appears in *some* report under `data/results/**/*.md` — a union over every report
+  **regardless of currency**. So when rebuild #4 moved `routed (shipped)` from 0.6831 to
+  0.6811, the prose kept saying 0.6831 and D2 kept passing, because ten *other* reports
+  (`hyde_retrieval_73det.md`, the five reranker ones, `hybrid_alpha_sweep.md`, …) still
+  carried 0.6831 — and they carried it for **exactly the same reason the prose was
+  wrong**. **A traceability check cannot detect rot that its own haystack shares.**
+  D1a (report older than its generator) cannot see it either: no generator changed, the
+  *indices* did. The honest fixes are one of (a) re-run the stale generator, (b) let D2
+  prefer a report newer than the last index build and warn when a figure is traceable
+  only to older ones, or (c) date the claim in the prose. Until (b) exists, **(c) is the
+  standing convention in this file** — every refreshed figure above now carries the date
+  of the run it came from.
 - The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;
   corpus-prep tooling in `tools/corpus_prep/` needs Poppler + Ollama.
 - **Superseded backups live off-repo** (2026-07-30): 2,389 `*.dup` / `*.bak` files
@@ -770,16 +802,33 @@ see `docs/adr/`.
   beats the 3-route one (**+0.0958** dense recall@10, Holm-adj p=0.0000, m=18 —
   and this margin is *invariant to the target refresh below*, since both arms hold
   the same person/program targets so the only difference between them is coverage),
-  but **no deployable** routed arm significantly beats just using the best single
-  combo for everything (shipped +0.0481, p=0.1548; LOO +0.0349, p=0.3568 — both ns).
-  The one arm that *does* clear the bar is `routed (oracle)`, significant on all
-  three dense metrics (+0.0586 recall@10 p=0.0462, +0.0642 MRR p=0.0160, +0.0701
-  nDCG@10 p=0.0036) — **but an oracle is not a system**: read it as the headroom a
-  perfect per-route map would have, real but small. So the claim is *matches a
-  well-chosen single index without knowing which one, and closes a 43% coverage
-  hole*, not *beats it*.
-  Under hybrid the gain shrinks to ns (+0.0408, p=0.1152) because BM25 partly rescues
-  the misrouted queries. Ordering inside `classify_query` is load-bearing: course is
+  and **the deployable claim changed sign at rebuild #4 (re-run 2026-08-18) — read
+  the date on any routing number.** Until then no deployable arm beat the best
+  single combo on either retriever and this bullet said so; that still holds on
+  **dense** (shipped +0.0500 Holm 0.1608, LOO +0.0317 Holm 0.4424, both ns, m=18)
+  but under **hybrid** both now clear the bar: `routed (shipped)` **+0.0581**
+  (Holm **0.0480**) and — the one that matters — `routed (loo)` **+0.0825**
+  (Holm **0.0000**), so the *generalisation* estimate is the stronger of the two
+  rather than a discount on a fitted one. The claim is now **beats a well-chosen
+  single index under hybrid, matches it under dense, and closes a 43% coverage hole
+  either way.** Levels: hybrid best-single **0.6229** / shipped **0.6811** / loo
+  **0.6794** / oracle **0.6863**; dense 0.5673 / 0.6173 / 0.5989 / 0.6277.
+  **Two things moved with it and both belong in the sentence.** (1) **Most of the
+  widening is the baseline falling, not the router rising** — the hybrid
+  best-single combo is `sentence × qwen3_0.6b` before *and* after (its identity did
+  not change), but it fell 0.6281 → **0.6229** while the routed arm fell only
+  0.6831 → **0.6811**, taking the margin 0.0549 → 0.0581 across a bar it had been
+  sitting just under (Holm 0.0672 → **0.0480**). A weaker baseline as much as a
+  stronger router; state both, and note the pre-rebuild margin was already +0.0549
+  — the "+0.0408, p=0.1152" this file used to quote was older still. (2) The **dense
+  oracle lost two of its three significant metrics**: it was significant on all
+  three (+0.0586 / +0.0642 / +0.0701) and is now nDCG@10 only (**+0.0744**, Holm
+  0.0126; recall@10 +0.0605 Holm 0.0640, MRR +0.0681 Holm 0.0980). An oracle is
+  still not a system, so nothing deployable rests on it — but on two metrics of
+  three that headroom is now a bound, not a result.
+  The old "under hybrid the gain shrinks to ns (+0.0408, p=0.1152) because BM25
+  partly rescues the misrouted queries" is **superseded** by the paragraph above;
+  the mechanism it named is real, it is simply no longer enough to erase the gain. Ordering inside `classify_query` is load-bearing: course is
   checked **ahead of both program branches** because the program route's ConGen
   embedder scores **0.0000** recall@10 on course queries. **Both structural facts
   that were open here are now closed in code (2026-08-08).** (1) The best target per
@@ -798,9 +847,11 @@ see `docs/adr/`.
   targets over 13 folds; hybrid gap only +0.0305; n=13 is inside the embedder
   family's own MDE). **The refresh made the `shipped` arm less honest, not more**:
   4 of 5 targets are now chosen on the 106 queries it is scored on, so it sits near
-  `routed (oracle)` by construction (dense 0.6189 vs 0.6293) — **cite `routed (loo)`
-  as the generalisation estimate**, and note it is *unchanged* by the refresh
-  (+0.0349 dense / +0.0499 hybrid, both ns) because it never read the constants.
+  `routed (oracle)` by construction (dense 0.6173 vs 0.6277) — **cite `routed (loo)`
+  as the generalisation estimate**, and note it was *unchanged* by that refresh
+  (+0.0349 dense / +0.0499 hybrid, both ns at the time) because it never read the
+  constants. **Rebuild #4 then moved it, and only on one retriever: dense +0.0317
+  still ns, hybrid +0.0825 at Holm 0.0000.**
   That is the cleanest statement of what the refresh bought: it raises the shipped
   router to what LOO already predicted, rather than creating new gain. The
   `unmatched_strategy="rrf"` branch is now unexercised by any eval (0/106 unrouted)
@@ -859,26 +910,32 @@ see `docs/adr/`.
   run against `ROUTE_COMBO`'s 2026-07-17 targets and reported soft ≥ hard; those
   targets were refreshed the same day (see the routing bullet above), the script
   re-run, and **the verdict flipped** — hard routing had been judged on a `program`
-  target that actively hurt. The soft arm never moved. Post-refresh: **hard**
-  (per-route index, 5 indices) 0.6831 recall@10 > **soft** (per-route fusion weight,
-  1 index) 0.6631 > **neither** 0.6281. **Two significant cells, one per mechanism,
-  on different metrics**: `hard vs none` recall@10 +0.0549 (Holm-adj 0.0242, m=12)
-  and `soft vs none` nDCG@10 +0.0360 (Holm-adj 0.0216). **Soft vs hard is ns on all
-  three** — CI rules out soft beating hard by more than 0.0156 recall@10, and hard
-  beating soft by more than 0.0575. So: hard leads numerically everywhere and owns
-  the only significant recall@10 result, but it is **not shown to beat soft**, and it
-  costs 5 indices to soft's 1. The cost-per-point argument for soft survives the
-  flip; "soft is at least as good" does not. Arm C reproduces `routing_eval.md`'s
-  hybrid `routed (shipped)` to 4 decimals (0.6831) from an independent code path.
-  Note arm C's targets are now fitted on this same set, so cite `routing_eval.md`'s
-  `routed (loo)` (0.6780) as the hard arm's generalisation estimate — still above
-  soft. **Still substitutes, not complements, but for a sharper reason**: doing both
-  (0.6629) is *below* hard alone and `D vs C` is negative (−0.0202, CI excludes zero,
-  ns after Holm) — yet at the oracle bound D′ (0.6901) is the best arm in the table.
+  target that actively hurt. The soft arm never moved. **Numbers below are the
+  2026-08-18 re-run against rebuild #4** (the pre-rebuild ones were 0.6831 / 0.6631 /
+  0.6281 with two significant cells): **hard** (per-route index, 5 indices)
+  **0.6811** recall@10 > **D both** 0.6648 > **soft** (per-route fusion weight,
+  1 index) **0.6510** > **neither** **0.6229**. **Now ONE significant cell, not two**
+  — `hard vs none` recall@10 **+0.0581** (Holm-adj **0.0264**, m=12) survives, and
+  `soft vs none` nDCG@10 **lost it** (+0.0333, Holm 0.0528, was +0.0360 at 0.0216).
+  **So soft routing no longer owns a significant result anywhere in this table**, and
+  it is now numerically below doing both, where before it was above. **Soft vs hard
+  is still ns on all three** — CI rules out soft beating hard by more than **0.0060**
+  recall@10 (was 0.0156, i.e. the bound tightened a lot), and hard beating soft by
+  more than **0.0687**. So: hard leads numerically everywhere and owns the only
+  significant cell, and it is *still* **not shown to beat soft**, at a cost of 5
+  indices to soft's 1. The cost-per-point argument for soft is weaker than it was;
+  "soft is at least as good" is still not refuted. Arm C reproduces `routing_eval.md`'s
+  hybrid `routed (shipped)` to 4 decimals (**0.6811**) from an independent code path.
+  Note arm C's targets are fitted on this same set, so cite `routing_eval.md`'s
+  `routed (loo)` (**0.6794**) as the hard arm's generalisation estimate — still above
+  soft. **Still substitutes, not complements**: doing both
+  (0.6648) is *below* hard alone and `D vs C` is negative (**−0.0163**, CI
+  [−0.0327, −0.0021] excludes zero, ns after Holm) — yet at the oracle bound D′
+  (**0.6909**) is the best arm in the table.
   There *is* a sliver of headroom for alpha on top of routing, and LOO fitting costs
   more than the sliver is worth (the pre-refresh version had D worse than B even at
   the oracle, i.e. no headroom at all). Per-route, **hard now wins every route**
-  (person +0.1044, program +0.0440, course +0.0316, faculty +0.0253) where before it
+  (person +0.1091, program +0.0504, course +0.0299, faculty +0.0300) where before it
   won only course and faculty and *lost* `program` by −0.0784 — that one route was
   most of the old verdict. The `person` row still gives the mechanism: optimal alpha
   is **0.15** on the generic index (hand it to BM25, 0.8147 there) but **0.30** on the
@@ -886,7 +943,18 @@ see `docs/adr/`.
   the same per-type weak dense arm. **Family-size
   trap, worth reading before citing:** this script's arms A/B reproduce
   `hybrid_alpha_sweep.py` to 4 decimals from an independent code path, yet the
-  `recall@10` **verdict** differs (Holm-adj 0.0252 at m=9 there, 0.0580 at m=12 here).
+  `recall@10` **verdict** differs (Holm-adj 0.0252 at m=9 there, **0.1960** at m=12
+  here). **And that cross-check is currently BROKEN, which is a finding, not a
+  footnote**: `hybrid_alpha_sweep.md` dates from 2026-08-08 and was **not** re-run
+  against rebuild #4, so arm B's effect sizes no longer match it (**+0.0281** here
+  against **+0.0350** there) while `soft_vs_hard_routing.py` still *prints* that they
+  "reproduce it to 4 decimal places" — and it hardcodes the **0.0252** as a literal.
+  It is therefore the **fourth** frozen cross-artifact anchor of the kind `561102e`
+  replaced with parsers in three other scripts, and the one that sweep missed. Two
+  jobs, in this order: **re-run `hybrid_alpha_sweep.py` against rebuild #4** (it
+  needs the GPU, and every per-`entity_type`-alpha number in the bullet above is
+  pre-rebuild-#4 until it is), then make that paragraph *read* the report rather
+  than assert agreement with it, so a future divergence prints as a divergence.
   Cite the sweep's m=9 for "is a per-route alpha worth anything"; cite this table's
   m=12 only for its own four comparisons.
 - `strip_course_comparison_tables` (`src/rag_lab/loaders/common.py`, commit
@@ -973,55 +1041,87 @@ see `docs/adr/`.
   (`tools/eval/hybrid_chunker_significance_test.py`, chunker-vs-chunker at a fixed
   embedder+retriever, one family per embedder + an aggregate family across all 9). **Result:
   `semantic` never significantly beats any other chunker, anywhere** — not for `qwen3_0.6b`
-  (all 4 chunkers fully tied, Holm-adj p≥0.44) nor in the aggregate (`recursive` is now
-  numerically highest at 0.5291 recall@10 vs. `semantic`'s 0.5206, not significant either). The
-  *only* significant chunker-pairwise result in the whole test is `fixed_size` losing to
-  `recursive` (aggregate nDCG@10 + several individual embedders). **Revised framing:
+  (all 4 chunkers fully tied, Holm-adj p≥0.44) nor in the aggregate. **Post-rebuild-#4
+  (2026-08-18) the aggregate order is `recursive` 0.5318 > `sentence` 0.5212 >
+  `semantic` 0.5186 > `fixed_size` 0.5073 recall@10** — so `semantic` has now slipped
+  to *third* numerically (it was second at 0.5206 behind `recursive`'s 0.5291), which
+  only sharpens the retirement. The
+  *only* significant chunker-pairwise result in the whole aggregate is still
+  `fixed_size` losing to `recursive` on **nDCG@10** (−0.0298, Holm **0.0216**);
+  aggregate recall@10 has **no** significant pair at all (that same cell is −0.0204 at
+  Holm 0.8256), so do not state the laggard finding on recall@10 — several individual
+  embedders do carry significant recall@10 cells, the aggregate does not. **Revised framing:
   `recursive`/`semantic`/`sentence` are a statistically tied top cluster with no provable
   winner; `fixed_size` is the one demonstrated laggard.** `semantic` is still a perfectly
   reasonable default (never proven worse than anything, and still the one chunker where a
   strong dense embedder demonstrably beats BM25, see below) — just no longer citable as "the
   best chunker." Cross-chunker-averaged
-  hybrid recall@10 (`qwen3_0.6b` 0.6167, `qwen3` 0.5945, `jina_v5` 0.5831, `e5` 0.5753,
-  `bge-m3` 0.5730, `e5_small` 0.5658, `congen` 0.4692, `sct` 0.3939, `m2v` 0.3028). **The
+  hybrid recall@10, **2026-08-18** (`qwen3_0.6b` 0.5999, `qwen3` 0.5792,
+  `jina_v5` 0.5696, `bge-m3` 0.5664, `e5` 0.5644, `e5_small` 0.5598, `congen` 0.4804,
+  `sct` 0.4065, `m2v` 0.3140 — ordering unchanged except `bge-m3` and `e5` swapping
+  two adjacent places by 0.0020). **The
   dedicated semantic-only top-5 pairwise tie test
-  (`tools/eval/hybrid_significance_test_semantic_top5.py`) was re-run 2026-07-29** — the tie
-  **partially broke**: `bge-m3` now loses significantly to `qwen3_0.6b`/`qwen3`/`jina_v5` on
-  recall@10, and to `qwen3_0.6b`/`qwen3` on nDCG@10 (still ties all three on MRR, and after the
-  2026-07-30 `resolution_id` relabel it also ties `jina_v5` on nDCG@10 — Holm-adj p=0.0928, the
-  one verdict that relabel narrowed), so it drops out of the cluster. The
-  remaining four (`qwen3_0.6b` 0.6152, `qwen3` 0.6051, `jina_v5` 0.5995, `e5_small` 0.5877
-  recall@10, semantic-only) are still fully, mutually tied on every metric. Don't cite a single
+  (`tools/eval/hybrid_significance_test_semantic_top5.py`) — the tie
+  **partially broke** in 2026-07-29 and **rebuild #4 partially UN-broke it, which is
+  the movement to know before citing `bge-m3`.** By 2026-08-06 `bge-m3` was outside
+  the cluster on *every* metric; as of the 2026-08-18 re-run it is outside on
+  **recall@10 and nDCG@10 only, and only against two rivals** — it loses to
+  `qwen3_0.6b` (0.0020 / 0.0060) and `qwen3` (0.0342 / 0.0060), while `jina_v5`
+  (0.1216 / 0.2992) and `e5_small` (0.1904 / ns) have gone back to ties, and **on MRR
+  it now ties everything again** (its closest cell, vs `qwen3`, is Holm **0.0940**).
+  So: **`bge-m3` is separated from the two `qwen3` models on 2 metrics of 3 and tied
+  with the rest** — not "clearly outside the cluster on every metric", which is
+  withdrawn. The
+  remaining four (`qwen3_0.6b` 0.6153, `qwen3` 0.6014, `jina_v5` 0.5941, `e5_small`
+  0.5854 recall@10, semantic-only; `bge-m3` 0.5436) are still fully, mutually tied on
+  every metric. Don't cite a single
   "best combo" among those four — the tie there is confirmed, not provisional. Hybrid still
   significantly beats dense-alone for essentially every one of the 9 embedders on every metric
-  (still 26/27 tests significant — same count, but **the sole exception moved from `qwen3` on
-  MRR to `qwen3_0.6b` on MRR**, Holm-adj p=0.30; `qwen3` is now significant on MRR too) — still
-  the most robust finding of the comparison. Hybrid vs. BM25-alone shifted more: `qwen3_0.6b`,
+  (**24/27** as of 2026-08-18, down from 26/27 — `qwen3_0.6b` on MRR stays the standing
+  exception (Holm 0.3674) and **`congen` newly joins it on recall@10 (0.3424) and
+  nDCG@10 (0.2062)**, which is the RRF rule doing exactly what it says: BM25 got
+  relatively stronger, `congen` did not, and fusing an arm that is no longer comparable
+  stops paying) — still the most robust finding of the comparison. Hybrid vs. BM25-alone shifted more: `qwen3_0.6b`,
   `qwen3`, `jina_v5`, `e5`, `bge-m3`, `e5_small` all significantly beat BM25 on recall@10 now
   (`jina_v5` newly clearly significant, was borderline before); `congen` dropped **out** of that
   group (BM25 itself got stronger post-OCR-fix, closing the gap); `sct`/`m2v` remain the
   cautionary cases where hybrid is significantly worse than BM25-alone, and **`sct`'s recall@10
   deficit is significant again** (reversing the 2026-07-25 "no longer significant, p=0.08"
   finding — that finding was itself measured against the since-superseded index). The
-  cross-chunker **dense-alone 3-way tie at the top is broken**: `qwen3_0.6b` now significantly
-  beats both `bge-m3` (+0.1173 recall@10) and `Qwen3-Embedding-4B` (+0.0486) in aggregate — this
-  was always computed fresh (unaffected by the BM25/hybrid staleness bug), so it's a genuine
-  finding, not an artifact. The per-entity_type specialist/weak-spot pattern underneath the old
+  cross-chunker **dense-alone 3-way tie at the top is broken, but only half of it stayed
+  broken.** `qwen3_0.6b` still significantly beats `bge-m3` on every metric
+  (**+0.1161** recall@10, Holm 0.0000) — but **against `Qwen3-Embedding-4B` its
+  recall@10 margin went ns at rebuild #4** — Holm **0.0592** on a +0.0475 margin,
+  where the pre-rebuild +0.0486 had cleared the bar — while MRR (+0.0915) and
+  nDCG@10 (+0.0694) both still clear it. **Cite it
+  as: `qwen3_0.6b` beats the 4B model on the ranking metrics and ties it on
+  recall@10** — a 0.0592 is a near-miss, not a reversal
+  ([[feedback_a_replication_disagrees_by_sign_not_verdict]]). The per-entity_type specialist/weak-spot pattern underneath the old
   aggregate tie is **unaffected** by this (separate, already-fresh dense-alone test): `bge-m3` =
   person-query specialist, `Qwen3-4B` = only embedder with no provable weak spot across both
   main categories (ties bge-m3 on person AND ties ConGen/qwen3_0.6b on program), `Qwen3-0.6B` =
   now aggregate-leading but still has a real person-query weak spot `Qwen3-4B` doesn't,
   `ConGen-PhayaThaiBERT` = program-query specialist. BM25 alone (`retrievers/bm25.py`) no
-  longer ties the top dense tier the way it used to — it now **significantly beats `bge-m3`**
-  (aggregate recall@10 rose 0.3908→0.4930 post-OCR-fix, more than any embedder's own gain,
-  because lexical matching is far more sensitive to OCR token corruption than dense embeddings)
-  and still significantly beats every weaker embedder; it statistically ties only `qwen3` and
-  `qwen3_0.6b` (and borderline-ties `jina_v5`, Holm-adj p=0.053). The per-chunker breakdown
-  (`tools/eval/bm25_vs_embedder_significance_test_per_chunker.py`, re-run 2026-07-29) still
-  shows `bge-m3` losing to BM25 significantly under `sentence` chunking specifically, and now
-  additionally shows `qwen3_0.6b`'s numerically-negative BM25 margin under `semantic` chunking
-  has become **statistically significant** (Holm-adj p=0.006) — the first cell in this whole
-  comparison where an embedder significantly beats BM25 outright, reinforcing `semantic` as the
+  longer ties the top dense tier the way it used to — it still **significantly beats
+  `bge-m3`** on recall@10 (**+0.0829**, Holm 0.0216; aggregate BM25 recall@10 rose
+  0.3908→0.4930 post-OCR-fix and reads **0.4863** after rebuild #4, more than any
+  embedder's own gain, because lexical matching is far more sensitive to OCR token
+  corruption than dense embeddings)
+  and still significantly beats every weaker embedder; it statistically ties `qwen3` and
+  `qwen3_0.6b` on recall@10, and `jina_v5` has slipped **from borderline-significant to a
+  clear tie** (+0.0784, Holm 0.0192 raw → **0.0576** adjusted, was 0.053).
+  **The bigger 2026-08-18 movement is on MRR, and it is the first AGGREGATE cell in this
+  whole comparison where a dense embedder significantly beats BM25 outright**:
+  `bm25 − qwen3_0.6b` MRR **−0.1249**, Holm **0.0072**. Until rebuild #4 that had only
+  ever happened in one per-chunker cell (below); it is now true of the headline
+  cross-chunker table. On the same table `bge-m3` and `e5` **lost** their significant
+  MRR margins over BM25 (0.0664 each), so BM25's MRR standing polarised rather than
+  moved. The per-chunker breakdown
+  (`tools/eval/bm25_vs_embedder_significance_test_per_chunker.py`) still
+  shows `bge-m3` losing to BM25 significantly under `sentence` chunking specifically, and
+  the `qwen3_0.6b`-under-`semantic` cell **strengthened from one metric to all three**
+  (recall@10 −0.1044 Holm 0.0070, MRR −0.1809 and nDCG@10 −0.1604 both 0.0000; it was
+  recall@10 alone at 0.006) — reinforcing `semantic` as the
   one chunker where a strong dense embedder demonstrably earns its cost over free BM25. Don't
   naively RRF a weak embedder with BM25: `m2v` and `sct` both still significantly *hurt* vs. BM25
   alone on recall@10/MRR/nDCG@10 (all three, both models, post-refresh) — a real RRF failure
@@ -2017,35 +2117,42 @@ see `docs/adr/`.
   top-10 of all 36 live combos: a pair no system finds is unreachable by any
   reranker/ensemble/fine-tune while the index family and k are fixed. Rewritten
   from an outside analysis in `road-to-wow-demo/`. Its numbers are superseded —
-  best single **0.6281** (was 0.6935), hybrid ceiling **0.8948** (was 0.9201),
+  best single **0.6229** (was 0.6935), hybrid ceiling **0.8916** (was 0.9201),
   pairs **1,046** (was 644) — but **the cause is the query set, not a bug in it,
   and getting that attribution right took a second look**: it ran on a checkout
   whose gold set still had **73** entries (`REPO` is hardcoded to another user's
   OneDrive path), and the 33 `course` queries are the harder ones. Holding this
   script's combo set fixed and scoring only the 73 non-course queries reproduces
-  its shape — best 0.6728, union 0.9125. The first draft of this bullet accused
+  its shape — best 0.6746, union 0.9125. The first draft of this bullet accused
   it of unioning 44 combos; **its own header says 36**, so that was wrong. What
   *is* true is a portability defect: it selects combos by bare `glob`, so re-run
   here it takes 44 (the 8 in `_EXCLUDED_COMBO_DIRS`, indices deleted, results
-  pre-rebuild-#3) and the ceiling reads 0.9046 instead of 0.8948 — measured in
+  pre-rebuild-#3) and the ceiling reads 0.9025 instead of 0.8916 (+0.0110) — in
   §1, not asserted. Note it moves the *ceiling* only; the retired combos are the
   weak `sct`/`congen` and never the argmax. Derive the combo set from which
   index dirs *exist* and cross-check against the exclusion list — either half
   alone goes stale. See [[feedback_external_analysis_reads_a_stale_slice]]:
-  verify what an outside analysis actually ran on before critiquing it. Findings: (a) **at a fixed 10-doc budget, diversity is negative**
-  — 2 systems × 5 = **0.5913** vs 1 system × 10 = **0.6281** (**−0.0368**),
-  while doubling the budget is **+0.1158**; the original's "ensemble wins" read
+  verify what an outside analysis actually ran on before critiquing it. Findings (levels are the 2026-08-18 re-run against rebuild #4;
+  pre-rebuild figures given where the shape matters): (a) **at a fixed
+  10-doc budget, diversity is negative** — 2 systems × 5 = **0.5936** vs 1 system
+  × 10 = **0.6229** (**−0.0294**, was −0.0368), while doubling the budget is
+  **+0.1196**; the original's "ensemble wins" read
   20 docs against 10, and both arms here are greedy-fitted on the test set so
-  the bias favours diversity and it still loses; (b) **69.3% of the misses are
-  ranking, not absence** (best single 512 pairs, union 882 of 1,046) — but that
-  headroom's own ceiling *at 10 docs sent* is 0.7771 (oracle picks the combo) to
-  0.8355 (perfect rerank over all 360), **never 0.8948**; (c) unioning the dense
-  and BM25 result sets too lifts it to **0.9443 macro / 0.9197 micro**, so
-  **80 of the 164 "nothing found it" pairs were a retriever-choice artifact** and
-  the floor is **84 pairs (8.0%)** — **cite 84, not the 76 this bullet used to
-  publish**: the subtracted 8 were called a labelling artifact, and that premise
-  was measured and refuted 2026-08-09 (see the anchor-ambiguity bullet below), so
-  the subtraction is withdrawn in the script and the report. **Do not call that floor *structural* — the word
+  the bias favours diversity and it still loses; (b) **67.8% of the misses are
+  ranking, not absence** (best single **509** pairs, union **873** of 1,046) — but
+  that headroom's own ceiling *at 10 docs sent* is **0.7775** (oracle picks the
+  combo) to **0.8342** (perfect rerank over all 360), **never** the hybrid union's
+  **0.8916**; (c) unioning
+  the dense and BM25 result sets too lifts it to **0.9418 macro / 0.9130 micro**, so
+  **82 of the 173 "nothing found it" pairs were a retriever-choice artifact** and
+  the floor is **91 pairs (8.7%)** — **cite 91**, re-derived from the 2026-08-18
+  re-run against rebuild #4; it was **84** before that (and **76** before
+  2026-08-09, when the 8 pairs subtracted as a labelling artifact were measured and
+  the premise refuted — see the anchor-ambiguity bullet below, and note the
+  subtraction stays withdrawn). **The floor moved UP while retrieval got better,
+  which is not a contradiction**: rebuild #4 re-OCR'd a meeting, so the union of
+  36 combos covers a slightly different corpus, and a pair no arm reaches is a
+  property of the qrels *and* the text. **Do not call that floor *structural* — the word
   was withdrawn 2026-08-08 by `tools/eval/miss_depth_profile.py` (next bullet).** The §1d
   router was **dropped, not recomputed** — `routing_eval.py` is its tested
   descendant and reports `routed (loo)` 0.6780 (+0.0499, **ns**), so recomputing
@@ -2132,15 +2239,18 @@ see `docs/adr/`.
   `argsort(-scores)[:k]`, so k=50 is free but erases the only distinction being
   asked about (rank 51 vs rank 40,000). It computes **untruncated** ranks for 36
   combos × 3 arms instead, ~14.5 min. **Result: the floor is depth, not absence** —
-  of the 84 all-arm misses, **64 (76.2%) sit at ranks 11-50**, 83 of 84 are inside
-  the top 1,000, exactly **1** is deep (`รายวิชา CALCULUS 2`, rank **2,984**), and
-  **0 are missing from the index**. So drop "structural"; a reranker fetching 50
-  candidates can reach three quarters of them. Two consequences: **`person` has 0
-  misses** (the 84 are course 33 / faculty 28 / program 23, and course is almost
-  purely near-miss at 32-of-33 while faculty splits 14 near / 14 deep — a reranker
-  helps course, not half of faculty); and **the candidate pool should come from
-  `dense`, not the shipped hybrid** — on these hard pairs dense has median best
-  rank **26** and is closest on **70 of 84**, vs hybrid 43 (9) and BM25 210 (6).
+  of the **91** all-arm misses (2026-08-18 re-run; **84** before rebuild #4),
+  **71 (78.0%) sit at ranks 11-50**, 90 of 91 are inside the top 1,000, exactly
+  **1** is deep (`รายวิชา CALCULUS 2`, rank **2,988**), and **0 are missing from
+  the index**. So drop "structural"; a reranker fetching 50 candidates can reach
+  three quarters of them. **Every one of those figures held its shape across the
+  rebuild**, which is the useful part — the profile is a property of the query set,
+  not of one build. Two consequences: **`person` has 0 misses** (the 91 are course
+  41 / faculty 28 / program 22, and course is almost purely near-miss at 40-of-41
+  while faculty still splits **14 near / 14 deep** — a reranker helps course, not
+  half of faculty); and **the candidate pool should come from `dense`, not the
+  shipped hybrid** — on these hard pairs dense has median best rank **22** and is
+  closest on **74 of 91**, vs hybrid 39 (13) and BM25 200 (6).
   Read against the **already-measured** cross-encoder result (hurts hybrid MRR
   0.7814→0.6778, p=0.0012): the evidence is in reach at P=50, the tried reranker
   does not reach it. **Two replication traps are pinned in the docstring because

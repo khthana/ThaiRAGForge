@@ -191,6 +191,76 @@ its BM25/hybrid latency columns are *not* comparable with any run dated
 2026-07-29 or earlier, which predate `5cc71a1` and are high by ~1s per query.
 Both the reason and the evidence are in that section's currency banner.
 
+## Superseded 2026-08-18 by rebuild #4 — read this before citing any retrieval number below
+
+Rebuild #4 (finished 2026-08-17) put the 2026-08-09 re-OCR of `2566/ครั้งที่ 3`
+into all 40 `chunker_compare_full` combos, and the persisted BM25/hybrid results
+plus every seconds-level significance test were re-run on 2026-08-18. **27 of the
+78 reports in `data/results/` are dated 2026-08-18 or later; the other 51 predate
+the rebuild.** The sections below carry their original dates and are left as
+written — this section says what moved. Anything not listed here held.
+
+**Four verdicts changed, and two of them change what the paper can claim.**
+
+| claim | before | after (2026-08-18) |
+|---|---|---|
+| hybrid `routed (shipped)` vs best single combo | +0.0549, Holm 0.0672 — ns | **+0.0581, Holm 0.0480 — significant** |
+| hybrid `routed (loo)` vs best single (loo) | +0.0499, Holm 0.0780 — ns | **+0.0825, Holm 0.0000 — significant** |
+| dense `routed (oracle)` | significant on all 3 metrics | **nDCG@10 only** (+0.0744, 0.0126) |
+| soft routing (`B vs A`, nDCG@10) | +0.0360, Holm 0.0216 — significant | **+0.0333, Holm 0.0528 — ns** |
+
+So **the headline "routing matches but does not beat a well-chosen single index"
+is now false under hybrid and still true under dense.** The section
+"Query routing — … and it ties the best single combo" below is superseded on
+exactly that point; its coverage result (5 routes, 0/106 unrouted) is unchanged,
+and so is the 5-route-vs-3-route margin (+0.0958 dense recall@10, Holm 0.0000).
+Read the new claim as: **beats a well-chosen single index under hybrid, matches
+it under dense, and closes a 43% coverage hole either way.**
+
+**Most of that gain is the baseline falling, not the router rising, and that
+belongs in the sentence.** The hybrid best-single combo is `sentence ×
+qwen3_0.6b` before *and* after — its identity did not change — but it fell 0.6281
+→ **0.6229** while the routed arm fell only 0.6831 → **0.6811**, taking the margin
+0.0549 → 0.0581 across a bar it had been sitting just under (Holm 0.0672 →
+**0.0480**). And **soft routing no longer owns a
+significant cell anywhere**, which weakens the cost-per-point argument for it
+without refuting "soft is at least as good" (`B vs C` is still ns; the CI now
+rules out soft beating hard by more than 0.0060 recall@10, tighter than the 0.0156
+quoted below).
+
+**Levels that moved (cite these, not the ones in the sections below).**
+
+| quantity | before | after |
+|---|---|---|
+| unrouted hybrid, best single combo | 0.6281 | **0.6229** |
+| hard routing, `routed (shipped)` | 0.6831 | **0.6811** |
+| hard routing, `routed (loo)` | 0.6780 | **0.6794** |
+| soft routing (arm B, LOO) | 0.6631 | **0.6510** |
+| both (arm D, LOO) | 0.6629 | **0.6648** |
+| oracle-union floor — pairs no arm reaches at k=10 | 84 (8.0%) | **91 (8.7%)** |
+| hybrid-union ceiling (36 combos, 360 docs) | 0.8948 | **0.8916** |
+| BM25 alone, aggregate recall@10 | 0.4930 | **0.4863** |
+
+**Three smaller movements worth knowing.** (1) `bge-m3` came **back into** the
+semantic top-5 tie cluster on MRR (its closest cell, vs `qwen3`, is Holm 0.0940)
+and against `jina_v5`/`e5_small` on recall@10 — it is now separated only from the
+two `qwen3` models, on 2 metrics of 3, so "clearly outside the cluster on every
+metric" is withdrawn. (2) `qwen3_0.6b` beating `Qwen3-Embedding-4B` dense-alone
+went **ns on recall@10** (+0.0475, Holm 0.0592) while staying significant on MRR
+and nDCG@10 — a near-miss, not a reversal. (3) **The first *aggregate* cell where
+a dense embedder significantly beats BM25 outright**: `bm25 − qwen3_0.6b` MRR
+−0.1249, Holm 0.0072. Until now that had only ever happened in one per-chunker
+cell, and that cell (`qwen3_0.6b` under `semantic`) strengthened from one metric
+to all three.
+
+**Not yet re-run against rebuild #4, so every figure in these sections is
+pre-rebuild-#4:** the per-`entity_type` alpha sweep, both `fetch_depth` sweeps
+(the *routed* one **is** current — it is the one the ship decision rests on), the
+whole reranker family including the trained cross-encoder, HyDE, ColBERT, the
+Qdrant pilot and concurrency runs, all three RQ3 ablations (this document's own
+rule says a `chunker_compare_full` rebuild stales them), `gold_anchor_ambiguity`,
+`residual_relevance`, and both `gold_entity_*` reports.
+
 ## Resolved 2026-07-23: RQ3 ablation results (normalization / segmentation / chunk-size)
 
 Full-corpus builds + paired bootstrap (n_boot=10,000, seed=42, Holm-Bonferroni
@@ -1209,7 +1279,7 @@ non-comparable side result, they stay useful. Reported next to the dense/lexical
 numbers without this paragraph, they would be the easiest thing in the paper for a
 reviewer to attack.
 
-## Resolved 2026-08-08: Query routing — the router now covers the whole Gold set, and it ties the best single combo
+## Resolved 2026-08-08, superseded in part 2026-08-18: Query routing — the router covers the whole Gold set, and (post-rebuild-#4) beats the best single combo under hybrid
 
 Report: `data/results/routing_eval.md` (`tools/eval/routing_eval.py`, rewritten
 2026-08-08). Reuses persisted rebuild-#3 results; no new retrieval. **Every arm
