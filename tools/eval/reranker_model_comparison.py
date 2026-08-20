@@ -88,8 +88,26 @@ MODELS = [
     ("cross-encoder/mmarco-mMiniLMv2-L12-H384-v1", "mmarco-mMiniLM", 118),
 ]
 ANCHOR = MODELS[0][0]
-# reranker_rrf_routed_test.md, same pool, same protocol
-PUBLISHED = {"C": 0.6831, "D_anchor": 0.6847, "oracle_p50": 0.8331, "holds_p50": 0.9054}
+# reranker_rrf_routed_test.md, same pool, same protocol -- PARSED from that
+# report, never frozen. It was the literal dict
+# {"C": 0.6831, "D_anchor": 0.6847, "oracle_p50": 0.8331, "holds_p50": 0.9054}
+# until 2026-08-20, when rebuild #4 moved C and D and S3/S4 FAILED on a run that
+# was itself correct -- the 11th-14th cross-artifact anchor of the kind `561102e`
+# replaced elsewhere. Worse than a red check: `head` below fed the report's own
+# "captured ceiling" column, so a stale literal produced a *silently* wrong
+# percentage on a fresh run. Missing/renamed report => empty, and every caller
+# FAILs with "UNPARSED" rather than skipping.
+def _published() -> dict[str, float | None]:
+    if not RT.ROUTED_REPORT.exists():
+        return {}
+    txt = RT.ROUTED_REPORT.read_text(encoding="utf-8")
+    arms = RT.parse_routed_arms(txt)
+    delivered, holds = RT.parse_routed_oracle(txt, 50)
+    return {"C": arms.get("C"), "D_anchor": arms.get("D"),
+            "oracle_p50": delivered, "holds_p50": holds}
+
+
+PUBLISHED = _published()
 
 
 def slug(model: str) -> str:
@@ -172,7 +190,10 @@ def kendall_tau(a: np.ndarray, b: np.ndarray) -> float:
 def main() -> int:
     ap = argparse.ArgumentParser(description="do other cross-encoders beat the router?")
     ap.add_argument("--smoke", action="store_true", help="8 queries, coarse grid, writes nothing")
-    ap.add_argument("--reuse-scores", action="store_true", help="skip GPU, re-render from caches")
+    ap.add_argument("--reuse-scores", action="store_true",
+                    help="reuse ce_scores.json instead of running the cross-encoder; NOT GPU-free -- "
+                         "retrieval still loads an embedder, so do not run this beside "
+                         "a training job on a single card")
     ap.add_argument("--n-boot", type=int, default=RT.N_BOOT)
     ap.add_argument("--seed", type=int, default=RT.SEED)
     ap.add_argument("--alpha", type=float, default=0.05)
@@ -278,22 +299,33 @@ def main() -> int:
     checks.append(("S2 w=0.00 reproduces arm C for every model (fusion is model-independent there)",
                    max(same_C.values()) == 0.0,
                    " · ".join(f"{k} |d|max={v:.0e}" for k, v in same_C.items())))
-    checks.append(("S3 arm C is routing_eval.md's `routed (shipped)` hybrid",
-                   abs(arm_C["recall@10"].mean() - PUBLISHED["C"]) < 5e-5 or args.smoke,
-                   f"{arm_C['recall@10'].mean():.4f} vs published {PUBLISHED['C']:.4f}"))
+    _pC, _pD = PUBLISHED.get("C"), PUBLISHED.get("D_anchor")
+    checks.append(("S3 arm C is reranker_rrf_routed_test.md's arm C (routed, shipped)",
+                   _pC is not None
+                   and (abs(arm_C["recall@10"].mean() - _pC) < 5e-5 or args.smoke),
+                   f"{arm_C['recall@10'].mean():.4f} vs published "
+                   + (f"{_pC:.4f}" if _pC is not None
+                      else "UNPARSED -- the cross-check could not be made")))
     checks.append(("S4 the anchor reproduces reranker_rrf_routed_test.md's arm D",
-                   abs(arm_D[ANCHOR]["recall@10"].mean() - PUBLISHED["D_anchor"]) < 5e-5
-                   or args.smoke,
+                   _pD is not None
+                   and (abs(arm_D[ANCHOR]["recall@10"].mean() - _pD) < 5e-5 or args.smoke),
                    f"{arm_D[ANCHOR]['recall@10'].mean():.4f} vs published "
-                   f"{PUBLISHED['D_anchor']:.4f}"))
+                   + (f"{_pD:.4f}" if _pD is not None
+                      else "UNPARSED -- the cross-check could not be made")))
 
     oracle, holds = RT.oracle_rerank(r_top, r_cid, r_rid, r_page, queries, qrels, P)
     checks.append(("S5 the routed oracle reproduces reranker_rrf_routed_test.md (pool is "
                    "model-independent)",
-                   (abs(oracle["recall@10"].mean() - PUBLISHED["oracle_p50"]) < 5e-5
-                    and abs(holds.mean() - PUBLISHED["holds_p50"]) < 5e-5) or args.smoke,
-                   f"delivered {oracle['recall@10'].mean():.4f} vs {PUBLISHED['oracle_p50']:.4f}; "
-                   f"holds {holds.mean():.4f} vs {PUBLISHED['holds_p50']:.4f}"))
+                   PUBLISHED.get("oracle_p50") is not None
+                   and PUBLISHED.get("holds_p50") is not None
+                   and ((abs(oracle["recall@10"].mean() - PUBLISHED["oracle_p50"]) < 5e-5
+                         and abs(holds.mean() - PUBLISHED["holds_p50"]) < 5e-5) or args.smoke),
+                   f"delivered {oracle['recall@10'].mean():.4f} vs "
+                   + (f"{PUBLISHED['oracle_p50']:.4f}" if PUBLISHED.get("oracle_p50") is not None
+                      else "UNPARSED")
+                   + f"; holds {holds.mean():.4f} vs "
+                   + (f"{PUBLISHED['holds_p50']:.4f}" if PUBLISHED.get("holds_p50") is not None
+                      else "UNPARSED -- the cross-check could not be made")))
 
     # The models must actually disagree. Two models that rank every pool
     # identically would give identical arms, and a null would then say nothing
@@ -357,15 +389,23 @@ def main() -> int:
     def w_(s: str = "") -> None:
         L.append(s)
 
-    head = PUBLISHED["oracle_p50"] - PUBLISHED["C"]
+    # Measured here, not carried from PUBLISHED: S3/S5 already gate that these two
+    # equal the routed report's own values, so deriving `head` from this run keeps
+    # every figure in this file a product of this run. The anchor's own delta and
+    # the share it captures were frozen literals ("+0.0017", "1%") until
+    # 2026-08-20 -- both are now derived, and both changed sign/direction at
+    # rebuild #4.
+    c_mean = float(arm_C["recall@10"].mean())
+    head = float(oracle["recall@10"].mean()) - c_mean
+    anchor_d = float(arm_D[ANCHOR]["recall@10"].mean()) - c_mean
     w_("# cross-encoder ตัวอื่นเอาชนะ hard router ได้ไหม")
     w_()
     w_(f"Generated by `tools/eval/reranker_model_comparison.py` · {len(queries)} คำถาม · "
        f"pool = routed hybrid top-{P} (**เหมือนกันทุกโมเดล**) · ทุก arm ส่งออก k={RT.K} เท่ากัน")
     w_()
-    w_(f"`reranker_rrf_routed_test.md` วัด rrf4 ทับ hard router ได้ **+0.0017** (Holm 1.0000) "
-       f"ขณะที่ oracle บน pool เดียวกันส่งมอบ **{PUBLISHED['oracle_p50']:.4f}** คือ "
-       f"**+{head:.4f}** — โมเดลเก็บได้ราว 1% ของเพดานตัวเอง · null ตัวเดียวแยกไม่ออกว่า "
+    w_(f"`reranker_rrf_routed_test.md` วัด rrf4 ทับ hard router ได้ **{anchor_d:+.4f}** "
+       f"ขณะที่ oracle บน pool เดียวกันส่งมอบ **{oracle['recall@10'].mean():.4f}** คือ "
+       f"**+{head:.4f}** — โมเดลเก็บได้ {anchor_d/head*100:.0f}% ของเพดานตัวเอง · null ตัวเดียวแยกไม่ออกว่า "
        "“โมเดลนี้อ่อน” หรือ “ไม่เหลืออะไรให้เก็บ” จึงสลับโมเดลโดยไม่แตะอย่างอื่นเลย")
     w_()
     w_("**เงื่อนไขก่อนวัด**: ทุกโมเดลต้องผ่าน `tools/eval/qualify_reranker_model.py` — "
@@ -430,6 +470,22 @@ def main() -> int:
     dbest = arm_D[best_m]["recall@10"].mean() - arm_C["recall@10"].mean()
     spread = (max(arm_D[m]["recall@10"].mean() for m, _, _ in MODELS)
               - min(arm_D[m]["recall@10"].mean() for m, _, _ in MODELS))
+    # Derived, never typed. The two sentences below quoted "+0.0017", "20 times",
+    # "+0.0275 / Holm 0.0228" and the word "makes it worse" as literals; after
+    # rebuild #4 the anchor's effect went NEGATIVE, so the ratio was wrong by ~7x
+    # and the mmarco sentence printed the verdict word "worse" beside its own
+    # POSITIVE number -- a hardcoded verdict word contradicting a live figure in
+    # the same clause (see CLAUDE.md, feedback_a_hardcoded_verdict_word_rots_unseen).
+    _f2 = {r[0] + "|" + r[1]: r for r in fam2}
+    _bk = f"D({best_lab}) vs C|ndcg@10"
+    _best_ndcg = (
+        f"{_f2[_bk][2]:+.4f} " + ("มีนัยสำคัญ" if _f2[_bk][6]
+                                  else "ไม่มีนัยสำคัญ")
+        + f", Holm {_f2[_bk][5]:.4f}"
+    ) if _bk in _f2 else "UNPARSED"
+    _mmarco_d = float(arm_D[MODELS[-1][0]]["recall@10"].mean() - arm_C["recall@10"].mean())
+    _mmarco_word = ("ทำให้แย่ลง" if _mmarco_d < 0
+                    else "แทบไม่ขยับ")
     w_("## อ่านผล")
     w_()
     w_(f"**ตระกูลที่ลงทะเบียนไว้ (recall@10) ไม่มีตัวไหนผ่าน 0/3** · ตัวที่สูงสุดคือ "
@@ -441,15 +497,16 @@ def main() -> int:
        f"ช่วงห่างระหว่างโมเดลคือ **{spread:.4f}** recall@10 (จาก "
        f"{min(arm_D[m]['recall@10'].mean() for m, _, _ in MODELS):.4f} ถึง "
        f"{max(arm_D[m]['recall@10'].mean() for m, _, _ in MODELS):.4f}) ซึ่งกว้างกว่าผลของ "
-       f"anchor ทั้งก้อน (+0.0017) กว่า 20 เท่า · ดังนั้น **+0.0017 เป็นคุณสมบัติของ "
+       f"anchor ทั้งก้อน ({anchor_d:+.4f}) ราว {spread/max(abs(anchor_d), 1e-9):.0f} เท่า · "
+       f"ดังนั้น **{anchor_d:+.4f} เป็นคุณสมบัติของ "
        f"`bge-reranker-v2-m3` ไม่ใช่ของ cross-encoder reranking บนคลังนี้** — ตรงกับที่ "
        f"คอลัมน์ oracle บอกไว้ แต่มาจากหลักฐานคนละเส้นทาง")
     w_()
     w_(f"**ส่วนที่สวนสัญชาตญาณคือหลักฐานที่หนักที่สุด**: ตัวที่ทำได้ดีที่สุดคือ `{best_lab}` "
        f"ซึ่งเป็นรุ่น**เก่ากว่า** ที่ v2-m3 ออกมาแทน แต่ดีกว่าทุก metric "
-       f"(nDCG@10 +0.0275 มีนัยสำคัญใน Family 2, Holm 0.0228) · การเลือก reranker ที่นี่ "
+       f"(nDCG@10 {_best_ndcg} ใน Family 2) · การเลือก reranker ที่นี่ "
        f"จึงไม่ได้เดินตามความแรงบน benchmark ทั่วไป ต้องวัดบนคลังนี้เอง · "
-       f"และ `mmarco-mMiniLM` **ทำให้แย่ลง** ({arm_D[MODELS[-1][0]]['recall@10'].mean() - arm_C['recall@10'].mean():+.4f}) "
+       f"และ `mmarco-mMiniLM` **{_mmarco_word}** ({_mmarco_d:+.4f}) "
        f"ซึ่งเข้ากับกฎ RRF ของโปรเจกต์นี้ — fuse ได้ต่อเมื่อสองแขนแรงพอ ๆ กัน")
     w_()
     w_(f"**ข้อควรระวังเรื่องการเลือก**: `{best_lab}` เป็น argmax ของ 4 โมเดลที่วัดบน 106 "

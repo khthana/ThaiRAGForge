@@ -98,9 +98,173 @@ QRELS_CEILING = 0.8856
 CE_MODEL = "BAAI/bge-reranker-v2-m3"
 CE_BATCH = 8
 # routing_eval.md, hybrid, `routed (shipped)`; and reranker_rrf_signal_test.md
-PUBLISHED = {"C_recall": 0.6831, "A_recall": 0.6281, "B_recall": 0.6660}
+ROUTING_EVAL = REPO / "data" / "results" / "routing_eval.md"
+RRF_SIGNAL_REPORT = REPO / "data" / "results" / "reranker_rrf_signal_test.md"
+
+
+def parse_routing_eval_routed(text: str, retriever: str = "hybrid",
+                              metric: str = "recall@10") -> float | None:
+    """`routed (shipped)` for one retriever from routing_eval.md S3.
+
+    PARSED, never frozen -- this was the literal 0.6831 until 2026-08-20, when
+    rebuild #4 moved it to 0.6811 and S4 went red against a report it agreed
+    with. The report carries **two** S3 tables, `-- dense` and `-- hybrid`, with
+    identical shape, so the retriever must be selected explicitly: reading the
+    first match returns the dense arm's 0.6173 for a check about hybrid.
+
+    None when the section or row is absent; the caller must FAIL, not skip.
+    """
+    head = "## 3. Routed system vs single-combo baselines -- " + retriever
+    if head not in text:
+        return None
+    body = text.split(head, 1)[1].split(chr(10) + "## ", 1)[0]
+    for line in body.splitlines():
+        cells = [c.strip().replace("*", "") for c in line.split("|")[1:-1]]
+        if len(cells) == 4 and cells[0] == metric and cells[1] == "routed (shipped)":
+            try:
+                return float(cells[2])
+            except ValueError:
+                return None
+    return None
+
+
+def parse_rrf_signal_arms(text: str) -> dict[str, float]:
+    """{arm label: recall@10} from reranker_rrf_signal_test.md's deployable table.
+
+    PARSED, never frozen (was 0.6281 / 0.6660). Rows look like
+    `| hybrid (shipped) | 0.6229 | 0.8478 | 0.6961 |`, bold markers stripped so
+    `**rrf4 (loo)**` and `hybrid (shipped)` key the same way.
+
+    SCOPED to the deployable-arms section. The first version scanned the whole
+    file for any 4-cell row, which happened to work only because that report's
+    other tables are 5 and 7 cells wide -- so it could neither be trusted against
+    a new table nor return {} when the report moved, i.e. it could not fail.
+    Empty when the section is absent; the caller must FAIL, not skip.
+    """
+    head = "## arm ที่ deploy ได้"
+    if head not in text:
+        return {}
+    body = text.split(head, 1)[1].split(chr(10) + "## ", 1)[0]
+    out: dict[str, float] = {}
+    for line in body.splitlines():
+        cells = [c.strip().replace("*", "") for c in line.split("|")[1:-1]]
+        if len(cells) == 4:
+            try:
+                out[cells[0]] = float(cells[1])
+            except ValueError:
+                continue
+    return out
 # reranker_pool_source_test.md, hybrid pool P=50 on the same unrouted combo
-PUBLISHED_ORACLE = {"unrouted_p50_delivered": 0.8249, "unrouted_p50_holds": 0.8869}
+POOL_SOURCE_REPORT = REPO / "data" / "results" / "reranker_pool_source_test.md"
+
+
+def parse_pool_source_oracle(text: str, source: str = "hybrid", P: int = 50):
+    """(delivered oracle, pool-holds) at depth P for one pool source.
+
+    PARSED, never frozen (was 0.8249 / 0.8869). Columns are
+    `| P | in pool | oracle | real | captured | MRR | nDCG@10 |`, so `holds` is
+    index 1 and the DELIVERED oracle is index 2 -- deliberately not index 3
+    (`real`), which is the arm reranker_rrf_signal_test.py's S4 anchors on.
+    Returns (None, None) when absent; the caller must FAIL, not skip.
+    """
+    caption = "**pool จาก `" + source + "`**"
+    if caption not in text:
+        return None, None
+    body = text.split(caption, 1)[1]
+    for stop in ("**pool จาก", chr(10) + "## "):
+        if stop in body:
+            body = body.split(stop, 1)[0]
+    for line in body.splitlines():
+        cells = [c.strip().replace("*", "") for c in line.split("|")[1:-1]]
+        if len(cells) == 7 and cells[0].replace(",", "").isdigit() and int(cells[0].replace(",", "")) == P:
+            try:
+                return float(cells[2]), float(cells[1])
+            except ValueError:
+                return None, None
+    return None, None
+ROUTED_REPORT = REPO / "data" / "results" / "reranker_rrf_routed_test.md"
+
+
+def parse_routed_arms(text: str) -> dict[str, float]:
+    """recall@10 of arms A/B/C/D from this script's OWN 2x2 table.
+
+    For downstream scripts (reranker_model_comparison.py) that must reproduce
+    arm C and the anchor's arm D. PARSED, never frozen -- those were literals
+    `{"C": 0.6831, "D_anchor": 0.6847}` until 2026-08-20 and both FAILED after
+    rebuild #4 while the run itself was correct. Rows are
+    `| arm | routing | rrf4 | recall@10 | MRR | nDCG@10 | fetch/send |`; the arm
+    label carries `**` on D, so strip it. The D' oracle row is skipped: its label
+    is not a bare letter. Returns {} when the table is absent; the caller must
+    FAIL, not skip.
+    """
+    head = "## ตาราง 2×2"
+    if head not in text:
+        return {}
+    body = text.split(head, 1)[1].split(chr(10) + "## ", 1)[0]
+    out: dict[str, float] = {}
+    for line in body.splitlines():
+        cells = [c.strip().replace("*", "") for c in line.split("|")[1:-1]]
+        if len(cells) != 7:
+            continue
+        if cells[0] not in ("A", "B", "C", "D"):
+            continue
+        try:
+            out[cells[0]] = float(cells[3])
+        except ValueError:
+            continue
+    return out
+
+
+def parse_routed_oracle(text: str, P: int = 50):
+    """(delivered oracle, pool-holds) at depth P on the ROUTED pool.
+
+    Columns are `| P | routed holds | routed delivered | over arm C | unrouted
+    delivered |`, so holds is index 1 and DELIVERED is index 2 -- index 4 is the
+    *unrouted* column and taking it would silently answer a different question.
+    Returns (None, None) when absent; the caller must FAIL, not skip.
+    """
+    head = "## มีอะไร"
+    if head not in text:
+        return None, None
+    body = text.split(head, 1)[1].split(chr(10) + "## ", 1)[0]
+    for line in body.splitlines():
+        cells = [c.strip().replace("*", "") for c in line.split("|")[1:-1]]
+        if len(cells) != 5 or not cells[0].replace(",", "").isdigit():
+            continue
+        if int(cells[0].replace(",", "")) != P:
+            continue
+        try:
+            return float(cells[2]), float(cells[1])
+        except ValueError:
+            return None, None
+    return None, None
+
+
+def parse_routed_truncate(text: str, P: int = 50) -> dict[str, float] | None:
+    """This report's own w=1.00 row -- truncate-and-replace on the routed pool.
+
+    For `reranker_trained_test.py`, whose `PUBLISHED["D_truncate_p50"]` was the
+    literal 0.6000 until 2026-08-20 (it is now 0.5987). The two w grids are
+    identically shaped and are told apart only by the depth in their heading, so
+    P must be selected explicitly -- reading the first grid answers about P=20.
+    None when the grid or the row is absent; the caller must FAIL, not skip.
+    """
+    head = "## กริด w บน routed pool (P=" + str(P)
+    if head not in text:
+        return None
+    body = text.split(head, 1)[1].split(chr(10) + "## ", 1)[0]
+    for line in body.splitlines():
+        cells = [c.strip().replace("*", "") for c in line.split("|")[1:-1]]
+        if len(cells) < 4 or cells[0] != "1.00":
+            continue
+        try:
+            return {"recall@10": float(cells[1]), "mrr": float(cells[2]),
+                    "ndcg@10": float(cells[3])}
+        except ValueError:
+            return None
+    return None
+
+
 ORACLE_POOLS = (10, 20, 50, 100)
 N_BOOT = 10_000
 SEED = 42
@@ -358,18 +522,36 @@ def main() -> int:
     arm_D, picks_D, w_or_D = loo_select(routed_scores[P_REGISTERED], grid, len(queries))
     arm_B, picks_B, w_or_B = loo_select(unrouted_scores[P_REGISTERED], grid, len(queries))
 
+    # Anchors, all PARSED from the reports they name. Frozen literals here went
+    # red on 2026-08-20 against reports they in fact agreed with: rebuild #4 had
+    # legitimately moved every one of them.
+    _re_txt = ROUTING_EVAL.read_text(encoding="utf-8") if ROUTING_EVAL.exists() else ""
+    _rs_txt = RRF_SIGNAL_REPORT.read_text(encoding="utf-8") if RRF_SIGNAL_REPORT.exists() else ""
+    _ps_txt = POOL_SOURCE_REPORT.read_text(encoding="utf-8") if POOL_SOURCE_REPORT.exists() else ""
+    _pub_C = parse_routing_eval_routed(_re_txt, "hybrid", "recall@10")
+    _arms = parse_rrf_signal_arms(_rs_txt)
+    _pub_A = _arms.get("hybrid (shipped)")
+    _pub_B = _arms.get("rrf4 (loo)")
+    _pub_del, _pub_hold = parse_pool_source_oracle(_ps_txt, "hybrid", 50)
+
     checks.append((
         "S4 arm C is routing_eval.md's `routed (shipped)` hybrid, from a 3rd code path",
-        abs(arm_C["recall@10"].mean() - PUBLISHED["C_recall"]) < 5e-5 or args.smoke,
-        f"{arm_C['recall@10'].mean():.4f} vs published {PUBLISHED['C_recall']:.4f}"
+        (_pub_C is not None
+         and abs(arm_C["recall@10"].mean() - _pub_C) < 5e-5) or args.smoke,
+        f"{arm_C['recall@10'].mean():.4f} vs published "
+        + (f"{_pub_C:.4f}" if _pub_C is not None
+           else "UNPARSED -- the cross-check could not be made")
         + ("  [smoke: subset]" if args.smoke else ""),
     ))
     checks.append((
         "S5 arms A and B reproduce reranker_rrf_signal_test.md",
-        (abs(arm_A["recall@10"].mean() - PUBLISHED["A_recall"]) < 5e-5
-         and abs(arm_B["recall@10"].mean() - PUBLISHED["B_recall"]) < 5e-5) or args.smoke,
-        f"A {arm_A['recall@10'].mean():.4f} vs {PUBLISHED['A_recall']:.4f}; "
-        f"B {arm_B['recall@10'].mean():.4f} vs {PUBLISHED['B_recall']:.4f}"
+        (_pub_A is not None and _pub_B is not None
+         and abs(arm_A["recall@10"].mean() - _pub_A) < 5e-5
+         and abs(arm_B["recall@10"].mean() - _pub_B) < 5e-5) or args.smoke,
+        f"A {arm_A['recall@10'].mean():.4f} vs "
+        + (f"{_pub_A:.4f}" if _pub_A is not None else "UNPARSED")
+        + f"; B {arm_B['recall@10'].mean():.4f} vs "
+        + (f"{_pub_B:.4f}" if _pub_B is not None else "UNPARSED")
         + ("  [smoke: subset]" if args.smoke else ""),
     ))
     hi = max(float(s[P]["recall@10"][wi].mean())
@@ -408,11 +590,13 @@ def main() -> int:
     ))
     checks.append((
         "S9 unrouted oracle reproduces reranker_pool_source_test.md (both columns)",
-        (abs(orc_u[50]["recall@10"].mean() - PUBLISHED_ORACLE["unrouted_p50_delivered"]) < 5e-5
-         and abs(hold_u[50].mean() - PUBLISHED_ORACLE["unrouted_p50_holds"]) < 5e-5) or args.smoke,
+        (_pub_del is not None and _pub_hold is not None
+         and abs(orc_u[50]["recall@10"].mean() - _pub_del) < 5e-5
+         and abs(hold_u[50].mean() - _pub_hold) < 5e-5) or args.smoke,
         f"delivered {orc_u[50]['recall@10'].mean():.4f} vs "
-        f"{PUBLISHED_ORACLE['unrouted_p50_delivered']:.4f}; holds {hold_u[50].mean():.4f} vs "
-        f"{PUBLISHED_ORACLE['unrouted_p50_holds']:.4f}" + ("  [smoke: subset]" if args.smoke else ""),
+        + (f"{_pub_del:.4f}" if _pub_del is not None else "UNPARSED")
+        + f"; holds {hold_u[50].mean():.4f} vs "
+        + (f"{_pub_hold:.4f}" if _pub_hold is not None else "UNPARSED") + ("  [smoke: subset]" if args.smoke else ""),
     ))
     worst = max(orc_r[P]["recall@10"].mean() for P in ORACLE_POOLS)
     checks.append((
@@ -555,7 +739,8 @@ def main() -> int:
     w_()
     w_(f"เวลารวม {time.time()-t0:.0f} วินาที · cross-encoder {ce_ms:.2f} ms/คู่ "
        f"(batch_size={CE_BATCH}) · แคชที่ `{SCORE_CACHE.relative_to(REPO).as_posix()}` "
-       f"— re-render ซ้ำได้โดยไม่ใช้ GPU ด้วย `--reuse-scores`")
+       f"— `--reuse-scores` ข้าม cross-encoder ได้ "
+       f"แต่**ยังใช้ GPU** เพราะส่วน retrieval ยังโหลด embedder — ห้ามรันคู่กับงานเทรน")
 
     OUT.write_text("\n".join(L), encoding="utf-8")
     print("\n".join(L))

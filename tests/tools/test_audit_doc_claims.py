@@ -205,3 +205,85 @@ class TestSignificanceWording:
             ("Holm 0.0144", "0.0144"),
         ]:
             assert adc.P_VALUE.search(text).group(1) == want, text
+
+
+class TestCountExtraction:
+    """D5's extractor, widened twice on 2026-08-20 after D6 caught the holes.
+
+    Both widenings were measured against the 12 real docs before being applied
+    (+4 and +1 figure respectively), because a rule that admits far more is a
+    different check, not a fixed one. The decimal guard is what must NOT loosen:
+    a real decimal on either side has to stay rejected, or D5 starts inventing
+    pairs out of "0.8856" and "1,046".
+    """
+
+    def test_a_plain_count_is_extracted(self):
+        assert adc.COUNT_PROSE.findall("71 of 91 pairs") == [("71", "91")]
+
+    def test_the_thai_form_is_extracted(self):
+        assert adc.COUNT_PROSE.findall("70 จาก 84") == [("70", "84")]
+
+    def test_a_count_ending_a_sentence_is_extracted(self):
+        r"""`(?![\d.])` also rejected a trailing full stop, which hid a live
+        claim ("agrees on 105 of 115.") and left its allowlist entry exempting
+        nothing -- invisible until D6 asked whether entries still match."""
+        assert adc.COUNT_PROSE.findall("agrees on 105 of 115.") == [("105", "115")]
+
+    def test_a_decimal_denominator_is_still_refused(self):
+        assert adc.COUNT_PROSE.findall("5 of 115.3") == []
+
+    def test_a_decimal_numerator_is_still_refused(self):
+        assert adc.COUNT_PROSE.findall("115.3 of 200") == []
+
+    def test_a_longer_number_is_still_refused_on_the_right(self):
+        assert adc.COUNT_PROSE.findall("5 of 1153") == [("5", "1153")]
+        assert adc.COUNT_PROSE.findall("5 of 115 3") == [("5", "115")]
+
+    def test_emphasis_between_the_halves_no_longer_hides_a_count(self):
+        r"""`union **873** of 1,046` broke the `\s+of\s+` join."""
+        assert adc.COUNT_PROSE.findall("union **873** of 1,046") == []
+        assert adc.COUNT_PROSE.findall(
+            adc._unemph("union **873** of 1,046")) == [("873", "1,046")]
+
+    def test_html_bold_is_stripped_too(self):
+        assert adc.COUNT_PROSE.findall(
+            adc._unemph("<b>206</b> of 435")) == [("206", "435")]
+
+    def test_unemph_leaves_the_numbers_alone(self):
+        assert adc._unemph("0.8856 and 1,046") == "0.8856 and 1,046"
+
+
+class TestAllowlistLiveness:
+    """D6: an exemption that matches nothing is how an allowlist goes vacuous.
+
+    The check must ask what D2/D5 EXTRACT, not whether the raw text contains the
+    string -- its first version compared against file text and called
+    `873 of 1,046` dead while the doc plainly contained it (as `**873** of
+    1,046`, which the extractor could not see). Both answers are "dead"; only
+    the extraction-based one says why it matters.
+    """
+
+    def test_every_numbers_entry_names_an_audited_doc(self):
+        docs = {str(d).replace("\\", "/") for d in adc.DOCS}
+        for e in adc._allowlist("numbers"):
+            assert e["doc"] in docs, e
+
+    def test_every_counts_entry_names_an_audited_doc(self):
+        docs = {str(d).replace("\\", "/") for d in adc.DOCS}
+        for e in adc._allowlist("counts"):
+            assert e["doc"] in docs, e
+
+    def test_every_entry_carries_a_reason_and_a_date(self):
+        for section in ("numbers", "counts"):
+            for e in adc._allowlist(section):
+                assert e.get("reason", "").strip(), e
+                assert e.get("checked"), e
+
+    def test_d6_is_a_warn_not_a_fail(self):
+        """An entry may legitimately outlive one edit of a sentence; a gate
+        nobody can clear is a gate nobody reads (the D1b rule)."""
+        before = len(adc.findings)
+        adc.audit_allowlist_liveness()
+        check, status, _ = adc.findings[before]
+        assert check.startswith("D6")
+        assert status in {"PASS", "WARN"}

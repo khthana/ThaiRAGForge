@@ -495,12 +495,18 @@ live — so it needed a separate manual re-run, see
 [[feedback_refresh_all_retrieval_paths_after_rebuild]]). Same 106-query Gold
 set, same methodology:
 
-| Retriever reranked | Metric | No-rerank → Reranked | Holm-adj. p | Direction |
-|---|---|---|---|---|
-| Hybrid (BM25+dense, RRF) | MRR | 0.7814 → 0.6778 | 0.0012 | **significantly worse** |
-| Hybrid (BM25+dense, RRF) | nDCG@10 | 0.6257 → 0.5879 | 0.2840 | worse, not significant |
-| Hybrid (BM25+dense, RRF) | recall@10 | 0.5598 → 0.5663 | 0.7974 | *better*, not significant |
-| Dense-alone (bge-m3) | recall@10 / MRR / nDCG@10 | — | n.s. all three (0.284–0.419) | no effect |
+**Refreshed a third time 2026-08-18** against rebuild #4. Verdicts unchanged;
+the numbers below are the current ones, with the rebuild-#3 pair beside them.
+
+| Retriever reranked | Metric | No-rerank → Reranked | Holm-adj. p | rebuild #3 | Direction |
+|---|---|---|---|---|---|
+| Hybrid (BM25+dense, RRF) | MRR | 0.7730 → 0.6940 | **0.0240** | 0.7814 → 0.6778, p=0.0012 | **significantly worse** |
+| Hybrid (BM25+dense, RRF) | nDCG@10 | 0.6195 → 0.5909 | 0.5442 | 0.6257 → 0.5879, p=0.2840 | worse, not significant |
+| Hybrid (BM25+dense, RRF) | recall@10 | 0.5558 → 0.5649 | 0.7112 | 0.5598 → 0.5663, p=0.7974 | *better*, not significant |
+| Dense-alone (bge-m3) | recall@10 / MRR / nDCG@10 | — | n.s. all three (0.3270–0.5442) | n.s. (0.284–0.419) | no effect |
+
+The MRR harm has now shrunk at every rebuild (p=0.0048 → 0.0012 → 0.0240)
+while staying significant — cite the direction, not the magnitude.
 
 Reranker latency, refreshed: p50 1169ms, p95 1423ms, mean 1224ms — still
 essentially unchanged run to run. **No finding-level change from the
@@ -591,9 +597,9 @@ outcome for the last one: `docs/reranker-trained-on-hybrid-design.md`.
 
 | what varied | result |
 |---|---|
-| **the wiring** — reranker as a 4th RRF signal instead of truncate-and-replace | beats unrouted hybrid **+0.0379** recall@10 (Holm 0.0216), but **not** the hard router (**+0.0017**, Holm 1.0000) |
-| **the model** — 4 qualified cross-encoders on one routed pool | spread **0.0355** recall@10, ~20x the anchor's whole effect; the *older* `bge-reranker-v1-large` is best |
-| **the ceiling** — oracle over the same routed P=50 pool | pool holds **0.9054**, a perfect selection of 10 delivers **0.8331** = **+0.1500** over the router |
+| **the wiring** — reranker as a 4th RRF signal instead of truncate-and-replace | beats unrouted hybrid **+0.0392** recall@10 (Holm 0.0108), but **not** the hard router (**−0.0098**, Holm 0.9768 — the point estimate is now *negative*, and the CI rules out its adding more than **+0.0037**) |
+| **the model** — 4 qualified cross-encoders on one routed pool | spread **0.0262** recall@10, and the anchor is the **worst** of the four (the only one below the router); the *older* `bge-reranker-v1-large` is best |
+| **the ceiling** — oracle over the same routed P=50 pool | pool holds **0.9054**, a perfect selection of 10 delivers **0.8331** = **+0.1520** over the router |
 | **the weights** — fine-tuned on hybrid-fused candidates from this corpus | **+0.0654** over the router, **+0.0637** over the off-the-shelf model, all six pre-registered tests Holm **0.0000** |
 
 Read row 2 as *the model is a real variable*, never as a model recommendation: the winner is an
@@ -2181,25 +2187,29 @@ exactly what an exhaustive rank costs while destroying the one distinction the
 question is about — rank 51 versus rank 40,000. The script therefore recomputes
 **untruncated ranks** for all 36 combos × 3 arms, and pins itself to the
 persisted results first: dense, BM25 and hybrid top-10 must each reproduce
-byte-for-byte (3,816 / 848 / 3,816 reproduce, 0 differ), and the 84 and 164
-counts must agree with the ceiling report from an independent code path.
+byte-for-byte (3,816 / 848 / 3,816 reproduce, 0 differ), and the all-arm and
+hybrid-only counts must agree with the ceiling report from an independent code
+path. **Figures below are the 2026-08-18 re-run against rebuild #4**; the
+pre-rebuild counts were 84 all-arm / 164 hybrid-only, and the *shape* held
+across the rebuild while both counts rose — a pair no arm reaches is a property
+of the qrels **and** of the text, and rebuild #4 re-OCR'd a meeting.
 
 A resolution's rank is its **best chunk's** rank, because the budget is counted
 in chunks (k=10 chunks ≈ 7 distinct resolutions).
 
-| best rank achieved by any arm | of the 84 all-arm misses | of the 164 hybrid-only misses |
+| best rank achieved by any arm | of the 91 all-arm misses | of the 173 hybrid-only misses |
 |---|---|---|
-| 11–50 | **64 (76.2%)** | 129 (78.7%) |
+| 11–50 | **71 (78.0%)** | 138 (79.8%) |
 | 51–100 | 11 | 20 |
 | 101–1000 | 8 | 14 |
 | 1001+ | 1 | 1 |
 | not in the index at all | **0** | **0** |
 
-**The floor is ranking depth, not absence.** Every one of the 84 pairs has a
-chunk in every index, 83 of 84 sit inside the top 1,000, and three quarters sit
+**The floor is ranking depth, not absence.** Every one of the 91 pairs has a
+chunk in every index, 90 of 91 sit inside the top 1,000, and 78% sit
 at ranks 11–50 — reachable by any reranker willing to fetch 50 candidates. Only
 one pair is genuinely deep (`รายวิชา CALCULUS 2` → a 2568 curriculum-revision
-resolution, best rank **2,984**). This is why "structural" was withdrawn above.
+resolution, best rank **2,988**). This is why "structural" was withdrawn above.
 
 **How deep a candidate pool a reranker would need — and what it could actually
 deliver.** These are two different quantities and the first version of this
@@ -2212,14 +2222,17 @@ reason every other 10-document row is (macro; best single = `sentence` ×
 
 | P | single, in pool | single, **delivered** | all arms, in pool | all arms, **delivered** |
 |---|---|---|---|---|
-| 10 | 0.6281 | **0.6281** | 0.9443 | **0.8614** |
-| 20 | 0.7751 | **0.7534** | 0.9674 | **0.8711** |
-| 50 | 0.8869 | **0.8249** | 0.9837 | **0.8783** |
+| 10 | 0.6229 | **0.6229** | 0.9418 | **0.8605** |
+| 20 | 0.7720 | **0.7510** | 0.9678 | **0.8711** |
+| 50 | 0.8896 | **0.8268** | 0.9837 | **0.8783** |
 | 100 | 0.9169 | **0.8356** | 0.9925 | **0.8814** |
 | 1000 | 0.9798 | **0.8738** | 0.9990 | **0.8846** |
 
+*(re-run 2026-08-18 against rebuild #4; the pre-rebuild row at P=50 read
+0.8869 / 0.8249 / 0.9837 / 0.8783.)*
+
 **Cite the delivered column.** A perfect reranker over a 50-document pool from
-one system is worth **0.6281 → 0.8249**, and going ten times deeper (P=1000)
+one system is worth **0.6229 → 0.8268**, and going ten times deeper (P=1000)
 buys only 0.8738 — the budget, not the pool, is what binds. The "in pool"
 column crosses 0.8856 at P=50 and reaches 0.9798, which is why it must never be
 quoted as a reranker's ceiling. Check S7 gates every delivered cell against the
@@ -2228,20 +2241,20 @@ quoted as a reranker's ceiling. Check S7 gates every delivered cell against the
 Two further facts, both of which change where effort should go:
 
 - **`person` has zero misses.** All 180 `person` pairs are found at k=10 by some
-  arm. The 84 are `course` 33, `faculty_adjunct_aggregate` 28, `program` 23 —
+  arm. The 91 are `course` 41, `faculty_adjunct_aggregate` 28, `program` 22 —
   and the three types fail differently: `course` is almost purely a near-miss
-  (32 of 33 at ranks 11–50), while `faculty_adjunct_aggregate` splits evenly
-  (14 at 11–50, 14 deeper). A reranker helps `course`; it will not rescue half
-  of `faculty`.
+  (40 of 41 at ranks 11–50), while `faculty_adjunct_aggregate` splits evenly
+  (14 at 11–50, 14 deeper) — **that even split is unmoved by the rebuild**.
+  A reranker helps `course`; it will not rescue half of `faculty`.
 - **The candidate pool should come from dense, not from the shipped hybrid.**
-  On exactly these hard pairs, `dense` has median best rank **26** and is the
-  closest arm on **70 of 84**; `hybrid` is 43 (9 pairs) and `bm25` is 210 (6).
+  On exactly these hard pairs, `dense` has median best rank **22** and is the
+  closest arm on **74 of 91**; `hybrid` is 39 (13 pairs) and `bm25` is 200 (6).
   The arm that wins the published recall@10 tables is not the arm that gets
   nearest on what they miss.
 
 **Standing caveat before anyone reads this as free headroom.** This project
 already measured a real cross-encoder over hybrid candidates and it
-*significantly hurt* MRR (0.7814 → 0.6778, Holm-adj p=0.0012) while doing
+*significantly hurt* MRR (0.7730 → 0.6940, Holm-adj p=0.0240) while doing
 nothing for recall@10. The depth profile says the evidence is within reach at
 P=50; it does not say the reranker that was tried can reach it.
 

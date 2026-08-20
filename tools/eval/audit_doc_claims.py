@@ -128,8 +128,27 @@ NUM = re.compile(r"(?<![\d.])(\d\.\d{4})(?![\d])")
 # the exact figure string -- so no naturally-written exemption could ever match
 # it and the flag would be unclearable. Values are unaffected (_int strips
 # separators), and a number never ends in a comma anyway.
-COUNT_PROSE = re.compile(r"(?<![\d.])(\d(?:[\d,]*\d)?)\s+(?:of|จาก)\s+(\d(?:[\d,]*\d)?)(?![\d.])")
+# The trailing lookahead is `(?!\d)(?!\.\d)`, not `(?![\d.])`: the latter also
+# rejects a count that ENDS A SENTENCE ("agrees on **105 of 115**."), which is
+# how one live claim sat unchecked with an allowlist entry exempting nothing.
+# Both forms still refuse a real decimal on either side -- probed at
+# "115.3 of 200" and "5 of 115.3" before the change; measured cost across the
+# 12 docs: +1 pair, i.e. this is a hole, not a floodgate.
+COUNT_PROSE = re.compile(r"(?<![\d.])(\d(?:[\d,]*\d)?)\s+(?:of|จาก)\s+(\d(?:[\d,]*\d)?)(?!\d)(?!\.\d)")
 COUNT_SLASH = re.compile(r"(?<![\d./])(\d(?:[\d,]*\d)?)\s*/\s*(\d(?:[\d,]*\d)?)(?![\d./])")
+
+# Inline emphasis sits BETWEEN the two halves of a count often enough to matter:
+# `union **873** of 1,046` is invisible to COUNT_PROSE because `**` breaks the
+# `\s+of\s+` join. Measured across the 12 docs before adding this: 182 figures
+# extracted, 4 more visible once markers are stripped -- small, but one of the
+# four was a live claim whose allowlist entry was therefore exempting nothing.
+# Applied to BOTH sides (docs and artifacts), or a report that bolds its own
+# figure would stop counting as the source for a doc that does not.
+_EMPH = re.compile(r"\*\*|__|</?b>|</?i>|</?strong>|</?em>")
+
+
+def _unemph(s: str) -> str:
+    return _EMPH.sub("", s)
 
 # D2 exemption 1: the prose is explicitly citing a number as *no longer current*.
 # `paper-results-summary.md` keeps its own supersession history on purpose (see
@@ -567,7 +586,7 @@ def audit_counts(show_all: bool = False) -> None:
         rel = str(a.relative_to(REPO)).replace("\\", "/")
         for i, ln in enumerate(a.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
             for rx in (COUNT_PROSE, COUNT_SLASH):
-                for n, m in rx.findall(ln):
+                for n, m in rx.findall(_unemph(ln)):
                     shape.setdefault((_int(n), _int(m)), f"{rel}:{i}")
 
     allow = {(e["doc"], str(e["figure"])) for e in _allowlist("counts")}
@@ -582,7 +601,7 @@ def audit_counts(show_all: bool = False) -> None:
                 l for j in (bi - 1, bi + 1) if 0 <= j < len(blocks) for _, l in blocks[j]
             )
             for lineno, ln in blk:
-                found = COUNT_PROSE.findall(ln)
+                found = COUNT_PROSE.findall(_unemph(ln))
                 total += len(found)
                 miss = [f"{n} of {m}" for n, m in found if (_int(n), _int(m)) not in shape]
                 if not miss:
@@ -698,6 +717,66 @@ def audit_eval_inputs() -> None:
         record("D4b declared paths exist", False, f"{len(missing)} missing: {', '.join(missing[:5])}", warn=True)
 
 
+def audit_allowlist_liveness() -> None:
+    """D6: every allowlist entry must still exempt something.
+
+    D1c already applies this rule to `RETIRED_REPORTS`; the allowlist had no
+    equivalent, and on its first run D6 found three dead entries -- two keyed on
+    "83 of 84", which the 2026-08-18 miss-depth re-run had moved to "90 of 91" in
+    both docs, and one on "882 of 1,046", moved to 873 by the same re-run. A dead
+    entry exempts nothing today, but the moment the figure comes back (a revert,
+    a re-run landing on the old value) it is exempt again with a `checked:` date
+    nobody re-verified. Same shape as feedback_cleanup_can_break_an_audit, one
+    layer up.
+
+    **The test is what D2/D5 EXTRACT, not raw substring containment**, and the
+    difference is not pedantry: the first version compared against the file text
+    and reported `873 of 1,046` dead while CLAUDE.md plainly contains it -- as
+    `union **873** of 1,046`, which `COUNT_PROSE` cannot match through the bold
+    markers. Both readings are "dead", but only this one says *why it matters*:
+    the entry exempts nothing because the figure was never flagged. Asking the
+    same question the checks ask is the only way an exemption list can be audited
+    against them.
+
+    WARN, not FAIL, for the same reason D1b is: an entry may legitimately outlive
+    one edit of a sentence, and a red gate nobody can clear is a gate nobody
+    reads. Denominator printed, per the E3 rule that 0 is ambiguous between
+    "examined and clean" and "nothing left to examine".
+    """
+    nums_of: dict[str, set[str]] = {}
+    counts_of: dict[str, set[str]] = {}
+    for d in DOCS:
+        f = REPO / d
+        if not f.exists():
+            continue
+        rel = str(d).replace(chr(92), "/")
+        body = f.read_text(encoding="utf-8")
+        nums_of[rel] = set(NUM.findall(body))
+        counts_of[rel] = {f"{n} of {m}" for n, m in COUNT_PROSE.findall(_unemph(body))}
+
+    dead: list[str] = []
+    total = 0
+    for section, key, table in (("numbers", "number", nums_of),
+                                ("counts", "figure", counts_of)):
+        for e in _allowlist(section):
+            total += 1
+            doc, fig = e["doc"], str(e[key])
+            if doc not in table:
+                dead.append(f"{section}: {doc} is not one of the {len(DOCS)} audited docs "
+                            f"(entry {fig!r})")
+            elif fig not in table[doc]:
+                dead.append(f"{section}: {doc} no longer yields {fig!r} "
+                            f"(checked {e.get('checked', '?')})")
+    record(
+        "D6 every allowlist entry still exempts something", not dead,
+        f"{len(dead)} of {total} numbers/counts entries no longer match a figure "
+        "their doc yields",
+        warn=True,
+    )
+    for d in dead[:15]:
+        print(f"        {d}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--list", action="store_true", help="print every D2/D5 hit, not the first 12")
@@ -710,6 +789,7 @@ def main() -> int:
     audit_counts(args.list)
     audit_significance_wording()
     audit_eval_inputs()
+    audit_allowlist_liveness()
 
     fails = [f for f in findings if f[1] == "FAIL"]
     warns = [f for f in findings if f[1] == "WARN"]

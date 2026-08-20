@@ -9,7 +9,9 @@ WHAT IS BEING ASKED, AND WHY IT NEEDED A TRAINED MODEL TO ASK IT
 `reranker_rrf_routed_test.md` measured the off-the-shelf `bge-reranker-v2-m3`
 fused in as a fourth RRF signal on top of the shipped hard router and found
 **+0.0017** recall@10 (Holm-adj 1.0000) against a routed-pool oracle of
-**+0.1500**. Two independent pieces of evidence said that null belongs to the
+**+0.1500** -- both re-measured against rebuild #4 on 2026-08-20 as **-0.0098**
+and **+0.1520**, verdict unchanged. Two independent pieces of evidence said that
+null belongs to the
 *model*, not to the axis: the oracle column (the evidence IS in the pool and the
 model does not select it) and a 4-model swap whose spread (0.0355) is ~20x the
 anchor's whole effect. The remaining explanation this project has never tested is
@@ -20,8 +22,8 @@ grid, `P`, `k`, metrics and the bootstrap are all held at the published values.
 
 ARMS (every arm SENDS k=10; the reranked arms additionally FETCH 50)
 --------------------------------------------------------------------
-    C  hard routing, no reranker                       -- published 0.6831
-    D  hard routing + rrf4, off-the-shelf model        -- published 0.6847
+    C  hard routing, no reranker                       -- parsed from the report
+    D  hard routing + rrf4, off-the-shelf model        -- parsed from the report
     T  hard routing + rrf4, **trained** model          -- the open question
     L  hard routing + rrf4, lexical containment        -- descriptive control
 
@@ -59,8 +61,8 @@ significance from family 1; read it as sizing the threat, never as a result.
 ANCHORS
 -------
 Nothing published is trusted; five numbers are reproduced from this code path:
-arm C 0.6831, arm D 0.6847, the routed P=50 oracle 0.8331 delivered / 0.9054
-holds, and truncate-and-replace 0.6000 -- which is the w=1.00 end of the same
+arm C, arm D, the routed P=50 oracle's delivered and holds columns, and
+truncate-and-replace -- which is the w=1.00 end of the same
 grid, so it anchors the *far* end of the axis the fusion moves along and not
 just the near one. S7 additionally re-verifies the *training* set's disjointness from
 the eval set from the artifacts themselves rather than from the builder's own
@@ -120,6 +122,7 @@ from reranker_rrf_routed_test import (  # noqa: E402
     K, P_MAX, POOLS, P_REGISTERED, QRELS_CEILING, SELECT_METRIC, W_GRID,
     CE_BATCH, CE_MODEL, INDEX_ROOT, N_BOOT, SEED, _METRICS,
     fuse_grid, loo_select, oracle_rerank, persisted_hybrid_top10, rank_one_index,
+    ROUTED_REPORT, parse_routed_arms, parse_routed_oracle, parse_routed_truncate,
 )
 
 GOLD = REPO / "config" / "eval" / "gold_query_set_73det.yaml"
@@ -132,10 +135,39 @@ SCORE_CACHE = OUT_DIR / "ce_scores.json"
 SCORE_META = OUT_DIR / "ce_scores_meta.json"
 OUT = REPO / "data" / "results" / "reranker_trained_test.md"
 
-# reranker_rrf_routed_test.md, all four verified there against their own sources
-PUBLISHED = {"C_recall": 0.6831, "D_recall": 0.6847,
-             "oracle_p50_delivered": 0.8331, "oracle_p50_holds": 0.9054,
-             "D_truncate_p50": 0.6000}
+# reranker_rrf_routed_test.md, all five PARSED from that report rather than
+# frozen. They were the literal dict
+#   {"C_recall": 0.6831, "D_recall": 0.6847, "oracle_p50_delivered": 0.8331,
+#    "oracle_p50_holds": 0.9054, "D_truncate_p50": 0.6000}
+# until 2026-08-20, when rebuild #4 moved three of the five (0.6811 / 0.6713 /
+# 0.5987) and every anchored self-check would have gone red against a run that
+# was itself correct. A missing or renamed report leaves the value None and each
+# check FAILs with "UNPARSED" -- never skips, which would be a vacuous pass.
+def _published() -> dict[str, float | None]:
+    if not ROUTED_REPORT.exists():
+        return {}
+    txt = ROUTED_REPORT.read_text(encoding="utf-8")
+    arms = parse_routed_arms(txt)
+    delivered, holds = parse_routed_oracle(txt, 50)
+    trunc = parse_routed_truncate(txt, 50) or {}
+    return {"C_recall": arms.get("C"), "D_recall": arms.get("D"),
+            "oracle_p50_delivered": delivered, "oracle_p50_holds": holds,
+            "D_truncate_p50": trunc.get("recall@10")}
+
+
+PUBLISHED = _published()
+
+
+def _pub(key: str) -> float | None:
+    return PUBLISHED.get(key)
+
+
+def _vs(got: float, key: str) -> str:
+    """`x vs published y`, or a message that names the failure instead of a
+    plausible-looking number."""
+    want = _pub(key)
+    return (f"{got:.4f} vs published {want:.4f}" if want is not None
+            else f"{got:.4f} vs UNPARSED -- the cross-check could not be made")
 ORACLE_POOLS = (10, 20, 50, 100)
 MIN_FREE_GB = 4.0
 _WS = re.compile(r"\s+")
@@ -345,14 +377,16 @@ def main() -> int:
 
     checks.append((
         "S3 arm C reproduces routing_eval.md's `routed (shipped)` hybrid",
-        abs(arm_C["recall@10"].mean() - PUBLISHED["C_recall"]) < 5e-5 or args.smoke,
-        f"{arm_C['recall@10'].mean():.4f} vs published {PUBLISHED['C_recall']:.4f}"
+        _pub("C_recall") is not None
+        and (abs(arm_C["recall@10"].mean() - _pub("C_recall")) < 5e-5 or args.smoke),
+        _vs(float(arm_C["recall@10"].mean()), "C_recall")
         + ("  [smoke: subset]" if args.smoke else ""),
     ))
     checks.append((
         "S4 arm D reproduces reranker_rrf_routed_test.md's off-the-shelf arm",
-        abs(arm_D["recall@10"].mean() - PUBLISHED["D_recall"]) < 5e-5 or args.smoke,
-        f"{arm_D['recall@10'].mean():.4f} vs published {PUBLISHED['D_recall']:.4f}"
+        _pub("D_recall") is not None
+        and (abs(arm_D["recall@10"].mean() - _pub("D_recall")) < 5e-5 or args.smoke),
+        _vs(float(arm_D["recall@10"].mean()), "D_recall")
         + ("  [smoke: subset]" if args.smoke else ""),
     ))
 
@@ -364,8 +398,9 @@ def main() -> int:
     d_trunc = sc_D[P_REGISTERED]["recall@10"][wi1].mean()
     checks.append((
         "S10 truncate-and-replace (w=1.00) reproduces the published routed P=50 value",
-        abs(d_trunc - PUBLISHED["D_truncate_p50"]) < 5e-5 or args.smoke,
-        f"{d_trunc:.4f} vs published {PUBLISHED['D_truncate_p50']:.4f}"
+        _pub("D_truncate_p50") is not None
+        and (abs(d_trunc - _pub("D_truncate_p50")) < 5e-5 or args.smoke),
+        _vs(float(d_trunc), "D_truncate_p50")
         + ("  [smoke: subset]" if args.smoke else ""),
     ))
 
@@ -374,11 +409,12 @@ def main() -> int:
         orc[P], holds[P] = oracle_rerank(r_top, r_cid, r_rid, r_page, queries, qrels, P)
     checks.append((
         "S5 the routed oracle reproduces reranker_rrf_routed_test.md (both columns)",
-        (abs(orc[50]["recall@10"].mean() - PUBLISHED["oracle_p50_delivered"]) < 5e-5
-         and abs(holds[50].mean() - PUBLISHED["oracle_p50_holds"]) < 5e-5) or args.smoke,
-        f"delivered {orc[50]['recall@10'].mean():.4f} vs "
-        f"{PUBLISHED['oracle_p50_delivered']:.4f}; holds {holds[50].mean():.4f} vs "
-        f"{PUBLISHED['oracle_p50_holds']:.4f}" + ("  [smoke: subset]" if args.smoke else ""),
+        _pub("oracle_p50_delivered") is not None and _pub("oracle_p50_holds") is not None
+        and ((abs(orc[50]["recall@10"].mean() - _pub("oracle_p50_delivered")) < 5e-5
+              and abs(holds[50].mean() - _pub("oracle_p50_holds")) < 5e-5) or args.smoke),
+        "delivered " + _vs(float(orc[50]["recall@10"].mean()), "oracle_p50_delivered")
+        + "; holds " + _vs(float(holds[50].mean()), "oracle_p50_holds")
+        + ("  [smoke: subset]" if args.smoke else ""),
     ))
     hi = max([float(s[P]["recall@10"][wi].mean())
               for s in (sc_T, sc_D, sc_L) for P in pools for wi in range(len(grid))]
@@ -454,9 +490,19 @@ def main() -> int:
        f"ทุก arm **ส่งออก k={K} เท่ากัน** (arm ที่ rerank **ดึงเพิ่ม {P_REGISTERED} ใบ** "
        f"ไปให้ cross-encoder — ต่างกันที่ต้นทุน ไม่ใช่ที่งบที่ถูกวัด)")
     w_()
-    w_(f"`reranker_rrf_routed_test.md` วัด reranker สำเร็จรูปทับ router ได้ **+0.0017** "
-       f"ขณะที่ oracle บน pool เดียวกันได้ **+0.1500** — หลักฐานสองทาง (คอลัมน์ oracle "
-       f"และการสลับโมเดล 4 ตัวที่กระจาย 0.0355 ราว 20 เท่าของ effect ทั้งก้อน) ชี้ว่า null "
+    # Derived from the parsed anchors, not typed: both were literals ("+0.0017",
+    # "+0.1500", "0.0355 raw 20x") and rebuild #4 took the off-the-shelf delta
+    # NEGATIVE, so the sentence would have contradicted its own table.
+    _ots = ((_pub("D_recall") - _pub("C_recall"))
+            if _pub("D_recall") is not None and _pub("C_recall") is not None else None)
+    _hd = ((_pub("oracle_p50_delivered") - _pub("C_recall"))
+           if _pub("oracle_p50_delivered") is not None and _pub("C_recall") is not None
+           else None)
+    _ots_s = f"{_ots:+.4f}" if _ots is not None else "UNPARSED"
+    _hd_s = f"{_hd:+.4f}" if _hd is not None else "UNPARSED"
+    w_(f"`reranker_rrf_routed_test.md` วัด reranker สำเร็จรูปทับ router ได้ **{_ots_s}** "
+       f"ขณะที่ oracle บน pool เดียวกันได้ **{_hd_s}** — หลักฐานสองทาง (คอลัมน์ oracle "
+       f"และการสลับโมเดล 4 ตัว ซึ่ง anchor เป็นตัวแย่ที่สุดในสี่) ชี้ว่า null "
        f"นั้นเป็นของ**โมเดล** ไม่ใช่ของ**แกน** · คำอธิบายที่เหลือคือของ HYRR: โมเดลสำเร็จรูป "
        f"ถูกเทรนบน candidate จาก retriever เดียว ส่วน pool ที่นี่มาจาก hybrid fusion ")
     w_("จึงเปลี่ยนสิ่งเดียวคือ**น้ำหนักของโมเดล** — pool, fusion, routing, กริด `w`, `P`, `k`, "

@@ -1525,11 +1525,13 @@ see `docs/adr/`.
      `chunker_compare_full/plain__fixed_size__local__ceea7536` (so it goes stale on every
      index rebuild — it is **not** in the persisted-results refresh chain, and must be
      re-run by hand). **Refreshed 2026-08-05** against rebuild #3: result unchanged —
-     **significantly hurts hybrid MRR** (0.7814→0.6778, Holm-adj p=0.0012, was
-     0.7775→0.6775 p=0.0048 pre-rebuild), **no significant effect on dense-alone** (all
-     three dense metrics Holm-adj p≥0.28), **no significant effect on hybrid recall@10 or
-     nDCG@10** either (p=0.797 / p=0.284) — MRR-only is still the correct framing, and it
-     costs ~1.22s/query mean (p50 1.17s, p95 1.42s). The nDCG@10 harm reported 2026-07-23
+     **significantly hurts hybrid MRR**, and that survived rebuild #4 too
+     (re-run 2026-08-18: **0.7730→0.6940**, diff **−0.0790**, Holm-adj **0.0240**; it was
+     0.7814→0.6778 p=0.0012 at rebuild #3 and 0.7775→0.6775 p=0.0048 before that — the
+     margin has shrunk at each rebuild while staying significant). **No significant effect on
+     dense-alone** (all three dense metrics Holm-adj p≥0.3270), **no significant effect on
+     hybrid recall@10 or nDCG@10** either (**0.7112 / 0.5442**) — MRR-only is still the
+     correct framing, and it costs ~1.23s/query mean (p50 1.17s, p95 1.42s). The nDCG@10 harm reported 2026-07-23
      (p=0.030) still does not replicate (now p=0.284, was p=0.5676 at the 2026-07-29
      refresh) and stays retired as a separate claim — it actually sharpens the
      literature's "phantom hits" mechanism (early-rank disruption without evicting relevant
@@ -1542,30 +1544,37 @@ see `docs/adr/`.
      pool source ∈ {dense, hybrid} × P ∈ {10,20,50,100,200}, equal 10-doc budget, with an
      **oracle rerank of the same pool beside every real arm**. `miss_depth_profile.md`'s
      "dense is closest on 70 of 84" motivated it; **the hypothesis is rejected in the
-     opposite direction** — a dense pool is significantly *worse* (recall@10 **−0.1085**,
-     Holm-adj 0.0000, m=3) and loses to shipped hybrid on all three metrics. **The reasoning
+     opposite direction** — a dense pool is significantly *worse* (recall@10 **−0.1143**,
+     Holm-adj 0.0000, m=3 — re-run 2026-08-20; was −0.1085) and loses to shipped hybrid on all three metrics. **The reasoning
      error is the reusable part: "closest on the pairs everyone misses" is about 84 pairs,
-     but a pool serves all 1,046** — dense's 0.5034 baseline starts too far behind hybrid's
-     0.6281 for the hard pairs to repay. Two things the original test could not show. (1)
+     but a pool serves all 1,046** — dense's 0.5041 baseline starts too far behind hybrid's
+     0.6229 for the hard pairs to repay. Two things the original test could not show. (1)
      **The evidence is in the pool and the reranker does not find it**: at P=50 the hybrid
-     pool holds **0.8869** of the gold and a perfect rerank of it delivers **0.8249**, but
-     the real reranker delivers **0.6162** — *below its own baseline*. Without the oracle
+     pool holds **0.8896** of the gold and a perfect rerank of it delivers **0.8268**, but
+     the real reranker delivers **0.6182** — *below its own baseline*. Without the oracle
      column a null cannot be told apart from "the evidence was never reachable"; it was.
      (2) **Depth and harm point opposite ways, which is what closes the axis**: the misses
-     sit at ranks 11-50 but captured headroom goes **−6% / −22% / −33%** at P=50/100/200, so
+     sit at ranks 11-50 but captured headroom goes **−2% / −17% / −29%** at P=50/100/200, so
      it cannot reach them without destroying more than it recovers. Its per-type table shows
-     damage concentrated on `person` (**−0.2668** vs `course` −0.0205) — **but do not read
+     damage concentrated on `person` (**−0.2620** vs `course` −0.0192) — **but do not read
      that as a truncate-and-replace effect; it is a POOL-SOURCE effect, corrected the same
      day** (see the next paragraph). It is the *dense*-pool arm, i.e. what happens when the
      candidates come from the retriever that scores 0.5735 on `person` rather than the one
      BM25 carries to 0.8147. On the hybrid pool, truncate-and-replace *improves* `person`
-     (+0.1195) and collapses `program` (−0.1688). The one improving cell
-     (hybrid P=20, 0.6535 vs 0.6281) was **not pre-registered** — cite it as a hypothesis for
+     (+0.1243) and collapses `program` (−0.1553). The one improving cell
+     (hybrid P=20, 0.6464 vs 0.6229) was **not pre-registered** — cite it as a hypothesis for
      a fresh query set, never as a result. Cost is real too: P=50 adds ~1.2 s/query on a
      1.21-1.86 s base. Method worth reusing: a cross-encoder score depends on neither P nor
      the pool's source, so **score each (query, chunk) pair once and derive all 10 arms from
      the cache** (~1.3 arms' cost, and two arms can't disagree about one pair); it is
-     persisted so a GPU-free re-render reproduces the report line for line (784 s → 53 s).
+     persisted so a re-render reproduces the report line for line (784 s → 53 s).
+     **`--reuse-scores` is NOT GPU-free and this file said it was until 2026-08-20**, in
+     all three reranker scripts plus the routed report's own footer: it skips the
+     *cross-encoder*, which is the expensive part, but `rank_one_index` runs
+     unconditionally and loads an embedder onto the card. The wrong claim is what caused a
+     re-render to be launched beside a running fine-tune on the one 12 GB card — it
+     survived on free VRAM, not by design. Corrected at the source in every place that
+     asserted it.
      Its S6 rebuilds `miss_depth_profile.md` §2's five delivered figures to 4 decimals from
      an independent path, and S4 pins the structural anchor that at P=k reranking may change
      the *order* but never the *set*, so recall@10 must equal baseline exactly.
@@ -1584,85 +1593,117 @@ see `docs/adr/`.
      both, S4 reproducing all six published figures to 4 decimals from an independent code
      path. Same discipline as `hybrid_alpha_sweep.py`'s alpha=0.50 anchor. Pre-registered at
      pool=hybrid, P=50, w chosen **leave-one-out** on recall@10 (Family 1, m=6):
-     **`rrf4 (loo)` 0.6660 recall@10 vs shipped hybrid 0.6281, +0.0379, Holm-adj 0.0216 —
-     significant**, and it beats truncate-and-replace on all three metrics (+0.0497 /
-     +0.1171 / +0.0776, all 0.0000). **Cite MRR as REPAIRED, not improved**: the published
+     **`rrf4 (loo)` 0.6622 recall@10 vs shipped hybrid 0.6229, +0.0392, Holm-adj 0.0108 —
+     significant** (re-run 2026-08-20; it was 0.6660 / 0.6281 / +0.0379 / 0.0216, i.e. both
+     levels fell and the margin *strengthened*), and it beats truncate-and-replace on all
+     three metrics (+0.0439 / +0.1024 / +0.0698, Holm 0.0064 / 0.0020 / 0.0000). **Cite MRR as REPAIRED, not improved**: the published
      harm reproduces at w=1.00 (−0.1197) and vanishes under fusion but does not become a
-     gain (−0.0026, ns; CI rules out a loss worse than 0.0420 or a gain better than 0.0368),
-     and nDCG@10 +0.0272 is ns too — **recall@10 is the only claim that clears
+     gain (**−0.0221**, ns; CI rules out a loss worse than **0.0642** or a gain better than
+     **0.0181** — the bound loosened at rebuild #4, it read −0.0026 / 0.0420 / 0.0368),
+     and nDCG@10 **+0.0202** is ns too — **recall@10 is the only claim that clears
      significance.** No fitting premium: all 106 folds pick the same w, so LOO equals the
-     oracle to 4 decimals, and the peak is broad — **report the range 0.40–0.55, not a
-     point.** **The mechanism, corrected**: the prediction (fuse > replace) survived, the
+     oracle to 4 decimals — **still true after rebuild #4** (1 distinct w over 106 folds,
+     modal **0.45**) — but the peak **narrowed**: **report the range 0.40–0.45, not a
+     point** (it was 0.40–0.55; w=0.50 now drops to 0.6522 from the 0.6622 peak). **The mechanism, corrected**: the prediction (fuse > replace) survived, the
      stated reason did not. The cross-encoder is *not* uniformly destructive — on the right
      pool it is a `person` specialist that wrecks `program`, and what RRF buys is **keeping
-     both sides**, recovering `program` +0.1275 over truncate-and-replace while giving back
-     only −0.0165 of the person gain. Also: **once the reranker is only a vote, pool depth
-     stops mattering** (P=20 peaks 0.6662 vs P=50's 0.6660, at 487 ms/query instead of
-     1,218) — a cost observation from a descriptive column, not a pre-registered result.
-     **That +0.0379 was measured without routing, and it does NOT survive the hard router
-     (2026-08-09, `tools/eval/reranker_rrf_routed_test.py` →
-     `data/results/reranker_rrf_routed_test.md`, 878 s, 10,600 pairs over the 4 routed
-     indices).** Measured as a 2×2 because "does it still help" and "substitutes or
-     complements" are one experiment: **A** no routing/no rrf4 **0.6281**, **B** rrf4 only
-     **0.6660**, **C** routing only **0.6831**, **D** both **0.6847**; every arm sends k=10,
-     B and D additionally *fetch* 50. **All six pre-registered tests (m=6) are ns**: `D vs C`
-     (the reranker on top of routing) **+0.0017 recall@10, Holm-adj 1.0000** (MRR +0.0116,
-     nDCG −0.0005, both 1.0000); `D vs B` +0.0188/+0.0398/+0.0274, all 0.8244. **State it as
-     a bound**: the CI rules out the reranker adding more than **+0.0212** on top of the
-     router, for ~1.2 s/query and 50 extra fetches. **This is the second intervention to die
+     both sides**, recovering `program` +0.1155 over truncate-and-replace while giving back
+     only −0.0190 of the person gain. Also: **once the reranker is only a vote, pool depth
+     stops mattering** (P=20 peaks 0.6614 vs P=50's 0.6622, at 486 ms/query instead of
+     1,216) — a cost observation from a descriptive column, not a pre-registered result.
+     **That +0.0392 was measured without routing, and it does NOT survive the hard router
+     (2026-08-09, re-run 2026-08-20 against rebuild #4 — 142 s,
+     `tools/eval/reranker_rrf_routed_test.py` →
+     `data/results/reranker_rrf_routed_test.md`, 10,600 pairs over the 4 routed
+     indices; **10/10 self-checks PASS**).** Measured as a 2×2 because "does it still help"
+     and "substitutes or complements" are one experiment: **A** no routing/no rrf4
+     **0.6229**, **B** rrf4 only **0.6622**, **C** routing only **0.6811**, **D** both
+     **0.6713**; every arm sends k=10, B and D additionally *fetch* 50. **All six
+     pre-registered tests (m=6) are ns, before and after the rebuild — 0 verdict flips**:
+     `D vs C` (the reranker on top of routing) **−0.0098 recall@10, Holm-adj 0.9768**
+     (MRR +0.0047, nDCG −0.0071, both 1.0000); `D vs B` +0.0091/+0.0408/+0.0239, Holm
+     1.0000/0.9768/0.9768. **The verdicts held but the bound moved a long way, and that is
+     the citable change**: the point estimate flipped sign (**+0.0017 → −0.0098**) and
+     the CI now rules out the reranker adding more than **+0.0037** on top of the router —
+     it was **+0.0212**, so the case against wiring rrf4 is ~5.7x tighter than published,
+     for ~1.2 s/query and 50 extra fetches. **This is the second intervention to die
      against the router in exactly this way** (per-`entity_type` alpha was the first) and the
      mechanism is identical both times — both repair a per-type weak dense arm, and hard
      routing already hands each route a specialist index that hasn't got one. The per-route
-     table shows the near-cancellation: `course` **+0.0496** and `person` +0.0140 against
-     `program` **−0.0633** (the same cross-encoder personality as above), because routing had
-     already collected the person gain that made the unrouted number large (person 0.7487
+     table showed a near-cancellation before the rebuild (`course` **+0.0496**, `person`
+     +0.0140, `program` **−0.0633**) and now shows a small net loss: `course` **+0.0126**,
+     `faculty` +0.0019, `person` −0.0047, `program` **−0.0445** — i.e. **the one route
+     the reranker used to help lost three quarters of that gain**, while the `program` damage
+     (the same cross-encoder personality as above) shrank less. Routing had
+     already collected the person gain that made the unrouted number large (person 0.7440
      unrouted → 0.8531 routed *before* any reranking). **Substitutes, not complements** — the
      same verdict soft-vs-hard routing reached. Two supporting details: there is no fitted
-     signal left either (the P=50 w grid wanders 0.6784-0.6895 with no shape, a jagged plateau
-     not a peak, and LOO 0.6847 vs oracle 0.6895 is a real fitting premium where the unrouted
-     sweep had none), and truncate-and-replace on a *routed* pool is worse still (0.6000 at
-     P=50, 0.6637 at P=20). Descriptively (not pre-registered): **B 0.6660 < C 0.6831**, i.e.
+     signal left either (the P=50 w grid wanders with no shape, a jagged plateau
+     not a peak, and LOO **0.6713** vs oracle **0.6867** is a real fitting premium where the
+     unrouted sweep had none — and rebuild #4 **widened** it, 0.0048 → **0.0154**), and
+     truncate-and-replace on a *routed* pool is worse still (**0.5987** at
+     P=50, **0.6640** at P=20). Descriptively (not pre-registered): **B 0.6622 < C 0.6811**, i.e.
      routing alone beats the reranker path while costing no extra fetch and no query-time GPU.
      Three of the four cells are already-published numbers and the script **checks all three
-     rather than assuming them** — S4 reproduces `routing_eval.md`'s 0.6831 from a *third*
-     independent code path, S5 reproduces 0.6281/0.6660, S1/S2 reproduce 106/106 persisted
-     top-10s. **Neither rrf4 nor per-type alpha is wired into `query_service`, and this is
+     rather than assuming them** — S4 reproduces `routing_eval.md`'s **0.6811** from a *third*
+     independent code path, S5 reproduces **0.6229/0.6622**, S1/S2 reproduce 106/106 persisted
+     top-10s. **All three were frozen literals until 2026-08-20** — the 8th, 9th and 10th
+     cross-artifact anchors of the kind `561102e` replaced elsewhere — and are now parsed
+     live from their reports (`parse_routing_eval_routed`, which must select the
+     `-- hybrid` section, since the `-- dense` one reads 0.6173; `parse_rrf_signal_arms`;
+     `parse_pool_source_oracle`), each printing "UNPARSED — the cross-check could not be
+     made" rather than passing silently. **Neither rrf4 nor per-type alpha is wired into `query_service`, and this is
      why.** **But the axis is NOT dead, and the oracle column is what says so**: a null alone
      cannot separate "this reranker is weak" from "nothing is left to win", so the same
      oracle was computed over the *routed* pool. At P=50 the routed pool **holds** 0.9054 of
-     the gold and a perfect selection of 10 from it **delivers 0.8331** — **+0.1500 over arm
-     C, against the real reranker's +0.0017, i.e. about 1% of its own ceiling.** So the
+     the gold and a perfect selection of 10 from it **delivers 0.8331** — **+0.1520 over arm
+     C, against the real reranker's −0.0098, i.e. −6% of its own ceiling** (it was "about
+     1%"; the oracle is unmoved by the rebuild to 4 decimals and the real arm went
+     negative). So the
      verdict is *this cross-encoder is weak*, not *the headroom is gone*, and **routing
      enlarges the headroom rather than shrinking it** (routed 0.9054 holds / 0.8331
-     delivered vs unrouted 0.8869 / 0.8249 — the specialist indices supply *better*
+     delivered vs unrouted **0.8896 / 0.8268** — the specialist indices supply *better*
      candidates and the model still cannot select among them, the same shape as the
      unrouted diagnosis). Cite it as a **bound on the axis, not a plan**: an oracle is not a
-     system, and closing any of +0.1500 needs a reranker qualitatively better than
+     system, and closing any of +0.1520 needs a reranker qualitatively better than
      `bge-reranker-v2-m3` here, not a re-tuned fusion. Follow-up (a), a reranker trained on
      hybrid-fused candidates, keeps its motivation and remains untouched. **One trap, found
      by a failing self-check rather than by reasoning**: the delivered oracle is
      `min(#relevant resolutions with a chunk in the pool, K) / #relevant`, so chunks sharing
      a `resolution_id` **must be deduplicated first** — a perfect reranker never spends one
      of its 10 slots on a document it already returned. Sorting the pool relevant-first
-     *without* dedup understates the ceiling (0.7790 instead of 0.8249 unrouted at P=50);
+     *without* dedup understates the ceiling (0.7790 instead of 0.8268 unrouted at P=50);
      S9, which reproduces `reranker_pool_source_test.md`'s published `delivered/holds` pair
      from an independent code path, is what caught it.
      **"This cross-encoder is weak" is now CONFIRMED by a second route (2026-08-09,
+     re-run 2026-08-20 against rebuild #4 — 7 min for 3 models,
      `tools/eval/reranker_model_comparison.py` → `data/results/reranker_model_comparison.md`,
-     112 s from cached scores): swap the model, change nothing else.** Same routed hybrid
-     P=50 pool for every arm, same k=10 sent, same LOO-fitted `w`. **The model is a real
-     variable and the anchor is a bad one**: over 4 qualified models the spread is
-     **0.0355** recall@10 (mmarco-mMiniLM 0.6671 → bge-reranker-**v1**-large 0.7027) against
-     the anchor's entire effect of +0.0017, i.e. ~20x. So the null belongs to
+     8/8 self-checks PASS): swap the model, change nothing else.** Same routed hybrid
+     P=50 pool for every arm, same k=10 sent, same LOO-fitted `w`. **The verdict holds and
+     its strongest form is now a fact about ordering, not a ratio.** Over 4 qualified models
+     the spread is **0.0262** recall@10 (was 0.0355), and **the anchor is now the WORST of
+     the four** (0.6713, the only one *below* the router) while the other three all beat it
+     numerically — `bge-reranker-**v1**-large` **0.6975**, `bge-v1-base` 0.6820,
+     `mmarco-mMiniLM` 0.6822. **Do not restate the old "the spread is ~20x the anchor's whole
+     effect"**: that ratio was 0.0355 against +0.0017, and with the anchor's effect now
+     −0.0098 it reads ~2.7x — a much weaker sentence for the same conclusion, which is why
+     the ordering is the thing to cite. So the null belongs to
      `bge-reranker-v2-m3`, not to cross-encoder reranking on this corpus — the same verdict
      the oracle column reached, from independent evidence. **Cite the recall@10 family as
-     inconclusive, not as a win**: 0 of 3 clear the bar (best `bge-v1-large` +0.0196, raw
-     0.0282, **Holm 0.0612**, m=3), and the one significant cell is nDCG@10 **+0.0275**
-     (Holm 0.0228, m=6, family 2). **The counter-intuitive part is the strongest part**: the
+     inconclusive, not as a win**: 0 of 3 clear the bar (best `bge-v1-large` +0.0164, raw
+     0.0512, **Holm 0.1536**, m=3 — it moved *away* from the bar, it was +0.0196 / 0.0282 /
+     0.0612), and the one significant cell is still nDCG@10 **+0.0257**
+     (Holm 0.0336, m=6, family 2; was +0.0275 / 0.0228). **The counter-intuitive part is the
+     strongest part**: the
      best model is the *older* v1 lineage that v2-m3 supersedes, so reranker choice here does
-     not track general benchmark strength and has to be measured on this corpus;
-     `mmarco-mMiniLM` actively **hurts** (−0.0159), which is the project's RRF rule again —
-     fuse only when the arms are comparable. **Selection caveat**: the winner is an argmax
+     not track general benchmark strength and has to be measured on this corpus.
+     **The `mmarco-mMiniLM` illustration is WITHDRAWN**: it was cited here as the RRF rule
+     again (actively **hurts**, −0.0159) and after rebuild #4 it reads **+0.0011**, i.e. it
+     no longer hurts — the rule is unaffected, this table simply stopped illustrating it,
+     the same shape as the family-size example `soft_vs_hard_routing.md` lost. The generator
+     printed the verdict word "hurts" beside its own *positive* number until 2026-08-20
+     ([[feedback_a_hardcoded_verdict_word_rots_unseen]]); that word, the "20x", and the
+     nDCG cell are now **derived from the tables** rather than typed. **Selection caveat**: the winner is an argmax
      over 4 models on the same 106 queries (`w` is LOO, the *model* is not), so the citable
      claim is *at least one qualified model does materially better*, never *use bge-v1-large*
      — that would need a fresh query set, and **that confirmation is CLOSED as dominated
@@ -1675,8 +1716,9 @@ see `docs/adr/`.
      regime together (BM25 collapses there), so a non-replication could not be attributed —
      the wrong-pair trap that killed per-`entity_type` alpha and rrf4 — and the only same-shape
      disjoint queries are (a)'s own training set, ~2 h GPU for a result nobody would act on.
-     **The bound is unchanged**: the best model captures 13%
-     of +0.1500, so 87% is still untouched and follow-up (a) keeps its motivation. Nothing is
+     **The bound is unchanged**: the best model captures **11%**
+     of **+0.1520** (was 13% of +0.1500), so **89%** is still untouched and follow-up (a)
+     keeps its motivation. Nothing is
      wired. Confounds measured rather than assumed: `ctx` is the one thing not equal across
      arms (anchor 8192, the rest 512 — each at its own max, since forcing 512 on the anchor
      would stop it reproducing its published number), but only **1.9%** of pairs exceed 512
@@ -1711,7 +1753,8 @@ see `docs/adr/`.
      `tools/eval/train_hybrid_reranker.py` → `data/results/reranker_training_run.md`
      (67.6 min, checkpoint `data/models/reranker_hybrid_trained/`, gitignored) and
      `tools/eval/reranker_trained_test.py` → `data/results/reranker_trained_test.md`
-     (716 s, then ~95 s GPU-free with `--reuse-scores`). Only the **weights** vary: pool,
+     (716 s, then ~95 s with `--reuse-scores` — which still uses the GPU for retrieval, see
+     above). Only the **weights** vary: pool,
      routing, rrf4, the `w` grid, P=50, k=10, metrics and bootstrap all held at published
      values, and the fine-tune **starts from the anchor's own weights** so the headline is a
      within-model paired before/after — a difference can't be attributed to model size,
@@ -2426,7 +2469,8 @@ see `docs/adr/`.
   shipped hybrid** — on these hard pairs dense has median best rank **22** and is
   closest on **74 of 91**, vs hybrid 39 (13) and BM25 200 (6).
   Read against the **already-measured** cross-encoder result (hurts hybrid MRR
-  0.7814→0.6778, p=0.0012): the evidence is in reach at P=50, the tried reranker
+  0.7730→0.6940, Holm 0.0240 as of the 2026-08-18 re-run): the evidence is in reach at
+  P=50, the tried reranker
   does not reach it. **Two replication traps are pinned in the docstring because
   both were hit while writing it.** (1) Batching all 106 queries into one
   `(N,1024)@(1024,106)` matmul reproduces only 98/106 top-10s — the *scores* are
@@ -2438,13 +2482,14 @@ see `docs/adr/`.
   arms against the persisted results (3,816 / 848 / 3,816 reproduce, 0 differ),
   S3b *verifies* rather than assumes the chunk-row sharing that licenses the
   per-chunker BM25 cache (36 combos → 4 `BM25Okapi` builds, the 2.4x speedup),
-  and **S5/S6 reproduce the ceiling report's 84 and 164 from an independent code
-  path**. **S7 exists because the first version of §2 was wrong**: it reported
+  and **S5/S6 reproduce the ceiling report's all-arm and hybrid-only miss counts
+  from an independent code path** (91 and 173 at the 2026-08-18 re-run, 84 and 164
+  before it — stated as a rule rather than a pair, since both move with the corpus). **S7 exists because the first version of §2 was wrong**: it reported
   "perfect rerank from a pool of 50 = 0.8869", which is *above* the qrels ceiling
   0.8856 and therefore impossible for a reranker that still sends 10 documents —
   the table was measuring what is *in the pool*. §2 now prints both columns and
   S7 gates the deliverable one against the ceiling — **cite the delivered one**:
-  a perfect rerank over P=50 is 0.6281 → **0.8249**, and P=1000 buys only 0.8738,
+  a perfect rerank over P=50 is 0.6229 → **0.8268**, and P=1000 buys only 0.8738,
   so the 10-document budget binds, not the pool. Same family as
   [[feedback_state_the_retrieval_budget_in_every_comparison]].
 - **ColBERT / late interaction: BUILT, PILOTED AND CLOSED 2026-08-13 at the user's

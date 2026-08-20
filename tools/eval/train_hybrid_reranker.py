@@ -7,15 +7,18 @@ doc and measured by `tools/eval/reranker_trained_test.py`.
 
 WHAT IS ACTUALLY BEING CHANGED, AND WHAT IS HELD FIXED
 ------------------------------------------------------
-The published null (`reranker_rrf_routed_test.md`: the reranker adds **+0.0017**
-on top of the shipped router, against a routed-pool oracle of **+0.1500**) was
+The published null (`reranker_rrf_routed_test.md`: the off-the-shelf reranker
+adds nothing on top of the shipped router -- **+0.0017** when this was written,
+**-0.0098** after rebuild #4 -- against a routed-pool oracle of **+0.1520**) was
 attributed to the *model* rather than to the axis, on two independent pieces of
-evidence -- the oracle column, and a 4-model swap whose spread (0.0355) is ~20x
-the anchor's whole effect. Follow-up (a) asks whether the model is weak *because
+evidence: the oracle column, and a 4-model swap in which the anchor is the worst
+of the four. Follow-up (a) asks whether the model is weak *because
 it never saw this candidate distribution*. So exactly one thing varies: the
 cross-encoder's weights. The pool, the fusion, the routing, `w`, `P` and `k` all
-stay at the values the published arms used, and the eval script re-anchors
-0.6831 / 0.6847 / 0.8331 / 0.9054 rather than trusting that claim.
+stay at the values the published arms used, and the eval script re-anchors arm C,
+arm D, the routed P=50 oracle and truncate-and-replace **by parsing that report**
+rather than by trusting the claim -- or by freezing it, which is what it did
+until 2026-08-20.
 
 THE GPU BUDGET, AND WHY THE WORD EMBEDDINGS ARE FROZEN
 ------------------------------------------------------
@@ -120,6 +123,36 @@ def load_pools() -> tuple[list[dict], list[dict], dict]:
     train = [r for r in pools if r["split"] == "train"]
     dev = [r for r in pools if r["split"] == "dev"]
     return train, dev, meta
+
+
+def index_currency(meta: dict) -> tuple[bool, str]:
+    """Do the training pools come from the indices that exist right now?
+
+    A pool is a RETRIEVAL result, so an index rebuild stales `train_pools.json`
+    -- yet the builder's `input_fingerprint()` covers only the label side
+    (dicts/tags/manifests) and stays put across a rebuild. Rebuild #4 was
+    exactly that: the 2026-08-12 pools survived it looking current, and nothing
+    on disk said which indices they came from. Compared on `docset_hash` from
+    each index's own manifest, the same field `E0` attributes results with.
+
+    Returns (ok, detail). `ok` is False for a real mismatch AND for pools minted
+    before this field existed -- unrecorded is *unmeasured*, never *current*.
+    """
+    recorded = meta.get("index_provenance")
+    if not recorded:
+        return False, ("the pools record no index provenance (minted before "
+                       "2026-08-20) — re-run build_reranker_training_data.py")
+    live, drift = {}, []
+    for combo, got in recorded.items():
+        mf = REPO / str(got.get("dir", "")) / "manifest.json"
+        m = json.loads(mf.read_text(encoding="utf-8")) if mf.exists() else {}
+        live[combo] = m.get("docset_hash")
+        if live[combo] != got.get("docset_hash"):
+            drift.append(f"{combo}: pools {got.get('docset_hash')} vs index {live[combo]}")
+    if drift:
+        return False, "; ".join(drift)
+    return True, (f"{len(recorded)} routed indices, docset_hash "
+                  + ", ".join(sorted({str(v) for v in live.values()})))
 
 
 def build_groups(records: list[dict], epoch: int) -> list[tuple[str, str, list[str]]]:
@@ -418,6 +451,11 @@ def main() -> int:
         bool(torch.equal(emb_before, emb_after)),
         f"{emb.numel()/1e6:.0f}M weights, max |Δ| = "
         f"{float((emb_before - emb_after).abs().max()):.3e}",
+    ))
+    _cur_ok, _cur_detail = index_currency(meta)
+    checks.append((
+        "C6 the training pools were retrieved from the indices that exist now",
+        _cur_ok, _cur_detail,
     ))
     checks.append((
         "C3 a checkpoint is selected on held-out TRAINING queries, never on the eval set",

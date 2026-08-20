@@ -106,6 +106,43 @@ DENSE_RES = REPO / "data" / "results" / "gold_73det_full_embedder_matrix"
 HYB_RES = REPO / "data" / "results" / "gold_hybrid_73det"
 GOLD = REPO / "config" / "eval" / "gold_query_set_73det.yaml"
 MISS_DEPTH = REPO / "data" / "results" / "miss_depth_profile.md"
+
+
+def parse_miss_depth_delivered(text: str) -> dict[int, float]:
+    """{P: single-system *delivered* oracle recall@10} from miss_depth_profile.md S2.
+
+    PARSED, never frozen. This was the literal dict
+    `{10: 0.6281, 20: 0.7534, 50: 0.8249, 100: 0.8356, 200: 0.8412}` until
+    2026-08-20, when rebuild #4 legitimately moved three of the five and S6 went
+    red against a report it in fact agreed with to 4 decimals -- the sixth
+    cross-artifact anchor of the kind `561102e` replaced elsewhere.
+
+    S2's table is `| P | in pool | **delivered** | all-arm in pool | **all-arm
+    delivered** |`, and the column that belongs here is the SECOND numeric one:
+    the single system's delivered figure, which is the only one bounded by the
+    10-document budget the oracle here also respects. Taking `in pool` instead
+    would compare against a quantity that may legitimately exceed the qrels
+    ceiling, i.e. a check that can never fail for the right reason.
+
+    Returns {} when the section or its table cannot be found; the caller must
+    treat that as a FAIL, not a skip -- an anchor that cannot find its
+    counterpart must not pass quietly.
+    """
+    head = "## 2."
+    if head not in text:
+        return {}
+    body = text.split(head, 1)[1].split(chr(10) + "## ", 1)[0]
+    out: dict[int, float] = {}
+    for line in body.splitlines():
+        cells = [c.strip() for c in line.split("|")[1:-1]]
+        if len(cells) != 5:
+            continue
+        try:
+            P = int(cells[0].replace(",", ""))
+            out[P] = float(cells[2].replace("*", "").strip())
+        except ValueError:
+            continue
+    return out
 OUT_DIR = REPO / "data" / "results" / "reranker_pool_source"
 SCORE_CACHE = OUT_DIR / "ce_scores.json"
 SCORE_META = OUT_DIR / "ce_scores_meta.json"
@@ -154,7 +191,9 @@ def main() -> int:
     ap.add_argument("--smoke", action="store_true",
                     help="8 queries, P<=50, tiny score pass (~2 min) -- writes nothing")
     ap.add_argument("--reuse-scores", action="store_true",
-                    help="reuse ce_scores.json instead of running the cross-encoder")
+                    help="reuse ce_scores.json instead of running the cross-encoder; NOT GPU-free -- "
+                         "retrieval still loads an embedder, so do not run this beside "
+                         "a training job on a single card")
     ap.add_argument("--n-boot", type=int, default=N_BOOT)
     ap.add_argument("--seed", type=int, default=SEED)
     ap.add_argument("--alpha", type=float, default=0.05)
@@ -358,12 +397,16 @@ def main() -> int:
                        "skipped: needs the full query set"))
     else:
         md_txt = MISS_DEPTH.read_text(encoding="utf-8") if MISS_DEPTH.exists() else ""
-        published = {10: 0.6281, 20: 0.7534, 50: 0.8249, 100: 0.8356, 200: 0.8412}
-        repro = [(P, oracle("hybrid", P)[0], published[P]) for P in pools]
+        published = parse_miss_depth_delivered(md_txt)
+        missing = [P for P in pools if P not in published]
+        repro = [(P, oracle("hybrid", P)[0], published[P])
+                 for P in pools if P in published]
         checks.append((
             "S6 oracle rerank of the hybrid pool reproduces miss_depth_profile.md S2",
-            all(abs(a - b) < 5e-4 for _, a, b in repro) and bool(md_txt),
-            "; ".join(f"P={P}: {a:.4f} vs published {b:.4f}" for P, a, b in repro),
+            bool(repro) and not missing and all(abs(a - b) < 5e-4 for _, a, b in repro),
+            ("; ".join(f"P={P}: {a:.4f} vs published {b:.4f}" for P, a, b in repro)
+             + (f"; UNPARSED at P={missing} -- the cross-check could not be made"
+                if missing else "")),
         ))
 
         worst = max(

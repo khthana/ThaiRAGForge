@@ -111,8 +111,54 @@ W_GRID = tuple(round(x, 2) for x in np.arange(0.0, 1.0001, 0.05))
 SELECT_METRIC = "recall@10"
 QRELS_CEILING = 0.8856
 # reranker_pool_source_test.md, hybrid pool -- the w=1.00 anchor
-PUBLISHED_TNR = {50: {"recall@10": 0.6162, "mrr": 0.7233, "ndcg@10": 0.6447},
-                 20: {"recall@10": 0.6535, "mrr": 0.7793, "ndcg@10": 0.6949}}
+POOL_SOURCE_REPORT = REPO / "data" / "results" / "reranker_pool_source_test.md"
+
+
+def parse_pool_source_truncate(text: str, source: str) -> dict[int, dict[str, float]]:
+    """{P: {metric: value}} for the truncate-and-replace arm of one pool source.
+
+    PARSED, never frozen. This was the literal dict
+    `{50: {recall@10 0.6162, mrr 0.7233, ndcg@10 0.6447}, 20: {...0.6535...}}`
+    until 2026-08-20, when rebuild #4 legitimately moved five of the six and S4
+    went red against a report it in fact agreed with -- the seventh
+    cross-artifact anchor of the kind `561102e` replaced elsewhere, and the
+    second found in this family on the same day.
+
+    The report holds one table per pool source under a
+    ``**pool จาก `<source>`**`` caption, with columns
+    `| P | in pool | oracle | REAL | captured | MRR | nDCG@10 |`. The column
+    that belongs here is `จริง` (**real**, index 3) -- the arm that actually
+    truncates and replaces -- never `oracle` (index 2), which is the ceiling
+    this same file reports beside it and would make the check unfailable for
+    the right reason.
+
+    `source` is matched explicitly because both tables have identical shape:
+    reading the first table found would silently anchor the hybrid arm to the
+    dense pool's numbers.
+
+    Returns {} when the caption or its table cannot be found; the caller must
+    treat that as a FAIL, not a skip.
+    """
+    caption = "**pool จาก `" + source + "`**"
+    if caption not in text:
+        return {}
+    body = text.split(caption, 1)[1]
+    for stop in ("**pool จาก", chr(10) + "## "):
+        if stop in body:
+            body = body.split(stop, 1)[0]
+    out: dict[int, dict[str, float]] = {}
+    for line in body.splitlines():
+        cells = [c.strip().replace("*", "") for c in line.split("|")[1:-1]]
+        if len(cells) != 7:
+            continue
+        try:
+            P = int(cells[0].replace(",", ""))
+            out[P] = {"recall@10": float(cells[3]),
+                      "mrr": float(cells[5]),
+                      "ndcg@10": float(cells[6])}
+        except ValueError:
+            continue
+    return out
 N_BOOT = 10_000
 SEED = 42
 
@@ -248,11 +294,18 @@ def main() -> int:
         "S3 w=0.00 is the shipped hybrid, per query and per metric",
         d0 < 1e-12, f"max |diff| {d0:.2e} over {len(pools)*3*len(queries)} cells",
     ))
-    tnr = [(P, m, float(scores[P][m][wi1].mean()), PUBLISHED_TNR[P][m]) for P in pools for m in _METRICS]
+    pub = parse_pool_source_truncate(
+        POOL_SOURCE_REPORT.read_text(encoding="utf-8") if POOL_SOURCE_REPORT.exists() else "",
+        POOL_SOURCE)
+    absent = [P for P in pools if P not in pub]
+    tnr = [(P, m, float(scores[P][m][wi1].mean()), pub[P][m])
+           for P in pools if P in pub for m in _METRICS]
     checks.append((
         "S4 w=1.00 reproduces truncate-and-replace (reranker_pool_source_test.md)",
-        all(abs(a - b) < 5e-4 for _, _, a, b in tnr) or args.smoke,
+        (bool(tnr) and not absent
+         and all(abs(a - b) < 5e-4 for _, _, a, b in tnr)) or args.smoke,
         "; ".join(f"P={P} {m} {a:.4f} vs {b:.4f}" for P, m, a, b in tnr)
+        + (f"; UNPARSED at P={absent} -- the cross-check could not be made" if absent else "")
         + ("  [smoke: subset, not comparable]" if args.smoke else ""),
     ))
     hi = max(float(scores[P][m][wi].mean())

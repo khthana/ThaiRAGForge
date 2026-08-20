@@ -424,6 +424,29 @@ def main() -> int:
     resolved = {r: resolve_index(t, indices) for r, t in targets.items()}
     combo_of = {r: i.combo_id for r, i in resolved.items()}
     dir_of = {i.combo_id: Path(i.dir) for i in resolved.values()}
+    # WHICH indices the pools came from, recorded so the pools and the
+    # checkpoint trained on them can name their source. `input_fingerprint()`
+    # deliberately covers only the LABEL side (dicts/tags/manifests), because
+    # that is all a minted candidate's labels depend on -- but a *pool* is a
+    # retrieval result, so an index rebuild stales `train_pools.json` while
+    # every fingerprint field stays put. Rebuild #4 was exactly that case: the
+    # 2026-08-12 pools survived it looking current. `docset_hash` comes from
+    # `Index.provenance`, the same field `E0` uses to attribute a result to its
+    # index (see CLAUDE.md) -- identify the artifact, never rename it.
+    # Read from the index's own manifest, NOT from `IndexRef.provenance`:
+    # `discover_indices` returns a lightweight reference and `provenance` is
+    # stamped only by `ArtifactStore.load`, so it is `{}` here -- recording it
+    # would have written four rows of None and looked like provenance.
+    index_provenance = {}
+    for ix in resolved.values():
+        mf = Path(ix.dir) / "manifest.json"
+        m = json.loads(mf.read_text(encoding="utf-8")) if mf.exists() else {}
+        index_provenance[ix.combo_id] = {
+            "dir": str(Path(ix.dir).relative_to(REPO)).replace("\\", "/"),
+            "docset_hash": m.get("docset_hash"),
+            "n_resolutions": m.get("n_resolutions"),
+            "built_at": m.get("timestamp"),
+        }
 
     route_of = {c["query"]: classify_query(c["query"]) for c in train}
     misrouted = [c for c in train if route_of[c["query"]] != EXPECTED_ROUTE[c["entity_type"]]]
@@ -528,6 +551,7 @@ def main() -> int:
         "type_mix": dict(Counter(r["entity_type"] for r in kept)),
         "route_mix": dict(Counter(r["route"] for r in kept)),
         "combos": sorted(by_combo),
+        "index_provenance": index_provenance,
         "seed": SEED,
         "min_hits": MIN_HITS,
         "eval_set": str(GOLD.relative_to(REPO)).replace("\\", "/"),

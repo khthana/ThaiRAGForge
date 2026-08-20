@@ -18,7 +18,7 @@ numbers:
       Not a published metric and never will be: it is the WRONG ceiling that S9 of
       reranker_pool_source_test.py caught -- what the undeduplicated oracle produced
       before chunks sharing a resolution_id were collapsed (0.7790 instead of the
-      published 0.8249, unrouted pool at P=50). A report emits the corrected value
+      published 0.8268 (0.8249 before the 2026-08-20 re-run), unrouted pool at P=50). A report emits the corrected value
       only, so the defect figure is untraceable BY CONSTRUCTION. It is quoted here,
       and in CLAUDE.md, precisely because the lesson is the gap between the two.
   - doc: docs/paper-results-summary.md
@@ -292,12 +292,14 @@ counts:
       exempted here.
 
   - doc: CLAUDE.md
-    figure: "882 of 1,046"
-    checked: 2026-08-12
+    figure: "873 of 1,046"
+    checked: 2026-08-20
     reason: >-
-      data/results/oracle_union_ceiling.md line 86 states all three figures on
-      one line but never as a pair: "คู่ทั้งหมด: **1046** · ระบบที่ดีที่สุดเจอ
-      **512** (48.9%) · union ของทุกระบบเจอ **882** (84.3%)".
+      data/results/oracle_union_ceiling.md's summary states all three figures on
+      one line but never as a pair (total pairs, best single, union of all
+      systems). Was "882 of 1,046" until the 2026-08-18 re-run against rebuild
+      #4 moved the union to 873 and the best single to 509 -- found by D6, on its
+      first run, which is the whole reason that check exists.
 
   - doc: CLAUDE.md
     figure: "38 of 401"
@@ -317,13 +319,15 @@ counts:
       106 - 33 = 73, recomputed 2026-08-12.
 
   - doc: CLAUDE.md
-    figure: "83 of 84"
-    checked: 2026-08-12
+    figure: "90 of 91"
+    checked: 2026-08-20
     reason: >-
-      Derived from data/results/miss_depth_profile.md: line 29 states the 84
-      all-arm misses ("หาไม่เจอ 84 คู่ จาก 1046") and §3 lists exactly one pair
-      deeper than rank 1,000 (รายวิชา CALCULUS 2 at rank 2,984, line 79), so
-      84 - 1 = 83. The report prints the depth histogram, not this subtraction.
+      Derived from data/results/miss_depth_profile.md: §1 states the all-arm
+      misses ("หาไม่เจอ 91 คู่ จาก 1046") and §4 lists exactly one pair deeper
+      than rank 1,000 (รายวิชา CALCULUS 2 at rank 2,988), so 91 - 1 = 90. The
+      report prints the depth histogram, not this subtraction. Was "83 of 84"
+      until the 2026-08-18 re-run against rebuild #4; keyed on the exact string,
+      so both halves must be re-derived rather than inherited.
 
   - doc: CLAUDE.md
     figure: "0 of 1,014"
@@ -356,11 +360,11 @@ counts:
       (data/logs/rq4_regen_2026_08_07.log).
 
   - doc: docs/paper-results-summary.md
-    figure: "83 of 84"
-    checked: 2026-08-12
+    figure: "90 of 91"
+    checked: 2026-08-20
     reason: >-
       Same figure as the CLAUDE.md entry above, same evidence
-      (data/results/miss_depth_profile.md lines 29 and 79).
+      (data/results/miss_depth_profile.md §1 and §4). Was "83 of 84" pre-rebuild-#4.
 
   - doc: docs/paper-results-summary.md
     figure: "73 of 106"
