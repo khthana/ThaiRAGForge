@@ -1021,9 +1021,11 @@ count (10) and the same character total (11,983) and are still different files.
 The paired rule of `docs/rq4-design.md` therefore held — only the 233 changed
 cells were regenerated, the other 509 frozen byte-for-byte.
 
-**State: `phi4` is complete for all three variants (424/424 each, 0 errors);
-`gemma4:e4b`'s two variants are untouched at 191/424.** Re-running
+**State at the time of writing: `phi4` complete for all three variants (424/424
+each, 0 errors); `gemma4:e4b`'s two variants untouched at 191/424.** Re-running
 `tools/eval/rq4_supervisor.sh` resumes there and skips the finished phi4 jobs.
+**That is now done — see "Completed 2026-08-20" at the end of this file; all five
+(model, variant) jobs are at 424/424.**
 
 Generation rate is a measurable consequence of the prompt ablation, and is the
 number to plan the next run with: `sentence_cap` 30–49 s/answer, `cite_all`
@@ -1086,8 +1088,9 @@ for the **shipped** prompt, where comparability does not apply.
 
 Three reports re-scored from the new phi4 answers (`rq4_score.md`,
 `rq4_score_guarded.md`, `rq4_score_entity.md`). **The two `gemma4:e4b` reports
-were deliberately NOT re-scored** — their answers are still 191/424 old, so
-re-running them would mix indices inside one table. `rq4_score_entity.md` *was*
+were held back** — their answers were still 191/424 old, so re-running them would
+have mixed indices inside one table; they were re-scored on 2026-08-20 once
+complete. `rq4_score_entity.md` *was*
 re-run even though both entity arms' contexts are byte-identical, because its
 comparison arm (`hybrid`) is not.
 
@@ -1127,3 +1130,40 @@ Every one of these is a single cell against a generator whose measured noise
 floor is 14/24 identical citation sets at temperature 0, so treat any *isolated*
 flip as inconclusive; the dense family-2 cell is quotable because its point
 estimate moved by a factor of 2.7 and the mechanism is legible in the means.
+
+### Completed 2026-08-20: the gemma half, and what a second generator says about the rebuild
+
+`gemma4:e4b` finished both variants the next morning — **424/424 each, 0 errors,
+0 capped**, 466 answers in 76 min at ~5.5 s each. Put that beside the phi4 rate
+above: the same contexts and the same prompts cost **~13.5 GPU-hours on phi4 and
+~1.3 on `gemma4:e4b`**, so a robustness check on a second generator is roughly a
+tenth the price of the run it checks — which is the practical argument for
+keeping one wired.
+
+Both reports re-scored (`--model gemma4_e4b`, `--out` mandatory), against
+snapshots taken *before* scoring at
+`data/results/_pre_2026_08_18_rebuild4_refresh/rq4_score_gemma4{,_guarded}.md`.
+**1 verdict flip of 12 under `cite_all`, 0 of 12 under the guard.**
+
+The substantive reading lives in `docs/rq4-second-generator-check.md`
+§"Refreshed 2026-08-20". In short: the cross-generator conclusion
+(`{hybrid, dense} > bm25 > m2v` generator-independent, `hybrid > dense` a phi4
+result) **survived a second index generation**, sign disagreements narrowed 4 →
+2 and are still confined to that one pair, and phi4's own `hybrid > dense` cell
+went **significant again** (recall −0.0678, Holm 0.0410) after the truncation
+repair had turned it into a bound.
+
+Two methodological notes worth keeping here rather than there.
+
+**Snapshot before scoring, not after.** The gemma reports had been deliberately
+held back on 08-19 while their answers were half-old, so on 08-20 the only copy
+of the pre-refresh table was the live file about to be overwritten. Copying both
+into the snapshot directory first is what makes "1 flip of 12" a *derived*
+number rather than a remembered one — `diff_significance_reports.py` re-derives
+it, and the allowlist entry for it names that derivation instead of a report.
+
+**`closed_book` is the control that costs nothing.** Its context is empty, so no
+rebuild can change its answers, and it came back byte-identical in both models.
+In a table where every other arm moved, an arm that *cannot* move is what
+separates repair from generator drift — the same role the untruncated `hybrid`
+arm played in the 2026-08-10 truncation repair.

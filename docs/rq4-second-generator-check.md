@@ -211,3 +211,54 @@ Note `--model gemma4_e4b` (underscore) when scoring — the answers directory is
 named from `model.replace(":", "_")`. And `--out` is **mandatory** here: the
 guard that refuses to overwrite the published `rq4_score.md` keys on `--arms`,
 not on `--model`, so a default-path run with a different model would clobber it.
+
+## Refreshed 2026-08-20 against rebuild #4 — the conclusion holds, two supporting figures do not
+
+All 466 changed `gemma4:e4b` cells were regenerated (76 min, 0 errors, 0 capped)
+and both reports re-scored: **1 verdict flip of 12 under `cite_all`, 0 of 12
+under the guard.** The pre-refresh reports are snapshotted at
+`data/results/_pre_2026_08_18_rebuild4_refresh/rq4_score_gemma4{,_guarded}.md`,
+so every figure below is diffable rather than remembered.
+
+**§4's four-position precision ordering no longer holds for gemma.** `cite_all`
+now reads dense **0.7314** > hybrid **0.7277** > bm25 **0.6879** > m2v **0.6270**
+— the top two swapped — while phi4 still puts hybrid clearly first (0.7185 >
+0.6381). Positions 3 and 4 are unchanged in both models.
+
+**Verdict agreement moved in both directions**, which is why the count alone was
+never the finding: **10 of 12 → 7 of 12** under `cite_all`, **7 of 12 → 8 of 12**
+under the guard.
+
+| | before | after |
+|---|---|---|
+| `cite_all` verdicts agreeing | 10 / 12 | **7 / 12** |
+| `cite_all_guarded` verdicts agreeing | 7 / 12 | **8 / 12** |
+| sign disagreements over all 24 cells | 4 (all `hybrid` vs `dense`) | **2 (both `hybrid` vs `dense`, both under `cite_all`)** |
+
+**The mechanical sign check is now the sharper statement.** Both remaining
+disagreements are the `hybrid` vs `dense` pair under `cite_all` (precision and
+recall); under the guard all 12 signs agree. And the phi4 side of that pair is
+**significant again** after the rebuild — recall −0.0678 (Holm **0.0410**),
+precision −0.0798 (Holm 0.0410), both hybrid-favouring — which reverses the
+2026-08-10 "now a bound, not a result" wording, while gemma stays ns and points
+the other way (+0.0093 recall, +0.0026 precision).
+
+**So §4's guidance survives a second index generation and is now the whole
+finding: cite `{hybrid, dense} > bm25 > m2v` as generator-independent, and
+`hybrid > dense` as a phi4 result, not a system result.**
+
+**Two controls held.** (1) `closed_book` is **byte-identical** across the
+refresh — 24 hallucinations under `cite_all`, 1 under the guard, phantom 37/37 →
+1/1 — which is expected, since its context is empty and no rebuild can change
+it, and is what separates repair from generator drift in an unpaired-looking
+table. Result B is therefore untouched. (2) Every verdict disagreement outside
+the `hybrid`/`dense` pair is still one model resolving what the other leaves
+inconclusive, never a reversal.
+
+**One level worth carrying, because it cuts against the obvious reading of a
+re-OCR.** gemma's `bm25` citation recall **fell** 0.3991 → **0.3784** under
+`cite_all`, and that is what strengthened both strong arms' margins over it
+(`hybrid vs bm25` Holm 0.0320 → 0.0000, `dense vs bm25` 0.0320 → 0.0016) — the
+opposite direction to phi4's dense arm, which *gained* from the same re-OCR. **A
+rebuild is not uniformly helpful per arm**; read each arm's own movement before
+attributing a margin to the treatment.

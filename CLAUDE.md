@@ -1672,15 +1672,16 @@ see `docs/adr/`.
   build phases: `docs/rq4-design.md`. **Refreshed against `chunker_compare_full`
   rebuild #3 on 2026-08-07** — see the currency paragraph at the end of this bullet
   before citing anything here; two findings below are corrected there.
-  **CURRENCY, 2026-08-19: the rebuild-#4 refresh is HALF DONE and every RQ4 number
-  on disk is therefore mixed.** Rebuild #4 changed **233 of 742** contexts (checked
+  **CURRENCY, 2026-08-20: the rebuild-#4 refresh is COMPLETE — all five
+  (model, variant) jobs at 424/424, 0 errors, and all five reports re-scored.**
+  Rebuild #4 changed **233 of 742** contexts (checked
   byte-for-byte, because `q097`'s old and new contexts share block count *and*
   character total and are still different files); the 233 were regenerated and the
-  other 509 frozen, per the paired rule. `phi4` is complete for all three variants
-  (424/424 each, 0 errors); **`gemma4:e4b`'s two variants are untouched at 191/424**,
-  so `rq4_score_gemma4*.md` describes the old indices while `rq4_score*.md` will
-  describe the new ones. Resume with `tools/eval/rq4_supervisor.sh`, which skips
-  finished jobs; nothing has been re-scored yet. **`num_predict` is now capped at
+  other 509 frozen, per the paired rule. `phi4` finished 2026-08-19 (3 variants,
+  **3 capped**) and `gemma4:e4b` 2026-08-20 (2 variants, 76 min for 466 answers at
+  ~5.5 s each against phi4's ~90 s, **0 capped**). `tools/eval/rq4_supervisor.sh`
+  drives all five and skips finished jobs, so it is the resume path as well as the
+  run path. **`num_predict` is now capped at
   4,096 and that IS part of the measurement, unlike a timeout** — with it unset
   (−1) plus ollama context-shifting a request has no end, and one cell really did
   generate 5,007 tokens of `๒ ๒ ๑ ๒ ๒ ๑ …` past a 3,600 s timeout. The cap is
@@ -1699,10 +1700,12 @@ see `docs/adr/`.
   `อ้างอิง:` line and scores as *cited nothing*, i.e. a generator failure that reads
   like a retrieval result. **RE-SCORED 2026-08-19 — 7 verdict flips of 57 in
   `rq4_score.md`, 5 of 57 guarded, 1 of 14 entity; the two `gemma4:e4b` reports were
-  deliberately NOT re-scored** (their answers are still half-old, so re-running them
-  would mix indices inside one table), while `rq4_score_entity.md` WAS, because its
+  held back** (their answers were still half-old, so re-running them would have mixed
+  indices inside one table), while `rq4_score_entity.md` WAS re-scored, because its
   comparison arm `hybrid` moved even though both entity arms' contexts are
-  byte-identical. **The headline movement is family 2's dense arm: `sentence_cap vs
+  byte-identical. **The gemma pair was then re-scored 2026-08-20 once its answers
+  were complete — 1 verdict flip of 12 under `cite_all`, 0 of 12 guarded** (see the
+  second-generator paragraph below for what that does to the cross-generator claim). **The headline movement is family 2's dense arm: `sentence_cap vs
   cite_all` citation recall +0.1095 (Holm 0.0000) → +0.0407 (Holm 0.6610), i.e. the
   cell is now a bound ruling out a loss beyond 0.0133** — and the mechanism is
   legible rather than a loss of signal, because the *baseline* rose (0.2261 →
@@ -1862,7 +1865,36 @@ see `docs/adr/`.
   transfer at all — gemma's recall is higher on every arm (dense 0.5074 vs 0.3356)
   — and neither does prompt fit: identical contexts tokenize to **6,714** tokens
   here against phi4's 7,999, so [[project_rq4_prompt_truncation]]'s clearance is
-  per-model. **The larger finding is Result B, on the guard.** `cite_all`'s missing
+  per-model.
+  **REFRESHED AGAINST REBUILD #4 (2026-08-20): the conclusion is unchanged and
+  better supported, but two of its supporting figures are not.** All 466 changed
+  gemma cells were regenerated and re-scored — **1 verdict flip of 12 under
+  `cite_all`, 0 of 12 under the guard.** Post-rebuild, the four-position precision
+  ordering claim above **no longer holds for gemma**: `cite_all` reads dense
+  **0.7314** > hybrid **0.7277** > bm25 0.6879 > m2v 0.6270, i.e. the top two
+  swapped, and phi4 still puts hybrid first (0.7185 > 0.6381). **Verdict agreement
+  moved in both directions — 10 of 12 → 7 of 12 under `cite_all`, 7 of 12 → 8 of 12
+  under the guard** — and the mechanical sign check is now the sharper statement:
+  **2 sign disagreements over 24 cells, both of them `hybrid` vs `dense` under
+  `cite_all` (precision and recall); under the guard all 12 signs agree.** The
+  phi4 side of that pair is **significant again** after the rebuild (recall −0.0678
+  Holm **0.0410**, precision −0.0798 Holm 0.0410, both hybrid-favouring), reversing
+  the 2026-08-10 "now a bound, not a result" wording, while gemma stays ns and
+  points the other way (+0.0093 / +0.0026). **So the published guidance survives a
+  second index generation and is now the whole finding: cite
+  `{hybrid, dense} > bm25 > m2v` as generator-independent, and `hybrid > dense`
+  as a phi4 result.** Two internal controls held: **`closed_book` is byte-identical
+  across the refresh** (24 hallucinations under `cite_all`, 1 under the guard;
+  phantom 37/37 → 1/1), which is expected because its context is empty and cannot
+  change, and it is what separates repair from generator drift here; and every one
+  of the 5 verdict disagreements outside the `hybrid`/`dense` pair is still one
+  model resolving what the other leaves inconclusive, never a reversal. One level
+  worth noting: gemma's `bm25` recall fell 0.3991 → **0.3784** under `cite_all`,
+  which is what strengthened both strong arms' margins over it (`hybrid vs bm25`
+  Holm 0.0320 → 0.0000, `dense vs bm25` 0.0320 → 0.0016) — the opposite direction
+  to phi4's dense arm gaining from the same re-OCR, so **do not read the rebuild as
+  uniformly helpful per arm.**
+  **The larger finding is Result B, on the guard.** `cite_all`'s missing
   zero-document rule cost phi4 2 hallucinations; it costs `gemma4:e4b` **24**, with
   **37/37** of its closed-book citations phantom. Rule 5 generalises — **24 → 1**,
   phantom 37/37 → **1/1** — so `cite_all_guarded`'s case is much stronger than the

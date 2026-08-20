@@ -46,6 +46,20 @@ counts:
       do not, which is D5's strict-pair rule behaving as designed.
 
   - doc: CLAUDE.md
+    figure: "0 of 12"
+    checked: 2026-08-20
+    reason: >-
+      Verdict flips in rq4_score_gemma4_guarded.md after the rebuild-#4 re-score,
+      out of the 12 family-1b cells that carry a verdict. Same class as the
+      "5 of 57" / "1 of 14" entries above: the source is a COMPARISON, not a
+      report -- tools/eval/diff_significance_reports.py re-derives it from the
+      report and its pre-refresh snapshot under
+      data/results/_pre_2026_08_18_rebuild4_refresh/, which is where those two
+      gemma snapshots were copied on 2026-08-20 before re-scoring. The sibling
+      "1 verdict flip of 12" (rq4_score_gemma4.md) is stated in prose rather
+      than as a bare pair, so only this one reaches D5.
+
+  - doc: CLAUDE.md
     figure: "27 of 78"
     checked: 2026-08-20
     reason: >-
