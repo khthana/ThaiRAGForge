@@ -182,14 +182,21 @@ see `docs/adr/`.
   (`semantic`/`recursive`/`sentence`/`fixed_size` all 9/9, RQ3 4/4);
   `make_residual_rebuild_config.py` reports `already current: 40  remaining: 0`,
   which is I6's own rule over manifest timestamps and therefore the same evidence
-  I6 reports. **Every index now holds the 2026-08-09 re-OCR, so the eval refresh
-  chain is UNBLOCKED and nothing downstream has been re-run yet** — until it is,
-  every persisted result, report and published table describes the *old* indices,
-  which is the mixed state one layer down. Order: BM25/hybrid persisted results +
-  the seconds-level significance tests, the thematic arm (~5 h), RQ4 contexts
-  (~4 h), `cost_latency_pareto.py` / `power_analysis.py` /
-  `reranker_significance_test.py`, then `audit_pipeline_invariants.py` to confirm
-  `I6` 0 and `E4` still 0. State and protocol live in
+  I6 reports. **Every index now holds the 2026-08-09 re-OCR, and the eval
+  refresh chain is COMPLETE as of 2026-08-20** — every item of the order this
+  paragraph used to list as pending has been run and verified on disk: BM25/hybrid
+  persisted results (08-18), the seconds-level significance tests (08-18), the
+  thematic arm across all three retrieval paths (08-18), RQ4 contexts (08-19/08-20,
+  all five model×variant jobs at 424/424), `cost_latency_pareto.py` /
+  `power_analysis.py` / `reranker_significance_test.py` (08-18), RQ3 (08-20, 0
+  verdict flips), ColBERT (08-20, verdict STOP unchanged), and
+  `audit_pipeline_invariants.py` reads **28 pass / 0 warn / 0 fail** with `I6` 0 and
+  `E4` 0. **This paragraph said "nothing downstream has been re-run yet" until
+  2026-08-20, four days after it stopped being true, while contradicting itself two
+  sentences later** — the same prose rot it goes on to describe, in the file whose
+  job is to prevent it. **A to-do list written into living guidance is a claim that
+  needs re-verifying like any other**: check it against artifact timestamps, not
+  against its own wording. State and protocol live in
   [[project_index_rebuild_pending]]. **The consequence that is easiest to miss:
   all 4 ingested Qdrant collections are now stale**, since a collection is a copy
   of an `Index`'s rows — `person` = `sentence × bge-m3` (combo 17, the exact
@@ -456,7 +463,13 @@ see `docs/adr/`.
   `hybrid_alpha_sweep.md` (the whole per-`entity_type`-alpha result), the two
   `fetch_depth` sweeps (`hybrid_fetch_depth_sweep.md`, `hybrid_weighted_fetch_depth.md`
   — note `routed_fetch_depth_test.md`, the one the ship decision rests on, **is**
-  current), the entire **reranker** family including `reranker_trained_test.md`, the
+  current), **most of the reranker family** — `reranker_trained_test.md`, the three
+  `reranker_training_*`/`_pool_source`/`_rrf_*`/`_model_comparison` reports — but
+  **not `reranker_significance_test.md`, which was re-run 08-18 and IS current**, and
+  not `reranker_model_qualification.md`, which is corpus-independent (it gates models
+  on hand-written examples, so no rebuild can stale it). *"The entire reranker family"
+  was the wording here until 2026-08-20 and it over-claimed on both counts; a currency
+  list is itself a claim to check against timestamps.* Also stale: the
   entire **HyDE** family, `qdrant_pilot.md` / `qdrant_concurrency.md`,
   `gold_anchor_ambiguity.md`, `residual_relevance.md`, and both `gold_entity_*` reports.
   **The `rq3_*` and ColBERT families are no longer on this list — both were refreshed
