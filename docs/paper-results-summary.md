@@ -683,6 +683,32 @@ entity detection plus fetching 50 instead of 10 (~+20% on a 475 ms routed query)
 no GPU. **The trained cross-encoder is still not wired** — its ~1.2 s/query buys
 +0.0241 recall@10 over an arm that costs nothing.
 
+**A deployment gap the eval cannot see (2026-08-20).** Arm L′ recovers the entity
+with `router.detect_entities`, and a person searching types the *field*
+(`วิศวกรรมคอมพิวเตอร์`), not the 60-character canonical
+(`หลักสูตรวิศวกรรมศาสตรบัณฑิต สาขาวิชาวิศวกรรมคอมพิวเตอร์`). The dictionary is
+keyed on full canonicals, so such a query resolved to nothing and the arm silently
+degraded to plain hybrid. `match_programs_by_field` now resolves a bare field to
+**every** programme offering it — never a guess at the degree level — and
+`programme_groups` collapses the dictionary's 253 entries to 250 so a caller
+counting programmes does not see a renamed one twice.
+
+**No number in this document moves, and that is a structural fact rather than a
+null result**: all 30 `program` Gold queries name a full canonical, so the branch
+is reached by **0 of 106** queries and `classify_query` returns the identical label
+for all of them. Cite it as a deployment fix; **no retrieval claim may be made for
+it in either direction**, because the query shape it serves is absent from the
+evaluation set. The counts above are re-derived by
+`tests/test_program_field_matching.py`, which is their source — no report emits
+them.
+
+One measured caveat worth carrying, because it nearly moved a published arm: the
+fallback was first gated on "no programme matched", and in that form it fired on
+**5 of the 13** `faculty` queries, whose faculty names *contain* a programme field
+(`คณะบริหารธุรกิจ` holds `บริหารธุรกิจ`). It now fires only when the query resolved
+to nothing at all, which makes "this changes nothing on the Gold set" true by
+construction rather than by luck.
+
 Read all of it with the circularity: the `person`/`program`/`faculty` qrels were
 themselves derived by string containment, so this arm is closer to the labelling
 generator than to relevance. It is defensible to ship because the corpus owner's
