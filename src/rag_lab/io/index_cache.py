@@ -2,7 +2,7 @@
 
 `ArtifactStore.load` re-reads `chunks.parquet`, the ~234MB `embeddings.npy` and
 rebuilds ~57k `Chunk` objects on every call. Measured on the shipped `person`
-route (`data/results/serving_cost_profile.md`, 2026-08-21) that is **1,159 ms**,
+route (`data/results/serving_cost_profile.md`, 2026-08-21) that is **1,149 ms**,
 and because `BM25Okapi` is memoised *on the Index object*
 (`Index.lexical_scorer`), throwing the Index away also throws the scorer away and
 the next hybrid retrieve rebuilds it -- a further **921 ms**. Together 2,079 ms
@@ -26,7 +26,21 @@ two-artifacts-from-different-days shape `audit_pipeline_invariants.py` exists to
 catch, except invisible because it lives in RAM. So every cache HIT re-stats the
 four artifact files and serves the cached Index only if `(mtime_ns, size)` is
 unchanged for all of them. That costs ~4 stat calls (microseconds) against a
-1,159 ms reload, so there is no reason to make it optional.
+~1.15 s reload, so there is no reason to make it optional.
+
+**A rebuild that lands DURING a read is the case a hit-time check cannot see,
+and it was got wrong first (fixed 2026-08-21).** The load used to be stamped
+only *afterwards*, reasoning that stamping before would pin a torn read. That is
+backwards: a rebuild overlapping the read leaves the post-load stamp equal to
+what is now on disk, so the stale object is cached under the CURRENT stamp and
+every later hit agrees with it -- pinned permanently, the exact failure this
+cache exists to prevent. Measured, not argued: rewriting the directory mid-load
+made the next two calls return the previous build's rows indefinitely. The load
+is now stamped **before and after** and cached only if the two agree; otherwise
+it is re-read (`_MAX_RELOADS`), and a read that keeps racing **raises**. The
+object is not merely stale in that window -- `save` writes four files in
+sequence and `Index` is row-aligned across two of them, so a read can pair one
+build's chunks with another's vectors, which nothing downstream can detect.
 
 Bounded at 4 by default: the five shipped routes resolve to four distinct index
 directories (`faculty` and `unmatched` share one). `RAG_LAB_INDEX_CACHE=0`
@@ -52,6 +66,14 @@ from rag_lab.schema import Index
 
 _CACHE_ENV = "RAG_LAB_INDEX_CACHE"
 _DEFAULT_SIZE = 4
+
+#: How many times to re-read an index whose directory changed *during* the read.
+#: `ArtifactStore.save` writes four files in sequence, so a read that overlaps a
+#: rebuild can pair new chunks with the previous build's vectors -- misaligned
+#: rows, which `Index` cannot detect and which produce wrong answers rather than
+#: an error. A rebuild's save is seconds, so a few re-reads outlast it; a read
+#: that keeps racing raises instead of returning that pairing.
+_MAX_RELOADS = 3
 
 #: The files whose (mtime_ns, size) make up an index's identity on disk. A
 #: rebuild rewrites all of them; `lexical.json` is optional and its absence is
@@ -128,17 +150,38 @@ def load_index_cached(
 
     # Loaded OUTSIDE the lock: ~1.2s of I/O would otherwise block every other
     # route's cache hit behind it.
-    index = store.load(d, with_embeddings=with_embeddings)
-
-    with _lock:
-        # Re-stamp rather than trusting the pre-load one: if the directory was
-        # rewritten *while* we were reading it, caching under the old stamp
-        # would pin a torn read that no later check could ever invalidate.
-        _cache[key] = (_stamp(d), index)
-        _cache.move_to_end(key)
-        while len(_cache) > size:
-            _cache.popitem(last=False)
-    return index
+    #
+    # STAMPED BEFORE AND AFTER, and cached only if the two agree. This version
+    # of the cache stamped only *after* the load, reasoning that stamping before
+    # "would pin a torn read that no later check could ever invalidate". The
+    # reasoning was backwards and the measurement (2026-08-21) says so: a
+    # rebuild landing mid-read leaves the post-load stamp equal to what is now
+    # on disk, so the object is cached under the CURRENT stamp and every later
+    # hit re-stats, agrees, and serves it -- the stale index is pinned
+    # permanently, which is the exact failure this cache exists to prevent.
+    # Stamping before would merely have caused a redundant reload. Doing both is
+    # strictly better than either: an overlapping rebuild is detected rather
+    # than reasoned about.
+    for _ in range(_MAX_RELOADS):
+        before = _stamp(d)
+        index = store.load(d, with_embeddings=with_embeddings)
+        after = _stamp(d)
+        if before == after:
+            with _lock:
+                _cache[key] = (after, index)
+                _cache.move_to_end(key)
+                while len(_cache) > size:
+                    _cache.popitem(last=False)
+            return index
+        # The read overlapped a write. The object is not merely stale, it may
+        # pair one build's chunks with another's vectors (`save` writes four
+        # files in sequence and `Index` is row-aligned across two of them), so
+        # it is neither cached NOR returned.
+    raise RuntimeError(
+        f"index directory {d} changed during each of {_MAX_RELOADS} reads -- it is "
+        f"being rebuilt. Refusing to serve a read that may pair one build's chunks "
+        f"with another's vectors; retry once the build has finished."
+    )
 
 
 def clear_index_cache() -> None:

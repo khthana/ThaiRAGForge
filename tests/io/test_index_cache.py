@@ -245,3 +245,99 @@ def test_the_serving_path_uses_the_cache_and_the_store_is_untouched():
     src = inspect.getsource(query_service)
     assert src.count("load_index_cached(") >= 2, "both loops must use it"
     assert "store.load(" not in src, "a bare, uncached load survives"
+
+
+# ------------------------------------------------- a rebuild DURING the load
+class TestARebuildThatOverlapsTheRead:
+    """The case a hit-time staleness check is structurally unable to see.
+
+    Every test above rebuilds *between* calls, where re-stating the artifacts on
+    the next hit catches it. A rebuild landing **while a load is in flight** is
+    different, and the first version of this cache got it exactly wrong: it
+    stamped only after the load, so the object was filed under the stamp the
+    rebuild had just produced, every later hit re-stated, agreed, and served it
+    -- a stale index pinned permanently. These pin the fix.
+    """
+
+    def _rebuild_during_the_next_load(self, monkeypatch, rebuild, times=1):
+        """Make `ArtifactStore.load` rewrite the directory as it returns."""
+        real = ArtifactStore.load
+        fired = {"n": 0}
+
+        def load_then_rebuild(self, directory, *, with_embeddings=True):
+            idx = real(self, directory, with_embeddings=with_embeddings)
+            if fired["n"] < times:
+                fired["n"] += 1
+                time.sleep(0.01)  # a distinct mtime even on a coarse clock
+                rebuild()
+            return idx
+
+        monkeypatch.setattr(ArtifactStore, "load", load_then_rebuild)
+        return fired
+
+    def test_it_is_not_pinned_in_the_cache(self, tmp_path, monkeypatch):
+        d = _make_index(tmp_path, "one", tag="old")
+        fired = self._rebuild_during_the_next_load(
+            monkeypatch, lambda: _make_index(tmp_path, "one", tag="new")
+        )
+
+        first = load_index_cached(d)
+        assert fired["n"] == 1, "the race never happened; this test proves nothing"
+        # The racing read is discarded and re-read, so even THIS caller gets the
+        # rebuilt rows -- and, the point of the test, so does every later one.
+        assert first.chunks[0].text.endswith("new 0")
+        assert load_index_cached(d).chunks[0].text.endswith("new 0")
+        assert load_index_cached(d).chunks[0].text.endswith("new 0")
+
+    def test_a_directory_that_keeps_changing_raises_rather_than_serving(
+        self, tmp_path, monkeypatch
+    ):
+        """A torn read is worse than stale: `save` writes four files in sequence
+        and `Index` is row-aligned across two of them, so one build's chunks can
+        be paired with another's vectors and nothing downstream can tell."""
+        d = _make_index(tmp_path, "one", tag="old")
+        counter = {"i": 0}
+
+        def rebuild():
+            counter["i"] += 1
+            _make_index(tmp_path, "one", tag=f"v{counter['i']}")
+
+        self._rebuild_during_the_next_load(monkeypatch, rebuild, times=99)
+
+        with pytest.raises(RuntimeError, match="being rebuilt"):
+            load_index_cached(d)
+        assert index_cache_info()["size"] == 0, "a racing read must not be cached"
+
+    def test_concurrent_readers_never_see_a_mix(self, tmp_path, monkeypatch):
+        """Six threads reading while one rebuild lands mid-flight. Each returned
+        Index must be internally consistent -- the embedding value is keyed to
+        the tag, so a mismatch is a paired-across-builds read."""
+        d = _make_index(tmp_path, "one", tag="old")
+        self._rebuild_during_the_next_load(
+            monkeypatch, lambda: _make_index(tmp_path, "one", tag="new")
+        )
+
+        got: list[Index] = []
+        errors: list[BaseException] = []
+        barrier = threading.Barrier(6)
+
+        def work():
+            try:
+                barrier.wait(timeout=30)
+                got.append(load_index_cached(d))
+            except BaseException as exc:  # noqa: BLE001 - reported, not swallowed
+                errors.append(exc)
+
+        threads = [threading.Thread(target=work) for _ in range(6)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=60)
+
+        assert not errors, f"a reader failed: {errors[:1]}"
+        assert len(got) == 6
+        for idx in got:
+            n = len(idx.chunks)
+            assert idx.embeddings.shape[0] == n, "chunks and vectors came from different builds"
+        # Whatever raced, the settled state is what the next caller gets.
+        assert load_index_cached(d).chunks[0].text.endswith("new 0")

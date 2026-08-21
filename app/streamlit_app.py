@@ -5,6 +5,8 @@ All logic lives in the Streamlit-free core; this file only renders.
 """
 from __future__ import annotations
 
+import json
+import os
 import sys
 from pathlib import Path
 
@@ -14,7 +16,12 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from rag_lab.config import StrategySpec  # noqa: E402
-from rag_lab.query_service import discover_indices, query_indices, route_query  # noqa: E402
+from rag_lab.query_service import (  # noqa: E402
+    discover_indices,
+    query_indices,
+    route_query,
+    warm_serving_caches,
+)
 from rag_lab.router import classify_query, detect_entities, route_targets  # noqa: E402
 
 st.set_page_config(page_title="RAG Lab — Query & Compare", layout="wide")
@@ -251,6 +258,72 @@ if _engine_narrowing:
     # traceback. Read the disabled state instead of the widget. Nothing is
     # silently dropped: both widgets are visibly disabled and say why.
     year_filter, entity_boost = "", False
+
+# ------------------------------------------------------------- cache warm-up
+_WARM_ENV = "RAG_LAB_WARM_ON_START"
+
+
+@st.cache_resource(show_spinner=False)
+def _warm_once(
+    index_dir: str, retriever_type: str, with_rows: bool, params_json: str
+) -> dict:
+    """Fill the two serving caches. Cached per (dir, retriever, shape, params)
+    so a rerun -- every keystroke in Streamlit -- does not re-warm.
+
+    `with_rows` is not cosmetic: it is part of the index cache's key, because an
+    engine-served retriever loads without the ~234MB matrix. Warming the wrong
+    shape would fill an entry the serving path never asks for. The params travel
+    as JSON because `st.cache_resource` keys on the arguments and a dict is not
+    hashable -- and they travel at all because the warm-up's probe retrieval has
+    to exercise the path this UI will actually serve (at the class defaults a
+    hybrid probe fuses over the whole corpus, 2,052 ms against the shipped
+    F=200's ~470)."""
+    return warm_serving_caches(
+        discover_indices(index_dir),
+        retriever_type,
+        with_rows=with_rows,
+        retriever_params=json.loads(params_json),
+    )
+
+
+def _render_warm(report: dict) -> None:
+    ok, bad = report["warmed"], report["failures"]
+    st.sidebar.success(
+        f"อุ่นแล้ว {len(ok)} index · {report['total_ms'] / 1000:.1f}s"
+        + (f" · ล้มเหลว {len(bad)}" if bad else "")
+    )
+    for e in ok:
+        st.sidebar.caption(
+            f"`{Path(e['dir']).name}` — {e.get('n_chunks', 0):,} chunks, "
+            f"{e['total_ms'] / 1000:.1f}s"
+        )
+    for f in bad:
+        st.sidebar.warning(f"{f.get('route', '?')}: {f['error'][:120]}")
+
+
+with st.sidebar.expander("Serving cache", expanded=False):
+    st.caption(
+        "The first query on each route pays ~12s: the embedder's weights, the "
+        "index rows and the BM25 scorer are all cold. Warming loads all four "
+        "routed indices and both embedders up front, after which a routed query "
+        "is ~0.45s (data/results/serving_cost_profile.md). "
+        "**Off by default on purpose.** It holds ~3.2GB RAM and ~3.3GB VRAM "
+        "(serving_cache_memory.md), and this repo shares one 12GB card with the "
+        "eval scripts -- an automatic grab at UI start is how a GPU run dies. A "
+        f"deployment sets `{_WARM_ENV}=1`; here, press the button when you want it."
+    )
+    _auto = os.environ.get(_WARM_ENV, "") not in ("", "0", "false", "False")
+    if st.button("อุ่น cache ตอนนี้", key="warm_now") or _auto:
+        with st.spinner("กำลังโหลด index และ embedder ของทุก route..."):
+            _render_warm(
+                _warm_once(
+                    output_dir,
+                    _retriever_spec().type,
+                    retriever not in _ENGINE_RETRIEVERS,
+                    json.dumps(_retriever_spec().params, sort_keys=True),
+                )
+            )
+
 query = st.text_input("Query (คำค้น)", key="query")
 
 

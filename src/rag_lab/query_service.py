@@ -31,6 +31,12 @@ from rag_lab.schema import RetrievalResult
 
 ENTITY_TAGS_LOADER = "entity_tags"
 
+#: Retrievers that score a lexical arm in process, i.e. the ones for which the
+#: `BM25Okapi` memoised on the Index is worth ~1.0s of warm-up. `qdrant_hybrid`
+#: is deliberately absent: its sparse arm is scored by the engine, from weights
+#: precomputed at ingest.
+_LEXICAL_RETRIEVERS = {"bm25", "hybrid"}
+
 
 def check_entity_tags_loader(manifest: dict, index_dir: str | Path) -> None:
     """Loud guard for entity_lookup: metadata['people']/['programs']/
@@ -282,3 +288,151 @@ def route_query(
     chosen = resolve_index(route_combo[route], indices)
     [retrieval] = query_indices(query, [chosen.dir], retriever_spec, k, results_dir=results_dir)
     return retrieval.result
+
+
+def warm_serving_caches(
+    indices: list[IndexInfo],
+    retriever_type: str = "hybrid",
+    *,
+    with_rows: bool = True,
+    probe: str = "อุ่นเครื่อง",
+    probe_retrieval: bool = True,
+    retriever_params: dict | None = None,
+    route_combo: dict[str, RouteTarget] | None = None,
+) -> dict:
+    """Load everything the shipped routes will need, before a user asks.
+
+    The two serving caches take a warm routed query from 12,329 ms to 447 ms
+    (`data/results/serving_cost_profile.md`) -- but only for the SECOND caller
+    on each route. The first still pays ~9.3 s of weight loading plus ~1.1 s of
+    index read plus the ~1.0 s BM25 rebuild, and there are four routed indices
+    and two embedders, so a fresh process has four such first callers. This
+    front-loads them.
+
+    Three details are load-bearing, each measured rather than assumed.
+
+    1. **Building the embedder is not loading it.** `LocalSTEmbedder._load()`
+       runs inside the first `embed()`, so constructing one costs 0.0 ms and
+       warms nothing at all -- the trap that made the first cost decomposition
+       price this whole cache at 10% instead of 78%
+       ([[feedback_a_lazy_constructor_hides_the_cost_you_are_pricing]]). A one
+       string `embed` is what actually pulls the weights onto the card.
+    2. **The BM25 scorer rides on the Index, not on the cache.** Discarding an
+       Index discards the memo, and rebuilding it is ~1.0 s of the first hybrid
+       query -- so warming the rows without warming the scorer delivers less
+       than half of what this function claims. Whether to warm it is **derived
+       from `retriever_type`, not a separate flag**: a dense deployment would
+       pay ~1.0 s per index for a structure it never scores with, and a caller
+       who could ask for `hybrid` *and* "no scorer" would be asking for a state
+       that cannot serve -- the probe retrieval in (4) would build it anyway.
+    3. **Route targets are retriever-dependent** (`route_targets`), and the five
+       routes resolve to four distinct index directories -- `faculty` and
+       `unmatched` share one -- so this dedupes by directory rather than
+       looping over routes. `route_combo` overrides the map, as in `route_query`.
+
+    4. **Loading everything is still not warm.** With all four indices and both
+       embedders resident, the first real query measured **1,240.8 ms** against
+       ~430 for the ones after it -- and a single throwaway retrieval before
+       them takes that first one to **488.6 ms** (2026-08-21, one process per
+       arm, four routed queries). The residue is process-global CUDA/BLAS
+       initialisation, not per-index: ONE probe retrieval fixed all four routes,
+       which is why this does one rather than one per index. It is the same
+       lesson as (1) one layer up -- a resource can be present and still not be
+       initialised. End to end over those four queries: cold **30,550 ms**,
+       warmed **1,634 ms** after a 29,642 ms warm-up (of which the probe is
+       1,093).
+
+       **Pass `retriever_params`.** The probe must exercise the path the
+       deployment serves: left at the class defaults a `hybrid` probe fuses at
+       `fetch_depth=None`, i.e. the whole corpus, which costs 2,052 ms against
+       the shipped F=200's ~470 -- warming a slower code path than the one the
+       user's query will take, and charging the difference to startup.
+
+    `with_rows=False` is the engine-served shape: `query_indices` loads without
+    `embeddings.npy` when the retriever reports `reads_index_rows is False`, and
+    that flag is **part of the cache key**, so warming the full variant for an
+    engine retriever would both waste ~234MB per index and warm an entry the
+    serving path never asks for. It also implies no lexical warm-up -- the
+    engine scores its own sparse arm.
+
+    Returns what was warmed and what it cost, so a caller can log it. Failures
+    are collected per target rather than raised: a warm-up is an optimisation,
+    and a deployment that refuses to start because one index directory is
+    missing is worse than one that serves the other three.
+    """
+    import time
+
+    from rag_lab.retrievers.bm25 import BM25Retriever
+
+    store = ArtifactStore()
+    targets = route_targets(retriever_type) if route_combo is None else route_combo
+    seen: set[str] = set()
+    first_pair = None
+    warmed: list[dict] = []
+    failures: list[dict] = []
+    t_all = time.perf_counter()
+
+    for route, target in targets.items():
+        try:
+            info = resolve_index(target, indices)
+        except Exception as exc:  # noqa: BLE001 - reported, never fatal
+            failures.append({"route": route, "stage": "resolve", "error": str(exc)})
+            continue
+        if info.dir in seen:
+            continue
+        seen.add(info.dir)
+
+        entry: dict = {"route": route, "dir": info.dir}
+        t0 = time.perf_counter()
+        try:
+            manifest = _read_manifest(info.dir)
+            spec = StrategySpec.model_validate(manifest["combo"]["embedder"])
+            embedder = build_embedder_cached(spec)
+            embedder.embed([probe])  # forces the lazy weight load -- see (1)
+            entry["embedder_ms"] = (time.perf_counter() - t0) * 1000
+
+            t1 = time.perf_counter()
+            index = load_index_cached(info.dir, with_embeddings=with_rows, store=store)
+            entry["index_ms"] = (time.perf_counter() - t1) * 1000
+            entry["n_chunks"] = len(index.chunks)
+
+            if with_rows and _LEXICAL_RETRIEVERS & {retriever_type} and index.lexical is not None:
+                t2 = time.perf_counter()
+                BM25Retriever._scorer(index)  # memoised ON the Index -- see (2)
+                entry["lexical_ms"] = (time.perf_counter() - t2) * 1000
+        except Exception as exc:  # noqa: BLE001
+            failures.append({"route": route, "dir": info.dir, "error": str(exc)})
+            continue
+        entry["total_ms"] = (time.perf_counter() - t0) * 1000
+        warmed.append(entry)
+        if first_pair is None:
+            first_pair = (index, embedder)
+
+    probe_ms = None
+    if probe_retrieval and with_rows and first_pair is not None:
+        index, embedder = first_pair
+        t3 = time.perf_counter()
+        try:
+            retrieve(
+                probe,
+                index,
+                embedder,
+                build_retriever(
+                    StrategySpec(type=retriever_type, params=retriever_params or {})
+                ),
+                1,
+                combination_id="warmup",
+            )
+            probe_ms = (time.perf_counter() - t3) * 1000
+        except Exception as exc:  # noqa: BLE001 - an optimisation, never fatal
+            # e.g. an engine retriever that needs a url it was not given.
+            failures.append({"route": "(probe retrieval)", "error": str(exc)})
+
+    return {
+        "retriever_type": retriever_type,
+        "with_rows": with_rows,
+        "probe_ms": probe_ms,
+        "warmed": warmed,
+        "failures": failures,
+        "total_ms": (time.perf_counter() - t_all) * 1000,
+    }

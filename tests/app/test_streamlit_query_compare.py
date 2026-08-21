@@ -176,3 +176,40 @@ def test_combo_label_disambiguates_same_chunker_type_by_chunk_size(tmp_path):
     assert len(set(labels)) == 2
     assert any("100" in label for label in labels)
     assert any("50" in label for label in labels)
+
+
+def test_the_warm_up_is_off_until_asked(tmp_path, monkeypatch):
+    """The button exists and nothing is warmed by merely opening the page.
+
+    Deliberate: warming holds ~3.2GB RAM and ~3.3GB VRAM, and this repo shares
+    one 12GB card with the eval scripts -- an automatic grab at UI start is how
+    a GPU run dies. A deployment opts in with RAG_LAB_WARM_ON_START=1."""
+    from rag_lab.io.index_cache import clear_index_cache, index_cache_info
+
+    monkeypatch.delenv("RAG_LAB_WARM_ON_START", raising=False)
+    out = _build_index(tmp_path)
+    clear_index_cache()
+
+    at = AppTest.from_file(_APP, default_timeout=30).run(timeout=60)
+    _point_at_custom_index_dir(at, out)
+
+    assert any(b.key == "warm_now" for b in at.sidebar.button), "no warm-up control"
+    assert index_cache_info()["size"] == 0, "opening the page warmed the caches"
+
+
+def test_pressing_the_button_warms_the_routed_indices(tmp_path, monkeypatch):
+    """The shipped route map points at real bge-m3/qwen3 combos, which this
+    fixture does not have -- so what is exercised is that the press reaches
+    `warm_serving_caches` and that an unreachable target is REPORTED rather
+    than raised. A warm-up is an optimisation; it must not take the app down."""
+    monkeypatch.delenv("RAG_LAB_WARM_ON_START", raising=False)
+    out = _build_index(tmp_path)
+
+    at = AppTest.from_file(_APP, default_timeout=60).run(timeout=90)
+    _point_at_custom_index_dir(at, out)
+    at.sidebar.button(key="warm_now").click().run(timeout=90)
+
+    assert not at.exception, f"warming crashed the app: {at.exception}"
+    # Every shipped target is missing from this toy dir, so the report is all
+    # failures -- rendered as warnings, with the app still usable.
+    assert at.sidebar.warning, "an unreachable target was not reported"
