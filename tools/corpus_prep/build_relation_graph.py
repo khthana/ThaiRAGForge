@@ -78,7 +78,10 @@ from rag_lab.loaders.common import (  # noqa: E402
 )
 from rag_lab.loaders.faculty_loader import match_faculties  # noqa: E402
 from rag_lab.loaders.person_loader import find_people  # noqa: E402
-from rag_lab.loaders.program_loader import match_programs  # noqa: E402
+from rag_lab.loaders.program_loader import (  # noqa: E402
+    match_programs,
+    programme_groups,
+)
 
 # --- edge A' extraction parameters (all three are reported, not hidden) ------
 FACULTY_WINDOW = 60  # chars after "สังกัด" the faculty name must fit inside
@@ -222,19 +225,39 @@ def merge(*counters: Counter) -> Counter:
 
 # ------------------------------------------------------------------- graph
 def build_graph(raw: dict) -> dict:
-    programs = [p["canonical"] for p in json.loads(read_text(DICT_DIR / "programs.json"))]
+    """One node per PROGRAMME, not per dictionary entry.
+
+    `programs.json` holds 253 canonical names for 250 programmes: KOSEN renamed
+    three associate degrees in 2568 and both names are in the dictionary,
+    because `match_programs` must still match documents written under either.
+    A graph keyed on entries would therefore count those three twice **and split
+    their evidence between the two names**, which is not cosmetic -- one half of
+    the แมคคาทรอนิกส์ pair had a single witness and fell under `min_votes=2` as
+    `ambiguous` while its twin resolved on four votes at the same faculty.
+
+    So the votes of a group are pooled onto its first entry in dictionary order
+    (stable, so the representative does not drift between runs) and the other
+    names are kept on the record as `aka` -- nothing is dropped, and `S5` gates
+    exactly that. `programme_groups` decides what is one programme; see its
+    module for the rule and, more importantly, for the symmetric-looking rule
+    that was rejected because a longer field name is normally a DIFFERENT
+    programme.
+    """
+    groups = programme_groups()
     body = one_to_one_votes(raw["files"])
     title = one_to_one_votes(raw["titles"])
 
     program_edges: dict[str, dict] = {}
-    for name in programs:
-        record = classify(merge(body.get(name, Counter()), title.get(name, Counter())),
-                          MIN_VOTES_PROGRAM)
-        record["by_source"] = {
-            "body": dict(body.get(name, Counter())),
-            "title": dict(title.get(name, Counter())),
-        }
-        program_edges[name] = record
+    for group in groups:
+        names = [e["canonical"] for e in group]
+        head, aka = names[0], names[1:]
+        b = merge(*(body.get(n, Counter()) for n in names))
+        t = merge(*(title.get(n, Counter()) for n in names))
+        record = classify(merge(b, t), MIN_VOTES_PROGRAM)
+        record["by_source"] = {"body": dict(b), "title": dict(t)}
+        if aka:
+            record["aka"] = aka
+        program_edges[head] = record
 
     people = person_votes(raw["files"])
     person_edges = {
@@ -291,12 +314,19 @@ def run_checks(raw: dict, graph: dict) -> list[dict]:
         != (r["total"] == 0 and r["share"] is None and r["faculty"] is None)
     ]
     off_dict = sorted(set(graph["program_belongs_to_faculty"]) - programs)
+    # The denominator FOLLOWS ITS SUBJECT: this graph is keyed on programmes
+    # (250) and not on dictionary entries (253), so comparing against the raw
+    # entry count would fail on a correct graph. Both numbers are printed --
+    # a check whose subject moves and whose wording does not is how a real
+    # finding gets read as a bug, or a bug as a finding.
+    n_groups = len(programme_groups())
     rows.append({
         "id": "S2", "gate": True,
-        "ok": not leaked and not off_dict and len(records) == len(programs),
+        "ok": not leaked and not off_dict and len(records) == n_groups,
         "what": "no_evidence ต้อง 'ไม่นิยาม' จริง (total=0, share=None) ไม่ใช่คะแนนต่ำ",
         "detail": f"{buckets['resolved']}+{buckets['ambiguous']}+{buckets['no_evidence']}"
-                  f" = {len(records)} จาก {len(programs)}; {len(leaked)} record ที่ปนกัน",
+                  f" = {len(records)} จาก {n_groups} หลักสูตร"
+                  f" ({len(programs)} รายการพจนานุกรม); {len(leaked)} record ที่ปนกัน",
     })
 
     # A window match that the whole document does not also produce would mean
@@ -328,6 +358,21 @@ def run_checks(raw: dict, graph: dict) -> list[dict]:
         "what": "ทุกชื่อบนขอบ A′ ต้องอยู่ในชุดชื่อที่ find_people เจอในไฟล์เดียวกัน",
         "detail": f"{unknown} ชื่อที่หาไม่เจอ",
     })
+    # Grouping's own risk is not a wrong merge -- `programme_groups` is tested
+    # for that -- it is an entry going MISSING, which would shrink every
+    # denominator in this report while every check above still passed.
+    reachable = set(graph["program_belongs_to_faculty"])
+    for r in graph["program_belongs_to_faculty"].values():
+        reachable |= set(r.get("aka", ()))
+    lost = sorted(programs - reachable)
+    rows.append({
+        "id": "S5", "gate": True, "ok": not lost,
+        "what": "ทุกชื่อใน programs.json ต้องยังเข้าถึงได้ (เป็น node เองหรือเป็น aka)",
+        "detail": f"{len(lost)} ชื่อหาย จาก {len(programs)}; "
+                  f"{len(programs) - len(reachable & programs)} นอกกลุ่ม"
+                  + (f": {lost[:3]}" if lost else ""),
+    })
+
     return rows
 
 
@@ -434,6 +479,28 @@ def render_report(raw: dict, graph: dict, checks: list[dict], agree: dict,
     A("")
     A("## 1. ขอบ A — หลักสูตร → คณะ")
     A("")
+    merged = {n: r["aka"] for n, r in prog.items() if r.get("aka")}
+    n_entries = sum(1 + len(v) for v in merged.values()) + (len(prog) - len(merged))
+    A(f"**หนึ่ง node = หนึ่งหลักสูตร ไม่ใช่หนึ่งรายการพจนานุกรม** — `programs.json` มี "
+      f"**{n_entries}** ชื่อ canonical สำหรับ **{len(prog)}** หลักสูตร เพราะ "
+      f"{len(merged)} หลักสูตรถูกเปลี่ยนชื่อปริญญาและมีอยู่สองชื่อในพจนานุกรม "
+      f"(`match_programs` ต้องยังจับเอกสารที่เขียนด้วยชื่อเก่าได้) · ถ้าคีย์ด้วยรายการ "
+      f"จะ**นับซ้ำและซอยหลักฐานออกเป็นสองกอง** ซึ่งไม่ใช่แค่เรื่องความสวยงาม: "
+      f"ครึ่งหนึ่งของคู่แมคคาทรอนิกส์มีพยานเดียวจึงตกไปเป็น `ambiguous` "
+      f"ขณะที่ฝาแฝดของมัน `resolved` ด้วย 4 โหวตที่คณะเดียวกัน · "
+      f"โหวตถูกรวมมาไว้ที่ชื่อแรกตามลำดับพจนานุกรม ชื่อที่เหลืออยู่ในฟิลด์ `aka` "
+      f"และ `S5` เป็นตัวกันไม่ให้มีชื่อไหนหายไปเงียบๆ")
+    A("")
+    if merged:
+        A("| หลักสูตร (node) | ชื่ออื่นที่รวมเข้ามา |")
+        A("|---|---|")
+        for n, aka in merged.items():
+            A(f"| {n} | {', '.join(aka)} |")
+        A("")
+    A("*หมายเหตุ: การตรวจไขว้ในหัวข้อ 3 ยัง**นับรายชื่อ ไม่ใช่รายหลักสูตร*** — "
+      "มันวัดว่าสองแหล่ง (manifest title กับเนื้อ OCR) เห็นตรงกันไหมต่อชื่อหนึ่งชื่อ "
+      "ซึ่งเป็นคนละคำถามกับการนับหลักสูตร")
+    A("")
     A(f"| สถานะ | จำนวนหลักสูตร | สัดส่วนของ {len(prog)} |")
     A("|---|---:|---:|")
     for status in ("resolved", "ambiguous", "no_evidence"):
@@ -495,10 +562,17 @@ def render_report(raw: dict, graph: dict, checks: list[dict], agree: dict,
     A("**ตัวเลขบนหน้านี้เป็นภาพหลังการซ่อมทั้งสองครึ่งแล้ว (เดินคลังใหม่ 2026-08-11) และแถวที่เป็น"
       "แรงจูงใจของ audit ทั้งชุดขยับจริง** — `หลักสูตรแพทยศาสตรบัณฑิต` เคยเป็น `ambiguous` "
       "เพราะกลืนโหวตของทันตแพทยศาสตร์/พยาบาลศาสตร์เข้ามา ตอนนี้เป็น `resolved` → "
-      "`คณะแพทยศาสตร์` (8 โหวต) และหายจากตารางข้างบนไปแล้ว · เทียบสามรอบ: ก่อนซ่อม "
-      "**170 / 60 / 23**, หลังซ่อมครึ่งระดับปริญญา **177 / 62 / 14**, หลังซ่อมครบ "
-      "**182 / 57 / 14** — `resolved` ขึ้นเพราะแท็กที่ถูกดูดไปคืนหลักฐานให้หลักสูตรที่เป็น"
-      "เจ้าของจริง ไม่ใช่เพราะเกณฑ์หลวมลง")
+      "`คณะแพทยศาสตร์` (8 โหวต) และหายจากตารางข้างบนไปแล้ว · เทียบสามรอบ **บนตัวส่วน 253 "
+      "รายการพจนานุกรมแบบเดิม**: ก่อนซ่อม **170 / 60 / 23**, หลังซ่อมครึ่งระดับปริญญา "
+      "**177 / 62 / 14**, หลังซ่อมครบ **182 / 57 / 14** — `resolved` ขึ้นเพราะแท็กที่ถูกดูดไป"
+      "คืนหลักฐานให้หลักสูตรที่เป็นเจ้าของจริง ไม่ใช่เพราะเกณฑ์หลวมลง")
+    A("")
+    A(f"**แถวข้างบนคือ {pb['resolved']} / {pb['ambiguous']} / {pb['no_evidence']} บนตัวส่วน "
+      f"{len(prog)} หลักสูตร (2026-08-21) และมันไม่ใช่รอบที่สี่ของการซ่อม matcher** — "
+      "หลักฐานเป็นชุดเดิมทุกตัวอักษร (cache 2026-08-11) เปลี่ยนแค่ว่า *อะไรคือหนึ่งหลักสูตร* · "
+      "ส่วนต่างทั้งหมดคือคู่ KOSEN 3 คู่ที่เคยถูกนับเป็น 6: เดิม 5 `resolved` + 1 `ambiguous` "
+      "รวมเป็น 3 `resolved` · **อย่าอ่านคู่ตัวเลขนี้เป็นการวัดที่เปลี่ยนไป** — "
+      "ตัวส่วนต่างกัน")
     A("")
     A("## 2. ขอบ A′ — บุคคล → คณะ")
     A("")

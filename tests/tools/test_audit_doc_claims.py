@@ -340,11 +340,31 @@ class TestInputsAllowlistIsKeyedOnContent:
         cleared, dead = adc._inputs_cleared()
         assert cleared == {("a.py", "r.md")} and dead == []
 
-    def test_the_program_loader_edges_are_sha_keyed(self):
-        """The three that would otherwise be disarmed permanently."""
-        sha_keyed = {
-            (e["src"], e["report"]) for e in adc._allowlist("inputs") if e.get("src_sha")
-        }
+    def test_the_program_loader_edges_are_not_exempted_at_all(self):
+        """The strongest state for these three is no exemption, and that is the
+        state they are in.
+
+        They were cleared by `src_sha` on 2026-08-20 (a purely additive edit),
+        and on 2026-08-21 a comment-only edit re-flagged all three -- exactly as
+        intended. The discharge was to re-render each report and show the output
+        unchanged (`program-matcher-absorption.md` and `program-tag-regeneration.md`
+        byte-identical, `relation-graph.md` identical but for its timestamp
+        line), which leaves the pairs passing on their own merit, so the
+        exemptions were deleted rather than re-stamped. Re-adding one would
+        pre-emptively disarm the very edge that exists because a matcher repair
+        twice moved these reports without touching their generators."""
+        exempted = {(e["src"], e["report"]) for e in adc._allowlist("inputs")}
         for report in ("docs/relation-graph.md", "docs/program-matcher-absorption.md",
                        "docs/program-tag-regeneration.md"):
-            assert ("src/rag_lab/loaders/program_loader.py", report) in sha_keyed
+            assert ("src/rag_lab/loaders/program_loader.py", report) not in exempted
+
+    def test_any_program_loader_exemption_must_be_content_keyed(self):
+        """If one is ever added back, it may not be a standing one. Vacuous
+        today by construction -- the rule above is what makes it so -- and it
+        bites the moment someone writes a pair-keyed entry for this source."""
+        for e in adc._allowlist("inputs"):
+            if e["src"] == "src/rag_lab/loaders/program_loader.py":
+                assert e.get("src_sha"), (
+                    f"{e['report']} is exempted without a src_sha, which disarms "
+                    "the edge permanently"
+                )

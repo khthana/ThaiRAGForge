@@ -628,25 +628,52 @@ see `docs/adr/`.
   would be this project's signature two-artifacts-from-different-days failure.
   One corpus walk (~22 min, 2,854 files) caches its evidence to
   `data/results/relation_graph_raw.json` so `--render` re-derives graph and report
-  free. **Edge A: 182 of 253 programs resolved, 57 ambiguous, 14 no_evidence**
+  free. **Edge A: 180 of 250 programs resolved, 56 ambiguous, 14 no_evidence**
   — and the `ambiguous` bucket is **not one thing**: only **8** have two faculties
-  genuinely pointing at each other, the other **49** have a single faculty with
-  fewer witnesses than `min_votes=2`. **Those figures are the SECOND 2026-08-11
-  re-walk's, and both re-walks were forced rather than routine**: this script calls
+  genuinely pointing at each other, the other **48** have a single faculty with
+  fewer witnesses than `min_votes=2`.
+  **The denominator is 250 and not 253 as of 2026-08-21, and the change is a
+  DEFINITION not a measurement — never read the two side by side as drift.**
+  `programs.json` holds 253 canonical names for 250 programmes: KOSEN renamed
+  three associate degrees in 2568 and both names must stay in the dictionary so
+  `match_programs` still matches documents written under either. Keyed on
+  *entries*, the graph counted those three twice **and split their evidence**,
+  which is not cosmetic — one half of the แมคคาทรอนิกส์ pair had a single witness
+  and sat in `ambiguous` while its twin resolved on four votes at the *same*
+  faculty. `build_graph` now iterates `programme_groups()`, pools each group's
+  votes onto its first entry in dictionary order and keeps the rest as `aka`.
+  The whole delta is those 6 entries (5 resolved + 1 ambiguous → 3 resolved), on
+  **byte-identical evidence** (the 08-11 cache), so this is not a fourth matcher
+  repair. **The check had to follow its subject**: `S2` gated
+  `len(records) == len(programs)` and would have FAILED on a correct graph, so it
+  now compares against the group count and prints both numbers
+  ([[feedback_cleanup_can_break_an_audit]]); new **`S5`** gates that every one of
+  the 253 names is still reachable as a node or an `aka`, because grouping's real
+  risk is not a wrong merge (`programme_groups` is tested for that) but an entry
+  going **missing**, which would shrink every denominator here while every other
+  check still passed. This is also what made `programme_groups` a live function
+  rather than one only its own tests called. The §3 cross-checks are deliberately
+  **left per-name**: they ask whether two sources agree about one written name,
+  which is a different question from counting programmes.
+  **The pre-grouping figures are kept because the three walks below are stated
+  on them, and are superseded: 182 / 57 / 14 of 253 (split 8 / 49). They are
+  the SECOND 2026-08-11 re-walk's, and both re-walks were forced rather than
+  routine**: this script calls
   `match_programs`, so each half of the matcher repair below moved the graph
   without touching its own generator — the two-artifacts-from-different-days shape
   again, now guarded by a `program_loader.py → relation-graph.md` edge in
   `audit_doc_claims.py`'s `EVAL_INPUTS`. Both moves went in the predicted
   direction: **170 / 60 / 23** (split 9 / 51) before either repair → **177 / 62 /
   14** (12 / 50) after the degree half → **182 / 57 / 14** (8 / 49) after the
-  cross-subject half. A rescued tag returns evidence to the program that actually
+  cross-subject half — all three on the 253-entry denominator, so compare them
+  with each other and not with the 250-programme figures above. A rescued tag returns evidence to the program that actually
   owns it, which is why `no_evidence` fell by 9 on the first walk; a *dropped*
   absorption stops lending a foreign programme's votes to its neighbour, which is
   why `ambiguous` fell by 5 on the second. **The motivating case of the whole
   audit visibly moved**: `หลักสูตรแพทยศาสตรบัณฑิต` — the row that held both
   `ทันตแพทยศาสตรบัณฑิต` and `พยาบาลศาสตรบัณฑิต` — left the `ambiguous` table
   altogether and is now `resolved → คณะแพทยศาสตร์` on 8 votes. The two
-  cross-checks moved too (see below) and all four self-checks still PASS. Two
+  cross-checks moved too (see below) and all **five** self-checks still PASS. Two
   distinct causes underneath, and the
   first is the important one: **`program → faculty` is not a function** —
   `วิศวกรรมเครื่องกล` really is offered by both `คณะวิศวกรรมศาสตร์` and
@@ -1920,7 +1947,19 @@ see `docs/adr/`.
      `program_loader`'s own docstring opens with. It was caught by **reading the groups,
      not the count**, and the one real case it was written for is a single 2566 manifest
      title that dropped `วิศวกรรม` from `สาขาวิชาวิศวกรรมแมคคาทรอนิกส์` — a typo costing
-     one `count=1` entry, not worth a rule that cannot tell it from a real programme. So
+     one `count=1` entry, not worth a rule that cannot tell it from a real programme.
+     **It was left standing as "a manifest typo worth fixing in the data" until
+     2026-08-21, and that reading was wrong**: `2566/ครั้งที่ 9`'s own minutes print the
+     agenda line as `หลักสูตรอนุปริญญา สาขาวิชาแมคคาทรอนิกส์` verbatim (checked in the
+     body; the other **4** titles of that programme across the corpus all carry
+     `วิศวกรรม`), so the manifest is a **faithful transcription** and the typo is the
+     source document's. That closes the item rather than queueing it: editing the title
+     would make our metadata disagree with the document it points at — the *inverse* of
+     the 2026-08-08 mispairing repairs, which fixed titles that disagreed with their own
+     file — and would move a `resolution_id`, i.e. a relabel across 40+ indices and ~24k
+     results, to buy one dictionary entry. **There is therefore no cheap data fix that
+     removes the rejected rule's motivation**, which is one more reason it stays
+     rejected. So
      the collapse is **7 entries → 4, not the 7 → 3 asked for**, and the difference is
      stated rather than quietly delivered. `tests/test_program_field_matching.py` pins
      every negative, and was **verified to fail on the rejected rule** before being
@@ -1942,6 +1981,16 @@ see `docs/adr/`.
      exemption would have disarmed it. `D6` now audits the section, and the mechanism
      was exercised in the failing direction before being trusted (a one-byte change to
      the loader re-flags all three pairs and marks all three entries dead).
+     **That happened for real on 2026-08-21, on a COMMENT-ONLY edit, and the right
+     discharge turned out to be deleting all three.** `D4` went red on the three reports
+     and `D6` reported the three entries dead — the mechanism working — and the fix was
+     to re-render each report (absorption and tag-regeneration **byte-identical**,
+     relation-graph identical but for its timestamp line), after which the pairs pass on
+     their own merit and need no exemption at all. **An exemption's strongest state is
+     not existing**: re-stamping `src_sha` would have pre-armed the *next* edit with a
+     clearance nobody had earned. `tests/tools/test_audit_doc_claims.py` now pins that
+     these three pairs are **not** exempted, plus the standing rule that any future
+     `program_loader` entry must be content-keyed.
      **REFRESHED AGAINST REBUILD #4 (2026-08-20) — pools re-minted, model retrained, and
      two defects in the harness came out of it that matter more than the numbers.**
      (1) **The training pools had no way of naming the indices they came from.** The
@@ -2604,7 +2653,7 @@ see `docs/adr/`.
   `detect_entities`/`entity_lookup`. **`courses.json` is deliberately not
   shrunk** — `router._default_course_matcher` reads it, so the gate belongs in
   `build_gold_candidates.py`, which now annotates each course candidate with
-  `anchor_status` ∈ `ok`/`ambiguous`/`no_name_evidence` (**414 / 66 / 198** of 678). **That split is UNVERIFIED as of 2026-08-20 and needs re-deriving before it is relied on**: the denominator reproduces from `gold_candidates_report.md`, but the on-disk `gold_candidates.json` carries **no `anchor_status` key anywhere** — the artifact predates the annotation the code now writes, so nothing on disk confirms 414/66/198. Found by `audit_doc_claims.py`'s `D5` the day its extractor stopped being blind to inline emphasis, which is what made the figure visible at all.
+  `anchor_status` ∈ `ok`/`ambiguous`/`no_name_evidence` (**414 / 66 / 198** of 678). **VERIFIED 2026-08-21 — it reproduces exactly.** It had been flagged UNVERIFIED on 08-20 because the on-disk `gold_candidates.json` carries no `anchor_status` key at all; that turned out to be provenance, not disagreement — the artifact is dated 2026-07-25 and the annotation landed 08-09, so it *could not* contain the field. Re-running the generator to a scratch directory (`--output-dir`, ~4 min, so the 07-25 artifacts that the published gold set was curated from are **left untouched** — they are its provenance) returns `ok 414 / ambiguous 66 / no_name_evidence 198` of 678. **Re-deriving it also found something the figure itself never would have**, which is why re-running beat hand-checking: the person pool moved **1,139 → 1,119**, and exactly **1 of the 30 published person gold entities is no longer nominable as a candidate** — `ดร.กลกรณ์ วงศ์ภาคิกะเสรี` had `hit_count 2` in July and has 1 today, because its two documents now spell the surname differently (`วงศ์ภา**คิ**กะเสรี` and `วงศ์ภา**ติ**กะเสรี`, one character) after a re-OCR, so neither spelling clears `min_person_hits=2`. **The qrels are still correct and nothing is being changed**: both resolutions genuinely concern that person, and the gold string is the one the corpus carried when the entry was curated. What it *is* is a concrete instance of the pooling-bias threat already written up in `docs/eval-validity-threats.md` §2 — a relevant document phrased differently is a hard retrieval case, not a mislabelled one — and a reminder that **a candidate pool is dated evidence, not a standing property of the corpus**: re-deriving one after a re-OCR will not reproduce it. Editing the entity string would move every published person figure for one query and is deliberately not done.
   **That third bucket is why the classification is three-way, not a number**: with
   zero naming documents the ratio is *undefined*, not zero, and collapsing them
   reported 264 flags of which 198 were OCR-garbled dictionary names, burying the

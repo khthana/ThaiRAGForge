@@ -439,9 +439,16 @@ def _same_programme(a: dict[str, Any], b: dict[str, Any]) -> bool:
     # `วิศวกรรมไฟฟ้า` with `วิศวกรรมไฟฟ้าสื่อสารและเครือข่าย`, `ภาษาญี่ปุ่น`
     # with `ภาษาญี่ปุ่นธุรกิจ`, and `วิศวกรรมอุตสาหการ` with three siblings.
     # The one real instance it was written for is a single 2566 title that
-    # dropped `วิศวกรรม` from `สาขาวิชาวิศวกรรมแมคคาทรอนิกส์`; that is a typo in
-    # one manifest, costing one count=1 entry, and it is not worth a rule that
-    # cannot tell it from a real programme.
+    # dropped `วิศวกรรม` from `สาขาวิชาวิศวกรรมแมคคาทรอนิกส์`, costing one
+    # count=1 entry. It is not worth a rule that cannot tell it from a real
+    # programme -- and CHECKED 2026-08-21, it is not repairable at the metadata
+    # layer either: the shortened form is what `2566/ครั้งที่ 9`'s own minutes
+    # print (its agenda line reads `หลักสูตรอนุปริญญา สาขาวิชาแมคคาทรอนิกส์`
+    # verbatim, while the other 4 titles of this programme across the corpus all
+    # carry `วิศวกรรม`), so the manifest is a faithful transcription and editing
+    # it would make our metadata disagree with the document it points at -- the
+    # inverse of the 2026-08-08 mispairing repairs -- and move a resolution_id
+    # for one dictionary entry.
     return False
 
 

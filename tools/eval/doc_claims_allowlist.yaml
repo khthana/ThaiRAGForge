@@ -213,12 +213,16 @@ counts:
       purpose, so clearing it in one doc must not silently clear it in another.
 
   - doc: CLAUDE.md
-    figure: "182 of 253"
-    checked: 2026-08-12
+    figure: "180 of 250"
+    checked: 2026-08-21
     reason: >-
-      docs/relation-graph.md line 17 (`resolved` 182, 71.9%) and line 122
-      (S2: "182+57+14 = 253 จาก 253"). The report states the numerator and the
-      denominator as a sum in a self-check row rather than as one pair.
+      docs/relation-graph.md's edge-A table (`resolved` 180 of 250, 72.0%) and
+      its S2 row ("180+56+14 = 250 จาก 250 หลักสูตร (253 รายการพจนานุกรม)").
+      The report states the numerator and the denominator as a sum in a
+      self-check row rather than as one pair. Was "182 of 253" until 2026-08-21,
+      when build_graph started keying on programmes rather than dictionary
+      entries; the key is the exact figure, so the next such change re-flags
+      rather than inheriting this clearance.
 
   - doc: CLAUDE.md
     figure: "0 of 30"
@@ -496,56 +500,8 @@ inputs:
       stronger discharge than re-rendering would be, since re-rendering only
       moves an mtime ([[feedback_a_staleness_check_is_only_a_proxy]]).
 
-  - src: src/rag_lab/loaders/program_loader.py
-    report: docs/program-matcher-absorption.md
-    checked: 2026-08-20
-    src_sha: 9e34028128210518
-    reason: >-
-      The 2026-08-20 edit is PURELY ADDITIVE -- `git diff --numstat` reads
-      143 insertions / 0 deletions in a single hunk appended after the
-      ProgramLoader class -- so `match_programs`, the only function this report
-      consumes, is byte-identical. Checked by execution as well as by
-      construction: running `match_programs` over 400 randomly sampled corpus
-      files under this version and under f78ed5e gives 0 of 400 differing
-      results. The added `programme_groups` / `match_programs_by_field` have no
-      caller inside `match_programs`.
-      Cleared by content: `src_sha` re-flags this pair the moment the loader
-      changes again, because this edge exists precisely to catch a matcher
-      repair moving the report without touching its generator.
 
-  - src: src/rag_lab/loaders/program_loader.py
-    report: docs/relation-graph.md
-    checked: 2026-08-20
-    src_sha: 9e34028128210518
-    reason: >-
-      The 2026-08-20 edit is PURELY ADDITIVE -- `git diff --numstat` reads
-      143 insertions / 0 deletions in a single hunk appended after the
-      ProgramLoader class -- so `match_programs`, the only function this report
-      consumes, is byte-identical. Checked by execution as well as by
-      construction: running `match_programs` over 400 randomly sampled corpus
-      files under this version and under f78ed5e gives 0 of 400 differing
-      results. The added `programme_groups` / `match_programs_by_field` have no
-      caller inside `match_programs`.
-      Cleared by content: `src_sha` re-flags this pair the moment the loader
-      changes again, because this edge exists precisely to catch a matcher
-      repair moving the report without touching its generator.
 
-  - src: src/rag_lab/loaders/program_loader.py
-    report: docs/program-tag-regeneration.md
-    checked: 2026-08-20
-    src_sha: 9e34028128210518
-    reason: >-
-      The 2026-08-20 edit is PURELY ADDITIVE -- `git diff --numstat` reads
-      143 insertions / 0 deletions in a single hunk appended after the
-      ProgramLoader class -- so `match_programs`, the only function this report
-      consumes, is byte-identical. Checked by execution as well as by
-      construction: running `match_programs` over 400 randomly sampled corpus
-      files under this version and under f78ed5e gives 0 of 400 differing
-      results. The added `programme_groups` / `match_programs_by_field` have no
-      caller inside `match_programs`.
-      Cleared by content: `src_sha` re-flags this pair the moment the loader
-      changes again, because this edge exists precisely to catch a matcher
-      repair moving the report without touching its generator.
 
   - src: src/rag_lab/router.py
     report: qdrant_routed_check.md
