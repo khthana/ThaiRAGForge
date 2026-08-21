@@ -3113,6 +3113,52 @@ see `docs/adr/`.
   subset**: `build_embedder` has no cache and `query_indices` never releases, so N
   `route_query` calls are N model loads — a **pre-existing** serving gap (the Streamlit UI has
   it too), and per §8b the embedder is the layer that saturates anyway.
+- **Serving cost: an embedder cache on the query path, and the 78% nobody had priced
+  (2026-08-21, `tools/eval/serving_cost_profile.py` → `data/results/serving_cost_profile.md`,
+  4/4 self-checks).** `qdrant_concurrency.md` established the system is **ENCODE-BOUND**,
+  but its harness built the embedder **once outside the loop**, so it measured a *warm*
+  model and never priced the per-call **construction** the shipped `query_service`
+  actually pays — `build_embedder` had no cache and `query_indices` builds one per index
+  dir per call. Decomposed on the shipped `person` route (bge-m3, 57,172 chunks): one
+  served query is **11,317 ms**, of which **8,835 ms is loading weights the previous query
+  already loaded**, against **416 ms** of irreducible work (encode 13.0 + score/fuse 403).
+  `build_embedder_cached` (bounded LRU, `RAG_LAB_EMBEDDER_CACHE`, default **2**) takes the
+  shipped `route_query` from **11,604 → 3,074 ms p50 (3.8x)**, **2,994 ms steady state
+  (3.9x)**, with **0 of 8** queries returning a different top-10 — ids *and* scores.
+  **Five things worth keeping, and the first two are instrument faults that each reversed
+  the conclusion on their own.** (1) **`LocalSTEmbedder._load()` is LAZY** — the
+  constructor stores a model name and `SentenceTransformer(...)` runs inside the first
+  `embed()` — so the first measurement timed `build_embedder` at **0.0 ms**, charged the
+  8.8 s to *encode*, and concluded a cache could win **10%**. A 9 s encode against the
+  published **13–83 ms** is an instrument fault, not a finding
+  ([[feedback_a_mode_on_a_constant_is_your_instrument]]); `S1` now gates warm encode
+  against that published range. (2) **The A/B measured itself at 1.0x** because the `off`
+  arm called `clear_embedder_cache()` — unnecessary (at size 0 the builder bypasses the
+  cache and never reads it) *and* destructive, since the arms alternate per query so every
+  `on` measurement started cold. The harness was wrong, not the cache. (3) **The cache is
+  on the SERVING path only** — `build_embedder` stays uncached for every eval script,
+  because a global cache would hold Qwen3-Embedding-4B resident beside its neighbours
+  during a 9-embedder sweep, which is the OOM this project already lost five
+  `semantic × 4B` runs to. So **no published number can move**, and
+  `tests/test_embedder_cache.py` pins that exclusion in both directions. (4) **2 is not
+  arbitrary**: the five routes resolve to exactly **two** distinct embedders (bge-m3 for
+  person/faculty/unmatched, qwen3-0.6B for program/course), so the probe **alternates
+  routes** — consecutive same-route queries would be served by one resident model and a
+  size-1 cache would look identical. (5) **The object is now SHARED between concurrent
+  callers** where each used to build its own; that is a real behaviour change, so
+  bit-identical output under 8 concurrent encodes is pinned, as is the double-checked
+  construction race — and **that race test was decoration until it was probed**: the
+  `hashing` fixture constructs in microseconds so the branch was never reached, and
+  deleting the double-check left it green. It now slows the constructor deliberately and
+  asserts the race actually happened.
+  **What is NOT done: the index cache.** `ArtifactStore.load` re-reads the ~234 MB
+  `embeddings.npy` and rebuilds 57k `Chunk` objects every call (**1,159 ms**), and because
+  `BM25Okapi` is memoised **on the `Index` object**, a fresh load throws that memo away and
+  the next hybrid retrieve rebuilds it (**921 ms**) — so **2,079 ms of the remaining
+  2,994 ms is a second cache nobody has built**, and it is measured rather than estimated.
+  It is a bigger change than this one (a shared `Index` is mutable state — `MetadataFilter`
+  and `EntityFilter` derive new ones from it) and is deliberately left out rather than
+  half-done.
 - **Corpus data-quality audit** (`tools/corpus_prep/audit_title_body_agreement.py`,
   2026-07-30): flags manifest titles that disagree with the document's own page-1
   `เรื่อง` subject line. A first version was rejected on measurement (median 0.660,

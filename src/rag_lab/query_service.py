@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from rag_lab.config import StrategySpec
-from rag_lab.factory import build_embedder, build_reranker, build_retriever
+from rag_lab.factory import build_embedder_cached, build_reranker, build_retriever
 from rag_lab.io.artifact_store import ArtifactStore
 from rag_lab.pipeline import retrieve
 from rag_lab.results import save_retrieval_result
@@ -125,7 +125,11 @@ def query_indices(
     out: list[ComboRetrieval] = []
     for index_dir in index_dirs:
         manifest = _read_manifest(index_dir)
-        embedder = build_embedder(
+        # Cached: the serving path hits the same two models over and over, and
+        # a fresh construction reloads ~8.9 s of weights (78% of a served
+        # query). Bounded at 2 -- see factory.build_embedder_cached for why
+        # the eval path deliberately does NOT share this.
+        embedder = build_embedder_cached(
             StrategySpec.model_validate(manifest["combo"]["embedder"])
         )
         index = store.load(index_dir, with_embeddings=reads_rows)
@@ -180,7 +184,11 @@ def entity_lookup(
     for index_dir in index_dirs:
         manifest = _read_manifest(index_dir)
         check_entity_tags_loader(manifest, index_dir)
-        embedder = build_embedder(
+        # Cached: the serving path hits the same two models over and over, and
+        # a fresh construction reloads ~8.9 s of weights (78% of a served
+        # query). Bounded at 2 -- see factory.build_embedder_cached for why
+        # the eval path deliberately does NOT share this.
+        embedder = build_embedder_cached(
             StrategySpec.model_validate(manifest["combo"]["embedder"])
         )
         index = store.load(index_dir)
