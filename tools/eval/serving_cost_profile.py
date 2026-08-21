@@ -60,6 +60,7 @@ from rag_lab.factory import (  # noqa: E402
     embedder_cache_info,
 )
 from rag_lab.io.artifact_store import ArtifactStore  # noqa: E402
+from rag_lab.io.index_cache import clear_index_cache, index_cache_info  # noqa: E402
 from rag_lab.pipeline import retrieve  # noqa: E402
 from rag_lab.query_service import (  # noqa: E402
     _read_manifest,
@@ -73,6 +74,7 @@ INDEX_ROOT = REPO / "data/index/chunker_compare_full"
 REPORT = REPO / "data/results/serving_cost_profile.md"
 RAW = REPO / "data/results/serving_cost_profile_raw.json"
 CACHE_ENV = "RAG_LAB_EMBEDDER_CACHE"
+INDEX_ENV = "RAG_LAB_INDEX_CACHE"
 
 # Alternating routes on purpose: consecutive same-route queries would be served
 # by one resident model and a size-1 cache would look identical to a size-2 one.
@@ -92,6 +94,29 @@ REPEATS = 3
 # 181 ms after 1.8 s idle). S1 is a sanity gate against a lazy load hiding in
 # the encode number, not a precision claim.
 PUBLISHED_ENCODE_MS = (5.0, 250.0)
+
+
+ROUTED_REPORT = REPO / "data/results/routed_fetch_depth_test.md"
+
+
+def published_routed_p50() -> float | None:
+    """The shipped routed hybrid p50 at F=200, parsed from its own report.
+
+    PARSED, never frozen as a literal: this project has already replaced 14
+    hardcoded cross-artifact anchors that went on printing a number their source
+    had moved past. A missing or renamed report yields None and S7 says the
+    cross-check could not be made, rather than passing silently.
+    """
+    if not ROUTED_REPORT.exists():
+        return None
+    for line in ROUTED_REPORT.read_text(encoding="utf-8").splitlines():
+        cells = [c.strip() for c in line.split("|")]
+        if len(cells) > 2 and cells[1] == "F=200" and cells[2].endswith("ms"):
+            try:
+                return float(cells[2].removesuffix("ms").strip())
+            except ValueError:
+                return None
+    return None
 
 
 def timed(fn):
@@ -148,44 +173,74 @@ def decompose(indices) -> dict:
 
 
 def ab(indices) -> dict:
-    """§2: the shipped route_query, cache off vs on, alternated in one process."""
-    os.environ[CACHE_ENV] = "0"
-    clear_embedder_cache()
-    route_query(QUERIES[0], indices, RETRIEVER, 10)  # warm disk/CUDA for both arms
+    """§2: the shipped route_query across THREE arms, alternated in one process.
 
-    times = {"off": [], "on": []}
-    answers = {"off": [], "on": []}
+    Three, not two, because "is the cache worth it" and "which cache" are
+    different questions and a single on/off arm answers only the first:
+
+        none      both caches off  -- the behaviour before 2026-08-21
+        embedder  embedder only    -- what shipped first
+        both      + the Index cache
+
+    NEITHER cache is cleared between arms, and getting that wrong cost this
+    measurement twice. A disabled arm is separated by the disable itself: both
+    `build_embedder_cached` and `load_index_cached` return the uncached object
+    BEFORE reading their dict when size is 0, so nothing can leak into them.
+    Clearing, meanwhile, runs immediately before the next enabled arm and wipes
+    exactly the state it is about to measure -- which is how the embedder cache
+    first read 1.0x and the index cache first read -2 ms.
+    """
+    arms = ("none", "embedder", "both")
+    env = {
+        "none": {CACHE_ENV: "0", INDEX_ENV: "0"},
+        "embedder": {CACHE_ENV: "2", INDEX_ENV: "0"},
+        "both": {CACHE_ENV: "2", INDEX_ENV: "4"},
+    }
+
+    os.environ.update(env["none"])
+    clear_embedder_cache()
+    clear_index_cache()
+    route_query(QUERIES[0], indices, RETRIEVER, 10)  # warm disk/CUDA for all arms
+
+    times = {a: [] for a in arms}
+    answers = {a: [] for a in arms}
     for q in QUERIES * 2:
-        for arm in ("off", "on"):
-            # NOTE: no clear_embedder_cache() in the 'off' arm. At size 0 the
-            # cached builder bypasses the cache entirely and never reads it, so
-            # 'off' cannot benefit anyway -- while clearing WIPED the resident
-            # models 'on' depends on. With the arms alternating per query, that
-            # made every 'on' measurement cold and the treatment measured itself
-            # at 1.0x. The harness was wrong, not the cache.
-            os.environ[CACHE_ENV] = "0" if arm == "off" else "2"
-            # ONE call, both timed and scored. A second call for the answer
-            # would double the work and -- worse -- score a query the timing
-            # never saw, so a cache bug that only bit the first call would be
-            # invisible to S2.
+        for arm in arms:
+            os.environ.update(env[arm])
+            # NO clear of either cache here, and the index one is the SECOND
+            # time this trap was hit -- the first version of this arm cleared
+            # it on the reasoning that "a disabled cache is bypassed, not
+            # cleared, so an entry could leak into a disabled arm". False:
+            # `load_index_cached` returns `store.load(...)` before it ever
+            # reads the dict at size 0, so a leftover entry cannot be served.
+            # The clear was unnecessary AND destructive -- it ran immediately
+            # before the `both` arm every query, so `both` never once got a
+            # hit and the index cache measured itself at -2 ms.
+            # NOTE: no clear_embedder_cache() here, and that was a real harness
+            # bug: at size 0 the cached builder bypasses the cache and never
+            # reads it, so a disabled arm cannot benefit anyway -- while
+            # clearing WIPED the resident models the enabled arms depend on.
+            # With arms alternating per query that made every treatment
+            # measurement cold and the effect read 1.0x.
             res, dt = timed(lambda: route_query(q, indices, RETRIEVER, 10))
             times[arm].append(dt)
             answers[arm].append(top10(res))
-    os.environ.pop(CACHE_ENV, None)
+    for k in (CACHE_ENV, INDEX_ENV):
+        os.environ.pop(k, None)
 
-    differing = [i for i in range(len(answers["off"])) if answers["off"][i] != answers["on"][i]]
-    # Steady state excludes the cold fill: with 2 models and alternating routes
-    # the first query of each route pays a load in BOTH arms by construction.
-    steady_on = sorted(times["on"])[: len(times["on"]) - 2]
+    differing = {
+        a: [i for i in range(len(answers["none"])) if answers["none"][i] != answers[a][i]]
+        for a in ("embedder", "both")
+    }
     return {
         "queries": [{"query": q, "route": classify_query(q)} for q in QUERIES],
-        "off_ms": times["off"], "on_ms": times["on"],
-        "p50_off": statistics.median(times["off"]),
-        "p50_on": statistics.median(times["on"]),
-        "p50_on_steady": statistics.median(steady_on),
-        "n_differing": len(differing),
-        "n_compared": len(answers["off"]),
-        "cache_after": embedder_cache_info(),
+        "arms": arms,
+        "ms": {a: times[a] for a in arms},
+        "p50": {a: statistics.median(times[a]) for a in arms},
+        "n_differing": {a: len(v) for a, v in differing.items()},
+        "n_compared": len(answers["none"]),
+        "embedder_cache_after": embedder_cache_info(),
+        "index_cache_after": index_cache_info(),
     }
 
 
@@ -197,24 +252,50 @@ def render(data: dict) -> tuple[str, list[tuple[str, bool, str]]]:
     emb_saving = m["build"] + m["first_embed"] - m["warm_embed"]
     idx_saving = m["load"] + (m["first_retrieve"] - m["warm_retrieve"])
 
+    # Steady state = the SECOND pass over the query list. Defined structurally
+    # rather than by dropping the N slowest rows: the number of cold fills is
+    # arm-dependent (the embedder arm fills 2 models, the `both` arm also fills
+    # 4 indices), so a fixed N is a fudge that happens to work for one arm. Every
+    # route appears once in the first pass by construction, so the second pass is
+    # warm for every arm at once.
+    n = len(a["queries"])
+    a["p50_steady"] = {arm: statistics.median(a["ms"][arm][n:]) for arm in a["arms"]}
+
     checks = [
         ("S1 warm encode is in the published cost_latency_pareto range",
          PUBLISHED_ENCODE_MS[0] <= m["warm_embed"] <= PUBLISHED_ENCODE_MS[1],
          f"{m['warm_embed']:.1f} ms, expected {PUBLISHED_ENCODE_MS[0]}-{PUBLISHED_ENCODE_MS[1]}"),
-        ("S2 the cache does not change the answer",
-         a["n_differing"] == 0,
-         f"{a['n_differing']} of {a['n_compared']} queries returned a different top-10"),
-        ("S3 the cache holds the shipped model count after alternating routes",
-         a["cache_after"]["size"] == 2,
-         f"holds {a['cache_after']['size']} of max {a['cache_after']['max_size']}"),
-        ("S4 the two arms were genuinely separated",
-         a["p50_off"] - a["p50_on_steady"] > emb_saving * 0.5,
-         f"off p50 {a['p50_off']:.0f} - on steady {a['p50_on_steady']:.0f} = "
-         f"{a['p50_off'] - a['p50_on_steady']:.0f} ms vs weight load {emb_saving:.0f} ms"),
+        ("S2 neither cache changes the answer",
+         sum(a["n_differing"].values()) == 0,
+         f"embedder {a['n_differing']['embedder']} / both {a['n_differing']['both']} "
+         f"of {a['n_compared']} queries returned a different top-10"),
+        ("S3 the embedder cache holds the shipped model count",
+         a["embedder_cache_after"]["size"] == 2,
+         f"holds {a['embedder_cache_after']['size']} of max "
+         f"{a['embedder_cache_after']['max_size']}"),
+        ("S4 the index cache holds the routed index count",
+         a["index_cache_after"]["size"] == 4,
+         f"holds {a['index_cache_after']['size']} of max "
+         f"{a['index_cache_after']['max_size']}"),
+        ("S5 the arms were genuinely separated",
+         a["p50"]["none"] - a["p50_steady"]["both"] > emb_saving * 0.5,
+         f"none p50 {a['p50']['none']:.0f} - both steady {a['p50_steady']['both']:.0f} = "
+         f"{a['p50']['none'] - a['p50_steady']['both']:.0f} ms vs weight load {emb_saving:.0f} ms"),
+        ("S6 the BM25 memo survives in the index-cached arm",
+         all(e["has_bm25_scorer"] for e in a["index_cache_after"]["entries"]),
+         f"{sum(e['has_bm25_scorer'] for e in a['index_cache_after']['entries'])} of "
+         f"{len(a['index_cache_after']['entries'])} cached indices carry a scorer"),
+        ("S7 a fully warm query reproduces the published routed p50",
+         (lambda pub: pub is not None and abs(a["p50_steady"]["both"] - pub) / pub < 0.5)(
+             published_routed_p50()),
+         (lambda pub: "UNPARSED -- the cross-check could not be made" if pub is None
+          else f"{a['p50_steady']['both']:.0f} ms vs routed_fetch_depth_test.md's "
+               f"{pub:.1f} ms ({abs(a['p50_steady']['both'] - pub) / pub * 100:.0f}% apart)"
+          )(published_routed_p50())),
     ]
 
     L = []
-    L.append("# Serving cost profile — what a query pays for, and what the embedder cache removes")
+    L.append("# Serving cost profile — what a query pays for, and what the caches remove")
     L.append("")
     L.append(f"Generated by `tools/eval/serving_cost_profile.py` on "
              f"{datetime.fromtimestamp(data['ts']):%Y-%m-%d %H:%M}.")
@@ -231,40 +312,51 @@ def render(data: dict) -> tuple[str, list[tuple[str, bool, str]]]:
         ("build", "`build_embedder` (constructor)", "lazy — the cost is not here"),
         ("first_embed", "first `embed()` — loads the weights", "**yes, embedder cache**"),
         ("warm_embed", "warm `embed()`", "no — real GPU work"),
-        ("load", "`ArtifactStore.load` (parquet + npy + Chunk objects)", "yes, an index cache"),
+        ("load", "`ArtifactStore.load` (parquet + npy + Chunk objects)", "**yes, index cache**"),
         ("first_retrieve", "first `retrieve` (includes the BM25Okapi rebuild)", "the delta, yes"),
         ("warm_retrieve", "warm `retrieve`", "no — scoring + fusion"),
     ]:
         L.append(f"| {label} | {m[k]:.1f} | {note} |")
     L.append("")
-    L.append(f"- one served query today, nothing cached: **{now:,.0f} ms**")
+    L.append(f"- one served query with nothing cached: **{now:,.0f} ms**")
     L.append(f"- the embedder cache removes **{emb_saving:,.0f} ms** "
              f"({emb_saving / now * 100:.0f}% of it)")
-    L.append(f"- an index cache would remove a further **{idx_saving:,.0f} ms** "
-             f"(load {m['load']:.0f} + BM25 rebuild {m['first_retrieve'] - m['warm_retrieve']:.0f}) "
-             f"— **not built**")
+    L.append(f"- the index cache removes a further **{idx_saving:,.0f} ms** "
+             f"(load {m['load']:.0f} + the BM25 rebuild it discards "
+             f"{m['first_retrieve'] - m['warm_retrieve']:.0f})")
     L.append(f"- irreducible: **{irreducible:.0f} ms** (encode {m['warm_embed']:.1f} + "
              f"score/fuse {m['warm_retrieve']:.0f})")
     L.append("")
     L.append("## 2. A/B on the shipped `route_query`")
     L.append("")
-    L.append("Cache off vs on, alternated per query in one process so machine drift "
-             "cannot be read as the effect. Routes alternate too — consecutive "
-             "same-route queries would be served by one resident model and a size-1 "
-             "cache would look identical to a size-2 one.")
+    L.append("Three arms, alternated per query in one process so machine drift cannot "
+             "be read as the effect. Routes alternate too — consecutive same-route "
+             "queries would be served by one resident model and one resident index, "
+             "and a size-1 cache would look identical to the shipped size.")
     L.append("")
-    L.append("| # | route | off (ms) | on (ms) |")
-    L.append("| ---: | --- | ---: | ---: |")
-    for i, (off, on) in enumerate(zip(a["off_ms"], a["on_ms"]), start=1):
-        L.append(f"| {i} | {a['queries'][(i - 1) % len(a['queries'])]['route']} "
-                 f"| {off:,.0f} | {on:,.0f} |")
+    L.append("| # | route | none (ms) | embedder (ms) | both (ms) |")
+    L.append("| ---: | --- | ---: | ---: | ---: |")
+    for i in range(len(a["ms"]["none"])):
+        route = a["queries"][i % len(a["queries"])]["route"]
+        L.append(f"| {i + 1} | {route} | {a['ms']['none'][i]:,.0f} | "
+                 f"{a['ms']['embedder'][i]:,.0f} | {a['ms']['both'][i]:,.0f} |")
     L.append("")
-    L.append(f"- p50 **{a['p50_off']:,.0f} → {a['p50_on']:,.0f} ms** "
-             f"(**{a['p50_off'] / a['p50_on']:.1f}x**, −{a['p50_off'] - a['p50_on']:,.0f} ms/query)")
-    L.append(f"- steady state, excluding the two cold fills: **{a['p50_on_steady']:,.0f} ms** "
-             f"(**{a['p50_off'] / a['p50_on_steady']:.1f}x**)")
-    L.append(f"- the first query on each route pays a weight load in **both** arms "
-             f"by construction; that is the cold fill, not a cache failure")
+    L.append("| arm | p50 (ms) | steady state (ms) | vs none |")
+    L.append("| --- | ---: | ---: | ---: |")
+    for arm in a["arms"]:
+        speed = a["p50"]["none"] / a["p50"][arm]
+        L.append(f"| {arm} | {a['p50'][arm]:,.0f} | {a['p50_steady'][arm]:,.0f} | "
+                 f"{speed:.1f}x |")
+    L.append("")
+    L.append(f"- **{a['p50']['none']:,.0f} → {a['p50']['both']:,.0f} ms p50** "
+             f"(**{a['p50']['none'] / a['p50']['both']:.1f}x**), steady state "
+             f"**{a['p50_steady']['both']:,.0f} ms** "
+             f"(**{a['p50']['none'] / a['p50_steady']['both']:.1f}x**)")
+    L.append(f"- the index cache's own contribution: "
+             f"**{a['p50']['embedder'] - a['p50']['both']:,.0f} ms** off the "
+             f"embedder-only arm")
+    L.append("- the first query on each route pays both loads in **every** arm by "
+             "construction; that is the cold fill, not a cache failure")
     L.append("")
     L.append("## 3. Self-checks")
     L.append("")
@@ -275,8 +367,12 @@ def render(data: dict) -> tuple[str, list[tuple[str, bool, str]]]:
     L.append("")
     L.append("## 4. What this does NOT establish")
     L.append("")
-    L.append("- **No index cache exists.** The `load` + BM25 rebuild cost above is "
-             "measured, not removed; it is what a served query still pays.")
+    L.append("- **Nothing about staleness under load.** The index cache re-stats its "
+             "artifacts on every hit and `tests/io/test_index_cache.py` pins that a "
+             "rebuilt directory is never served from RAM, but no measurement here "
+             "rebuilds an index while queries are in flight.")
+    L.append(f"- **RAM is not measured.** {a['index_cache_after']['size']} indices "
+             "are held resident; this reports latency, not footprint.")
     L.append("- **No concurrency.** These are sequential, single-client timings. "
              "`qdrant_concurrency.md` is the layer that measures contention, and the "
              "cache makes callers *share* one model where each used to build its own "

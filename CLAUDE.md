@@ -3151,14 +3151,55 @@ see `docs/adr/`.
   `hashing` fixture constructs in microseconds so the branch was never reached, and
   deleting the double-check left it green. It now slows the constructor deliberately and
   asserts the race actually happened.
-  **What is NOT done: the index cache.** `ArtifactStore.load` re-reads the ~234 MB
-  `embeddings.npy` and rebuilds 57k `Chunk` objects every call (**1,159 ms**), and because
-  `BM25Okapi` is memoised **on the `Index` object**, a fresh load throws that memo away and
-  the next hybrid retrieve rebuilds it (**921 ms**) — so **2,079 ms of the remaining
-  2,994 ms is a second cache nobody has built**, and it is measured rather than estimated.
-  It is a bigger change than this one (a shared `Index` is mutable state — `MetadataFilter`
-  and `EntityFilter` derive new ones from it) and is deliberately left out rather than
-  half-done.
+  **THE INDEX CACHE IS NOW BUILT TOO (2026-08-21, `src/rag_lab/io/index_cache.py`), and
+  together they take a warm served query to 422 ms.** `ArtifactStore.load` re-read the
+  ~234 MB `embeddings.npy` and rebuilt 57k `Chunk` objects every call (**1,159 ms**), and
+  because `BM25Okapi` is memoised **on the `Index` object**, discarding the Index discarded
+  the scorer too and the next hybrid retrieve rebuilt it (**921 ms**). Three arms on the
+  shipped `route_query`, alternated in one process: **none 11,980 → embedder 3,316 →
+  both 1,476 ms p50 (8.1x)**, and **steady state 422 ms (28.4x)** — the index cache's own
+  contribution is **1,841 ms** off the embedder-only arm. **0 of 8** queries changed their
+  top-10 in either arm, 7/7 self-checks.
+  **Four things worth keeping.** (1) **Sharing an `Index` is safe only because nothing
+  mutates one, and that was grepped rather than assumed**: across `src/`, `tools/` and
+  `app/` there is exactly **one** write to an Index attribute — `bm25.py`'s
+  `index.lexical_scorer = (...)`, the memo the cache exists to preserve — while
+  `MetadataFilter`/`EntityFilter` both go through `Index.select()`, which builds a new
+  Index (fancy-indexing the matrix copies it). `tests/io/test_index_cache.py` pins the
+  no-mutation property directly, because if it ever stops holding this becomes a
+  correctness bug rather than a slow path. (2) **Staleness is the real risk, not memory**:
+  a long-running server holding an Index while its directory is rebuilt would serve the
+  previous build's rows while every artifact on disk said otherwise — the
+  two-artifacts-from-different-days shape, invisible because it lives in RAM. Every cache
+  **hit** re-stats `(mtime_ns, size)` of all four artifacts (~4 stat calls against a
+  1,159 ms reload, so it is not optional), and the invalidation takes the stale BM25 memo
+  with it. (3) **The steady-state definition was a fudge that happened to work**: dropping
+  the *N* slowest rows is arm-dependent (the embedder arm fills 2 models, the `both` arm
+  also fills 4 indices), so it is now the **second pass over the query list** — every route
+  appears once in the first pass by construction. (4) **`S7` anchors the result against
+  another report**: a fully warm query is **422 ms** against
+  `routed_fetch_depth_test.md`'s published **475.6 ms** p50, 11% apart, and the figure is
+  **parsed from that report** rather than frozen as a literal
+  ([[feedback_a_frozen_anchor_can_print_a_wrong_number]]).
+  **THE SAME HARNESS BUG BIT BOTH CACHES, and the second time I argued myself into it in a
+  code comment.** The embedder A/B first read **1.0x** and the index arm first read
+  **−2 ms**, both because a disabled arm called `clear_*_cache()` immediately before the
+  enabled arm ran, wiping exactly the state about to be measured. Both clears were also
+  **unnecessary**: `build_embedder_cached` and `load_index_cached` each return the uncached
+  object *before* reading their dict at size 0, so nothing can leak into a disabled arm.
+  The comment justifying the second clear reasoned that a bypassed cache "is not cleared,
+  so an entry could leak" — true of the dict, false of the code path. **A control arm that
+  can touch the treatment's state is not a control**
+  ([[feedback_a_lazy_constructor_hides_the_cost_you_are_pricing]]).
+  **Bounded at 4** (the five routes resolve to four distinct index dirs — `faculty` and
+  `unmatched` share one), `RAG_LAB_INDEX_CACHE` to change or disable, and it holds host RAM
+  rather than VRAM. `with_embeddings` is part of the key: the engine-served path loads
+  without the matrix, and handing *it* the full variant merely wastes the 234 MB the flag
+  exists to avoid, while the reverse would hand a row-reading retriever an **empty** matrix
+  — a silent wrong answer. **Serving path only**, same rule as the embedder cache:
+  `ArtifactStore.load` stays uncached so a 36-combo sweep keeps its memory profile.
+  **Still not measured: RAM footprint, and staleness under concurrent load** (the
+  invalidation is unit-tested, but nothing rebuilds an index while queries are in flight).
 - **Corpus data-quality audit** (`tools/corpus_prep/audit_title_body_agreement.py`,
   2026-07-30): flags manifest titles that disagree with the document's own page-1
   `เรื่อง` subject line. A first version was rejected on measurement (median 0.660,

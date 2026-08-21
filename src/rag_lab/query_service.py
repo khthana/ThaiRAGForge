@@ -13,6 +13,7 @@ from pathlib import Path
 
 from rag_lab.config import StrategySpec
 from rag_lab.factory import build_embedder_cached, build_reranker, build_retriever
+from rag_lab.io.index_cache import load_index_cached
 from rag_lab.io.artifact_store import ArtifactStore
 from rag_lab.pipeline import retrieve
 from rag_lab.results import save_retrieval_result
@@ -132,7 +133,11 @@ def query_indices(
         embedder = build_embedder_cached(
             StrategySpec.model_validate(manifest["combo"]["embedder"])
         )
-        index = store.load(index_dir, with_embeddings=reads_rows)
+        # Cached: re-reading ~234MB of embeddings.npy and rebuilding 57k Chunk
+        # objects costs ~1,159 ms, and throwing the Index away also throws away
+        # the BM25Okapi memoised on it (~921 ms more). The cache re-stats the
+        # artifacts on every hit, so a rebuilt index is never served from RAM.
+        index = load_index_cached(index_dir, with_embeddings=reads_rows, store=store)
         if filter_criteria:
             index = MetadataFilter(filter_criteria).apply(index)
         # query_indices compares potentially-heterogeneous combos side by
@@ -191,7 +196,7 @@ def entity_lookup(
         embedder = build_embedder_cached(
             StrategySpec.model_validate(manifest["combo"]["embedder"])
         )
-        index = store.load(index_dir)
+        index = load_index_cached(index_dir, store=store)
         combination_id = f"{manifest['combo_id']}__entity_lookup"
         result: RetrievalResult = retrieve(
             query, index, embedder, retriever, k=0, combination_id=combination_id,
