@@ -353,7 +353,9 @@ def test_an_engine_backed_retriever_is_handed_an_index_with_no_embeddings(tmp_pa
     out = _build_two_indices(tmp_path)
     dirs = [i.dir for i in discover_indices(out)]
     stub = _EngineRetriever()
-    monkeypatch.setattr("rag_lab.query_service.build_retriever", lambda spec: stub)
+    monkeypatch.setattr(
+        "rag_lab.query_service.build_retriever_cached", lambda spec: stub
+    )
 
     query_indices("ค่าธรรมเนียม", dirs, StrategySpec(type="qdrant_hybrid"), k=3)
 
@@ -366,7 +368,9 @@ def test_a_retriever_that_declares_nothing_still_gets_its_embeddings(tmp_path, m
     out = _build_two_indices(tmp_path)
     dirs = [i.dir for i in discover_indices(out)]
     stub = _RowReadingRetriever()
-    monkeypatch.setattr("rag_lab.query_service.build_retriever", lambda spec: stub)
+    monkeypatch.setattr(
+        "rag_lab.query_service.build_retriever_cached", lambda spec: stub
+    )
 
     query_indices("ค่าธรรมเนียม", dirs, StrategySpec(type="dense"), k=3)
 
@@ -386,7 +390,9 @@ def test_query_indices_refuses_to_narrow_an_engine_backed_retriever(
     out = _build_two_indices(tmp_path)
     dirs = [i.dir for i in discover_indices(out)]
     stub = _EngineRetriever()
-    monkeypatch.setattr("rag_lab.query_service.build_retriever", lambda spec: stub)
+    monkeypatch.setattr(
+        "rag_lab.query_service.build_retriever_cached", lambda spec: stub
+    )
 
     with pytest.raises(ValueError, match="external store"):
         query_indices(

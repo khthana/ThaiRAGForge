@@ -186,7 +186,101 @@ def embedder_cache_info() -> dict:
 
 
 def build_retriever(spec: StrategySpec):
+    """Always constructs a fresh retriever. See `build_retriever_cached` for the
+    serving path and why the eval path deliberately does not share one."""
     return retriever_registry.get(spec.type)(**spec.params)
+
+
+_RETRIEVER_CACHE_ENV = "RAG_LAB_RETRIEVER_CACHE"
+_DEFAULT_RETRIEVER_CACHE = 4
+_retriever_cache: "OrderedDict[tuple, object]" = OrderedDict()
+_retriever_lock = threading.Lock()
+
+
+def _retriever_cache_size() -> int:
+    raw = os.environ.get(_RETRIEVER_CACHE_ENV)
+    if raw is None or raw == "":
+        return _DEFAULT_RETRIEVER_CACHE
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return _DEFAULT_RETRIEVER_CACHE
+
+
+def build_retriever_cached(spec: StrategySpec):
+    """`build_retriever`, reusing an already-constructed retriever for the same
+    spec -- the THIRD construction on the serving path, and the one nobody had
+    priced.
+
+    Measured on the shipped `route_query` (`data/results/serving_concurrency.md`
+    section 4): an engine-served query spends **327 ms of its 433 ms** building
+    a retriever the previous query had already built. `QdrantHybridRetriever`
+    holds its Qdrant client and a per-collection arm cache whose construction
+    parses a 78k-term vocabulary sidecar off disk, and `query_indices` threw the
+    whole instance away between queries -- the embedder and the Index were
+    cached, this was not.
+
+    **A retriever is a pure function of its spec, and that is the whole licence
+    for sharing it.** Everything a retrieve() reads comes from its arguments
+    (the query and the Index); the instance holds configuration plus derived
+    handles. What it must NOT hold is per-query or per-Index state, which is
+    why `QdrantHybridRetriever._arms` is keyed by collection rather than being
+    a single slot -- a routed session revisits four collections and a
+    single-slot cache would thrash. Pinned by
+    `tests/test_retriever_cache.py`, which requires a cached retriever's
+    results to be identical to a freshly built one across routes.
+
+    Bounded at 4: the shipped UI offers one retriever at a time, and 4 leaves
+    room for a session that switches between them. `RAG_LAB_RETRIEVER_CACHE=0`
+    disables it.
+
+    **Serving path only**, the same rule the other two caches follow. Eval
+    scripts keep calling `build_retriever`, so no published number can move --
+    and, more concretely, a shared `BM25Retriever` would be indistinguishable
+    from a fresh one anyway while a shared engine client across a 36-combo
+    sweep is a connection nobody asked for.
+    """
+    size = _retriever_cache_size()
+    if size == 0:
+        return build_retriever(spec)
+
+    key = _spec_key(spec)
+    with _retriever_lock:
+        if key in _retriever_cache:
+            _retriever_cache.move_to_end(key)
+            return _retriever_cache[key]
+
+    # Built OUTSIDE the lock, as with the embedder: constructing one parses a
+    # vocabulary off disk, and holding the lock across that would serialise
+    # every other caller's hit behind it.
+    retriever = build_retriever(spec)
+
+    with _retriever_lock:
+        if key in _retriever_cache:
+            # Another thread won the race. Keep theirs, so every caller shares
+            # one object and one client.
+            _retriever_cache.move_to_end(key)
+            return _retriever_cache[key]
+        _retriever_cache[key] = retriever
+        while len(_retriever_cache) > size:
+            _retriever_cache.popitem(last=False)
+        return retriever
+
+
+def clear_retriever_cache() -> None:
+    """Drop every cached retriever. For tests, and for a caller that wants the
+    engine connections closed."""
+    with _retriever_lock:
+        _retriever_cache.clear()
+
+
+def retriever_cache_info() -> dict:
+    with _retriever_lock:
+        return {
+            "size": len(_retriever_cache),
+            "max_size": _retriever_cache_size(),
+            "keys": [k[0] + " " + k[1] for k in _retriever_cache],
+        }
 
 
 def build_reranker(spec: StrategySpec):

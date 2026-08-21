@@ -165,7 +165,9 @@ _ENGINE_RETRIEVERS = {"qdrant_hybrid"}
 _FUSED_RETRIEVERS = {"hybrid", "lexical_containment", "qdrant_hybrid"}
 _WHOLE_CORPUS = "ทั้งคลัง (k=n)"
 qdrant_url = st.sidebar.text_input(
-    "Qdrant URL", "http://localhost:6333", key="qdrant_url",
+    # 127.0.0.1 rather than localhost: on this box the name costs 2.0 s per
+    # request (IPv4-only publish, ::1 tried first). See QdrantHybridRetriever.
+    "Qdrant URL", "http://127.0.0.1:6333", key="qdrant_url",
     disabled=retriever not in _ENGINE_RETRIEVERS,
 )
 fetch_depth = st.sidebar.selectbox(

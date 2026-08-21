@@ -21,13 +21,19 @@ that carry the design are pinned here rather than argued:
 """
 from __future__ import annotations
 
+import shutil
 import threading
 import time
 
 import numpy as np
 import pytest
 
-from rag_lab.io.artifact_store import ArtifactStore
+from rag_lab.io.artifact_store import (
+    ArtifactStore,
+    artifact_stamp,
+    read_seal,
+    seal,
+)
 from rag_lab.io.index_cache import (
     clear_index_cache,
     index_cache_info,
@@ -116,12 +122,21 @@ def test_a_rebuilt_index_is_not_served_from_the_cache(tmp_path):
 
 def test_a_changed_embeddings_file_alone_invalidates(tmp_path):
     """Rows can be identical while the vectors are not -- that is precisely the
-    silent case, so the stamp must cover every artifact, not just the chunks."""
+    silent case, so the stamp must cover every artifact, not just the chunks.
+
+    Since the seal landed there are two steps rather than one, and the first is
+    the stronger guarantee: a vectors-only rewrite is a directory that no longer
+    matches the build its writer declared, so it is REFUSED rather than served,
+    and only re-sealing (what an in-place writer owes) brings it back."""
     d = _make_index(tmp_path, "one")
     first = load_index_cached(d)
     time.sleep(0.01)
     np.save(d / "embeddings.npy", np.zeros((6, 4), dtype=np.float32))
 
+    with pytest.raises(RuntimeError, match="sealed"):
+        load_index_cached(d)
+
+    seal(d)
     second = load_index_cached(d)
     assert second is not first
     assert float(second.embeddings.sum()) == 0.0
@@ -341,3 +356,96 @@ class TestARebuildThatOverlapsTheRead:
             assert idx.embeddings.shape[0] == n, "chunks and vectors came from different builds"
         # Whatever raced, the settled state is what the next caller gets.
         assert load_index_cached(d).chunks[0].text.endswith("new 0")
+
+
+class TestARebuildThatLandsBetweenTheWritersOwnFiles:
+    """The case stamping the read at BOTH ends is still unable to see.
+
+    `save` writes `chunks.parquet` and then `embeddings.npy`, so in between the
+    directory is *stably* inconsistent: new chunks, previous build's vectors,
+    nothing moving. A reader whose whole load falls inside that window sees the
+    same stamp before and after, caches the pairing, and serves it to every
+    later hit. Measured under load with a 150 ms gap, that was the majority of
+    reads (`data/results/serving_concurrency.md` section 6).
+
+    The fix is writer-side: `save` seals the directory last, and a reader
+    refuses a directory whose artifacts do not match that seal. These pin it,
+    and each one FAILS on the pre-seal implementation.
+    """
+
+    @staticmethod
+    def _half_rebuild(tmp_path, d, tag: str) -> None:
+        """Replace ONLY chunks.parquet, as a writer mid-save has done."""
+        other = _make_index(tmp_path, "staging", tag=tag)
+        shutil.copyfile(other / "chunks.parquet", d / "chunks.parquet")
+
+    def test_a_half_written_directory_is_refused_not_served(self, tmp_path):
+        d = _make_index(tmp_path, "one", tag="old")
+        self._half_rebuild(tmp_path, d, "new")
+
+        with pytest.raises(RuntimeError, match="sealed"):
+            load_index_cached(d)
+
+    def test_the_mixed_pairing_is_never_cached(self, tmp_path):
+        """The damage the old behaviour did was not one bad read, it was that
+        the bad read became the cached one."""
+        d = _make_index(tmp_path, "one", tag="old")
+        self._half_rebuild(tmp_path, d, "new")
+        with pytest.raises(RuntimeError):
+            load_index_cached(d)
+        assert index_cache_info()["size"] == 0
+
+        # Finish the rebuild the way a real writer does, and it serves again.
+        rebuilt = _make_index(tmp_path, "one", tag="new")
+        assert rebuilt == d
+        got = load_index_cached(d)
+        assert got.chunks[0].text.endswith("new 0")
+        assert index_cache_info()["entries"][0]["sealed"] is True
+
+    def test_an_unsealed_directory_still_serves_and_says_so(self, tmp_path):
+        """Every index built before 2026-08-21 has no seal. Refusing those would
+        take the whole fleet offline, so they get the older, narrower guarantee
+        -- and `index_cache_info` reports the gap rather than hiding it."""
+        d = _make_index(tmp_path, "one", tag="old")
+        (d / "_complete.json").unlink()
+
+        got = load_index_cached(d)
+        assert got.chunks[0].text.endswith("old 0")
+        assert index_cache_info()["entries"][0]["sealed"] is False
+
+    def test_a_seal_that_does_not_match_is_not_downgraded_to_unsealed(self, tmp_path):
+        """The tempting rule -- a mismatch that is not moving must be an
+        out-of-band edit, so read it anyway -- is unsound, because during the
+        inter-file window the directory is stable too. Stability cannot tell
+        the two apart, so a mismatch always refuses."""
+        d = _make_index(tmp_path, "one", tag="old")
+        self._half_rebuild(tmp_path, d, "new")
+        stamp_before = (d / "chunks.parquet").stat().st_mtime_ns
+
+        with pytest.raises(RuntimeError):
+            load_index_cached(d)
+        # Nothing moved while it was being refused: this is the stable case.
+        assert (d / "chunks.parquet").stat().st_mtime_ns == stamp_before
+
+    def test_an_in_place_writer_that_reseals_is_served_again(self, tmp_path):
+        """`relabel_index_resolution_ids.py` rewrites chunks.parquet directly,
+        so it owes a re-seal -- one line against a silent wrong answer."""
+        d = _make_index(tmp_path, "one", tag="old")
+        self._half_rebuild(tmp_path, d, "new")
+        with pytest.raises(RuntimeError):
+            load_index_cached(d)
+
+        seal(d)
+        got = load_index_cached(d)
+        assert got.chunks[0].text.endswith("new 0")
+
+    def test_save_seals_last_so_a_partial_save_is_never_merely_unsealed(self, tmp_path):
+        """The seal is not cleared before a rewrite. A directory being rebuilt
+        must present as *mismatching* (refused), never as *unsealed* (served),
+        because unsealed is the one classification that does not refuse."""
+        d = _make_index(tmp_path, "one", tag="old")
+        recorded = read_seal(d)
+        self._half_rebuild(tmp_path, d, "new")
+
+        assert read_seal(d) == recorded, "the stale seal must stay standing"
+        assert read_seal(d) != artifact_stamp(d)

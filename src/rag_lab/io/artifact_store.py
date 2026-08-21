@@ -4,6 +4,7 @@ Layout under one directory (per ADR-0001, this is the serialized index output):
 - ``chunks.parquet``   — chunk rows (metadata JSON-encoded per row)
 - ``embeddings.npy``   — the (n, dim) float matrix, aligned to chunk order
 - ``meta.json``        — how the index was built (chunker params, embedder id)
+- ``_complete.json``   — the writer declaring those files to be one build
 
 ``manifest.json`` sits in the same directory but is written by the runner
 (``manifest.py``), not here. ``load`` reads it when present, purely to stamp the
@@ -25,6 +26,84 @@ _EMBEDDINGS = "embeddings.npy"
 _META = "meta.json"
 _LEXICAL = "lexical.json"
 _MANIFEST = "manifest.json"
+_SEAL = "_complete.json"
+
+#: The files whose (mtime_ns, size) make up an index's identity on disk. ONE
+#: copy of that list: `index_cache` stats exactly these, and `seal` records
+#: exactly these, so the two can never drift into checking different things.
+ARTIFACT_FILES = (_CHUNKS, _EMBEDDINGS, _META, _LEXICAL)
+
+
+def artifact_stamp(directory: str | Path) -> list:
+    """What the index's artifacts look like on disk right now.
+
+    `[mtime_ns, size]` per file in `ARTIFACT_FILES` order, `None` for one that
+    does not exist. Both halves matter: a rebuild landing on the same
+    nanosecond is absurd, but a same-second rewrite is not, and size catches
+    the truncation a coarse mtime would miss. A list rather than a tuple
+    because it round-trips through JSON in the seal.
+    """
+    d = Path(directory)
+    out: list = []
+    for name in ARTIFACT_FILES:
+        try:
+            st = (d / name).stat()
+            out.append([st.st_mtime_ns, st.st_size])
+        except OSError:
+            out.append(None)
+    return out
+
+
+def seal(directory: str | Path) -> list:
+    """Declare the four artifacts in `directory` to be ONE build, and return
+    the stamp recorded.
+
+    **Why a writer-side seal exists at all.** `chunks.parquet` and
+    `embeddings.npy` are row-aligned (`I1`) and are written one after the
+    other, so between the two writes the directory is *stably inconsistent*:
+    new chunks beside the previous build's vectors, with nothing changing.
+    A reader stamping before and after its own read cannot see that -- the
+    stamps agree, because the write is not overlapping the read, it happened
+    just before it -- and the pairing is undetectable downstream (same row
+    count, same dtype, wrong rows). MEASURED, not argued: reader threads
+    hammering `load_index_cached` while a writer left a 150 ms gap between the
+    two halves served a mixed Index on the majority of reads
+    (`data/results/serving_concurrency.md` section 6), because one mixed read
+    is then cached and handed out until the next write moves the stamp.
+
+    So the writer states when it is finished, and the reader checks. A
+    directory whose seal does not match its artifacts is mid-write or was
+    edited out of band; either way it is not the build the writer declared.
+
+    **Anything that rewrites an artifact in place must re-seal**, or the cache
+    will refuse the directory -- `relabel_index_resolution_ids.py` is the one
+    such writer in this repo today. `tools/seal_index_dirs.py` seals the
+    indices that predate this.
+    """
+    d = Path(directory)
+    stamp = artifact_stamp(d)
+    (d / _SEAL).write_text(
+        json.dumps({"artifacts": list(ARTIFACT_FILES), "stamp": stamp}),
+        encoding="utf-8",
+    )
+    return stamp
+
+
+def read_seal(directory: str | Path) -> list | None:
+    """The stamp a writer last declared complete, or None for an UNSEALED
+    directory (one written before seals existed).
+
+    None is deliberately not "fine": it means the mixed-read window above
+    cannot be detected for this directory, only the narrower overlapping-write
+    one. `index_cache_info()` reports it per entry so the gap stays visible
+    rather than being assumed closed.
+    """
+    try:
+        data = json.loads((Path(directory) / _SEAL).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    stamp = data.get("stamp")
+    return stamp if isinstance(stamp, list) else None
 
 
 #: Rows per parquet batch. CHOSEN ON THE MEASURED CURVE, not on pyarrow's own
@@ -113,6 +192,12 @@ class ArtifactStore:
             (d / _LEXICAL).write_text(
                 json.dumps(index.lexical, ensure_ascii=False), encoding="utf-8"
             )
+        # LAST, and never removed first: the stale seal left standing during
+        # the writes above is exactly what tells a concurrent reader that this
+        # directory is mid-build. Clearing it up front would present the
+        # half-written state as merely UNSEALED, i.e. as legacy, which is the
+        # one classification that does not refuse.
+        seal(d)
 
     def load(self, directory: str | Path, *, with_embeddings: bool = True) -> Index:
         """`with_embeddings=False` returns an Index whose `embeddings` is an empty

@@ -54,13 +54,27 @@ class QdrantHybridRetriever(BaseRetriever):
     """Dense + sparse from one Qdrant collection, fused with weighted RRF.
 
     Reads nothing off the Index but its provenance, so `query_service` skips
-    loading `embeddings.npy` -- see `BaseRetriever.reads_index_rows`."""
+    loading `embeddings.npy` -- see `BaseRetriever.reads_index_rows`.
+
+    **The default url is `127.0.0.1`, not `localhost`, and the difference is
+    2.0 seconds per request on this machine** (`data/results/serving_concurrency.md`
+    section 3b): `docker run -p 6333:6333` publishes the port on IPv4 only,
+    `getaddrinfo("localhost")` returns `::1` first, and the client stack spends
+    ~2 s on that address before falling back -- 12.3 ms against 2,050 ms, a
+    167x tax on a name. It went unnoticed because every eval script already
+    passed `--url http://127.0.0.1:6333` while this class and the UI defaulted
+    to `localhost`, so the published Qdrant latencies were measured on a path
+    the shipped default did not take. Set `url=` explicitly for a real server;
+    a host that is not on IPv4 loopback is a deployment decision, not a
+    default."""
 
     reads_index_rows = False
 
     def __init__(
         self,
-        url: str = "http://localhost:6333",
+        # 127.0.0.1, NOT localhost, and that is a measured 167x -- see the
+        # class docstring.
+        url: str = "http://127.0.0.1:6333",
         api_key: str | None = None,
         path: str | None = None,
         collection_name: str | None = None,

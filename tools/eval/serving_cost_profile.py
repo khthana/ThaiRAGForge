@@ -367,13 +367,17 @@ def render(data: dict) -> tuple[str, list[tuple[str, bool, str]]]:
     L.append("")
     L.append("## 4. What this does NOT establish")
     L.append("")
-    L.append("- **Nothing about staleness under load.** The index cache re-stats its "
-             "artifacts on every hit and `tests/io/test_index_cache.py` pins that a "
-             "rebuilt directory is never served from RAM, but no measurement here "
-             "rebuilds an index while queries are in flight.")
+    L.append("- **Nothing about staleness under load** *here*. The index cache re-stats "
+             "its artifacts on every hit and `tests/io/test_index_cache.py` pins that a "
+             "rebuilt directory is never served from RAM, but no measurement in THIS "
+             "report rebuilds an index while queries are in flight. "
+             "`serving_concurrency.md` section 6 does, with a negative control — and it "
+             "found that re-stating was not enough on its own.")
     L.append(f"- **RAM is not measured.** {a['index_cache_after']['size']} indices "
              "are held resident; this reports latency, not footprint.")
-    L.append("- **No concurrency.** These are sequential, single-client timings. "
+    L.append("- **No concurrency** *here*. These are sequential, single-client timings; "
+             "`serving_concurrency.md` is the one that drives the shipped `route_query` "
+             "under load. "
              "`qdrant_concurrency.md` is the layer that measures contention, and the "
              "cache makes callers *share* one model where each used to build its own "
              "— pinned bit-identical by `tests/test_embedder_cache.py`, not measured "

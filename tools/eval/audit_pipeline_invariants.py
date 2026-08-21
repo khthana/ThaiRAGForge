@@ -461,6 +461,38 @@ def audit_indexes(corpus_ids: set[str], quick: bool) -> dict[Path, set[str]]:
     record("I6 index newer than corpus", not stale_vs_corpus, f"{len(stale_vs_corpus)} indexes built before the corpus's last edit", warn=True)
     for m in stale_vs_corpus[:8]:
         print(f"        {m}")
+
+    # I7. Every index directory must match the build its writer sealed.
+    #
+    # `ArtifactStore.save` writes chunks.parquet and embeddings.npy in sequence
+    # and they are row-aligned (I1 above), so between the two writes a reader
+    # can pair one build's chunks with another's vectors -- stably, with no
+    # stamp moving, and undetectably downstream. `index_cache` refuses a
+    # directory whose artifacts do not match the seal `save` writes last. This
+    # is the fleet-level version of that: an UNSEALED directory silently drops
+    # the serving cache to the weaker guarantee, and a MISMATCHING one is
+    # either mid-build or was rewritten in place without re-sealing, which
+    # `relabel_index_resolution_ids.py` is the repo's one writer able to do.
+    # WARN rather than FAIL, because unsealed is the pre-2026-08-21 state and a
+    # directory can legitimately be mid-build while this runs.
+    from rag_lab.io.artifact_store import artifact_stamp, read_seal  # noqa: E402
+
+    unsealed, mismatched = [], []
+    for d in combos():
+        recorded = read_seal(d)
+        if recorded is None:
+            unsealed.append(str(d))
+        elif recorded != artifact_stamp(d):
+            mismatched.append(str(d))
+    record(
+        "I7 index matches the build its writer sealed",
+        not unsealed and not mismatched,
+        f"{len(unsealed)} unsealed, {len(mismatched)} mismatching of {len(list(combos()))} "
+        f"(fix: python tools/seal_index_dirs.py --apply)",
+        warn=True,
+    )
+    for m in (unsealed + mismatched)[:8]:
+        print(f"        {m}")
     return ids_by_combo
 
 

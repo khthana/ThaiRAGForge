@@ -298,15 +298,26 @@ EVAL_INPUTS: dict[str, list[str]] = {
     # while nothing in the generator's own mtime would move. That is the exact
     # failure D4 exists to catch, and it is a live edge rather than a
     # hypothetical one: the streaming rewrite is what put it here.
+    # `serving_concurrency.md` joined those two on 2026-08-21 for the same
+    # reason and one more: its section 6 is a claim about what `index_cache`
+    # REFUSES, so a change to the settle rule turns a passing negative control
+    # into a record of a guard that no longer exists.
     "src/rag_lab/io/artifact_store.py": [
         "serving_cache_memory.md", "serving_cost_profile.md",
+        "serving_concurrency.md",
     ],
     "src/rag_lab/io/index_cache.py": [
         "serving_cache_memory.md", "serving_cost_profile.md",
+        "serving_concurrency.md",
     ],
     "src/rag_lab/factory.py": [
         "serving_cache_memory.md", "serving_cost_profile.md",
+        "serving_concurrency.md",
     ],
+    # Section 3b is a claim about this class's own DEFAULT url, and section 4
+    # about what its construction costs -- neither is re-derived by the
+    # generator, and both are wrong the moment the class changes.
+    "src/rag_lab/retrievers/qdrant_hybrid.py": ["serving_concurrency.md"],
 }
 
 findings: list[tuple[str, str, str]] = []

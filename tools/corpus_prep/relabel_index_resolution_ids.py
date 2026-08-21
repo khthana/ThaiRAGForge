@@ -50,6 +50,7 @@ sys.path.insert(0, "src")
 
 from rag_lab.config import StrategySpec  # noqa: E402
 from rag_lab.factory import build_loader  # noqa: E402
+from rag_lab.io.artifact_store import seal  # noqa: E402
 
 CORPUS = Path("academic_resolutions")
 INDEX_ROOT = Path("data/index")
@@ -347,6 +348,12 @@ def main() -> int:
             tmp = d / "chunks.parquet.tmp"
             pq.write_table(new_table, tmp)
             tmp.replace(d / "chunks.parquet")
+            # Re-declare the four artifacts to be one build. This script is the
+            # repo's only in-place writer of an index artifact, so without this
+            # the directory would permanently disagree with the seal
+            # ArtifactStore.save left, and a serving read would refuse it as
+            # half-rebuilt. See ArtifactStore.seal.
+            seal(d)
             manifest = d / "manifest.json"
             if manifest.exists():
                 man = json.loads(manifest.read_text(encoding="utf-8"))

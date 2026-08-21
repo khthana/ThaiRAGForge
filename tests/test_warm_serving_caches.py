@@ -206,13 +206,13 @@ def test_the_probe_uses_the_params_the_deployment_serves(tmp_path, monkeypatch):
     whole corpus, measured at 2,052 ms against the shipped F=200's 1,093
     (2026-08-21). It is the startup budget paying for a path nothing serves."""
     seen = []
-    real = qs.build_retriever
+    real = qs.build_retriever_cached
 
     def recording(spec):
         seen.append(spec)
         return real(spec)
 
-    monkeypatch.setattr(qs, "build_retriever", recording)
+    monkeypatch.setattr(qs, "build_retriever_cached", recording)
     warm_serving_caches(
         _indices(tmp_path),
         "hybrid",
@@ -221,3 +221,38 @@ def test_the_probe_uses_the_params_the_deployment_serves(tmp_path, monkeypatch):
     )
 
     assert seen and all(s.params.get("fetch_depth") == 200 for s in seen)
+
+
+def test_the_engine_shape_gets_a_probe_too(tmp_path):
+    """The probe was gated on `with_rows` until 2026-08-21, so an ENGINE-only
+    process got none -- and the probe's job is process-global CUDA/BLAS
+    initialisation, which has nothing to do with which rows are resident.
+    Measured cost of that gating: the engine topology's first real query came
+    back at 657 ms against a ~160 ms steady state, while the row-reading arm
+    beside it had been probed (`data/results/serving_concurrency.md`).
+
+    There is no Qdrant server here, so the probe cannot succeed -- what is
+    pinned is that it is ATTEMPTED, i.e. reported as a failure rather than
+    skipped in silence."""
+    infos = _indices(tmp_path)
+    report = warm_serving_caches(
+        infos, "qdrant_hybrid", route_combo=_TWO_ROUTES, with_rows=False
+    )
+    assert any(f.get("route") == "(probe retrieval)" for f in report["failures"]), (
+        "the engine shape skipped its probe entirely"
+    )
+    assert report["probe_ms"] is None
+    # and it is still the engine cache shape, not the row-reading one
+    assert all(e["with_embeddings"] is False for e in index_cache_info()["entries"])
+
+
+def test_probe_retrieval_false_still_skips_it_for_the_engine_shape(tmp_path):
+    """The escape hatch must survive the ungating, or the only way to warm
+    without a probe is gone."""
+    infos = _indices(tmp_path)
+    report = warm_serving_caches(
+        infos, "qdrant_hybrid", route_combo=_TWO_ROUTES,
+        with_rows=False, probe_retrieval=False,
+    )
+    assert not any(f.get("route") == "(probe retrieval)" for f in report["failures"])
+    assert report["probe_ms"] is None

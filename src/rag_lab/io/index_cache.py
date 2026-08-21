@@ -42,6 +42,20 @@ object is not merely stale in that window -- `save` writes four files in
 sequence and `Index` is row-aligned across two of them, so a read can pair one
 build's chunks with another's vectors, which nothing downstream can detect.
 
+**A rebuild that lands BETWEEN two of the writer's own files is a SECOND case,
+and stamping the read at both ends does not see it either (found by measuring
+it, 2026-08-21).** `save` writes `chunks.parquet` and then `embeddings.npy`, so
+in between, the directory is *stably* inconsistent -- new chunks, previous
+build's vectors, nothing moving. A reader whose whole load falls inside that
+window stamps the same thing before and after, caches the pairing, and then
+serves it to every later hit until the next write. Measured under load with a
+150 ms inter-file gap, that was the MAJORITY of reads. It is undetectable
+downstream (same row count, same dtype, wrong rows), so the writer now declares
+when it is finished (`ArtifactStore.seal`) and `_settle` refuses a directory
+whose artifacts do not match that declaration. A directory written before seals
+existed is classified **unsealed** and gets the older, narrower guarantee --
+reported per entry by `index_cache_info()` rather than assumed away.
+
 Bounded at 4 by default: the five shipped routes resolve to four distinct index
 directories (`faculty` and `unmatched` share one). `RAG_LAB_INDEX_CACHE=0`
 disables it; any other integer sets the size. Unlike the embedder cache this
@@ -57,15 +71,21 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
-from rag_lab.io.artifact_store import ArtifactStore
+from rag_lab.io.artifact_store import ArtifactStore, artifact_stamp, read_seal
 from rag_lab.schema import Index
 
 _CACHE_ENV = "RAG_LAB_INDEX_CACHE"
 _DEFAULT_SIZE = 4
+
+#: How long to wait between looks at a directory whose seal does not match its
+#: artifacts. A real save writes ~234MB, so the mismatching window is seconds;
+#: this only has to be long enough that four looks are four looks and not one.
+_SETTLE_SLEEP_S = 0.05
 
 #: How many times to re-read an index whose directory changed *during* the read.
 #: `ArtifactStore.save` writes four files in sequence, so a read that overlaps a
@@ -75,12 +95,7 @@ _DEFAULT_SIZE = 4
 #: that keeps racing raises instead of returning that pairing.
 _MAX_RELOADS = 3
 
-#: The files whose (mtime_ns, size) make up an index's identity on disk. A
-#: rebuild rewrites all of them; `lexical.json` is optional and its absence is
-#: itself part of the stamp, so an index that gains one is treated as changed.
-_ARTIFACTS = ("chunks.parquet", "embeddings.npy", "meta.json", "lexical.json")
-
-_cache: "OrderedDict[tuple, tuple[Any, Index]]" = OrderedDict()
+_cache: "OrderedDict[tuple, tuple[Any, Index, str]]" = OrderedDict()
 _lock = threading.Lock()
 
 
@@ -94,23 +109,54 @@ def _cache_size() -> int:
         return _DEFAULT_SIZE
 
 
-def _stamp(directory: Path) -> tuple:
-    """What the index looks like on disk right now.
+def _as_tuple(stamp) -> tuple:
+    return tuple(tuple(e) if e is not None else None for e in stamp)
 
-    `(mtime_ns, size)` per artifact, `None` for one that does not exist. Both
-    halves matter: a rebuild that happens to land on the same nanosecond is
-    absurd, but a same-second rewrite is not, and size catches the truncation
-    case a coarse mtime would miss.
+
+def _stamp(directory: Path) -> tuple:
+    """What the index looks like on disk right now, as a hashable tuple.
+
+    The rule itself lives in `artifact_store.artifact_stamp`, which is also
+    what `seal` records -- one copy, so a reader and a writer cannot end up
+    checking different files.
     """
-    out = []
-    for name in _ARTIFACTS:
-        p = directory / name
-        try:
-            st = p.stat()
-            out.append((st.st_mtime_ns, st.st_size))
-        except OSError:
-            out.append(None)
-    return tuple(out)
+    return _as_tuple(artifact_stamp(directory))
+
+
+def _settle(d: Path) -> tuple[str, tuple]:
+    """Decide what state the directory is in before reading a byte of it.
+
+    Returns ("sealed"|"unsealed", stamp), or raises if the directory is
+    mid-write.
+
+    **This is the check the before/after stamping could not make.** Stamping a
+    read at both ends detects a write that OVERLAPS the read; it cannot detect
+    a directory that is stably inconsistent -- new chunks.parquet beside the
+    previous build's embeddings.npy, nothing moving, because the writer is
+    between its two writes. ArtifactStore.save leaves the previous seal
+    standing while it writes, so that state is exactly "seal does not match
+    artifacts", and it is refused here rather than read.
+
+    A mismatch is NEVER downgraded to "probably an out-of-band edit, read it
+    anyway". That was the tempting rule and it is unsound for a measurable
+    reason: during the inter-file window the directory is *stable*, so
+    stability cannot tell an edited directory from a half-written one. An
+    index rewritten in place must re-seal (ArtifactStore.seal); that is a
+    one-line obligation on a writer, against a silent wrong answer here.
+    """
+    for _ in range(_MAX_RELOADS + 1):
+        stamp = _stamp(d)
+        sealed = read_seal(d)
+        if sealed is None:
+            return "unsealed", stamp
+        if _as_tuple(sealed) == stamp:
+            return "sealed", stamp
+        time.sleep(_SETTLE_SLEEP_S)
+    raise RuntimeError(
+        f"index directory {d} does not match the build its writer last sealed -- it is "
+        f"being rebuilt, or an artifact was rewritten in place without re-sealing "
+        f"(ArtifactStore.seal). Refusing to serve rows that may come from two builds."
+    )
 
 
 def load_index_cached(
@@ -163,12 +209,12 @@ def load_index_cached(
     # strictly better than either: an overlapping rebuild is detected rather
     # than reasoned about.
     for _ in range(_MAX_RELOADS):
-        before = _stamp(d)
+        mode, before = _settle(d)
         index = store.load(d, with_embeddings=with_embeddings)
         after = _stamp(d)
         if before == after:
             with _lock:
-                _cache[key] = (after, index)
+                _cache[key] = (after, index, mode)
                 _cache.move_to_end(key)
                 while len(_cache) > size:
                     _cache.popitem(last=False)
@@ -203,6 +249,10 @@ def index_cache_info() -> dict:
                     "n_chunks": len(v[1].chunks),
                     "embeddings_shape": list(v[1].embeddings.shape),
                     "has_bm25_scorer": v[1].lexical_scorer is not None,
+                    # "unsealed" is a REPORTED gap, not a passing grade: for
+                    # such a directory only the overlapping-write race is
+                    # detectable, not the mixed-build one.
+                    "sealed": v[2] == "sealed",
                 }
                 for k, v in _cache.items()
             ],
