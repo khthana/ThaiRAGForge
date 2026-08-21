@@ -27,6 +27,66 @@ _LEXICAL = "lexical.json"
 _MANIFEST = "manifest.json"
 
 
+#: Rows per parquet batch. CHOSEN ON THE MEASURED CURVE, not on pyarrow's own
+#: default of 65,536 -- which for a 57k-chunk index is the whole file in one
+#: batch and gives back barely a tenth of the saving. Held RSS reading the
+#: shipped `person` index, one process per point so no arena is inherited, and
+#: the sweep run twice in opposite orders because a cold page cache would
+#: otherwise be charged to whichever reader went first: 64 rows -> 176 MB,
+#: 256 -> 184, 1,024 -> 195, 2,048 -> 208-215, 8,192 -> 271-275,
+#: 65,536 -> 313-322, whole table -> 360. The curve is flat below ~1,024 (256
+#: buys 11 MB more and 64 only 19), so this is the knee, not the minimum.
+_BATCH_ROWS = 1_024
+
+
+def _read_chunks(path: Path) -> list[Chunk]:
+    """Every Chunk in a chunks.parquet, streamed a batch at a time.
+
+    The obvious `pq.read_table(path).to_pydict()` costs **280 MB of the 581 MB**
+    a loaded 57k-chunk index holds (`data/results/serving_cache_memory.md` 1b):
+    182 MB of arrow buffers plus 98 MB of whole-column Python lists, of which
+    deleting both returns only 2 MB because the rest stays in the allocator's
+    arenas. That is transient work, not live data -- the Chunk objects it
+    produces are 80 MB -- so it was pure waste held for the lifetime of a
+    serving process, and the largest single lever in that report.
+
+    Streaming holds one batch of columns at a time instead of every column of
+    every row. Measured on that index, one child process per arm so no arena is
+    inherited (`1c`): **360 MB -> 244 MB held**, at **no cost in time** (550 ms
+    against 532, inside the run-to-run spread -- building 57k pydantic `Chunk`s
+    dominates either way). End to end the four routed indices resident in one
+    serving process went **3,488 MB -> 3,176 MB**, less than 4x the per-index
+    saving because the parent reuses arenas across loads; quote the 3,176, and
+    treat the 3,488 as a dated pre-change snapshot (2026-08-21) that the report
+    no longer holds.
+
+    Two things to know before touching this. The batch size is on a measured
+    knee, not a guess -- see `_BATCH_ROWS`. And the rows are byte-identical in
+    file order: parquet preserves row order and `iter_batches` yields batches in
+    file order, which matters more than it looks, because `Index.embeddings` is
+    row-aligned to `Index.chunks` (invariant `I1`) so a reordering here would
+    mispair every vector in the index without raising anything.
+    `tests/io/test_artifact_store_streaming.py` pins both against the
+    whole-table read rather than trusting the documentation.
+    """
+    chunks: list[Chunk] = []
+    pf = pq.ParquetFile(path)
+    for batch in pf.iter_batches(batch_size=_BATCH_ROWS):
+        cols = batch.to_pydict()
+        for i in range(len(cols["chunk_id"])):
+            chunks.append(
+                Chunk(
+                    chunk_id=cols["chunk_id"][i],
+                    resolution_id=cols["resolution_id"][i],
+                    text=cols["text"][i],
+                    chunk_index=int(cols["chunk_index"][i]),
+                    page=int(cols["page"][i]),
+                    metadata=json.loads(cols["metadata"][i]),
+                )
+            )
+    return chunks
+
+
 class ArtifactStore:
     def save(self, index: Index, directory: str | Path) -> None:
         d = Path(directory)
@@ -68,18 +128,7 @@ class ArtifactStore:
         silently fail to narrow the engine, which is why query_service refuses
         that combination outright rather than relying on this."""
         d = Path(directory)
-        cols = pq.read_table(d / _CHUNKS).to_pydict()
-        chunks = [
-            Chunk(
-                chunk_id=cols["chunk_id"][i],
-                resolution_id=cols["resolution_id"][i],
-                text=cols["text"][i],
-                chunk_index=int(cols["chunk_index"][i]),
-                page=int(cols["page"][i]),
-                metadata=json.loads(cols["metadata"][i]),
-            )
-            for i in range(len(cols["chunk_id"]))
-        ]
+        chunks = _read_chunks(d / _CHUNKS)
         embeddings = (
             np.load(d / _EMBEDDINGS) if with_embeddings else np.zeros((0, 0), dtype=np.float32)
         )

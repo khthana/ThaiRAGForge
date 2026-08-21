@@ -170,9 +170,16 @@ def decompose_load(directory) -> dict:
     """Where one index's RSS actually goes.
 
     940 MB held for a 223 MB embedding matrix is not self-explanatory, and an
-    unexplained number is not a measurement. This walks `ArtifactStore.load`'s
-    own steps so the chunk-object cost, the transient column materialisation and
-    the matrix are separated rather than summed.
+    unexplained number is not a measurement. This separates the chunk-object
+    cost, the transient column materialisation and the matrix rather than
+    summing them.
+
+    **It walks the WHOLE-TABLE read, which `ArtifactStore.load` no longer does**
+    (2026-08-21). That is deliberate: this decomposition is what identified the
+    transient columns as the largest single lever here, so it is kept as the
+    "before" arm and `compare_readers` measures what replacing it bought. Read
+    the `chunk_objects`/`embeddings` rows as current and the two column rows as
+    the cost that was removed.
     """
     import json as _json
 
@@ -218,6 +225,95 @@ def decompose_load(directory) -> dict:
     return out
 
 
+def _reader_child(path: Path, mode: str) -> None:
+    """One reader, one process: read `chunks.parquet` and print its cost as JSON.
+
+    A subprocess per arm is not tidiness. The whole question is whether the
+    allocator's arenas have to GROW, so an arm measured after another in the same
+    process is handed the previous one's freed arenas and reads low for a reason
+    that has nothing to do with the reader under test.
+    """
+    import hashlib
+    import json as _json
+    import time as _time
+
+    import pyarrow.parquet as pq
+
+    from rag_lab.io import artifact_store as store_mod
+    from rag_lab.schema import Chunk
+
+    gc.collect()
+    base, peak_base = settled_rss(), peak_rss()
+    t0 = _time.perf_counter()
+
+    if mode == "legacy":
+        # The implementation `load` used until 2026-08-21, kept here as the
+        # "before" arm so the saving is a measurement rather than a memory.
+        cols = pq.read_table(path).to_pydict()
+        chunks = [
+            Chunk(
+                chunk_id=cols["chunk_id"][i],
+                resolution_id=cols["resolution_id"][i],
+                text=cols["text"][i],
+                chunk_index=int(cols["chunk_index"][i]),
+                page=int(cols["page"][i]),
+                metadata=_json.loads(cols["metadata"][i]),
+            )
+            for i in range(len(cols["chunk_id"]))
+        ]
+        del cols
+    else:
+        chunks = store_mod._read_chunks(path)
+
+    ms = (_time.perf_counter() - t0) * 1000
+    gc.collect()
+    held = settled_rss() - base
+    # Relative to the peak the process had ALREADY reached: importing rag_lab
+    # pulls torch and costs several hundred MB on its own, so an absolute peak
+    # here would be a fact about the imports, printed in a column about the
+    # reader. Zero is a real answer -- it says this read never pushed the
+    # process past a high-water mark the imports had already set.
+    peak = max(0, peak_rss() - peak_base)
+    h = hashlib.sha256()
+    for c in chunks:
+        h.update(
+            f"{c.chunk_id}|{c.resolution_id}|{c.text}|{c.chunk_index}|{c.page}|"
+            f"{_json.dumps(c.metadata, sort_keys=True, ensure_ascii=False)}".encode()
+        )
+    print(_json.dumps({
+        "mode": mode, "n_chunks": len(chunks), "ms": ms,
+        "held": held, "peak": peak, "sha": h.hexdigest()[:16],
+        "batch_rows": store_mod._BATCH_ROWS,
+    }))
+
+
+def compare_readers(directory) -> dict | None:
+    """The parquet reader, before and after — one child process per arm.
+
+    `1b` says the whole-table read is the largest lever in this report; this is
+    the arm that pulled it. Both arms hash their rows, so "smaller" is only
+    reported alongside "identical" — a reader that dropped a batch would
+    otherwise look like the best result in the file.
+    """
+    import subprocess
+
+    path = Path(directory) / "chunks.parquet"
+    out = {}
+    for mode in ("legacy", "stream"):
+        try:
+            r = subprocess.run(
+                [sys.executable, str(Path(__file__).resolve()),
+                 "--reader-child", str(path), mode],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=600,
+            )
+            out[mode] = json.loads(r.stdout.strip().splitlines()[-1])
+        except Exception as exc:  # a child that dies must say so, not vanish
+            return {"error": f"{mode}: {exc}"}
+    out["dir"] = Path(directory).name
+    return out
+
+
 def measure(indices) -> dict:
     import numpy as np
 
@@ -231,6 +327,7 @@ def measure(indices) -> dict:
         routed.append((route, info))
 
     breakdown = decompose_load(routed[0][1].dir)
+    readers = compare_readers(routed[0][1].dir)
 
     baseline = settled_rss()
     per_index = []
@@ -298,6 +395,7 @@ def measure(indices) -> dict:
 
     return {
         "load_breakdown": breakdown,
+        "readers": readers,
         "peak_rss": peak_rss(),
         "baseline_rss": baseline,
         "per_index": per_index,
@@ -316,6 +414,7 @@ def measure(indices) -> dict:
 
 def render(data: dict) -> tuple[str, list[tuple[str, bool, str]]]:
     c, m = data["calibration"], data["measure"]
+    r = m.get("readers")
     exact = sum(i["embeddings_bytes"] for i in m["per_index"])
     cal_err = abs(c["observed"] - c["expected"]) / c["expected"]
 
@@ -339,6 +438,16 @@ def render(data: dict) -> tuple[str, list[tuple[str, bool, str]]]:
          "no CUDA" if not m["vram_available"] else
          f"returned {m['vram_returned_on_clear'] / MB:.0f} of "
          f"{m['vram_held'] / MB:.0f} MB"),
+        ("C6 both parquet readers return byte-identical rows",
+         bool(r) and "error" not in r
+         and r["legacy"]["sha"] == r["stream"]["sha"]
+         and r["legacy"]["n_chunks"] == r["stream"]["n_chunks"],
+         "not measured" if not r else r.get("error") or
+         f"{r['stream']['n_chunks']:,} chunks, sha {r['stream']['sha']} both arms"),
+        ("C7 streaming holds less than the whole-table read",
+         bool(r) and "error" not in r and r["stream"]["held"] < r["legacy"]["held"],
+         "not measured" if not r else r.get("error") or
+         f"{r['stream']['held'] / MB:,.0f} MB vs {r['legacy']['held'] / MB:,.0f} MB"),
     ]
 
     L = ["# What the serving caches hold — host RAM and VRAM", ""]
@@ -378,9 +487,11 @@ def render(data: dict) -> tuple[str, list[tuple[str, bool, str]]]:
         L.append(f"### 1b. Where one index's RSS goes — `{b['dir']}`, "
                  f"{b['n_chunks']:,} chunks")
         L.append("")
-        L.append("940 MB held for a 223 MB matrix is not self-explanatory, so "
-                 "`ArtifactStore.load`'s own steps are walked separately rather than "
-                 "summed.")
+        L.append("940 MB held for a 223 MB matrix is not self-explanatory, so the "
+                 "steps are walked separately rather than summed. **The two column "
+                 "rows are the whole-table read `ArtifactStore.load` used until "
+                 "2026-08-21**, kept as the before arm because this decomposition is "
+                 "what identified them; `1c` measures what replacing them bought.")
         L.append("")
         L.append("| step | RSS |")
         L.append("| --- | ---: |")
@@ -408,8 +519,9 @@ def render(data: dict) -> tuple[str, list[tuple[str, bool, str]]]:
                  f"the transient parquet read**, not live data: `pq.read_table` plus "
                  f"`.to_pydict()` allocate it and deleting both returns only "
                  f"**{-b['freed_columns'] / MB:,.0f} MB** — the rest stays in the "
-                 f"allocator's arenas. That is the single largest lever here, and it is "
-                 f"a property of `ArtifactStore.load`, not of the cache.")
+                 f"allocator's arenas. That was the single largest lever here, and it "
+                 f"was a property of `ArtifactStore.load` rather than of the cache, "
+                 f"which is why it could be fixed without touching either cache (`1c`).")
         L.append(f"- of what IS live, the **{bigger[0]}** is larger "
                  f"({bigger[1] / MB:,.0f} MB against {smaller[1] / MB:,.0f} MB); the "
                  f"chunk objects work out at roughly "
@@ -418,6 +530,49 @@ def render(data: dict) -> tuple[str, list[tuple[str, bool, str]]]:
         L.append(f"- process peak working set during this run: "
                  f"**{m['peak_rss'] / MB:,.0f} MB** — a deployment sizes for the peak, "
                  f"not the steady state")
+        L.append("")
+    if r and "error" not in r:
+        lg, st = r["legacy"], r["stream"]
+        L.append(f"### 1c. The fix — streaming `chunks.parquet`, `{r['dir']}`")
+        L.append("")
+        L.append("`1b` found the transient columns, so `ArtifactStore.load` now reads "
+                 f"the file **{st['batch_rows']:,} rows at a time** "
+                 "(`pq.ParquetFile.iter_batches`) instead of materialising every column "
+                 "of every row. **One child process per arm**: the question is whether "
+                 "the allocator's arenas have to grow, and a second arm in the same "
+                 "process inherits the first one's freed arenas and reads low for a "
+                 "reason that has nothing to do with the reader.")
+        L.append("")
+        L.append("| reader | held | peak | time |")
+        L.append("| --- | ---: | ---: | ---: |")
+        L.append(f"| `read_table().to_pydict()` (before) | {lg['held'] / MB:,.0f} MB | "
+                 f"{lg['peak'] / MB:,.0f} MB | {lg['ms']:,.0f} ms |")
+        L.append(f"| `iter_batches` (now) | **{st['held'] / MB:,.0f} MB** | "
+                 f"{st['peak'] / MB:,.0f} MB | **{st['ms']:,.0f} ms** |")
+        L.append("")
+        saved = lg["held"] - st["held"]
+        d_ms = lg["ms"] - st["ms"]
+        # DERIVED, never typed: an earlier draft called this "smaller AND faster"
+        # on the strength of a standalone probe, and in situ the two arms are
+        # within noise. A verdict word beside numbers that do not carry it is
+        # exactly the rot `audit_doc_claims.py` exists to catch.
+        verdict = (
+            f"and **{d_ms / 1000:,.2f} s** faster per index" if d_ms > 0.10 * lg["ms"]
+            else f"at no cost in time ({lg['ms']:,.0f} ms against {st['ms']:,.0f}, "
+                 f"inside the run-to-run spread — building "
+                 f"{st['n_chunks']:,} pydantic `Chunk`s dominates either way)"
+        )
+        L.append(f"- **{saved / MB:,.0f} MB per index** {verdict}. At the default cache "
+                 f"size {m['cache_max']} that is on the order of "
+                 f"**{saved * m['cache_max'] / MB:,.0f} MB** off the resident set, and "
+                 f"it needed no change to either cache.")
+        L.append(f"- **identical rows, checked rather than assumed** (`C6`): both arms "
+                 f"hash all {st['n_chunks']:,} chunks field by field and agree "
+                 f"(`{st['sha']}`). A reader that dropped a batch would otherwise be "
+                 f"the best-looking result in this file.")
+        L.append("- the batch size is on the measured knee, not pyarrow's default — "
+                 "65,536 rows is one batch for every shipped index and gives back "
+                 "almost none of this; the curve is in `artifact_store._BATCH_ROWS`")
         L.append("")
     L.append("## 2. VRAM — the embedder cache")
     L.append("")
@@ -459,7 +614,13 @@ def render(data: dict) -> tuple[str, list[tuple[str, bool, str]]]:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--render", action="store_true", help="re-render from the raw JSON")
+    ap.add_argument("--reader-child", nargs=2, metavar=("PARQUET", "MODE"),
+                    help="internal: measure one parquet reader in this process")
     args = ap.parse_args()
+
+    if args.reader_child:
+        _reader_child(Path(args.reader_child[0]), args.reader_child[1])
+        return
 
     if sys.platform != "win32" and not args.render:
         print("This measurement uses the Windows working-set API; skipping.")

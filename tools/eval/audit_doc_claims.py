@@ -289,6 +289,24 @@ EVAL_INPUTS: dict[str, list[str]] = {
     # is not the report's generator either, so nothing else on disk would say
     # the measured collection had been rebuilt differently.
     "tools/eval/qdrant_pilot_ingest.py": ["qdrant_pilot.md", "qdrant_routed_check.md"],
+    # The two serving reports are *entirely* a function of these three files and
+    # of none of their own generators: `serving_cost_profile.md` prices what the
+    # two caches remove, and `serving_cache_memory.md` weighs what they hold and
+    # -- since 2026-08-21 -- what streaming `chunks.parquet` gave back. Its `1b`
+    # decomposition is literally a walk through the loader, so a change to the
+    # reader turns that section into a record of code that no longer exists,
+    # while nothing in the generator's own mtime would move. That is the exact
+    # failure D4 exists to catch, and it is a live edge rather than a
+    # hypothetical one: the streaming rewrite is what put it here.
+    "src/rag_lab/io/artifact_store.py": [
+        "serving_cache_memory.md", "serving_cost_profile.md",
+    ],
+    "src/rag_lab/io/index_cache.py": [
+        "serving_cache_memory.md", "serving_cost_profile.md",
+    ],
+    "src/rag_lab/factory.py": [
+        "serving_cache_memory.md", "serving_cost_profile.md",
+    ],
 }
 
 findings: list[tuple[str, str, str]] = []

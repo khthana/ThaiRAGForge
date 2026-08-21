@@ -358,10 +358,17 @@ see `docs/adr/`.
   check vacuous — the [[feedback_cleanup_can_break_an_audit]] shape again — and
   the tests pin that no current report (`routing_eval`, `rq4_score`,
   `oracle_union_ceiling`, `power_analysis`, the three 9-way tables) is exempt.
-  Current state: **6 pass / 1 warn / 0 fail** over 7 checks (re-run 2026-08-16
-  after this file's rebuild-#4 progress edit; unchanged from the 08-13 run after
-  the ColBERT pilot, itself unchanged from the 08-12 run that was D5's first
-  green one), the warn still being D3's 3 known false positives. **D5 caught that
+  Current state: **6 pass / 2 warn / 0 fail** over **8** checks (re-run
+  2026-08-21 after the streaming loader; D6 and the `inputs` section landed
+  2026-08-20, which is why the family is 8 rather than 7). The two warns are
+  D3's 4 known false positives and D5's standing residue (19 untraceable of 243
+  count/total figures across 12 docs) — **D5 is warning by design here, not
+  regressing**: it was green only while it watched 2 docs, and ~36% of correct
+  writing is untraceable to it by construction. **D4 fired once during that run
+  and was a true positive**, on a new `artifact_store.py → serving_cache_memory.md`
+  edge: a docstring edit 21 seconds after the render made the report older than
+  its input. Discharged the standing way — re-render, which is free from the raw
+  JSON and came back **byte-identical** — never by an allowlist entry. **D5 caught that
   edit and the entry it got is worth reading as a pattern**: rebuild #4's
   combos-rebuilt count (`N of 40`) is the one allowlisted figure whose source is
   the **index tree** rather than a report —
@@ -3152,14 +3159,18 @@ see `docs/adr/`.
   deleting the double-check left it green. It now slows the constructor deliberately and
   asserts the race actually happened.
   **THE INDEX CACHE IS NOW BUILT TOO (2026-08-21, `src/rag_lab/io/index_cache.py`), and
-  together they take a warm served query to 422 ms.** `ArtifactStore.load` re-read the
-  ~234 MB `embeddings.npy` and rebuilt 57k `Chunk` objects every call (**1,159 ms**), and
+  together they take a warm served query to 447 ms.** `ArtifactStore.load` re-read the
+  ~234 MB `embeddings.npy` and rebuilt 57k `Chunk` objects every call (**1,144 ms**), and
   because `BM25Okapi` is memoised **on the `Index` object**, discarding the Index discarded
-  the scorer too and the next hybrid retrieve rebuilt it (**921 ms**). Three arms on the
-  shipped `route_query`, alternated in one process: **none 11,980 → embedder 3,316 →
-  both 1,476 ms p50 (8.1x)**, and **steady state 422 ms (28.4x)** — the index cache's own
-  contribution is **1,841 ms** off the embedder-only arm. **0 of 8** queries changed their
-  top-10 in either arm, 7/7 self-checks.
+  the scorer too and the next hybrid retrieve rebuilt it (**972 ms**). Three arms on the
+  shipped `route_query`, alternated in one process: **none 12,329 → embedder 3,168 →
+  both 1,548 ms p50 (8.0x)**, and **steady state 447 ms (27.6x)** — the index cache's own
+  contribution is **1,620 ms** off the embedder-only arm. **0 of 8** queries changed their
+  top-10 in either arm, 7/7 self-checks. **Those are the 2026-08-21 16:13 re-run's
+  figures, taken after the streaming loader below**; the first run of the same script read
+  11,980 → 3,316 → 1,476 with a 422 ms steady state, i.e. **the two runs of an unchanged
+  measurement differ by ~6%, more than the loader change moved anything** — that is this
+  rig's own resolution, and the reason the loader is defended on memory rather than time.
   **Four things worth keeping.** (1) **Sharing an `Index` is safe only because nothing
   mutates one, and that was grepped rather than assumed**: across `src/`, `tools/` and
   `app/` there is exactly **one** write to an Index attribute — `bm25.py`'s
@@ -3172,13 +3183,13 @@ see `docs/adr/`.
   previous build's rows while every artifact on disk said otherwise — the
   two-artifacts-from-different-days shape, invisible because it lives in RAM. Every cache
   **hit** re-stats `(mtime_ns, size)` of all four artifacts (~4 stat calls against a
-  1,159 ms reload, so it is not optional), and the invalidation takes the stale BM25 memo
+  1,144 ms reload, so it is not optional), and the invalidation takes the stale BM25 memo
   with it. (3) **The steady-state definition was a fudge that happened to work**: dropping
   the *N* slowest rows is arm-dependent (the embedder arm fills 2 models, the `both` arm
   also fills 4 indices), so it is now the **second pass over the query list** — every route
   appears once in the first pass by construction. (4) **`S7` anchors the result against
-  another report**: a fully warm query is **422 ms** against
-  `routed_fetch_depth_test.md`'s published **475.6 ms** p50, 11% apart, and the figure is
+  another report**: a fully warm query is **447 ms** against
+  `routed_fetch_depth_test.md`'s published **475.6 ms** p50, 6% apart, and the figure is
   **parsed from that report** rather than frozen as a literal
   ([[feedback_a_frozen_anchor_can_print_a_wrong_number]]).
   **THE SAME HARNESS BUG BIT BOTH CACHES, and the second time I argued myself into it in a
@@ -3199,22 +3210,48 @@ see `docs/adr/`.
   — a silent wrong answer. **Serving path only**, same rule as the embedder cache:
   `ArtifactStore.load` stays uncached so a 36-combo sweep keeps its memory profile.
   **FOOTPRINT IS NOW MEASURED (2026-08-21, `tools/eval/serving_cache_memory.py` →
-  `data/results/serving_cache_memory.md`, 5/5 checks): 3,488 MB host RAM + 3,310 MB
-  VRAM.** The index cache holds **3,488 MB** for its 4 routed indices (10.7% of this
-  32 GB machine; per index 769–962 MB), of which **1,019 MB is the embedding matrices**
-  as an exact `ndarray.nbytes` figure and **315 MB is the BM25 scorers** — which is what
-  the 921 ms rebuild buys back. The embedder cache holds **3,310 MB of VRAM** for its two
+  `data/results/serving_cache_memory.md`, 7/7 checks): 3,176 MB host RAM + 3,310 MB
+  VRAM.** The index cache holds **3,176 MB** for its 4 routed indices (9.7% of this
+  32 GB machine; per index 648–864 MB), of which **1,019 MB is the embedding matrices**
+  as an exact `ndarray.nbytes` figure and **331 MB is the BM25 scorers** — which is what
+  the 972 ms rebuild buys back. The embedder cache holds **3,310 MB of VRAM** for its two
   models (bge-m3 **2,174**, qwen3-0.6B **1,136**) on a 12 GB card, and `C5` confirms
   `_release` actually returns it (3,302 of 3,310). **Process peak working set is
-  4,440 MB — a deployment sizes for the peak, not the steady state.**
-  **The number worth acting on is not the total but where it goes.** 940 MB held for a
-  223 MB matrix is not self-explanatory, so §1b walks `ArtifactStore.load`'s own steps:
-  **306 of 607 MB is the transient parquet read** (`pq.read_table` 207 + `.to_pydict()`
-  98), and deleting both returns only **2 MB** — the rest stays in the allocator's
-  arenas. So **roughly half the per-index footprint is not live data at all**, and the
-  lever is `ArtifactStore.load` materialising every column as Python lists before
-  building `Chunk`s, not the cache. Of what *is* live the matrix is the larger half
-  (223 MB against 80 MB of chunk objects, ~1,461 bytes/chunk).
+  4,141 MB — a deployment sizes for the peak, not the steady state.**
+  **The number worth acting on was not the total but where it goes, and it has now been
+  acted on.** 940 MB held for a 223 MB matrix is not self-explanatory, so §1b walks the
+  read step by step: **280 MB of the 581 MB held was the transient parquet read**
+  (`pq.read_table` 182 + `.to_pydict()` 98), and deleting both returns only **2 MB** — the rest stays in
+  the allocator's arenas. So **roughly half the per-index footprint was not live data at
+  all**, and the lever was `ArtifactStore.load` materialising every column as Python
+  lists before building `Chunk`s, not the cache. Of what *is* live the matrix is the
+  larger half (223 MB against 80 MB of chunk objects, ~1,468 bytes/chunk).
+  **`ArtifactStore.load` NOW STREAMS (2026-08-21): `pq.ParquetFile.iter_batches` a batch
+  at a time instead of `pq.read_table(...).to_pydict()`.** Per index, one child process
+  per arm so no arena is inherited: **360 MB → 244 MB held**, and end to end the four
+  resident indices went **3,488 MB → 3,176 MB** — less than 4x the per-index saving
+  because the parent reuses arenas across loads, so **quote the in-situ 3,176, never the
+  projection**. **Time is unchanged and that is the honest headline** (550 ms against
+  532, and §1's `load` step 1,159 → 1,144 ms): building 57k pydantic `Chunk`s dominates
+  either way, so this is a memory result. An isolated probe building plain tuples *did*
+  show 817 → 435 ms, consistent with a fresh process having to grow its heap for the
+  larger read — but **a report quoting that would be describing a loader that builds
+  tuples, and nothing does**. Four things to keep. (1) **The batch size is on a measured
+  knee, not pyarrow's default**: at its default 65,536 rows a 57k-chunk index is *one
+  batch* and gives back barely a tenth of the saving (313–322 MB held); the curve runs
+  1,024 → 195 MB, 256 → 184, 64 → 176, so 1,024 is the knee and the constant carries the
+  whole sweep. (2) **The sweep was run twice in opposite orders**, because the first pass
+  ran the whole-table arm first with a cold page cache and would otherwise have charged
+  its own I/O to the reader under test ([[feedback_check_benchmark_position_drift]]).
+  (3) **"Smaller" is only reported beside "identical"**: `C6` hashes all 57,172 chunks
+  field by field in both arms and requires agreement, since a reader that silently
+  dropped a batch would be the best-looking row in the file. (4) **Reordering, not loss,
+  is the silent failure mode**: `Index.embeddings` is row-aligned to `Index.chunks`
+  (invariant `I1`), so a reordered read mispairs every vector in the index and raises
+  nothing — `tests/io/test_artifact_store_streaming.py` pins file order against the
+  whole-table read on a fixture numbered **backwards**, so a loader that sorted could not
+  pass, and pins the mechanism itself by making `pq.read_table` raise (verified to fail
+  on the old implementation before it was trusted).
   **Two method points.** (1) **"Is the memory returned?" and "is the object freed?" are
   different questions**, and only the second has an exact answer: RSS is an allocator
   question (a large numpy buffer goes straight back, small objects do not), so the leak
