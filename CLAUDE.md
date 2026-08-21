@@ -3198,8 +3198,38 @@ see `docs/adr/`.
   exists to avoid, while the reverse would hand a row-reading retriever an **empty** matrix
   — a silent wrong answer. **Serving path only**, same rule as the embedder cache:
   `ArtifactStore.load` stays uncached so a 36-combo sweep keeps its memory profile.
-  **Still not measured: RAM footprint, and staleness under concurrent load** (the
-  invalidation is unit-tested, but nothing rebuilds an index while queries are in flight).
+  **FOOTPRINT IS NOW MEASURED (2026-08-21, `tools/eval/serving_cache_memory.py` →
+  `data/results/serving_cache_memory.md`, 5/5 checks): 3,488 MB host RAM + 3,310 MB
+  VRAM.** The index cache holds **3,488 MB** for its 4 routed indices (10.7% of this
+  32 GB machine; per index 769–962 MB), of which **1,019 MB is the embedding matrices**
+  as an exact `ndarray.nbytes` figure and **315 MB is the BM25 scorers** — which is what
+  the 921 ms rebuild buys back. The embedder cache holds **3,310 MB of VRAM** for its two
+  models (bge-m3 **2,174**, qwen3-0.6B **1,136**) on a 12 GB card, and `C5` confirms
+  `_release` actually returns it (3,302 of 3,310). **Process peak working set is
+  4,440 MB — a deployment sizes for the peak, not the steady state.**
+  **The number worth acting on is not the total but where it goes.** 940 MB held for a
+  223 MB matrix is not self-explanatory, so §1b walks `ArtifactStore.load`'s own steps:
+  **306 of 607 MB is the transient parquet read** (`pq.read_table` 207 + `.to_pydict()`
+  98), and deleting both returns only **2 MB** — the rest stays in the allocator's
+  arenas. So **roughly half the per-index footprint is not live data at all**, and the
+  lever is `ArtifactStore.load` materialising every column as Python lists before
+  building `Chunk`s, not the cache. Of what *is* live the matrix is the larger half
+  (223 MB against 80 MB of chunk objects, ~1,461 bytes/chunk).
+  **Two method points.** (1) **"Is the memory returned?" and "is the object freed?" are
+  different questions**, and only the second has an exact answer: RSS is an allocator
+  question (a large numpy buffer goes straight back, small objects do not), so the leak
+  test is `C3` — a **weakref** to every cached Index, all dead after a clear — while the
+  returned-MB figure is reported as operational, never as evidence of a leak. (2) **The
+  instrument is calibrated in-process before it is trusted** (`C1`: a 200 MB array must
+  register within 10%; it read 200.0 MB), and `GetProcessMemoryInfo` needs explicit
+  ctypes `restype`/`argtypes` or the 64-bit pseudo-handle is truncated and the call fails
+  with ERROR_INVALID_HANDLE — which is how it was written the first time. No new
+  dependency: psapi/kernel32 via ctypes, Windows-only, and it skips rather than pretends
+  elsewhere. **A bullet in §1b was also caught asserting "the chunk objects are the
+  larger half" beside numbers saying 80 MB against 223 MB**; it is now derived from the
+  data ([[feedback_a_hardcoded_verdict_word_rots_unseen]]).
+  **Still not measured: staleness under concurrent load** — the invalidation is
+  unit-tested, but nothing rebuilds an index while queries are in flight.
 - **Corpus data-quality audit** (`tools/corpus_prep/audit_title_body_agreement.py`,
   2026-07-30): flags manifest titles that disagree with the document's own page-1
   `เรื่อง` subject line. A first version was rejected on measurement (median 0.660,
