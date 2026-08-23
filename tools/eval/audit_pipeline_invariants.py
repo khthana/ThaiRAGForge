@@ -558,6 +558,80 @@ def combos() -> list[Path]:
     ]
 
 
+def audit_docset_hashes() -> None:
+    """Indices built by the same loader over the same number of resolutions must
+    share a `docset_hash`.
+
+    **The loader qualifier is the whole check, and it came from a false claim in
+    CLAUDE.md.** `manifest._docset_hash` hashes `(resolution_id, raw_text)` AFTER
+    the loader has run, so it identifies *corpus x loader*, not the corpus. That
+    file said the four RQ3 treatment indices "carry the same docset_hash
+    091b7a0ad8a5cfbe as both baselines -- so no confound". Three do; the
+    `normalized` one carries `574945883e8320d0` and CANNOT carry the other,
+    because normalising the text is the treatment. The conclusion survived (`I6`
+    is the loader-independent evidence for it) but the evidence given was false,
+    and no figure check could see it: the hash quoted is a real hash of a real
+    index, just not of the index the sentence named.
+
+    **The key is `(loader, n_resolutions)` and NOT `(root, loader)`, which is
+    what the first version used and was wrong.** The claim being pinned is
+    cross-ROOT -- the RQ3 treatment roots against the `chunker_compare_full`
+    baselines -- so a per-root key cannot express it; and grouped per root the
+    check split nowhere even with the loader qualifier removed, i.e. it was
+    grouping on a property this fleet does not exercise. Keying on the loader
+    globally would then wrongly demand that the smoke roots agree with the full
+    corpus, so `n_resolutions` separates them -- on a real property of the build,
+    not on a directory name. All 39 full-corpus `plain` indices, both RQ3 plain
+    roots included, land in one group and must agree.
+
+    **What it cannot see, stated because a check that looks broader than it is
+    would be worse than none**: a group of one index has nothing to disagree
+    with, so `entity_tags_full` and `rq3_normalize_ablation` -- each the sole
+    holder of its loader -- are outside this check entirely. `I6` and `I7` are
+    what watch those. Within a multi-index group, a disagreement is the shape a
+    half-finished rebuild leaves, which is what rebuild #4 would have left had it
+    died at combo 20 of 40.
+    """
+    groups: dict[tuple[str, object], dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
+    for d in combos():
+        manifest_path = d / "manifest.json"
+        if not manifest_path.exists():
+            continue
+        j = json.loads(manifest_path.read_text(encoding="utf-8"))
+        loader = j.get("combo", {}).get("loader", {}).get("type", "?")
+        groups[(loader, j.get("n_resolutions"))][j.get("docset_hash")].append(
+            f"{d.parent.name}/{d.name}"
+        )
+
+    if not groups:
+        # Not a pass. A comparison over nothing agrees with itself, and this
+        # file has already had a check report "0 mixed of 0 checked".
+        record("I8 one corpus state per (loader, n_resolutions)", False,
+               "no index carries a manifest -- nothing was compared, which is a "
+               "gap in the check's input, not a clean fleet")
+        return
+
+    split = {k: v for k, v in groups.items() if len(v) > 1}
+    sizes = {k: sum(len(n) for n in v.values()) for k, v in groups.items()}
+    singletons = sorted(k for k, n in sizes.items() if n == 1)
+    n_idx = sum(sizes.values())
+    detail = (
+        f"{len(groups)} (loader, n_resolutions) groups over {n_idx} indices, "
+        f"{len(split)} holding more than one docset_hash; "
+        f"largest {max(sizes.values())}; "
+        f"{len(singletons)} group(s) of one are UNWATCHED here "
+        f"({', '.join(f'{l}/{n}' for l, n in singletons)}) -- I6/I7 cover those"
+    )
+    if split:
+        detail += ". SPLIT: " + "; ".join(
+            f"{loader}/{n} -> " + ", ".join(
+                f"{h} ({len(names)}: {names[0]}...)" for h, names in sorted(v.items()))
+            for (loader, n), v in sorted(split.items(), key=lambda kv: str(kv[0]))
+        )
+        detail += " -- a half-finished rebuild leaves exactly this"
+    record("I8 one corpus state per (loader, n_resolutions)", not split, detail)
+
+
 def audit_indexes(corpus_ids: set[str], quick: bool) -> dict[Path, set[str]]:
     # Manifests count as corpus edits, not just the .md files. A `resolution_id`
     # is `<year>/<session>/<title>` and the title comes from meeting_manifest.json
@@ -1145,11 +1219,11 @@ def main() -> int:
     started = datetime.now(timezone.utc)
     print("=== corpus ===")
     corpus_ids, _ = audit_corpus()
-    print("\n=== indexes ===")
-    print("")
-    print("=== derived copies ===")
+    print("\n=== derived copies ===")
     audit_derived_copies(args.quick)
+    print("\n=== indexes ===")
     ids_by_combo = audit_indexes(corpus_ids, args.quick)
+    audit_docset_hashes()
     print("\n=== eval ===")
     audit_eval(corpus_ids, ids_by_combo, args.quick)
     print("\n=== generation ===")

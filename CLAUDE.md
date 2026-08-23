@@ -75,6 +75,22 @@ see `docs/adr/`.
   older than the corpus) and `E4` (results newer than their index) — `E4` at 0 across
   every result file is the mechanical confirmation that a whole refresh chain is
   complete, which the headline count does not tell you.
+  **`I8` landed 2026-08-23 after this file stated FALSE EVIDENCE for a true
+  conclusion, and the shape is worth more than the check.** The claim was that
+  the RQ3 treatment indices "carry the same `docset_hash` as both baselines — so
+  no confound"; `docset_hash` is computed over `raw_text` **after the loader**,
+  so the `normalized` treatment cannot ever carry the plain baselines' hash.
+  **No figure check could see it**: the hash quoted is a real hash of a real
+  index, just not of the index the sentence named — D2 finds it in an artifact,
+  D8 sees no supersession because nothing changed. **A key is only evidence for
+  what the key identifies**, and the conclusion was fine on other grounds (`I6`).
+  The check's own first version repeated the error one level down — keyed on
+  `(root, loader)` it could not express a cross-root claim, and split nowhere
+  even with the qualifier removed, i.e. it grouped on a property this fleet does
+  not exercise. **Drive a new check over a synthetic fleet before trusting it**;
+  the three counterfactuals (agree → PASS, one index disagreeing → FAIL, a
+  different loader disagreeing → PASS) are what found that, and an empty fleet
+  crashing is what added its vacuity gate.
   **A DERIVED-COPY LAYER landed 2026-08-23, and it is the Qdrant finding swept.**
   The class is *an artifact computed from another artifact, read by something,
   where drift is silent*; the inventory (what is guarded, by what, and what is
@@ -919,8 +935,19 @@ see `docs/adr/`.
      `data/logs/run_rq3_rebuild_2026_08_05.sh`, ~2.5h, exit=0. **Rebuild #4 was the
      third time, and it was already handled: the 4 RQ3 treatment indices are part of
      its 40** (36 chunker x embedder + 4 RQ3), rebuilt 2026-08-17T12:01-13:50, and
-     they carry the same `docset_hash 091b7a0ad8a5cfbe` as both baselines — so no
-     confound. **Only the eval was owed, and it ran 2026-08-20** (14 min, no GPU
+     there is no clean-baseline-vs-dirty-treatment confound. **The evidence for
+     that is `I6`, not a matching `docset_hash`, and this bullet used to say
+     otherwise**: the hash is computed over `raw_text` *after* the loader, so it
+     identifies corpus × **loader**. The two plain-loader treatments do carry the
+     baselines' `091b7a0ad8a5cfbe`; `rq3_normalize_ablation` carries
+     **574945883e8320d0** and could not carry the other, because normalising the
+     text *is* the treatment. **`I8` now keys the comparison on
+     `(loader, n_resolutions)`** — cross-*root* on purpose, since this claim is
+     exactly a cross-root one, with `n_resolutions` separating the smoke roots on
+     a real property rather than on a directory name: all 39 full-corpus `plain`
+     indices, both plain RQ3 roots included, must agree. It does **not** watch a
+     loader with only one index (`entity_tags_full`, `rq3_normalize_ablation`) —
+     those have nothing to disagree with, and `I6`/`I7` are what cover them. **Only the eval was owed, and it ran 2026-08-20** (14 min, no GPU
      rebuild): **0 verdict flips across all three reports**, so every claim in this
      bullet holds with the point estimates above refreshed. Two things worth keeping.
      **Read a treatment index's currency off `manifest["timestamp"]`, never off the

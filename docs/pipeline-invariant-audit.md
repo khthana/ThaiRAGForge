@@ -1,6 +1,6 @@
 # Pipeline invariant audit
 
-Run 2026-08-23 14:12 UTC. 30 pass / 0 warn / 1 fail.
+Run 2026-08-23 14:29 UTC. 31 pass / 0 warn / 1 fail.
 
 | check | status | detail |
 |---|---|---|
@@ -22,6 +22,7 @@ Run 2026-08-23 14:12 UTC. 30 pass / 0 warn / 1 fail.
 | I5 manifest n_resolutions matches corpus | PASS | 0 drifted |
 | I6 index newer than corpus | PASS | 0 indexes built before the corpus's last edit |
 | I7 index matches the build its writer sealed | PASS | 0 unsealed, 0 mismatching of 55 (fix: python tools/seal_index_dirs.py --apply) |
+| I8 one corpus state per (loader, n_resolutions) | PASS | 5 (loader, n_resolutions) groups over 55 indices, 0 holding more than one docset_hash; largest 39; 2 group(s) of one are UNWATCHED here (entity_tags/2854, normalized/2854) -- I6/I7 cover those |
 | E1 gold ids resolve (gold_query_set_73det.yaml) | PASS | 1046 refs, 0 dangling |
 | E2 no duplicate query (gold_query_set_73det.yaml) | PASS | 106 queries, 0 duplicated |
 | E1 gold ids resolve (gold_query_set.yaml) | PASS | 1219 refs, 0 dangling |
