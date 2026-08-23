@@ -277,15 +277,29 @@ def main() -> int:
         client = QdrantClient(
             url=args.url, grpc_port=args.grpc_port, prefer_grpc=True, timeout=300
         )
-        ingest(client, models, collection, index, scorer, vocab, args.batch_size)
-        checks.append(check_count(client, collection, index))
-        checks.append(check_alignment(client, models, collection, index))
-        checks.append(check_hnsw(client, collection))
-
+        # THE VOCABULARY GOES DOWN FIRST, AND THE ORDER IS THE GUARD.
+        # The sidecar and the collection are two copies of one build: the stored
+        # sparse vectors carry term IDS that only this vocabulary decodes. Written
+        # AFTER the upsert (as it was until 2026-08-23), a run that died in between
+        # left a CURRENT collection beside a STALE vocabulary -- every query then
+        # scores real term ids against the wrong mapping, silently, and nothing
+        # looks at it: `QdrantHybridRetriever._arms_for` checks that the file
+        # exists, never which build it belongs to.
+        #
+        # Written FIRST, the same crash leaves the opposite pairing -- current
+        # vocabulary, stale collection -- and that state is exactly what
+        # `QdrantHybridRetriever._verify` already refuses, by row count and by
+        # sampled chunk_id. So the ordering converts an undetectable failure into
+        # one an existing guard sees, at the cost of nothing.
         vocab_path = VOCAB_ROOT / collection / "vocab.json"
         vocab_path.parent.mkdir(parents=True, exist_ok=True)
         vocab_path.write_text(json.dumps(vocab, ensure_ascii=False), encoding="utf-8")
         print(f"vocab      : {vocab_path} ({vocab_path.stat().st_size / 1e6:.1f} MB)")
+
+        ingest(client, models, collection, index, scorer, vocab, args.batch_size)
+        checks.append(check_count(client, collection, index))
+        checks.append(check_alignment(client, models, collection, index))
+        checks.append(check_hnsw(client, collection))
 
     print("\nself-checks")
     for c in checks:

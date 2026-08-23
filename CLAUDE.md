@@ -62,7 +62,8 @@ see `docs/adr/`.
   contamination, stale BM25/hybrid result cache, `resolution_id` collisions); they
   share a shape — **a mismatch between two artifacts produced at different times by
   different scripts, which never crashes, it just makes a number wrong**. The script
-  checks 29 such invariants across corpus/index/eval/answer layers and exits 1 on any
+  checks that class of invariant across corpus/derived-copy/index/eval/answer
+  layers and exits 1 on any
   FAIL. Report: `docs/pipeline-invariant-audit.md`. **Do not quote a pass/fail count
   from this file — run it**; the docstring's `Lessons` section carries the reusable
   half (why `BuildCombo.id` is deliberately not corpus-hashed and `E0` identifies
@@ -74,6 +75,33 @@ see `docs/adr/`.
   older than the corpus) and `E4` (results newer than their index) — `E4` at 0 across
   every result file is the mechanical confirmation that a whole refresh chain is
   complete, which the headline count does not tell you.
+  **A DERIVED-COPY LAYER landed 2026-08-23, and it is the Qdrant finding swept.**
+  The class is *an artifact computed from another artifact, read by something,
+  where drift is silent*; the inventory (what is guarded, by what, and what is
+  deliberately not) lives in the script's docstring. **T1 reads the artifact, not
+  its date**: it replicates each tagger's own text pipeline and compares tag for
+  tag, because every cached tag file IS older than its matcher and that says
+  nothing about whether the matcher would now differ. It does — over a 60-file
+  sample, **people 17/60, courses 2/60**, programs and faculties 0. The consumer
+  that matters is `build_gold_candidates.py`, the **qrels generator**, which
+  reads people/courses/faculties **by value**; it now **refuses** on drift
+  (`--allow-stale-tags` to override) rather than mixing tags from one date with
+  matchers from another. `build_relation_graph.py` recomputes from the loaders
+  and `entity_loader` calls the matchers directly, so neither is exposed —
+  **T1b** records that a `programs` drift cannot move the qrels at all, since
+  `program_candidates()` reads only the mapping's keys.
+  **T1 is red, and clearing it is a DECISION rather than a chore**: re-running
+  `tag_*.py` would make the cached copies current with today's corpus while
+  `data/index/entity_tags_full` still holds tags from its own build date, i.e.
+  it moves the mismatch rather than removing it — which is exactly why this file
+  already couples that index to a tag regeneration. Decide the pair together, and
+  re-run the RQ4 entity arms if you do.
+  **The vocabulary sidecar is guarded by ORDERING, not by a check**:
+  `qdrant_pilot_ingest.py` writes `vocab.json` **before** the upsert as of the
+  same day, so a run that dies in between leaves a *current vocabulary beside a
+  stale collection* — the state `QdrantHybridRetriever._verify` already refuses.
+  Written after (as it was), the same crash left the undetectable pairing: a
+  current collection whose term ids only a previous build's vocabulary decodes.
   Two standing operational facts, neither derivable by running it. (1) **A rebuild is
   not always owed**: `I6` sat red on 40 indices holding a pre-re-OCR file for days and
   that was correct to leave — 0 gold entries in either gold set cite any resolution

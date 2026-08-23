@@ -98,7 +98,11 @@ DICT_DIR = REPO / "data" / "entity_dictionaries"
 # so src/ needs to be on sys.path explicitly to reuse the already-tested
 # path-parsing helpers instead of duplicating them here.
 sys.path.insert(0, str(REPO / "src"))
-from rag_lab.loaders.common import make_resolution_id, parse_path  # noqa: E402
+from rag_lab.loaders.common import (  # noqa: E402
+    iter_corpus_files,
+    make_resolution_id,
+    parse_path,
+)
 
 _ALNUM = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 _WS = re.compile(r"\s+")
@@ -493,6 +497,61 @@ def render_report(
     return "\n".join(lines) + "\n"
 
 
+def _verify_tags_reproduce(sample_size: int) -> list[str]:
+    """Which cached tag files no longer reproduce from the current matchers?
+
+    THIS GENERATOR BUILDS THE QRELS, AND IT READS CACHED TAGS. Values, not just
+    keys: person_candidates reads people_by_file.json's names, course_candidates
+    its codes, faculty_adjunct_candidates its faculties. So a matcher repair
+    that lands after those files were written makes every candidate pool derived
+    here a mixture of two dates -- this project's signature failure, and the one
+    CLAUDE.md has warned about in prose since 2026-08-12 without anything
+    enforcing it.
+
+    Replicates each tagger's own text pipeline exactly
+    (strip_mapping_tables(strip_document_header(text)), not PlainLoader, which
+    since 2026-08-03 also strips course-comparison tables), so a difference is
+    the matcher or the corpus and never a different preprocessing path.
+
+    A sample, because all four matchers over the whole corpus is ~18 minutes and
+    this runs before every regeneration. That is sound in the direction that
+    matters: it can prove drift, never its absence.
+    """
+    from rag_lab.loaders.common import strip_document_header, strip_mapping_tables
+    from rag_lab.loaders.course_loader import match_courses
+    from rag_lab.loaders.faculty_loader import match_faculties
+    from rag_lab.loaders.person_loader import match_people
+    from rag_lab.loaders.program_loader import match_programs
+
+    matchers = {"people": match_people, "programs": match_programs,
+                "courses": match_courses, "faculties": match_faculties}
+    cached = {}
+    for name in matchers:
+        path = TAGS_DIR / f"{name}_by_file.json"
+        if not path.exists():
+            return [f"{name} (missing: {path})"]
+        cached[name] = json.loads(path.read_text(encoding="utf-8"))
+
+    files = sorted(iter_corpus_files(CORPUS_ROOT), key=str)
+    step = max(1, len(files) // sample_size)
+    drifted = {}
+    for f in files[::step][:sample_size]:
+        rel = str(f.relative_to(CORPUS_ROOT).as_posix())
+        try:
+            text = f.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            text = f.read_text(encoding="utf-8-sig")
+        text = strip_mapping_tables(strip_document_header(text))
+        for name, fn in matchers.items():
+            was = cached[name].get(rel)
+            if was is None:
+                continue
+            now = json.dumps(fn(text), ensure_ascii=False, sort_keys=True)
+            if now != json.dumps(was, ensure_ascii=False, sort_keys=True):
+                drifted[name] = drifted.get(name, 0) + 1
+    return [f"{k} ({v} of the sampled files differ)" for k, v in sorted(drifted.items())]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--min-program-hits", type=int, default=2)
@@ -505,7 +564,34 @@ def main() -> None:
         default=str(TAGS_DIR),
         help="Directory to save candidate pool + report",
     )
+    parser.add_argument(
+        "--allow-stale-tags",
+        action="store_true",
+        help="build anyway when the cached tag files no longer reproduce from "
+             "the current matchers (record WHY in the run that uses the output)",
+    )
+    parser.add_argument(
+        "--tag-check-sample",
+        type=int,
+        default=60,
+        help="corpus files sampled when checking that the cached tags reproduce",
+    )
     args = parser.parse_args()
+
+    drifted = _verify_tags_reproduce(args.tag_check_sample)
+    if drifted and not args.allow_stale_tags:
+        raise SystemExit(
+            "refusing to build candidates from tag files that no longer reproduce "
+            "from the current matchers: " + ", ".join(drifted) + ".\n"
+            "These pools would mix tags written on one date with matchers from "
+            "another, which is what makes a qrels error silent rather than loud. "
+            "Re-run tools/corpus_prep/tag_people.py / tag_courses.py / "
+            "tag_faculties.py / tag_programs.py first, or pass --allow-stale-tags "
+            "if you have decided the drift cannot reach what you are building."
+        )
+    if drifted:
+        print("WARNING: building from tag files that do not reproduce: "
+              + ", ".join(drifted))
 
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

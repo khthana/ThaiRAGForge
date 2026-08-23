@@ -46,6 +46,41 @@ Checks, grouped by layer (C = corpus, I = index, E = eval):
 Lessons this file's own checks were built from. Read these before editing a
 check, because each one is a way a check went quietly wrong here at least once.
 
+  * THE DERIVED-COPY INVENTORY (swept 2026-08-23, after a Qdrant collection was
+    found ANSWERING from a previous build). The class is: an artifact computed
+    from another artifact, read by something, where drift is silent. Enumerated
+    here so a future copy is added to a list rather than discovered:
+
+      - Qdrant collections (a copy of an Index's rows) -- GUARDED at query time
+        by QdrantHybridRetriever._verify: row count plus a sample compared by
+        identity. Before 2026-08-23 a rebuild without a re-ingest served the
+        previous build's payload with no error.
+      - data/qdrant/<collection>/vocab.json (term -> sparse id, from the same
+        ingest) -- GUARDED BY ORDERING, not by a check. Written BEFORE the
+        upsert since 2026-08-23, so a run that dies in between leaves a current
+        vocabulary beside a stale collection, which _verify already refuses.
+        Written after, the same crash left the undetectable pairing.
+      - academic_resolutions/entity_tags/*_by_file.json (corpus x matchers) --
+        T1. Read by build_gold_candidates.py, the QRELS generator, and by VALUE
+        for people/courses/faculties. Not read by build_relation_graph.py, which
+        recomputes from the loaders and says so in its own report; not read by
+        entity_loader, which calls the same matchers at build time -- so a built
+        index is current with the matchers while these copies need not be.
+      - academic_resolutions/entity_tags/gold_candidates.json -- DELIBERATELY
+        NOT regenerated: it is dated 2026-07-25 and is the provenance of the
+        published gold set. Re-deriving it is a measurement, never a repair.
+      - data/index/<combo>/* -- the seal (_complete.json, written last) plus
+        index_cache._settle; I6/I7 watch staleness and unsealed dirs.
+      - data/results/** -- E0 (a result names the index that produced it) and E4
+        (results newer than their index).
+      - docs/*.md generated from a script -- D1a (report older than generator)
+        and D4 (an input changed after the report) in audit_doc_claims.py.
+
+    The shape to look for when adding one: does the CONSUMER read the copy's own
+    bytes? A collection answers from its stored payload and the qrels generator
+    reads cached values, so both can be wrong without erroring. A copy nothing
+    reads by value is a reporting concern, not a correctness one (T1b).
+
   * A CHECK WHOSE SUBJECT MATTER MOVES BECOMES A VACUOUS PASS. C4 went 24 -> 0
     the moment the `.md.dup` archives were moved off-repo, so it now follows them
     to ARCHIVE_ROOT and prints "0 of 239" rather than "0". Because 0 is ambiguous
@@ -401,6 +436,115 @@ def audit_corpus() -> tuple[set[str], dict[str, Path]]:
             "not file-level -- informational)",
         )
     return set(by_id), {k: v[0] for k, v in by_id.items()}
+
+
+# ------------------------------------------------------- derived-copy layer
+#: Files sampled per tag file. All four matchers over one corpus file cost
+#: ~0.4 s, so a full 2,854-file pass is ~18 min -- far too slow for a sweep
+#: meant to run before trusting anything. The sample size is stated in the
+#: detail rather than hidden, because a CLEAN result on a small sample is weak
+#: evidence while a DIRTY one is conclusive: this check can prove drift, never
+#: its absence.
+_TAG_SAMPLE = 60
+_TAG_SAMPLE_QUICK = 20
+
+#: One cached map per entity type, written by tools/corpus_prep/tag_*.py from
+#: the matcher named beside it. `entity_loader` calls the SAME matchers directly
+#: at build time, so a built index is current with the matchers while these
+#: cached copies need not be -- which is the whole reason this check exists.
+_TAG_FILES = ("people", "programs", "courses", "faculties")
+
+
+def audit_derived_copies(quick: bool) -> None:
+    """Do the cached entity-tag files still reproduce from the current matchers?
+
+    **This is the class the Qdrant collection guard came out of, swept.** A
+    derived copy that nothing re-derives goes stale silently. The collection did
+    it by ANSWERING from a previous build's payload; these files do it by being
+    read as ground truth by `build_gold_candidates.py`, which is the qrels
+    generator. CLAUDE.md has said "recompute tags from the tested matchers,
+    never read entity_tags/*_by_file.json as ground truth" since 2026-08-12 --
+    and writing a rule down is not a guard.
+
+    **The date is only a proxy, and is deliberately not what is checked.** Every
+    one of these files IS older than its own matcher, which says nothing about
+    whether the matcher would now produce something different. So the check
+    reads the artifact: it replicates each tagger's own text pipeline exactly --
+    `strip_mapping_tables(strip_document_header(text))`, NOT `PlainLoader`,
+    which since 2026-08-03 also strips course-comparison tables -- and compares
+    tag for tag. A difference is then the matcher or the corpus, never a
+    different preprocessing path.
+    """
+    from rag_lab.loaders.common import strip_document_header, strip_mapping_tables
+    from rag_lab.loaders.course_loader import match_courses
+    from rag_lab.loaders.faculty_loader import match_faculties
+    from rag_lab.loaders.person_loader import match_people
+    from rag_lab.loaders.program_loader import match_programs
+
+    matchers = {"people": match_people, "programs": match_programs,
+                "courses": match_courses, "faculties": match_faculties}
+    tags_dir = CORPUS / "entity_tags"
+    cached: dict[str, dict] = {}
+    for name in _TAG_FILES:
+        path = tags_dir / f"{name}_by_file.json"
+        if not path.exists():
+            record("T1 cached entity tags reproduce from the current matchers",
+                   False, f"{path} is missing")
+            return
+        cached[name] = json.loads(path.read_text(encoding="utf-8"))
+
+    files = sorted(iter_corpus_files(CORPUS), key=str)
+    n = _TAG_SAMPLE_QUICK if quick else _TAG_SAMPLE
+    step = max(1, len(files) // n)
+    sample = files[::step][:n]
+
+    differ = {k: 0 for k in matchers}
+    compared = {k: 0 for k in matchers}
+    for f in sample:
+        rel = str(f.relative_to(CORPUS).as_posix())
+        try:
+            text = f.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            text = f.read_text(encoding="utf-8-sig")
+        text = strip_mapping_tables(strip_document_header(text))
+        for name, fn in matchers.items():
+            was = cached[name].get(rel)
+            if was is None:
+                continue
+            compared[name] += 1
+            now = json.dumps(fn(text), ensure_ascii=False, sort_keys=True)
+            before = json.dumps(was, ensure_ascii=False, sort_keys=True)
+            if now != before:
+                differ[name] += 1
+
+    parts = [f"{k} {differ[k]}/{compared[k]}" for k in _TAG_FILES]
+    ok = not any(differ.values())
+    remedy = (
+        "; build_gold_candidates.py (the qrels generator) reads people/courses/"
+        "faculties VALUES and now refuses on this, so nothing can silently derive "
+        "qrels from them. RE-RUNNING tag_*.py IS NOT AN OBVIOUS FIX and is a "
+        "decision, not a chore: it would make these copies current with today's "
+        "corpus while data/index/entity_tags_full still holds tags from its own "
+        "build date, i.e. it moves the mismatch rather than removing it, and "
+        "CLAUDE.md coupled that index to a tag regeneration for exactly this "
+        "reason. Decide the pair together"
+    )
+    record(
+        "T1 cached entity tags reproduce from the current matchers",
+        ok,
+        f"files differing of files compared, over a {len(sample)}-file sample: "
+        + ", ".join(parts) + ("" if ok else remedy),
+    )
+
+    # Stated so the T1 detail is not read as "all four are equally load-bearing".
+    record(
+        "T1b a programs drift cannot move the qrels",
+        True,
+        "program_candidates() iterates the tag mapping's KEYS and never reads a "
+        "value -- audit_program_tag_regeneration.py S2 blanks every value and "
+        "requires identical output -- so a programs difference is a reporting "
+        "concern, not a qrels one",
+    )
 
 
 # ---------------------------------------------------------------- index layer
@@ -1002,6 +1146,9 @@ def main() -> int:
     print("=== corpus ===")
     corpus_ids, _ = audit_corpus()
     print("\n=== indexes ===")
+    print("")
+    print("=== derived copies ===")
+    audit_derived_copies(args.quick)
     ids_by_combo = audit_indexes(corpus_ids, args.quick)
     print("\n=== eval ===")
     audit_eval(corpus_ids, ids_by_combo, args.quick)

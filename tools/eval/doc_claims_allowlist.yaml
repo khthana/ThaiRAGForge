@@ -354,6 +354,19 @@ counts:
 # D4: an eval input that changed after a report that reads it, cleared because
 # the change provably cannot move that report's numbers.
 inputs:
+  - src: tools/eval/qdrant_pilot_ingest.py
+    report: qdrant_pilot.md
+    checked: 2026-08-23
+    reason: >-
+      The 2026-08-23 edit moves the vocabulary sidecar write from AFTER the
+      upsert to BEFORE it. On a completed ingest the two orders produce
+      byte-identical artifacts, so no measurement in this report can move; the
+      change exists only to fix which pairing a CRASHED ingest leaves behind
+      (current vocabulary + stale collection, which
+      QdrantHybridRetriever._verify refuses, instead of the reverse, which
+      nothing could see). The claim is about the failure path, and this report
+      contains no failure-path measurement.
+
   - src: src/rag_lab/retrievers/qdrant_hybrid.py
     report: serving_concurrency.md
     checked: 2026-08-23
