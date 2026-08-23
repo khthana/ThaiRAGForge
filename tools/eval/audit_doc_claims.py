@@ -154,6 +154,11 @@ DOCS = [
     Path("docs/rq4-second-generator-check.md"),
     Path("docs/rq4-design.md"),
     Path("docs/reranker-trained-on-hybrid-design.md"),
+    # Added 2026-08-23 with the fold-out of CLAUDE.md's 40 KB reranker item.
+    # The text moved VERBATIM, so listing it here is what keeps every figure it
+    # carried under D2/D5/D7 -- a move whose destination is not in DOCS is a
+    # silent loss of coverage, which is the one rule the size-reduction work has.
+    Path("docs/reranker-axis-notes.md"),
     Path("docs/serving-architecture.md"),
     Path("docs/eval-validity-threats.md"),
     Path("docs/research-framework-gap-analysis.md"),

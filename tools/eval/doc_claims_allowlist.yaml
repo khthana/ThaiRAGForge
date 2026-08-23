@@ -43,17 +43,20 @@ numbers:
 # the entry is a provenance record rather than a silencer: it is keyed on the
 # exact string, so changing "0 of 239" to "0 of 241" stops matching and re-flags.
 counts:
-  - doc: CLAUDE.md
+  - doc: docs/reranker-axis-notes.md
     figure: "1 of 3"
-    checked: 2026-08-20
+    checked: 2026-08-23
     reason: >-
       A DEFECT RECORD, and untraceable by construction like the 0.7790 entry in
       numbers:. It is how many of C2's three probe pools failed under the rule
       train_hybrid_reranker.py used before 2026-08-20 -- "the same top-K ids",
       which asserts tie order. The rewritten check gates on the delivered SCORES
       and passes 3 of 3, so the regenerated reranker_training_run.md states the
-      passing figure and no report can ever carry the failing one. Quoted in
-      CLAUDE.md precisely because the lesson is the gap between the two.
+      passing figure and no report can ever carry the failing one. Quoted
+      precisely because the lesson is the gap between the two. RE-KEYED
+      2026-08-23: the sentence moved from CLAUDE.md to docs/reranker-axis-notes.md
+      with the fold-out, and entries are keyed per document, so D6 correctly
+      reported this one as exempting nothing until it followed its subject.
 
   - doc: CLAUDE.md
     figure: "198 of 678"
@@ -127,9 +130,9 @@ counts:
       Same figure and evidence as the CLAUDE.md entry above; kept separate
       because entries are keyed per document.
 
-  - doc: CLAUDE.md
+  - doc: docs/reranker-axis-notes.md
     figure: "13 of 106"
-    checked: 2026-08-12
+    checked: 2026-08-23
     reason: >-
       data/results/reranker_trained_test.md states the two halves in different
       places by design: the header line says "106 คำถาม" and the per-route table
@@ -237,10 +240,12 @@ counts:
       was written -- the whole point of that measurement was that no gold set
       can detect the regression, so nothing downstream reads it.
 
-  - doc: CLAUDE.md
+  - doc: docs/reranker-axis-notes.md
     figure: "2 of 6"
-    checked: 2026-08-12
+    checked: 2026-08-23
     reason: >-
+      Re-keyed 2026-08-23: the sentence moved out of CLAUDE.md with the reranker
+      fold-out, and entries are keyed per document.
       Derived by counting rows of the table in
       data/results/reranker_model_qualification.md: 6 candidate models, of which
       lines 13-14 (`gte-multilingual-reranker-base`, `jina-reranker-v2`) read
