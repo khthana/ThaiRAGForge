@@ -2998,26 +2998,29 @@ ranking rather than approximating it.
 
 | F | top-10 identical (order) | identical as a set | recall@10 | Δ vs k=n |
 |---|---|---|---|---|
-| 50 | 31.16% | 34.75% | 0.5104 | −0.0100 |
-| 100 | 46.78% | 51.62% | 0.5167 | −0.0037 |
-| 200 | 56.29% | 62.71% | 0.5171 | −0.0033 |
-| 500 | 64.26% | 74.19% | 0.5185 | −0.0018 |
-| 1,000 | 70.02% | 82.86% | 0.5177 | −0.0026 |
-| 10,000 | 88.00% | 96.67% | 0.5199 | −0.0005 |
-| n | 100% | 100% | 0.5204 | — |
+| 50 | 31.34% | 34.93% | 0.5101 | −0.0097 |
+| 100 | 46.91% | 51.76% | 0.5162 | −0.0035 |
+| 200 | 56.39% | 62.81% | 0.5170 | −0.0027 |
+| 500 | 64.28% | 74.06% | 0.5182 | −0.0015 |
+| 1,000 | 70.13% | 82.76% | 0.5172 | −0.0025 |
+| 10,000 | 87.84% | 96.59% | 0.5193 | −0.0004 |
+| n | 100% | 100% | 0.5197 | — |
+
+2026-08-23 re-run against rebuild #4.
 
 **The two questions have opposite answers.** *Is the ranking preserved?* — only
-at F=n; even fetching 10,000 candidates reproduces just 88.00% of top-10s in
+at F=n; even fetching 10,000 candidates reproduces just 87.84% of top-10s in
 order. *Does it cost anything?* — almost nothing from F=100 up, and the loss is
-**non-monotonic** (F=500's −0.0018 beats F=1,000's −0.0026), because a larger F
+**non-monotonic** (F=500's −0.0015 beats F=1,000's −0.0025), because a larger F
 raises different chunks' fused scores at different rates. Note this recall@10 is
 a **macro average over all 36 combos** — a damage-size indicator, not a system
 result.
 
 Damage lands where this project's RRF rule predicts: the worst-hit combos are
-the weak arms (`semantic × e5_small` −0.0595 at F=50, `recursive × bge_m3`
-−0.0224 at F=200, `sentence × sct` −0.0145 at F=1,000). Per entity type,
-**`person` is the only one that *gains* from truncation** (+0.0212 at F=50),
+the weak arms (`semantic × e5_small` −0.0579 at F=50, `recursive × bge_m3`
+−0.0224 at F=200, `sentence × sct` −0.0145 at F=1,000 — the last two unchanged
+by the rebuild in both combo and value). Per entity type,
+**`person` is the only one that *gains* from truncation** (+0.0217 at F=50),
 consistent with BM25 carrying `person` (0.8147) while the cut removes a weak
 dense arm's long tail.
 
@@ -3060,7 +3063,7 @@ paired on the index each query is actually routed to.
 
 **The registered prediction was confirmed, and it confirms the mechanism rather
 than the headline.** Unrouted, `person` is the one entity type that *gains* from
-a shallow cut (+0.0202 at F=50 here, +0.0212 in the sweep) because BM25 carries
+a shallow cut (+0.0202 at F=50 here, +0.0217 in the sweep) because BM25 carries
 it while the cut deletes a weak dense arm's tail. Routing already hands `person`
 its dense specialist, so that gain should shrink — it **reverses**, to −0.0207.
 Same mechanism as the two interventions that died against the router; here it

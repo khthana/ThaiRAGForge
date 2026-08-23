@@ -1058,25 +1058,33 @@ see `docs/adr/`.
   `tests/retrievers/test_hybrid_retriever.py` pins it; the sweep runs F ∈ {10 … 10,000, n}
   over 36 combos × 106 queries = 3,816 pairs. **The two questions have opposite answers, and
   that is the finding.** *Is the ranking the same?* — only at F=n: **F=10,000 reproduces just
-  88.00%** of top-10s in order (96.67% as a set) and F=1,000 only 70.02%. The pre-registered
+  87.84%** of top-10s in order (96.59% as a set) and F=1,000 only 70.13%. The pre-registered
   guess "F=1000 will be identical" was **wrong**, recorded as such. *Does it matter?* —
-  barely: macro recall@10 across the 36 combos is 0.5204 at k=n, **0.5167 at F=100
-  (−0.0037)** and **0.5171 at F=200 (−0.0033)**, and it is **non-monotonic** (F=500's −0.0018
-  is better than F=1,000's −0.0026) because truncation lifts different chunks' scores at
+  barely: macro recall@10 across the 36 combos is 0.5197 at k=n, **0.5162 at F=100
+  (−0.0035)** and **0.5170 at F=200 (−0.0027)**, and it is **non-monotonic** (F=500's −0.0015
+  is better than F=1,000's −0.0025) because truncation lifts different chunks' scores at
   different rates as F grows. Mechanism worth keeping: a chunk inside dense's top-F but past
   BM25's cut loses its BM25 term **outright**, not by a little — that is why this is not an
   approximation that merely loses precision. Damage concentrates exactly where this project's
-  RRF rule predicts (worst combo at F=50 `semantic × e5_small` −0.0595, at F=200
-  `recursive × bge_m3` −0.0224, at F=1,000 `sentence × sct` −0.0145), and **`person` queries
-  *gain* at F=50 (+0.0212)** — the only entity_type that does, consistent with BM25 carrying
+  RRF rule predicts (worst combo at F=50 `semantic × e5_small` −0.0579, at F=200
+  `recursive × bge_m3` −0.0224, at F=1,000 `sentence × sct` −0.0145 — **the last two
+  identical to the pre-rebuild run, combo and value both**), and **`person` queries
+  *gain* at F=50 (+0.0217)** — the only entity_type that does, consistent with BM25 carrying
   `person` (0.8147) while the cut deletes a weak dense arm's tail. **Timing (paired, one
   process, one loaded index, arms alternated per query, BM25 scorer pre-warmed so its one-off
   build lands in neither arm, `plain__sentence__qwen3__ff8f6c49`): k=n p50 1089.5 ms → F=200
   **417.9 ms** (−0.672 s, 2.6x), F=1,000 421.0 ms.** So the over-fetch is **~62% of hybrid
   query time**, and the ~0.42 s left is real scoring work (dense encode + gemv + `get_scores`)
   that no depth cut can touch — **do not read the earlier "the remaining ~1.36s is the k=n
-  over-fetch" as all removable**; that sentence bundled the residual in. The trade on the
-  table was ~0.67 s/query for −0.0033 macro
+  over-fetch" as all removable**; that sentence bundled the residual in. **Re-run 2026-08-23 against rebuild #4 (the figures above are that run's): every
+  finding survived and only the levels moved** — the two questions still answer
+  oppositely, non-monotonicity still holds, `person` is still the only type that
+  gains, and the F=200/F=1,000 worst combos are unchanged in both combo and value.
+  All 6 self-checks pass at full scale (S2 and S4 both 3,816 reproduce / 0 differ
+  against the *current* persisted results, which is what confirms the refresh is
+  aligned with the rebuild).
+  The trade on the
+  table was ~0.67 s/query for −0.0027 macro
   recall@10 at F=200 — a *cost* decision of the same shape as soft-vs-hard routing, and it
   needed re-measuring against the hard router (which now ships) before adoption, since
   that macro figure is an average over a whole combo family, not a system result.
