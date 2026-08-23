@@ -392,3 +392,424 @@ inputs:
       version and under f78ed5e, and `detect_entities` likewise 106 of 106.
       Cleared by content, so a future router change re-flags rather than
       inheriting this.
+
+# D7 -- unit-suffixed figures (ms, q/s) that no report states.
+# Written 2026-08-23 when D7 landed. Four classes, each placed by a rule and
+# not by eye: a range endpoint (the min/max of a report column), a figure
+# rounded for readability, a deliberately-kept superseded value, and -- the
+# one that is a real gap rather than a false positive -- a measurement taken
+# while building the serving layer that no generator persists.
+units:
+  - doc: CLAUDE.md
+    figure: "1,240.8 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: CLAUDE.md
+    figure: "1,634 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: CLAUDE.md
+    figure: "2,052 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: CLAUDE.md
+    figure: "29,642 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: CLAUDE.md
+    figure: "30,550 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: CLAUDE.md
+    figure: "317 ms"
+    checked: 2026-08-23
+    reason: >-
+      a range endpoint: the min or max of a report's column, which no report
+      states as a figure of its own
+
+  - doc: CLAUDE.md
+    figure: "488.6 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: CLAUDE.md
+    figure: "525 ms"
+    checked: 2026-08-23
+    reason: >-
+      a range endpoint: the min or max of a report's column, which no report
+      states as a figure of its own
+
+  - doc: CLAUDE.md
+    figure: "657 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: CLAUDE.md
+    figure: "668 ms"
+    checked: 2026-08-23
+    reason: >-
+      a range endpoint: the min or max of a report's column, which no report
+      states as a figure of its own
+
+  - doc: CLAUDE.md
+    figure: "840 ms"
+    checked: 2026-08-23
+    reason: >-
+      a range endpoint: the min or max of a report's column, which no report
+      states as a figure of its own
+
+  - doc: docs/code-explained.html
+    figure: "1,093 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/code-explained.html
+    figure: "1,240.8 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/code-explained.html
+    figure: "2,052 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/paper-results-summary.md
+    figure: "1170 ms"
+    checked: 2026-08-23
+    reason: >-
+      the rebuild-#3 refresh of the same trail; superseded by the 2026-08-18
+      line below it, which quotes reranker_significance_test.md exactly
+
+  - doc: docs/paper-results-summary.md
+    figure: "1191 ms"
+    checked: 2026-08-23
+    reason: >-
+      the 2026-07-23 original, measured over the 73-query gold set; kept as the
+      head of a supersession trail whose current values are three paragraphs
+      below
+
+  - doc: docs/paper-results-summary.md
+    figure: "1208 ms"
+    checked: 2026-08-23
+    reason: >-
+      rounded for readability from 1208.47 in a report; kept rounded because the
+      surrounding sentence is about the ratio, not the value
+
+  - doc: docs/paper-results-summary.md
+    figure: "1227 ms"
+    checked: 2026-08-23
+    reason: >-
+      the rebuild-#3 refresh of the same trail; superseded by the 2026-08-18
+      line below it, which quotes reranker_significance_test.md exactly
+
+  - doc: docs/paper-results-summary.md
+    figure: "1259 ms"
+    checked: 2026-08-23
+    reason: >-
+      the 2026-07-23 original, measured over the 73-query gold set; kept as the
+      head of a supersession trail whose current values are three paragraphs
+      below
+
+  - doc: docs/paper-results-summary.md
+    figure: "1425 ms"
+    checked: 2026-08-23
+    reason: >-
+      the rebuild-#3 refresh of the same trail; superseded by the 2026-08-18
+      line below it, which quotes reranker_significance_test.md exactly
+
+  - doc: docs/paper-results-summary.md
+    figure: "1522 ms"
+    checked: 2026-08-23
+    reason: >-
+      the 2026-07-23 original, measured over the 73-query gold set; kept as the
+      head of a supersession trail whose current values are three paragraphs
+      below
+
+  - doc: docs/paper-results-summary.md
+    figure: "1863 ms"
+    checked: 2026-08-23
+    reason: >-
+      rounded for readability from 1862.64 in a report; kept rounded because the
+      surrounding sentence is about the ratio, not the value
+
+  - doc: docs/paper-results-summary.md
+    figure: "245.7 ms"
+    checked: 2026-08-23
+    reason: >-
+      a range endpoint: the min or max of a report's column, which no report
+      states as a figure of its own
+
+  - doc: docs/paper-results-summary.md
+    figure: "264.7 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/paper-results-summary.md
+    figure: "317 ms"
+    checked: 2026-08-23
+    reason: >-
+      a range endpoint: the min or max of a report's column, which no report
+      states as a figure of its own
+
+  - doc: docs/paper-results-summary.md
+    figure: "3325 ms"
+    checked: 2026-08-23
+    reason: >-
+      from the 2026-08-07 latency run that was DISCARDED on evidence (position
+      effect); its numbers appear in no report by design -- the passage exists
+      to record why the run was thrown out
+
+  - doc: docs/paper-results-summary.md
+    figure: "341 ms"
+    checked: 2026-08-23
+    reason: >-
+      rounded for readability from 340.5 in a report; kept rounded because the
+      surrounding sentence is about the ratio, not the value
+
+  - doc: docs/paper-results-summary.md
+    figure: "4315 ms"
+    checked: 2026-08-23
+    reason: >-
+      from the 2026-08-07 latency run that was DISCARDED on evidence (position
+      effect); its numbers appear in no report by design -- the passage exists
+      to record why the run was thrown out
+
+  - doc: docs/paper-results-summary.md
+    figure: "525 ms"
+    checked: 2026-08-23
+    reason: >-
+      a range endpoint: the min or max of a report's column, which no report
+      states as a figure of its own
+
+  - doc: docs/paper-results-summary.md
+    figure: "525.0 ms"
+    checked: 2026-08-23
+    reason: >-
+      a range endpoint: the min or max of a report's column, which no report
+      states as a figure of its own
+
+  - doc: docs/paper-results-summary.md
+    figure: "839 ms"
+    checked: 2026-08-23
+    reason: >-
+      rounded for readability from 838.70 in a report; kept rounded because the
+      surrounding sentence is about the ratio, not the value
+
+  - doc: docs/project-journey.html
+    figure: "1,093 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/project-journey.html
+    figure: "1,144 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/project-journey.html
+    figure: "1,240.8 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/project-journey.html
+    figure: "1,241 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/project-journey.html
+    figure: "1,634 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/project-journey.html
+    figure: "12,295 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/project-journey.html
+    figure: "2,052 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/project-journey.html
+    figure: "2,054 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/project-journey.html
+    figure: "2,532 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/project-journey.html
+    figure: "245.7 ms"
+    checked: 2026-08-23
+    reason: >-
+      a range endpoint: the min or max of a report's column, which no report
+      states as a figure of its own
+
+  - doc: docs/project-journey.html
+    figure: "30,550 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/project-journey.html
+    figure: "309 ms"
+    checked: 2026-08-23
+    reason: >-
+      the 2026-07-16 embedded-Qdrant vertical slice, superseded by the server
+      pilot once embedded mode was found to be brute force rather than ANN
+
+  - doc: docs/project-journey.html
+    figure: "317 ms"
+    checked: 2026-08-23
+    reason: >-
+      a range endpoint: the min or max of a report's column, which no report
+      states as a figure of its own
+
+  - doc: docs/project-journey.html
+    figure: "3325 ms"
+    checked: 2026-08-23
+    reason: >-
+      same discarded 2026-08-07 latency run
+
+  - doc: docs/project-journey.html
+    figure: "343 ms"
+    checked: 2026-08-23
+    reason: >-
+      the 2026-07-16 embedded-Qdrant vertical slice, superseded by the server
+      pilot once embedded mode was found to be brute force rather than ANN
+
+  - doc: docs/project-journey.html
+    figure: "4315 ms"
+    checked: 2026-08-23
+    reason: >-
+      same discarded 2026-08-07 latency run
+
+  - doc: docs/project-journey.html
+    figure: "488.6 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/project-journey.html
+    figure: "489 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/project-journey.html
+    figure: "525 ms"
+    checked: 2026-08-23
+    reason: >-
+      a range endpoint: the min or max of a report's column, which no report
+      states as a figure of its own
+
+  - doc: docs/project-journey.html
+    figure: "525.0 ms"
+    checked: 2026-08-23
+    reason: >-
+      a range endpoint: the min or max of a report's column, which no report
+      states as a figure of its own
+
+  - doc: docs/project-journey.html
+    figure: "532 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/project-journey.html
+    figure: "657 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+
+  - doc: docs/project-journey.html
+    figure: "793 ms"
+    checked: 2026-08-23
+    reason: >-
+      same 2026-07-16 vertical slice
+
+  - doc: docs/project-journey.html
+    figure: "9,193 ms"
+    checked: 2026-08-23
+    reason: >-
+      measured in-session while building the serving caches, the warm-up or the
+      seal, and never written to a report -- no generator persists it, which is
+      a real gap and is recorded here rather than hidden
+

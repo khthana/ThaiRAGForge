@@ -30,6 +30,9 @@ Checks (D = docs):
     D5  a count/total figure ("N of M", "N จาก M") that no report states as a
         pair -- the class D2 is structurally blind to, since it matches only
         4-decimal figures
+    D7  a unit-suffixed figure ("2,058.9 ms", "9.81 q/s") that no report
+        states -- the other class D2 cannot see, and the one that let a whole
+        serving layer's latencies drift
 
 Design rules, each learned by getting one of these checks wrong.
 
@@ -196,6 +199,58 @@ NUM = re.compile(r"(?<![\d.])(\d\.\d{4})(?![\d])")
 # "115.3 of 200" and "5 of 115.3" before the change; measured cost across the
 # 12 docs: +1 pair, i.e. this is a hole, not a floodgate.
 COUNT_PROSE = re.compile(r"(?<![\d.])(\d(?:[\d,]*\d)?)\s+(?:of|จาก)\s+(\d(?:[\d,]*\d)?)(?!\d)(?!\.\d)")
+
+# D7: the third figure shape, and the one that let a whole layer rot unseen. A
+# latency is written "2,058.9 ms" and a throughput "9.81 q/s"; NUM sees neither
+# (not 4-decimal) and COUNT_PROSE sees neither (not a proportion). That blind
+# spot is not hypothetical -- it is how CLAUDE.md came to carry an OLD and a NEW
+# set of serving figures for the same measurement in adjacent paragraphs, and
+# how `paper-results-summary.md` still quotes a reranker latency measured over
+# 73 queries against a report that has said 106 since.
+#
+# THE RULE WAS CALIBRATED, NOT CHOSEN. Every candidate was scored against its own
+# perturbations over the audited docs (the method that set D5's V1), because a
+# rule that clears a wrong number as readily as a right one is not a check:
+#
+#     rule                                    n    real   n+1   n+7
+#     any number + unit                    1021     84%   53%   56%
+#     >= 3 significant digits               515     76%   19%   24%
+#     units ms/MB/GB/q/s only               377     77%   33%   38%
+#     both of the above                     281     73%   13%   19%
+#
+# and per unit, at >= 3 significant digits:
+#
+#     unit     n    real   n+1   n+7     verdict
+#     ms     204     70%    8%    9%     a check
+#     q/s      6     67%    0%    0%     a check
+#     MB      64     91%   33%   52%     clears a wrong number half the time
+#     %      166     89%   30%   31%     mostly derived; poor discrimination
+#     x       17     94%    6%   53%     n too small, n+7 unusable
+#     s       51     49%   20%   20%     would go red on half of correct writing
+#     GB       5      0%    0%    0%     prose rounds to GB, reports state MB
+#
+# So the unit set is {ms, q/s} and nothing else, on evidence. `s` and `GB` are
+# excluded because they FAIL IN THE OTHER DIRECTION -- they would flag correct
+# writing -- which is as disqualifying as clearing a wrong number.
+UNIT_FIGURE = re.compile(r"(?<![\w.])(\d[\d,]*(?:\.\d+)?)\s*(ms|q/s)(?![\w/])")
+# >= 3 significant digits. "50 ms" and "2 s" collide with everything; "475.6 ms"
+# does not.
+_MIN_SIGNIFICANT = 3
+
+
+def _significant(v: str) -> int:
+    return len(re.sub(r"[^0-9]", "", v).lstrip("0"))
+
+
+# MATCHING IS EXACT, and a rounding tolerance was measured and REJECTED. Prose
+# legitimately writes "a 475 ms routed query" where the report says 475.6, so
+# accepting any report value that equals the prose figure when rounded OR
+# truncated to the prose's own precision was the obvious accommodation: it moves
+# real 70% -> 76%, and n+1 8% -> 23%. Three times the perturbation clearance for
+# six points of coverage is the wrong trade, and the same one D5 refused when it
+# rejected V2/V3. The cost is real and is paid in the allowlist: a rounded figure
+# in the prose is flagged, and the cheapest discharge is to quote the report's
+# value instead.
 COUNT_SLASH = re.compile(r"(?<![\d./])(\d(?:[\d,]*\d)?)\s*/\s*(\d(?:[\d,]*\d)?)(?![\d./])")
 
 # Inline emphasis sits BETWEEN the two halves of a count often enough to matter:
@@ -539,11 +594,39 @@ def audit_reports() -> None:
 
 
 # ------------------------------------------------------------------- D2
-def audit_numbers(show_all: bool) -> None:
-    artifacts: list[Path] = []
+def _artifacts() -> list[Path]:
+    """Every report D2 and D7 are allowed to source a figure from.
+
+    One definition, deliberately: two copies of the haystack rule would let the
+    two checks disagree about what counts as a report, and the haystack is the
+    single most load-bearing decision either of them makes (see the module
+    docstring on why it is `.md` only).
+    """
+    out: list[Path] = []
     for g in ARTIFACT_GLOBS:
-        artifacts += sorted(REPO.glob(g))
-    artifacts += [REPO / f for f in ARTIFACT_FILES if (REPO / f).exists()]
+        out += sorted(REPO.glob(g))
+    out += [REPO / f for f in ARTIFACT_FILES if (REPO / f).exists()]
+    return out
+
+
+def _artifact_numbers() -> set[str]:
+    """Every bare numeric token in every report, comma-separators stripped.
+
+    D7's haystack. Wider than D2's (which extracts 4-decimal figures only)
+    because a latency is written "1167.4" in a table cell whose unit lives in
+    the column header, so the unit can identify a CLAIM in the prose but cannot
+    be matched in the report.
+    """
+    hay: set[str] = set()
+    for a in _artifacts():
+        body = _unemph(a.read_text(encoding="utf-8", errors="ignore"))
+        for t in re.findall(r"\d[\d,]*(?:\.\d+)?", body):
+            hay.add(t.replace(",", ""))
+    return hay
+
+
+def audit_numbers(show_all: bool) -> None:
+    artifacts = _artifacts()
 
     known: dict[str, tuple[str, int]] = {}
     per_report: dict[str, list[tuple[float, str, int]]] = {}
@@ -875,6 +958,7 @@ def audit_allowlist_liveness() -> None:
     """
     nums_of: dict[str, set[str]] = {}
     counts_of: dict[str, set[str]] = {}
+    units_of: dict[str, set[str]] = {}
     for d in DOCS:
         f = REPO / d
         if not f.exists():
@@ -883,6 +967,8 @@ def audit_allowlist_liveness() -> None:
         body = f.read_text(encoding="utf-8")
         nums_of[rel] = set(NUM.findall(body))
         counts_of[rel] = {f"{n} of {m}" for n, m in COUNT_PROSE.findall(_unemph(body))}
+        units_of[rel] = {f"{v} {u}" for v, u in UNIT_FIGURE.findall(_unemph(body))
+                         if _significant(v) >= _MIN_SIGNIFICANT}
 
     # `inputs` entries are audited by content, not by figure: see
     # `_inputs_cleared`. An entry whose source has moved on since it was checked
@@ -891,7 +977,8 @@ def audit_allowlist_liveness() -> None:
     inputs_cleared, dead = _inputs_cleared()
     total = len(_allowlist("inputs"))
     for section, key, table in (("numbers", "number", nums_of),
-                                ("counts", "figure", counts_of)):
+                                ("counts", "figure", counts_of),
+                                ("units", "figure", units_of)):
         for e in _allowlist(section):
             total += 1
             doc, fig = e["doc"], str(e[key])
@@ -912,6 +999,70 @@ def audit_allowlist_liveness() -> None:
         print(f"        {d}")
 
 
+def audit_unit_figures(show_all: bool) -> None:
+    """D7: every ms / q-s figure in the prose appears in some report.
+
+    The sibling of D5, one figure shape over. D2 asks the same question of
+    4-decimal figures and FAILS on a miss; this one WARNs, for the reason D5
+    does: about a quarter of *correct* writing here is untraceable by
+    construction -- a range endpoint derived from a table's rows, a figure
+    rounded for readability, a probe measured while building something and never
+    written to a report. A check that goes red on correct writing is one nobody
+    reads.
+
+    **NEITHER of D2's exemptions is inherited, and that was measured rather than
+    assumed.** `SUPERSEDED` clears 44% of this residue and `DATED` 42% -- and
+    `SUPERSEDED` clears the one true positive this check was built on, the
+    reranker latency line in `paper-results-summary.md` that still reports a
+    73-query run. That is the identical trap D5 documents (inheriting `DATED`
+    cleared 18 of its 26 flags *including* its only true positive): an exemption
+    is only ever right for the check it was calibrated on. A superseded latency
+    is exempted here the way every other exemption is -- an entry in
+    `doc_claims_allowlist.yaml` naming the figure and saying why -- so it is
+    auditable by D6 rather than granted by a regex written for another check.
+
+    Denominator printed, per the E3 rule that 0 is ambiguous between "examined
+    and clean" and "nothing left to examine".
+    """
+    known = _artifact_numbers()
+    artifacts = _artifacts()
+    allow = {(e["doc"], str(e["figure"])) for e in _allowlist("units")}
+    total = untraceable = exempt_allow = 0
+    residue: list[tuple[str, int, list[str], str]] = []
+
+    for doc in DOCS:
+        p = REPO / doc
+        if not p.exists():
+            continue
+        rel = str(doc).replace(chr(92), "/")
+        for lineno, ln in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+            hits = [(v, u) for v, u in UNIT_FIGURE.findall(_unemph(ln))
+                    if _significant(v) >= _MIN_SIGNIFICANT]
+            total += len(hits)
+            miss = [f"{v} {u}" for v, u in hits if v.replace(",", "") not in known]
+            if not miss:
+                continue
+            untraceable += len(miss)
+            keep = [f for f in miss if (rel, f) not in allow]
+            exempt_allow += len(miss) - len(keep)
+            if keep:
+                residue.append((rel, lineno, keep, ln.strip()[:150]))
+
+    n_res = sum(len(r[2]) for r in residue)
+    record(
+        "D7 unit-suffixed figures trace to a report", not residue,
+        f"{n_res} untraceable of {total} ms/q-s figures across {len(DOCS)} docs "
+        f"({untraceable} not found in {len(artifacts)} reports; "
+        f"{exempt_allow} allowlisted)",
+        warn=True,
+    )
+    for doc, lineno, keep, ctx in (residue if show_all else residue[:12]):
+        print(f"        {doc}:{lineno}  {', '.join(keep)}")
+        print(f"          {ctx}")
+    if not show_all and len(residue) > 12:
+        print(f"        ... {len(residue) - 12} more (--list)")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--list", action="store_true", help="print every D2/D5 hit, not the first 12")
@@ -922,6 +1073,7 @@ def main() -> int:
     audit_reports()
     audit_numbers(args.list)
     audit_counts(args.list)
+    audit_unit_figures(args.list)
     audit_significance_wording()
     audit_eval_inputs()
     audit_allowlist_liveness()

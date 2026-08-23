@@ -368,3 +368,142 @@ class TestInputsAllowlistIsKeyedOnContent:
                     f"{e['report']} is exempted without a src_sha, which disarms "
                     "the edge permanently"
                 )
+
+
+class TestUnitFigureExtraction:
+    """D7's trigger pattern. The unit set is evidence, not taste."""
+
+    def test_finds_latency_and_throughput(self):
+        got = adc.UNIT_FIGURE.findall("p50 2,058.9 ms and 9.81 q/s at C=5")
+        assert got == [("2,058.9", "ms"), ("9.81", "q/s")]
+
+    def test_matches_with_or_without_a_space(self):
+        assert adc.UNIT_FIGURE.findall("p50 1167.4ms") == [("1167.4", "ms")]
+
+    def test_excludes_the_units_that_measured_badly(self):
+        # Per-unit discrimination over the audited docs decided this, and the
+        # table is in the source. `MB` (n+7 clears 52%), `%` (30%) and `x` (53%)
+        # clear a wrong number too often to be checks; `s` (real 49%) and `GB`
+        # (real 0%, because prose rounds to GB while reports state MB) would go
+        # red on correct writing, which is equally disqualifying.
+        text = "3.2 GB and 136.3 % and 3.87 x and 7.85 s and 244 MB"
+        assert adc.UNIT_FIGURE.findall(text) == []
+
+    def test_does_not_match_a_unit_glued_to_a_word(self):
+        # "300 msec", "12 q/second" are not this project's notation.
+        assert adc.UNIT_FIGURE.findall("300 msec") == []
+        assert adc.UNIT_FIGURE.findall("12 q/second") == []
+
+    def test_significant_digits_ignores_separators_and_leading_zeros(self):
+        assert adc._significant("1,167.4") == 5
+        assert adc._significant("0.6") == 1
+        assert adc._significant("475") == 3
+
+    def test_the_significance_floor_is_three(self):
+        # "50 ms" and "2 s" collide with almost any report by coincidence; the
+        # floor is what keeps the check from being satisfied by chance.
+        assert adc._MIN_SIGNIFICANT == 3
+        assert adc._significant("50") < adc._MIN_SIGNIFICANT
+        assert adc._significant("475.6") >= adc._MIN_SIGNIFICANT
+
+
+class TestD7InheritsNeitherOfD2sExemptions:
+    """The decisive design fact, and it was measured rather than assumed.
+
+    Over the audited docs, `SUPERSEDED` clears 44% of D7's residue and `DATED`
+    42% -- and `SUPERSEDED` clears the one true positive D7 was built on, the
+    reranker-latency line in `paper-results-summary.md` that still quoted a
+    73-query run. Identical to the trap D5 documents: an exemption is only ever
+    right for the check it was calibrated on.
+    """
+
+    def test_the_unit_check_applies_neither_regex(self):
+        import inspect
+
+        body = inspect.getsource(adc.audit_unit_figures).split('"""')[2]
+        assert "SUPERSEDED" not in body
+        assert "DATED" not in body
+
+    def test_a_superseded_marker_does_not_clear_a_unit_figure(self, tmp_path, monkeypatch):
+        doc = tmp_path / "prose.md"
+        doc.write_text("The old p50 was 9999.9 ms, now superseded.\n", encoding="utf-8")
+        monkeypatch.setattr(adc, "DOCS", [Path("prose.md")])
+        monkeypatch.setattr(adc, "REPO", tmp_path)
+        monkeypatch.setattr(adc, "_artifact_numbers", lambda: {"1.0"})
+        monkeypatch.setattr(adc, "_artifacts", lambda: [])
+        monkeypatch.setattr(adc, "_allowlist", lambda section: [])
+        adc.findings.clear()
+        adc.audit_unit_figures(show_all=True)
+        assert adc.findings[-1][1] == "WARN", "an untraceable ms figure must be reported"
+        assert "1 untraceable" in adc.findings[-1][2]
+
+
+class TestD7MatchingIsExactNotRounded:
+    """A rounding tolerance was built, measured and REJECTED.
+
+    Accepting any report value equal to the prose figure when rounded or
+    truncated to the prose's own precision moves real traceability 70% -> 76%
+    and perturbation clearance (n+1) 8% -> 23%. Three times the clearance for
+    six points of coverage is the trade D5 refused when it rejected V2/V3.
+    """
+
+    def _run(self, tmp_path, monkeypatch, prose, hay):
+        doc = tmp_path / "prose.md"
+        doc.write_text(prose, encoding="utf-8")
+        monkeypatch.setattr(adc, "DOCS", [Path("prose.md")])
+        monkeypatch.setattr(adc, "REPO", tmp_path)
+        monkeypatch.setattr(adc, "_artifact_numbers", lambda: hay)
+        monkeypatch.setattr(adc, "_artifacts", lambda: [])
+        monkeypatch.setattr(adc, "_allowlist", lambda section: [])
+        adc.findings.clear()
+        adc.audit_unit_figures(show_all=True)
+        return adc.findings[-1]
+
+    def test_a_rounded_figure_is_still_flagged(self, tmp_path, monkeypatch):
+        f = self._run(tmp_path, monkeypatch, "a 475 ms routed query\n", {"475.6"})
+        assert f[1] == "WARN" and "1 untraceable" in f[2]
+
+    def test_an_exact_figure_clears(self, tmp_path, monkeypatch):
+        f = self._run(tmp_path, monkeypatch, "a 475.6 ms routed query\n", {"475.6"})
+        assert f[1] == "PASS" and "0 untraceable" in f[2]
+
+    def test_separators_are_normalised_on_both_sides(self, tmp_path, monkeypatch):
+        f = self._run(tmp_path, monkeypatch, "p50 2,058.9 ms\n", {"2058.9"})
+        assert f[1] == "PASS"
+
+
+class TestUnitsAllowlist:
+    def test_an_entry_clears_only_its_exact_figure(self, tmp_path, monkeypatch):
+        doc = tmp_path / "prose.md"
+        doc.write_text("p50 1191 ms and p95 1522 ms\n", encoding="utf-8")
+        monkeypatch.setattr(adc, "DOCS", [Path("prose.md")])
+        monkeypatch.setattr(adc, "REPO", tmp_path)
+        monkeypatch.setattr(adc, "_artifact_numbers", lambda: set())
+        monkeypatch.setattr(adc, "_artifacts", lambda: [])
+        monkeypatch.setattr(
+            adc, "_allowlist",
+            lambda section: [{"doc": "prose.md", "figure": "1191 ms"}] if section == "units" else [],
+        )
+        adc.findings.clear()
+        adc.audit_unit_figures(show_all=True)
+        # The allowlisted one clears; its neighbour on the same line does not.
+        assert "1 untraceable" in adc.findings[-1][2]
+        assert "1 allowlisted" in adc.findings[-1][2]
+
+    def test_the_live_units_section_is_audited_by_d6(self):
+        # D6 must see `units` or a dead entry there is invisible -- the same
+        # hole D1c closes for RETIRED_REPORTS.
+        import inspect
+
+        src = inspect.getsource(adc.audit_allowlist_liveness)
+        assert '"units"' in src
+
+    def test_no_live_units_entry_names_a_doc_outside_DOCS(self):
+        docs = {str(d).replace("\\", "/") for d in adc.DOCS}
+        for e in adc._allowlist("units"):
+            assert e["doc"] in docs, f"{e['doc']} is exempted but not audited"
+
+    def test_every_live_units_entry_carries_a_reason_and_a_date(self):
+        for e in adc._allowlist("units"):
+            assert e.get("reason", "").strip(), e
+            assert e.get("checked"), e

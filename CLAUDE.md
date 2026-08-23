@@ -95,12 +95,28 @@ see `docs/adr/`.
   `diff_significance_reports.py` gates report-vs-report, but **nothing read the
   prose**, which is where this project's avoidable errors actually live — a number
   typed by hand, correct that day, that no later refresh touches because a refresh
-  re-runs scripts and diffs reports. Six checks (**D1** report older than its
+  re-runs scripts and diffs reports. Seven checks (**D1** report older than its
   generator, **D2** every 4-decimal figure in the prose must appear in some report,
   **D3** a p-value quoted against a contradicting verdict word, **D4** an eval *input*
   changed after a report that reads it, **D5** the count/total shape D2 is
-  structurally blind to, **D6** every allowlist entry still exempts something) over
-  **12 docs**. Report: `docs/doc-claims-audit.md`; triaged exemptions with written
+  structurally blind to, **D6** every allowlist entry still exempts something,
+  **D7** the unit-suffixed shape — `2,058.9 ms`, `9.81 q/s` — which is the *other*
+  class D2 cannot see) over **13 docs**.
+  **D7 landed 2026-08-23 and its unit set is evidence, not taste.** Every candidate
+  was scored against its own perturbations, and per unit at ≥3 significant digits
+  only `ms` (70% real / 8% at n+1) and `q/s` (67% / 0%) are checks: `MB`, `%` and
+  `x` clear a wrong number 30–53% of the time, while `s` (49% real) and `GB` (0%,
+  because prose rounds to GB and reports state MB) would go red on *correct*
+  writing — equally disqualifying. A rounding tolerance was built and **rejected**
+  on the same measurement (real 70→76%, n+1 8→23%). **Neither of D2's exemptions is
+  inherited**, and that too was measured: `SUPERSEDED` clears 44% of D7's residue
+  *including the one true positive it was built on* — `paper-results-summary.md`
+  had quoted a reranker latency from a 73-query run for weeks while the report has
+  said 106 since, invisible to every earlier check because a latency is neither
+  4-decimal nor a count/total. The residue is allowlisted by exact figure with a
+  written reason per class, and **26 of those entries are a real gap rather than a
+  false positive**: serving measurements taken while building the caches, the
+  warm-up and the seal that no generator persists. Report: `docs/doc-claims-audit.md`; triaged exemptions with written
   reasons in `tools/eval/doc_claims_allowlist.yaml`. **Do not quote its counts here —
   run it**; D3's known false positives and D5's standing residue (about a tenth of
   its figures, *below* its own documented ~36% base rate) are its designed state, and
@@ -1554,7 +1570,7 @@ see `docs/adr/`.
      column, which is retrieval and belongs to rebuild #4; every containment-derived
      column is byte-identical. Cost to state with it: `detect_entities` ~100 ms/query
      (the course matcher is ~75 ms of that) plus fetching 50 instead of 10, i.e. ~+20% on
-     a 475 ms routed query and **no GPU**. **Nothing defaults to it** — `dense`/`hybrid`
+     a 475.6 ms routed query and **no GPU**. **Nothing defaults to it** — `dense`/`hybrid`
      ship unchanged and this is opt-in by name, the same rule `qdrant_hybrid` follows.
      **Read it with the circularity**: the `person`/`program`/`faculty` qrels were
      themselves derived by string containment, so this arm is closer to the labelling
@@ -2535,7 +2551,7 @@ see `docs/adr/`.
   **Two harness defects were caught by the self-checks and fixed at the mechanism,
   and both had reversed a number before they were.** `S5` (drift) went red at
   **30.2%** on the engine arm because **only the repeat control was warmed at its
-  level** — the sweep cells were not, so `engine@C=1` measured 6.30 q/s cold against
+  level** — the sweep cells were not, so `engine@C=1` measured 6.3 q/s cold against
   the warmed repeat's 8.20 while `encode`/`inproc` agreed to 6% because earlier
   phases had incidentally warmed them. (Those four figures are readings of the
   *broken* harness and appear in no report by construction; the fixed run's drift

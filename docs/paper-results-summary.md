@@ -508,8 +508,11 @@ the numbers below are the current ones, with the rebuild-#3 pair beside them.
 The MRR harm has now shrunk at every rebuild (p=0.0048 → 0.0012 → 0.0240)
 while staying significant — cite the direction, not the magnitude.
 
-Reranker latency, refreshed: p50 1169ms, p95 1423ms, mean 1224ms — still
-essentially unchanged run to run. **No finding-level change from the
+Reranker latency, refreshed 2026-08-18 against rebuild #4: p50 1167.4ms,
+p95 1423.4ms, mean 1225.6ms over 106 queries — still essentially unchanged run
+to run. (This line had stayed at the rebuild-#3 figures until 2026-08-23; it was
+found by `D7`, the check that reads unit-suffixed figures, because no earlier
+check could see a latency — it is neither 4-decimal nor a count/total.) **No finding-level change from the
 2026-07-29 refresh**: hybrid MRR is still the sole significant casualty,
 now at even tighter significance (p=0.0012 vs 0.0048), everything else
 stays non-significant. This is now the third consecutive refresh to land on
@@ -679,7 +682,7 @@ training buys is not needing an entity extractor.
 `hybrid` are unchanged and nothing defaults to it. Its leave-one-out weight is
 1.00 on all 106 folds, at which the hybrid term is annihilated, so the arm reduces
 to a stable partition of the hybrid top-50 by containment. Cost: ~100 ms/query for
-entity detection plus fetching 50 instead of 10 (~+20% on a 475 ms routed query),
+entity detection plus fetching 50 instead of 10 (~+20% on a 475.6 ms routed query),
 no GPU. **The trained cross-encoder is still not wired** — its ~1.2 s/query buys
 +0.0241 recall@10 over an arm that costs nothing.
 
