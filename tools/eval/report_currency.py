@@ -90,6 +90,33 @@ NOT_WORTH_REFRESHING = {
     "qdrant_concurrency_smoke.md": "a smoke slice, kept to show the harness ran; a smoke "
                                    "slice is not a small version of the answer, so "
                                    "refreshing it would establish nothing",
+    # --- triaged 2026-08-23. Each of these is stale AND staying stale; the two
+    # that a re-run could settle cheaply were re-run instead of listed here.
+    "bge_qwen_bm25_complementarity.md": "its own header calls its rescue-rate and "
+                                        "union-coverage figures an approximation from "
+                                        "top-10-only persisted results; "
+                                        "bm25_hybrid_entity_type_breakdown.md is current "
+                                        "and establishes the same complementarity "
+                                        "directly, so a refresh would restate a proxy "
+                                        "for a question already answered exactly",
+    "residual_relevance.md": "the verdict is incomplete-not-biased, and it rests on three "
+                             "Wilson intervals over ~42 judgements per arm that overlap "
+                             "heavily; their width is two orders of magnitude larger than "
+                             "anything rebuild #4 moved, so no re-sample can separate the "
+                             "arms. Refreshing also means re-judging the 126-item sheet, "
+                             "which is the dated evidence, not the rendering",
+    "qdrant_pilot.md": "its two conclusions are a recommendation (serve dense exact) and a "
+                       "structural finding (a beam narrower than the request is malformed). "
+                       "The first is re-verified end to end by qdrant_routed_check.md, "
+                       "current after the 08-20 re-ingest; the second is a property of HNSW, "
+                       "not of this corpus. The ANN-vs-exact margin is an order of magnitude "
+                       "wider than a rebuild moves recall",
+    "qdrant_concurrency.md": "measures a HAND-ASSEMBLED pipeline whose embedder and Index "
+                             "were built once outside the loop -- an idealisation the "
+                             "shipped path no longer resembles. serving_concurrency.md "
+                             "re-measures the real route_query and REVERSES its headline "
+                             "for that path, so refreshing this one would re-measure a "
+                             "topology nothing runs",
 }
 
 # A rebuild cannot stale these at all.
@@ -100,6 +127,16 @@ CORPUS_INDEPENDENT = {
                                       "probes, so no rebuild can move it",
     "colbert_pylate_crosscheck.md": "one fixed query and two fixed documents, re-derived "
                                     "from persisted .npz; no index is read",
+    # Added 2026-08-23. Not the same shape as the three above -- it probes a
+    # model rather than gating one -- but corpus-independent for the same reason
+    # the class exists: what it measures is a fixed historical artifact.
+    "rq4_prompt_fit_probes.md": "asks what ollama FED for prompts already on disk. Those "
+                                "prompts are frozen artifacts, so no rebuild can change "
+                                "their token counts; answers regenerated since carry a "
+                                "recorded num_ctx and are covered by G1a instead. It is "
+                                "also load-bearing rather than dormant: G1c passes BY "
+                                "READING IT, and its universe is imported from the audit, "
+                                "so a re-run today would probe the empty set",
 }
 
 
