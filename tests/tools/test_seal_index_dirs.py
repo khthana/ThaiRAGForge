@@ -14,6 +14,7 @@ than sealed — and that is pinned here rather than trusted to a comment.
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
@@ -64,9 +65,43 @@ def test_a_directory_with_no_seal_is_unsealed(tmp_path):
 
 
 def test_an_artifact_changed_after_the_seal_is_stale(tmp_path):
+    """A rewrite that changes the file's SIZE is caught whatever the clock does.
+
+    This deliberately writes a different row count rather than a same-shaped
+    array. The same-shaped version was flaky (2 passes in 5 runs): it rewrote
+    `embeddings.npy` microseconds after the seal, and on Windows the two writes
+    can land on one `st_mtime_ns` value, so the stamp is byte-identical and
+    `classify` correctly reports `sealed`. That is the instrument, not the
+    system -- and the limitation it exposed is pinned by the next test rather
+    than left to resurface as a flake.
+    """
     d = _index(tmp_path, "one")
-    np.save(d / "embeddings.npy", np.ones((4, 3), dtype=np.float32))
+    np.save(d / "embeddings.npy", np.ones((5, 3), dtype=np.float32))
     assert sid.classify(d, 0.0)[0] == "stale"
+
+
+def test_a_same_size_rewrite_at_an_unchanged_mtime_is_NOT_detectable(tmp_path):
+    """The hole in an `(mtime_ns, size)` stamp, stated rather than discovered.
+
+    `artifact_stamp` reads mtime and size. If a rewrite changes neither, the
+    seal cannot see it -- there is no third signal short of hashing 234 MB on
+    every cache hit, which is the cost the stamp exists to avoid. This test
+    forces exactly that case (same shape, mtime restored) and asserts the
+    UNDETECTED outcome, so the boundary of the guarantee is written down.
+
+    Why shipping with it is defensible: `ArtifactStore.save` writes a real index
+    over seconds and a rebuild essentially never reproduces a byte-identical
+    file size at an identical timestamp. The race the seal was actually built
+    for -- a reader landing between the writer's own two files -- is a
+    *different* mechanism and is covered in `tests/io/test_index_cache.py`.
+    """
+    d = _index(tmp_path, "one")
+    emb = d / "embeddings.npy"
+    before = emb.stat()
+    np.save(emb, np.ones((4, 3), dtype=np.float32))
+    assert emb.stat().st_size == before.st_size, "the premise: size is unchanged"
+    os.utime(emb, ns=(before.st_atime_ns, before.st_mtime_ns))
+    assert sid.classify(d, 0.0)[0] == "sealed"
 
 
 def test_a_recently_touched_directory_is_refused_not_sealed(tmp_path):
@@ -85,14 +120,22 @@ def test_sealing_makes_it_serveable_again(tmp_path):
     from rag_lab.io.index_cache import clear_index_cache, load_index_cached
 
     d = _index(tmp_path, "one")
-    np.save(d / "embeddings.npy", np.ones((4, 3), dtype=np.float32))
+    # A DIFFERENT WIDTH, not a same-shaped array: the rewrite lands microseconds
+    # after the save and on Windows the two can share one st_mtime_ns, so a
+    # same-size rewrite leaves a byte-identical stamp and the directory reads as
+    # sealed -- which made this test fail 4 runs in 5. Changing the size is also
+    # what a real rebuild does. (Bumping the mtime instead does NOT work: a
+    # future timestamp is "too-new", which is a different verdict.) The
+    # underlying limit is pinned by
+    # test_a_same_size_rewrite_at_an_unchanged_mtime_is_NOT_detectable.
+    np.save(d / "embeddings.npy", np.ones((4, 4), dtype=np.float32))
     clear_index_cache()
     with pytest.raises(RuntimeError):
         load_index_cached(d)
 
     seal(d)
     assert sid.classify(d, 0.0)[0] == "sealed"
-    assert float(load_index_cached(d).embeddings.sum()) == 12.0
+    assert float(load_index_cached(d).embeddings.sum()) == 16.0
     clear_index_cache()
 
 

@@ -547,6 +547,35 @@ WATCHED_QUANTITIES: list[tuple] = [
     ("colbert pilot cells", "colbert_pilot.md", None,
      [r"^\|\s*`?(?:person|program)`?\s*\|\s*(?:BM25|dense)"],
      ["ColBERT", "late interaction", "colbert_pilot"]),
+    # --- added 2026-08-23, and these two are the first entries added BECAUSE a
+    # snapshot exists rather than in spite of it. Refreshing a report hands its
+    # old figures an alibi under D2 ("in a dated snapshot" is an exemption) at
+    # the same moment it hands D8 the evidence to catch them, so a report that
+    # is snapshotted and NOT watched here is the worst of both. `multi_k_report.md`
+    # is the counter-example: it has no snapshot, so an entry naming it would
+    # derive an empty superseded set and sit in this list looking like coverage.
+    # CHECK FOR A SNAPSHOT BEFORE ADDING A QUANTITY.
+    # THE LABELS HERE ARE DELIBERATELY NOT `fetch_depth`. That word names three
+    # different experiments in this repo -- the unrouted sweep, the routed test,
+    # and the qdrant pilot's request depth -- and using it matched the ROUTED
+    # test's own current `+0.0005` against the sweep's retired `-0.0005`, i.e. it
+    # reported correct writing as stale. Same rule as the alpha sweep's label:
+    # A LABEL MUST BE ONE THAT APPEARS WHERE THIS QUANTITY'S NUMBERS ARE.
+    ("fetch-depth sweep (rrf)", "hybrid_fetch_depth_sweep.md", None,
+     [r"^\|\s*(?:n \(|[0-9,]+\s*\|)", r"^\|\s*`?(?:course|person|program|faculty)"],
+     ["hybrid_fetch_depth_sweep", "over-fetch", "ความลึก F", "ดึงเกิน",
+      "macro recall@10 across the 36 combos", "macro recall@10 at"]),
+    # The first version of this entry watched the zeroed-term and comparison
+    # tables but NOT the main depth table, so `weighted`'s own headline column
+    # was unwatched and a block quoting it read as having no current value at
+    # all. A row set that misses the quantity's headline is worse than no entry:
+    # it fails on correct writing.
+    ("weighted x fetch-depth", "hybrid_weighted_fetch_depth.md", None,
+     [r"^\|\s*(?:n \(|[0-9,]+\s*\|)",
+      r"^\|\s*`?(?:course|person|program|faculty)[^|]*\|\s*(?:rrf|weighted)\s*\|",
+      r"^\|\s*recall@10 "],
+     ["hybrid_weighted_fetch_depth", "intersection-only", "`weighted` loses",
+      "weighted` เสีย"]),
 ]
 
 

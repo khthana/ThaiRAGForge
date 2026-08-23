@@ -102,7 +102,7 @@ see `docs/adr/`.
   structurally blind to, **D6** every allowlist entry still exempts something,
   **D7** the unit-suffixed shape — `2,058.9 ms`, `9.81 q/s` — which is the *other*
   class D2 cannot see, **D8** a *named quantity* quoted at a value it no longer
-  has, over 13 watched quantities) over **13 docs**, plus — for D7 only — **every Python docstring** in
+  has, over 15 watched quantities) over **13 docs**, plus — for D7 only — **every Python docstring** in
   `src/`, `tools/`, `app/` and `tests/`.
   **D7 landed 2026-08-23 and its unit set is evidence, not taste.** Every candidate
   was scored against its own perturbations, and per unit at ≥3 significant digits
@@ -160,7 +160,7 @@ see `docs/adr/`.
   **+0.1520 / −0.0098 / −6%**). **Two rules came out of that widening, both after
   a false positive rather than from taste.** (1) **A CI is not the quantity**: its
   endpoints are arbitrary 4-decimals that collide with unrelated effect sizes, and
-  the first widened run flagged `weighted × fetch_depth`'s −0.0609 against a
+  the first widened run flagged `weighted × fetch_depth`'s F=200 loss against a
   *retired CI bound of the alpha sweep* — two experiments with nothing to do with
   each other. Brackets are stripped, and an optional column cap keeps the p-value
   column out of a significance row. (2) **A label must be one that appears where
@@ -169,6 +169,26 @@ see `docs/adr/`.
   blocks whose figures belong elsewhere. Conversely **broad is safe and
   English-only is not** — adding the bare word `reranker` is what surfaced the
   three Thai blocks above.
+  **Widened again to 15 on 2026-08-23, and these two entries are the first added
+  BECAUSE a snapshot exists rather than in spite of one.** Refreshing a report is
+  double-edged for this family: a `_pre_*` snapshot is an **exemption** under D2
+  ("in a dated snapshot") and the **evidence** under D8, so a report that is
+  snapshotted and *not* watched here is the worst of both — its old figures gain an
+  alibi and nothing gains the means to catch them. `multi_k_report.md` is the
+  counter-example and the rule: it has **no** snapshot, so an entry naming it would
+  derive an empty superseded set and sit in the registry looking like coverage.
+  **Check for a snapshot before adding a quantity.** Adding the two fetch-depth
+  reports immediately found **10 stale blocks a targeted grep had missed**, four of
+  them in `README.md` and `docs/code-explained.html` — two files that hold published
+  figures and that the refresh had not prompted anyone to open. Two mechanism rules
+  came out of it, both after a FAIL on correct writing. (1) **`fetch_depth` is not a
+  label**: it names three different experiments here (the unrouted sweep, the routed
+  test, the qdrant request depth), so it matched the *routed* test's own current
+  `+0.0005` against the sweep's retired `−0.0005` — the same failure the alpha
+  sweep's label had, one report along. (2) **A row set that misses the quantity's
+  headline column is worse than no entry**: the first `weighted` entry watched the
+  zeroed-term and comparison tables but not the main depth table, so its own
+  headline was unwatched and a correct block read as having no current value at all.
   **The measurement that motivated D8 is worth more than D8, and it is about D2:
   scored against its own perturbations, D2 clears a wrong 4-decimal number 77% of
   the time** (over its 2,970 figures; D7, for contrast, clears 7%). D2 was never
@@ -1106,9 +1126,12 @@ see `docs/adr/`.
   hatch are gone, and `tests/retrievers/test_hybrid_retriever.py` now pins that permitting the
   pair did not quietly make it a **no-op** — truncation under `weighted` must still really
   truncate, since that is the whole cost. **LIFT is not a recommendation and the number is the
-  point**: at F=200 `weighted` loses **−0.0609** macro recall@10 against its own F=n, about
-  **18x** `rrf`'s −0.0033 at the same depth, and it does **not** recover with depth the way
-  `rrf` does — at F=10,000 of ~75,000 chunks it is still −0.0112 against `rrf`'s −0.0005, so
+  point**: at F=200 `weighted` loses **−0.0605** macro recall@10 against its own F=n, about
+  **22x** `rrf`'s −0.0027 at the same depth (it read 18x against −0.0033 before the
+  2026-08-23 refresh — **the multiple grew because the DENOMINATOR shrank**, not because
+  `weighted` got worse; state both terms, never the ratio alone), and it does **not** recover
+  with depth the way
+  `rrf` does — at F=10,000 of ~75,000 chunks it is still −0.0112 against `rrf`'s −0.0004, so
   for `weighted` "deep enough" is essentially n and the knob buys nothing. What licenses
   permitting it anyway is that this codebase bans an **unmeasured** configuration from passing
   as measured, not a measured-but-worse one (nothing bans `m2v`); the docstring now carries
@@ -1121,8 +1144,8 @@ see `docs/adr/`.
   and the *last-ranked* chunk really does score 0 — but only **0.1%** of the terms a cut
   zeroes were already 0, because a chunk scores exactly 0 only when it matches **no** query
   term and a ~20-token Thai query has common tokens reaching nearly every chunk. BM25 carries
-  73% of dense's zeroed mass at F=50 (88,301 vs 121,437). The promotion half is real and
-  negligible (2 of 157,717 dense terms at F=50), so the perturbation is one-sided after all —
+  73% of dense's zeroed mass at F=50 (88,313 vs 121,449). The promotion half is real and
+  negligible (2 of 157,731 dense terms at F=50), so the perturbation is one-sided after all —
   for the opposite reason to `rrf`'s. (3) **The mechanism, corrected by the same data**: the
   hypothesis was that truncation *creates* the intersection signal `weighted` structurally
   lacks (at F=n "also in the other arm's list" is true of every chunk). Truncation does not
@@ -1131,13 +1154,18 @@ see `docs/adr/`.
   rank 10, 0.2699 at rank n) where `rrf` at rank 1,000 forfeits only 0.5/1060 ≈ 0.0005. So
   `weighted`'s top-10 goes 8.25/10 in-both-arms at F=200 and 9.99/10 at F=1,000 (`rrf` 7.41 /
   8.30): it becomes an intersection-only ranker and evicts what one arm alone found. That
-  lands exactly where a single arm carries a type — **`person` −0.1965** at F=200 (BM25 carries
-  person at 0.8147) against `program` **+0.0212**. (4) **P4 refuted in the interesting
+  lands exactly where a single arm carries a type — **`person` −0.1957** at F=200 (BM25 carries
+  person at 0.8147) against `program` **+0.0216**. (4) **P4 refuted in the interesting
   direction and it is a hypothesis, never a result**: at F=n `weighted` scores **above** `rrf`
-  (0.5442 vs 0.5204, **+0.0239** macro recall@10). Descriptive only — no significance test,
+  (0.5439 vs 0.5197, **+0.0241** macro recall@10). Descriptive only — no significance test,
   macro over 36 combos, **unrouted**, and nothing ships `weighted`; the wrong-pair trap that
   killed per-`entity_type` alpha and rrf4 applies here too, so it would need re-measuring
-  against the hard router before it means anything. The fusion is **imported** from
+  against the hard router before it means anything. **Re-run 2026-08-23 against rebuild #4, as a PAIR with the sweep above and never alone:
+  the LIFT verdict, every refutation and every mechanism survived, only levels moved.** The
+  pairing is forced by S7 — this run's `rrf` columns must reproduce the *published* sweep, so
+  refreshing either report on its own breaks the anchor rather than merely dating it; the
+  sweep was re-run first and S7 then reproduced it at all 11 depths. The fusion is
+  **imported** from
   `hybrid_fetch_depth_sweep.py` rather than reimplemented, which makes this run's `rrf` columns
   a cross-artifact anchor (S7 reproduces that sweep at all 11 depths); S5/S6 check against the
   real `HybridRetriever` at F=n **and** at F ∈ {5, 50, 200, 1000}, since S5 alone would pass
@@ -1151,7 +1179,7 @@ see `docs/adr/`.
 - **`fetch_depth` against the shipped router, and the ship decision (2026-08-09,
   `tools/eval/routed_fetch_depth_test.py` → `data/results/routed_fetch_depth_test.md`,
   ~2.5 min quality + ~3 min latency).** The sweep above left one blocker: its
-  −0.0033 is a macro over 36 combos retrieving with **no router**, and hard routing has
+  −0.0027 is a macro over 36 combos retrieving with **no router**, and hard routing has
   shipped since 2026-08-08 — the exact wrong-pair trap that killed per-`entity_type` alpha
   and rrf4. Re-measured on the 106 queries routed by `classify_query` to their 4 shipped
   indices, **the trade gets better on both sides**: pre-registered F=200 vs k=n (3 metrics,

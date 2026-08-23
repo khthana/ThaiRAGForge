@@ -3029,7 +3029,7 @@ BM25 scorer pre-warmed; `plain__sentence__qwen3__ff8f6c49`, 106 queries):
 k=n p50 **1089.5 ms** → F=1,000 **421.0 ms** → F=200 **417.9 ms**. So the
 over-fetch is ~62% of hybrid query time, and the ~0.42 s that remains is real
 scoring work (dense encode + gemv + BM25 `get_scores`) that no depth cut
-touches. The trade on offer is ≈0.67 s/query for −0.0033 macro recall@10 at
+touches. The trade on offer is ≈0.67 s/query for −0.0027 macro recall@10 at
 F=200. **As of this sweep nothing was wired — the class default is still k=n**,
 and the knob's default (`fetch_depth=None`) computes `depth = len(index.chunks)`,
 i.e. the old expression exactly, so no published number moves. (It was
@@ -3095,9 +3095,9 @@ was run against a decision rule frozen in the script before the run, and the rul
 truncation a no-op.
 
 **LIFT is not a recommendation, and the number is the point.** At F=200 `weighted` loses
-**−0.0609** macro recall@10 against its own k=n — about **18x** `rrf`'s −0.0033 at the same
+**−0.0605** macro recall@10 against its own k=n — about **22x** `rrf`'s −0.0027 at the same
 depth — and unlike `rrf` it does **not** recover with depth: at F=10,000 of ~75,000 chunks
-it is still **−0.0112** against `rrf`'s −0.0005. For `weighted`, "deep enough" is essentially
+it is still **−0.0112** against `rrf`'s −0.0004. For `weighted`, "deep enough" is essentially
 n, so the knob buys nothing. What licenses permitting it anyway is that this codebase bans an
 *unmeasured* configuration from passing as measured, not a measured-but-worse one.
 
@@ -3108,14 +3108,14 @@ arm still forfeits a large term, where `rrf` at rank 1,000 forfeits only ≈0.00
 `weighted`'s top-10 goes **8.25/10** in-both-arms at F=200 and **9.99/10** at F=1,000 (`rrf`
 7.41 / 8.30): it becomes an intersection-only ranker and evicts what one arm alone found.
 That lands exactly where a single arm carries a type — `person` **−0.1965** at F=200 (BM25
-carries person at 0.8147) against `program` **+0.0212**.
+carries person at 0.8147) against `program` **+0.0216**.
 
 Two further results worth carrying. The pre-registered guess that a cut merely zeroes terms
 that were already zero was **refuted**: `BM25Okapi` floors negative IDF so the last-ranked
 chunk really does score 0, but only **0.1%** of the zeroed terms were already 0, because a
 ~20-token Thai query has common tokens reaching nearly every chunk (BM25 carries 88,301 of
 dense's 121,437 zeroed mass at F=50, and only 2 of 157,717 dense terms are promoted). And
-descriptively, at F=n `weighted` scores **above** `rrf` — 0.5442 vs 0.5204, **+0.0239** macro
+descriptively, at F=n `weighted` scores **above** `rrf` — 0.5439 vs 0.5197, **+0.0241** macro
 recall@10 — which is a **hypothesis, never a result**: no significance test, macro over 36
 combos, unrouted, and nothing ships `weighted`. The wrong-pair trap that killed
 per-`entity_type` alpha and rrf4 applies to it too.
@@ -3190,7 +3190,7 @@ smoke run checks that the code runs; it is not a small version of the answer.
    intrinsic baselines — the additive number is the real story.
    **The second is now measured, and DECIDED** (2026-08-09, see "Hybrid
    fetch depth" above): capping the fetch at F=200 removes ≈0.67s/query but
-   costs −0.0033 macro recall@10 and changes 43% of top-10 orderings, so it
+   costs −0.0027 macro recall@10 and changes 43% of top-10 orderings, so it
    is a cost/quality trade for the deployer, not a defect to silently
    repair. Re-measured against the **shipped hard router** (rather than the
    36-combo macro, which is not a system result) the same cut is

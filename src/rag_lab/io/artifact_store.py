@@ -38,10 +38,23 @@ def artifact_stamp(directory: str | Path) -> list:
     """What the index's artifacts look like on disk right now.
 
     `[mtime_ns, size]` per file in `ARTIFACT_FILES` order, `None` for one that
-    does not exist. Both halves matter: a rebuild landing on the same
-    nanosecond is absurd, but a same-second rewrite is not, and size catches
-    the truncation a coarse mtime would miss. A list rather than a tuple
-    because it round-trips through JSON in the seal.
+    does not exist. Both halves matter: a same-second rewrite is common and
+    size catches the truncation a coarse mtime would miss.
+
+    **The bound, measured rather than assumed.** An earlier version of this
+    docstring said a rewrite landing on the same nanosecond was "absurd". On
+    Windows it is not: two `np.save` calls microseconds apart can produce an
+    identical `st_mtime_ns`, which made a test that rewrote a same-shaped array
+    fail 3 runs in 5. So the honest statement is that this stamp cannot see a
+    rewrite that changes NEITHER size NOR mtime, and there is no third signal
+    short of hashing every artifact on each cache hit -- the cost the stamp
+    exists to avoid. That is acceptable because a real `save` takes seconds and
+    does not reproduce a byte-identical size at an identical timestamp; it is
+    pinned in the undetected direction by
+    `tests/tools/test_seal_index_dirs.py::test_a_same_size_rewrite_at_an_unchanged_mtime_is_NOT_detectable`
+    so the boundary is written down instead of resurfacing as a flake.
+
+    A list rather than a tuple because it round-trips through JSON in the seal.
     """
     d = Path(directory)
     out: list = []
