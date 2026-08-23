@@ -159,6 +159,7 @@ DOCS = [
     # carried under D2/D5/D7 -- a move whose destination is not in DOCS is a
     # silent loss of coverage, which is the one rule the size-reduction work has.
     Path("docs/reranker-axis-notes.md"),
+    Path("docs/entity-matching-and-relation-graph.md"),
     Path("docs/serving-architecture.md"),
     Path("docs/eval-validity-threats.md"),
     Path("docs/research-framework-gap-analysis.md"),

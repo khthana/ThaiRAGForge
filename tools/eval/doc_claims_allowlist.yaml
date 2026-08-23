@@ -149,10 +149,13 @@ counts:
       separate entry because allowlist entries are keyed per document on
       purpose, so clearing it in one doc must not silently clear it in another.
 
-  - doc: CLAUDE.md
+  - doc: docs/entity-matching-and-relation-graph.md
     figure: "180 of 250"
-    checked: 2026-08-21
+    checked: 2026-08-23
     reason: >-
+      RE-KEYED 2026-08-23 with the relation-graph fold-out: the sentence moved
+      from CLAUDE.md to docs/entity-matching-and-relation-graph.md and
+      allowlist entries are keyed per document.
       docs/relation-graph.md's edge-A table (`resolved` 180 of 250, 72.0%) and
       its S2 row ("180+56+14 = 250 จาก 250 หลักสูตร (253 รายการพจนานุกรม)").
       The report states the numerator and the denominator as a sum in a
@@ -161,30 +164,39 @@ counts:
       entries; the key is the exact figure, so the next such change re-flags
       rather than inheriting this clearance.
 
-  - doc: CLAUDE.md
+  - doc: docs/entity-matching-and-relation-graph.md
     figure: "0 of 30"
-    checked: 2026-08-12
+    checked: 2026-08-23
     reason: >-
+      RE-KEYED 2026-08-23 with the relation-graph fold-out: the sentence moved
+      from CLAUDE.md to docs/entity-matching-and-relation-graph.md and
+      allowlist entries are keyed per document.
       docs/program-matcher-absorption.md §4 lines 120-121, which state the two
       halves on separate lines: "program gold queries: **30**" and "gold pairs
       whose resolution_id does NOT literally contain the program: **0**".
       Appears twice in the prose (the degree half and the cross-subject half),
       both citing that same §4.
 
-  - doc: CLAUDE.md
+  - doc: docs/entity-matching-and-relation-graph.md
     figure: "0 of 247"
-    checked: 2026-08-12
+    checked: 2026-08-23
     reason: >-
+      RE-KEYED 2026-08-23 with the relation-graph fold-out: the sentence moved
+      from CLAUDE.md to docs/entity-matching-and-relation-graph.md and
+      allowlist entries are keyed per document.
       The 247 is the gold *pair* count behind the same §4 of
       docs/program-matcher-absorption.md, which reports the pair test as a
       verdict ("So the absorption defect does not reach the program qrels")
       rather than printing the denominator. Recomputed by hand 2026-08-12 --
       re-check if the program qrels are ever regenerated.
 
-  - doc: CLAUDE.md
+  - doc: docs/entity-matching-and-relation-graph.md
     figure: "206 of 435"
-    checked: 2026-08-12
+    checked: 2026-08-23
     reason: >-
+      RE-KEYED 2026-08-23 with the relation-graph fold-out: the sentence moved
+      from CLAUDE.md to docs/entity-matching-and-relation-graph.md and
+      allowlist entries are keyed per document.
       Correct but unpublished: docs/relation-graph.md line 80 prints only the
       accepted count ("occurrence ทั้งหมด **206**"), never the raw marker count
       it accepted them out of. Re-derived 2026-08-12 over the cache's own file
@@ -204,17 +216,23 @@ counts:
       percentage: "| คนละคณะ | 64 (100.0%) |" over the 64 determinable
       occurrences.
 
-  - doc: CLAUDE.md
+  - doc: docs/entity-matching-and-relation-graph.md
     figure: "170 of 181"
-    checked: 2026-08-12
+    checked: 2026-08-23
     reason: >-
+      RE-KEYED 2026-08-23 with the relation-graph fold-out: the sentence moved
+      from CLAUDE.md to docs/entity-matching-and-relation-graph.md and
+      allowlist entries are keyed per document.
       docs/relation-graph.md line 114 (manifest title vs OCR'd body cross-check,
       stated as "ตรงกัน **170** (93.9%)" of the 181 programs both can name).
 
-  - doc: CLAUDE.md
+  - doc: docs/entity-matching-and-relation-graph.md
     figure: "105 of 115"
-    checked: 2026-08-12
+    checked: 2026-08-23
     reason: >-
+      RE-KEYED 2026-08-23 with the relation-graph fold-out: the sentence moved
+      from CLAUDE.md to docs/entity-matching-and-relation-graph.md and
+      allowlist entries are keyed per document.
       docs/relation-graph.md line 115 (split-half cross-check: "115 หลักสูตร
       ตรงกัน **105** (91.3%)") -- same shape, numerator and denominator on the
       same line but not joined by "of"/"จาก".
