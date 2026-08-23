@@ -1501,10 +1501,12 @@ is the single largest reason the soft-vs-hard verdict below flipped.
 **Method note on honesty of the `shipped` arm — and it got weaker, not stronger,
 with the refresh.** After 2026-08-08, four of five shipped targets are chosen from
 this same 106-query scan, so `routed (shipped)` is largely fitted on the set it is
-scored on and now sits near `routed (oracle)` by construction (dense 0.6189 vs
-0.6293; hybrid 0.6831 vs 0.6868). **Cite `routed (loo)` as the generalisation
-estimate.** That arm is *unchanged* by the refresh (+0.0349 dense, +0.0499 hybrid,
-both ns) because it never read the shipped constants — which is the cleanest way to
+scored on and now sits near `routed (oracle)` by construction (dense 0.6173 vs
+0.6277; hybrid 0.6811 vs 0.6863 — 2026-08-18, against rebuild #4). **Cite
+`routed (loo)` as the generalisation estimate.** That arm was *unchanged* by the
+2026-08-08 refresh because it never read the shipped constants, and rebuild #4 then
+moved it on one retriever only: dense **+0.0317** (Holm 0.4424, ns), hybrid
+**+0.0825** (Holm 0.0000, significant) — both against `best single combo (loo)` — which is the cleanest way to
 state what the refresh bought: it raises the shipped router to what LOO already
 predicted for a well-chosen per-route map, rather than creating new gain. Every
 routed arm is compared against a baseline fitted the *same* way (`oracle` vs
@@ -1653,7 +1655,7 @@ the gold label (the two partitions agree 106/106).
 | _D′ both (oracle)_ | _upper bound_ | 5 | _0.6901_ | _0.9112_ | _0.7721_ |
 
 Arm C reproduces `routing_eval.md`'s `routed (shipped)` hybrid recall@10 to four
-decimals (0.6831 both) from an entirely separate code path — a useful cross-check
+decimals (0.6811 both, 2026-08-18) from an entirely separate code path — a useful cross-check
 that the two routing scripts agree on what the shipped router does.
 
 **Two significant results, one per mechanism, and they are on different metrics:**
@@ -1678,9 +1680,11 @@ cost-per-point argument for soft survives the flip; the "soft is at least as goo
 claim does not.
 
 **They remain substitutes, not complements — but for a sharper reason than before.**
-D (both) is 0.6629 recall@10, *below* C's 0.6831 and level with B, and `D vs C` is
-**negative** (−0.0202) with a CI excluding zero, though ns after Holm. Yet at the
-oracle bound D′ (0.6901) is the best arm in the table, above C by +0.0071. Put
+D (both) is 0.6648 recall@10, *below* C's 0.6811, and `D vs C` is
+**negative** (−0.0163, CI [−0.0327, −0.0021]) with a CI excluding zero, though ns
+after Holm. Yet at the oracle bound D′ (0.6909) is the best arm in the table, above
+C by +0.0098. (2026-08-18, against rebuild #4; the pre-rebuild reading was
+0.6629 / 0.6831 / −0.0202 / 0.6901 / +0.0071.) Put
 together: **there is a sliver of real headroom left for a per-route alpha on top of
 routing, and LOO fitting costs more than that sliver is worth.** That is a stronger
 statement than the pre-refresh version of this section made (it had D worse than B
@@ -1710,7 +1714,8 @@ against *no routing at all*, which stopped being the shipped configuration the s
 day. The decision-relevant comparison is **D vs C**, per-route alpha on top of the
 router that now ships, and it shows no gain on any metric: recall@10 −0.0202,
 MRR +0.0182, nDCG@10 +0.0066, none significant. Total remaining headroom is the
-oracle gap **+0.0071** (D′ 0.6901 vs C 0.6831), which LOO fitting costs more than.
+oracle gap **+0.0098** (D′ 0.6909 vs C 0.6811, 2026-08-18), which LOO fitting costs
+more than.
 The mechanism says this is not merely a power problem: a per-type alpha exists to
 repair a per-type weak dense arm, and hard routing hands each route a specialist
 index that by construction does not have one — hence the `person` alpha\* moving
@@ -1720,16 +1725,21 @@ to *invert* across types; `semantic+bge_m3` gains nothing).
 
 **The one branch that flips it:** if 5 indices becomes a deployment constraint, the
 question is not "add alpha" but "**replace** hard routing with soft" — arm B reaches
-0.6631 on **one** index, is ns against arm C, and is significant against no routing
-on nDCG@10. That is a cost decision, not an accuracy one. Never ship both.
+**0.6510** on **one** index and is ns against arm C. **Rebuild #4 weakened this
+branch and the sentence is corrected rather than merely re-quoted (2026-08-18):**
+arm B's nDCG@10 margin over no routing lost significance (+0.0333, Holm 0.0528, was
++0.0360 at 0.0216), so soft routing no longer owns a significant result anywhere in
+that table, and it is now numerically *below* doing both (0.6648) where it used to
+be above. That is still a cost decision, not an accuracy one. Never ship both.
 
 **Caveats.** (1) Arm A's index is the argmax over 36 combos on this same test set;
 its defence is that `routing_eval`'s LOO selector re-picks it in every fold (best
-single = best single (LOO) = 0.6281), not that it was chosen blind. (2) Arm C's
+single = 0.6229, and the LOO selector re-picks it in every fold), not that it was
+chosen blind. (2) Arm C's
 targets are now *also* fitted on this set (§"Query routing" method note), so C is
 closer to an upper bound than it was — read `routing_eval.md`'s `routed (loo)`
-(0.6780 hybrid recall@10) as the generalisation estimate for the hard arm, which
-still sits above soft's 0.6631. (3) `faculty` n=13 — no per-route conclusion from
+(**0.6794** hybrid recall@10) as the generalisation estimate for the hard arm, which
+still sits above soft's **0.6510**. (3) `faculty` n=13 — no per-route conclusion from
 that row alone. (4) The soft arm's numbers reproduce `hybrid_alpha_sweep.py` to 4
 decimal places from an independent code path, but its `recall@10` **verdict**
 differs (Holm-adj 0.0252 at m=9 there, 0.0580 at m=12 here) — same data, same
@@ -2211,29 +2221,32 @@ they send 360. The script recomputes 0.8856 from the qrels and gates on this
 
 | arm | docs sent | docs fetched | recall@10 macro | micro |
 |---|---|---|---|---|
-| best single combo (`sentence` × `qwen3_0.6b`) | 10 | 10 | 0.6281 | 0.4895 |
-| oracle picks the best combo per query | 10 | 10 | 0.7771 | 0.6233 |
-| union of all 36 + a perfect reranker | 10 | 360 | 0.8355 | 0.6931 |
-| union of all 36 (no budget cap) | 360 | 360 | 0.8948 | 0.8432 |
-| + dense results too (72 systems) | 720 | 720 | 0.9375 | 0.9120 |
-| + BM25 as well (76 systems) | 760 | 760 | **0.9443** | 0.9197 |
+| best single combo (`sentence` × `qwen3_0.6b`) | 10 | 10 | 0.6229 | 0.4866 |
+| oracle picks the best combo per query | 10 | 10 | 0.7775 | 0.6243 |
+| union of all 36 + a perfect reranker | 10 | 360 | 0.8342 | 0.6912 |
+| union of all 36 (no budget cap) | 360 | 360 | 0.8916 | 0.8346 |
+| + dense results too (72 systems) | 720 | 720 | 0.9359 | 0.9063 |
+| + BM25 as well (76 systems) | 760 | 760 | **0.9418** | 0.9130 |
+
+Levels are the 2026-08-18 re-run against rebuild #4; every conclusion below is
+unchanged and the point estimates moved by under 0.005.
 
 Three results worth citing, and one retraction.
 
 1. **Diversity is not free, and at a fixed budget it is negative.** Splitting
-   the same 10 document slots across 2 systems (5 each) scores **0.5913** against
-   a single system's **0.6281** — **−0.0368**. Doubling the budget instead (2
-   systems × 10 = 20 documents) gives **+0.1158**. The earlier reading that an
+   the same 10 document slots across 2 systems (5 each) scores **0.5936** against
+   a single system's **0.6229** — **−0.0294**. Doubling the budget instead (2
+   systems × 10 = 20 documents) gives **+0.1196**. The earlier reading that an
    ensemble beat a single model compared 20 documents against 10. Both arms here
    are chosen greedily *on the test set*, so the comparison is biased toward
    diversity and it still loses. See [[feedback_state_the_retrieval_budget_in_every_comparison]].
 2. **The misses are mostly ranking, not absence.** Of 1,046 pairs the best single
-   combo finds 512 (48.9%) and the 36-way union finds 882 (84.3%): **370 pairs
-   (69.3% of the misses) are found by *some* system**. That is the headroom a
+   combo finds 509 (48.7%) and the 36-way union finds 873 (83.5%): **364 pairs
+   (67.8% of the misses) are found by *some* system**. That is the headroom a
    per-query router or a reranker over a merged pool is aiming at — but at the
-   real 10-document budget its ceiling is 0.7771–0.8355, **not** 0.8948.
-3. **The floor is 84 pairs (8.0%)**, not the 164 the hybrid-only union
-   suggests. Adding the dense and BM25 result sets recovers 80 further pairs, so
+   real 10-document budget its ceiling is 0.7775–0.8342, **not** 0.8916.
+3. **The floor is 91 pairs (8.7%)**, not the 173 the hybrid-only union
+   suggests. Adding the dense and BM25 result sets recovers 82 further pairs, so
    most of "no system found it" was a *retriever-choice* artifact. **This line
    read 76 (7.3%) until 2026-08-09**, subtracting 8 pairs called unanswerable by
    construction; that premise was measured and refuted (below), so the
@@ -2242,8 +2255,8 @@ Three results worth citing, and one retraction.
    the depth profile below shows they are ranked, not absent.
 
 **Retracted from the earlier version of this analysis**: its best single of
-0.6935 is superseded by the 0.6281 above, and its ceiling of 0.9201 is retired
-in favour of the 0.8948 above — do not cite either. The cause is the query set:
+0.6935 is superseded by the 0.6229 above, and its ceiling of 0.9201 is retired
+in favour of the 0.8916 above — do not cite either. The cause is the query set:
 that analysis ran against a checkout whose Gold set still held **73** entries,
 and the 33 `course` queries added on 2026-07-25 are the harder ones. Scoring
 only those 73 non-course queries with the combo set used here reproduces its

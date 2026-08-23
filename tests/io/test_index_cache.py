@@ -1,10 +1,10 @@
 """The serving-path Index cache.
 
-Measured motivation (`data/results/serving_cost_profile.md`, 2026-08-21):
-`ArtifactStore.load` costs 1,159 ms, and because `BM25Okapi` is memoised on the
+Measured motivation (`data/results/serving_cost_profile.md`):
+`ArtifactStore.load` costs 1,185 ms, and because `BM25Okapi` is memoised on the
 Index object, discarding the Index discards the scorer too and the next hybrid
-retrieve rebuilds it -- 921 ms more. Together that is 2,079 ms of the 2,994 ms a
-served query still costs after the embedder cache.
+retrieve rebuilds it -- 995 ms more. Together that is 2,180 ms off the 3,069 ms
+a served query still costs after the embedder cache.
 
 Sharing an Index is only safe while nothing mutates one, so the two properties
 that carry the design are pinned here rather than argued:

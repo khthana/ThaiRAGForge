@@ -378,9 +378,11 @@ def warm_serving_caches(
     engine retriever would both waste ~234MB per index and warm an entry the
     serving path never asks for. It also implies no lexical warm-up -- the
     engine scores its own sparse arm. It does **not** imply skipping the probe:
-    that was the original gating and it cost an engine-only process ~485 ms on
-    its first real query, because the probe's job in (4) is process-global
-    initialisation that has nothing to do with which rows are resident.
+    that was the original gating and it cost an engine-only process **657 ms**
+    on its first real query against a ~160 ms steady state
+    (`data/results/serving_concurrency.md`), because the probe's job in (4) is
+    process-global initialisation that has nothing to do with which rows are
+    resident. Ungated, that first query reads **197.5 ms**.
 
     Returns what was warmed and what it cost, so a caller can log it. Failures
     are collected per target rather than raised: a warm-up is an optimisation,
@@ -440,8 +442,9 @@ def warm_serving_caches(
     # tidy-up (2026-08-21): the probe's job in (4) is process-global CUDA/BLAS
     # initialisation, which an engine-served deployment pays exactly like a
     # row-reading one. Gated on with_rows, an engine-only process got no probe
-    # and its first real query cost ~485 ms against a ~159 ms steady state
-    # (`data/results/serving_concurrency.md` section 3). The engine retriever
+    # and its first real query cost 657 ms against a ~160 ms steady state,
+    # against 197.5 ms once ungated (`data/results/serving_concurrency.md`
+    # section 3). The engine retriever
     # reads no Index rows, so a rows-less Index is a valid probe target, and a
     # probe that cannot run is collected as a failure rather than raised.
     if probe_retrieval and first_pair is not None:

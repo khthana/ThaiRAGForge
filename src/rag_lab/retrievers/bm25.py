@@ -35,11 +35,12 @@ class BM25Retriever(BaseRetriever):
         **Quote that saving in seconds, not as a multiple of `get_scores`.**
         `rank_bm25` loops over query *terms* in Python, so scoring is linear in
         query length (~12 ms/token here) while the build is not: the ratio is
-        ~26x for a 3-token query but ~4x for the 20-token Gold queries this
+        ~26x for a 3-token query but under 4x for the 20-token Gold queries this
         project evaluates. This docstring quoted the 26x on 2026-08-08 without
-        naming its token count; re-measured 2026-08-09 (`cost_latency_pareto.py`,
-        1007ms build vs 252ms scoring at 20 tokens median). The ~1s removed from
-        every query is the part that does not depend on query shape.
+        naming its token count; the current measurement is `cost_latency_pareto.md`
+        -- **898.80 ms build vs 233.51 ms `get_scores`** at the 20-token median,
+        a 3.8x ratio. **The absolute saving is what transfers between the two
+        query shapes (~1.07 s/query either way); the multiplier is not.**
 
         The memo is validated by *identity of the token list*, not by presence:
         `Index.lexical` is a mutable field, and serving a scorer built from a

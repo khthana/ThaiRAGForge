@@ -47,7 +47,7 @@ from the arm that was measured.
 
 Cost: `detect_entities` is ~100 ms/query on this corpus (the course matcher is
 ~75 ms of it) on top of a hybrid fetch of `fetch_depth` instead of `k`. Against
-a 475 ms routed hybrid query that is roughly +20%, and it touches no GPU -- the
+a 475.6 ms routed hybrid query that is roughly +20%, and it touches no GPU -- the
 layer that actually saturates under load (`data/results/qdrant_concurrency.md`).
 
 Not wired as anyone's default: `dense`/`hybrid` still ship unchanged, and this

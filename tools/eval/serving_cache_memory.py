@@ -3,7 +3,7 @@
 Generated report: data/results/serving_cache_memory.md
 
 `serving_cost_profile.md` measured what the caches SAVE (a warm served query is
-422 ms against 11,980) and explicitly listed footprint as not established. This
+463 ms against 12,465) and explicitly listed footprint as not established. This
 is that measurement. Both caches trade memory for latency and neither trade was
 priced:
 

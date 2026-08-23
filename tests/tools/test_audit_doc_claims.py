@@ -16,6 +16,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "eval"))
 import audit_doc_claims as adc  # noqa: E402
 
@@ -498,12 +500,134 @@ class TestUnitsAllowlist:
         src = inspect.getsource(adc.audit_allowlist_liveness)
         assert '"units"' in src
 
-    def test_no_live_units_entry_names_a_doc_outside_DOCS(self):
+    def test_no_live_units_entry_names_a_file_outside_what_D7_reads(self):
+        """D7 reads DOCS *and* Python docstrings since 2026-08-23, so a units
+        entry may name either -- but nothing else. An entry naming a file the
+        check never opens exempts nothing and is the easiest way to make an
+        allowlist look thorough while covering a file no check visits."""
         docs = {str(d).replace("\\", "/") for d in adc.DOCS}
+        sources = {r for r, _ in adc._source_docstrings()}
         for e in adc._allowlist("units"):
-            assert e["doc"] in docs, f"{e['doc']} is exempted but not audited"
+            assert e["doc"] in docs or e["doc"] in sources, (
+                f"{e['doc']} is exempted but not audited")
 
     def test_every_live_units_entry_carries_a_reason_and_a_date(self):
         for e in adc._allowlist("units"):
             assert e.get("reason", "").strip(), e
             assert e.get("checked"), e
+
+
+# --------------------------------------------------------------------- D8 ---
+class TestD8BlockSplitting:
+    """The block is the unit, and the split is what makes D8 non-vacuous.
+
+    CLAUDE.md writes its bullets with no blank line between them. Split on blank
+    lines alone and the whole Conventions list is ONE block -- every figure in
+    the file in one bag, so a superseded value always has a current one somewhere
+    beside it and the check passes on everything. That is the haystack-too-big
+    failure D2's own design rule warns about, one level down.
+    """
+
+    def test_a_top_level_bullet_starts_a_new_block(self):
+        text = "- first bullet 0.1111\n  continued\n- second bullet 0.2222\n"
+        got = adc._prose_blocks(text)
+        assert len(got) == 2
+        assert "0.1111" in got[0][1] and "0.1111" not in got[1][1]
+
+    def test_claude_md_does_not_collapse_to_one_block(self):
+        blocks = adc._prose_blocks((adc.REPO / "CLAUDE.md").read_text(encoding="utf-8"))
+        assert len(blocks) > 30, "CLAUDE.md collapsed to a handful of blocks"
+
+    def test_html_block_tags_split_too(self):
+        text = '<div class="note">\nfoo 0.1111\n</div>\n<div class="win">\nbar 0.2222\n'
+        assert len(adc._prose_blocks(text)) >= 2
+
+    def test_line_numbers_point_at_the_block_start(self):
+        text = "intro\n\n- bullet 0.1111\n  more\n"
+        blocks = dict((b, s) for s, b in adc._prose_blocks(text))
+        assert blocks["- bullet 0.1111\n  more"] == 3
+
+
+class TestD8SupersededIsDerivedNotTyped:
+    def test_current_and_superseded_are_disjoint(self):
+        for name, report, section, rows, _ in adc.WATCHED_QUANTITIES:
+            cur, old = adc._quantity_values(report, section, rows)
+            assert not (cur & old), f"{name}: a value cannot be both"
+
+    def test_every_watched_quantity_actually_resolves(self):
+        # A renamed row label would silently empty a quantity, and an empty
+        # quantity flags nothing -- the vacuous-PASS shape this whole file
+        # exists to prevent. D8 reports it as UNRESOLVED; here it is a failure.
+        for name, report, section, rows, _ in adc.WATCHED_QUANTITIES:
+            cur, _ = adc._quantity_values(report, section, rows)
+            assert cur, f"{name} resolved to nothing ({report})"
+
+    def test_a_missing_section_yields_nothing_rather_than_the_whole_file(self):
+        got = adc._table_values("| recall@10 | routed (shipped) | 0.6811 |",
+                              "## no such heading", [r"routed"])
+        assert got == set()
+
+    def test_the_section_stops_at_the_next_heading(self):
+        text = ("## A\n| recall@10 | routed (shipped) | 0.1111 |\n"
+                "## B\n| recall@10 | routed (shipped) | 0.2222 |\n")
+        assert adc._table_values(text, "## A", [r"routed \(shipped\)"]) == {0.1111}
+
+
+class TestD8AgreesWithTheTestedParsers:
+    """One authority, checked from the side.
+
+    D8 reads report tables generically rather than importing each script's own
+    parser, because importing one costs ~6 s and pulls torch into an audit that
+    has to stay fast. That is only safe if the two agree, so the comparison lives
+    here, where the 6 s can be afforded.
+    """
+
+    def test_routed_shipped_matches_parse_routing_eval_routed(self):
+        pytest.importorskip("numpy")
+        sys.path.insert(0, str(adc.REPO / "tools" / "eval"))
+        from reranker_rrf_routed_test import parse_routing_eval_routed
+
+        text = (adc.RESULTS / "routing_eval.md").read_text(encoding="utf-8")
+        for retriever in ("hybrid", "dense"):
+            spec = next(w for w in adc.WATCHED_QUANTITIES
+                        if w[0] == f"routed arms ({retriever})")
+            cur, _ = adc._quantity_values(spec[1], spec[2], spec[3])
+            assert parse_routing_eval_routed(text, retriever) in cur
+
+    def test_rrf4_arms_match_parse_routed_arms(self):
+        pytest.importorskip("numpy")
+        sys.path.insert(0, str(adc.REPO / "tools" / "eval"))
+        from reranker_rrf_routed_test import parse_routed_arms
+
+        text = (adc.RESULTS / "reranker_rrf_routed_test.md").read_text(encoding="utf-8")
+        spec = next(w for w in adc.WATCHED_QUANTITIES if w[0] == "rrf4 2x2 arms")
+        cur, _ = adc._quantity_values(spec[1], spec[2], spec[3])
+        assert set(parse_routed_arms(text).values()) <= cur
+
+
+# ------------------------------------------------- D7 over Python docstrings --
+class TestD7ReadsDocstrings:
+    """A docstring is prose and was outside every check here until 2026-08-23.
+
+    Only D7 was extended, and that was a measurement: over these docstrings the
+    ms/q-s rule scores 61% real / 15% at n+1 (a check) while the 4-decimal rule
+    scores 96% / 71% -- as weak as D2 itself, which had never been scored this
+    way. The registry below is what stops the source set silently shrinking.
+    """
+
+    def test_the_source_set_is_not_empty_and_covers_the_shipped_package(self):
+        found = adc._source_docstrings()
+        assert len(found) > 200
+        assert any(r.startswith("src/rag_lab/") for r, _ in found)
+        assert any(r.startswith("tests/") for r, _ in found)
+
+    def test_a_module_docstring_is_read(self):
+        rels = {r for r, _ in adc._source_docstrings()}
+        assert "src/rag_lab/query_service.py" in rels
+
+    def test_a_syntax_error_is_skipped_rather_than_fatal(self, tmp_path, monkeypatch):
+        bad = tmp_path / "src" / "rag_lab"
+        bad.mkdir(parents=True)
+        (bad / "broken.py").write_text("def (:\n", encoding="utf-8")
+        monkeypatch.setattr(adc, "REPO", tmp_path)
+        assert adc._source_docstrings() == []

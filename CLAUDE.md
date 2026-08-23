@@ -95,13 +95,15 @@ see `docs/adr/`.
   `diff_significance_reports.py` gates report-vs-report, but **nothing read the
   prose**, which is where this project's avoidable errors actually live — a number
   typed by hand, correct that day, that no later refresh touches because a refresh
-  re-runs scripts and diffs reports. Seven checks (**D1** report older than its
+  re-runs scripts and diffs reports. Eight checks (**D1** report older than its
   generator, **D2** every 4-decimal figure in the prose must appear in some report,
   **D3** a p-value quoted against a contradicting verdict word, **D4** an eval *input*
   changed after a report that reads it, **D5** the count/total shape D2 is
   structurally blind to, **D6** every allowlist entry still exempts something,
   **D7** the unit-suffixed shape — `2,058.9 ms`, `9.81 q/s` — which is the *other*
-  class D2 cannot see) over **13 docs**.
+  class D2 cannot see, **D8** a *named quantity* quoted at a value it no longer
+  has) over **13 docs**, plus — for D7 only — **every Python docstring** in
+  `src/`, `tools/`, `app/` and `tests/`.
   **D7 landed 2026-08-23 and its unit set is evidence, not taste.** Every candidate
   was scored against its own perturbations, and per unit at ≥3 significant digits
   only `ms` (70% real / 8% at n+1) and `q/s` (67% / 0%) are checks: `MB`, `%` and
@@ -121,6 +123,55 @@ see `docs/adr/`.
   run it**; D3's known false positives and D5's standing residue (about a tenth of
   its figures, *below* its own documented ~36% base rate) are its designed state, and
   both move whenever this file is edited.
+  **D8 landed 2026-08-23 and it is the first check here that can see rot D2's own
+  haystack shares.** D2 asks *does this figure appear in some report*, so when
+  rebuild #4 moved `routed (shipped)` 0.6831 → 0.6811 the prose kept saying 0.6831
+  and D2 kept passing, because ten other reports still carried it. D8 asks a
+  different question — **is the figure quoted beside this named quantity a value
+  the quantity USED TO have?** — and the superseded values are **derived, not
+  typed**: the `_*/` snapshot directories hold the previous run of each report, so
+  `superseded = union(snapshots) − current`. A block flags only when it holds a
+  superseded value and **no** current one, which is what lets a deliberate
+  supersession trail ("it was 0.6831, now 0.6811") pass. **It is not any of the
+  five refuted currency checks, and specifically not (e)** — that one *excluded*
+  snapshot copies from D2's haystack and cost 103 residue; this one *uses* them,
+  as a positive signal, in the opposite direction.
+  **Its first run found 12 stale claims across four documents that D2 passed**,
+  including three present-tense "S2 reproduces X" anchor sentences and a whole
+  superseded arm table in `paper-results-summary.md` (the oracle-union rows, the
+  soft/hard arms, the rrf4 2×2). All 12 are repaired. **The block is the unit and
+  the split is what makes it non-vacuous**: a supersession trail routinely puts the
+  old and new values 300+ chars apart so a character window flags correct writing,
+  and blank lines alone are the wrong split for *this* file, which writes its
+  bullets with no blank line between them — the whole Conventions list becomes one
+  block, every figure in the file lands in one bag, and the check passes on
+  everything. That is D2's own haystack-too-big rule, one level down, and it is
+  pinned by a test. The one class D8 must **not** flag is a **frozen
+  pre-registration**, where a figure that no longer matches the outcome is the
+  point of having written it down; those are allowlisted by (doc, quantity) and
+  D6 audits them like every other exemption.
+  **The measurement that motivated D8 is worth more than D8, and it is about D2:
+  scored against its own perturbations, D2 clears a wrong 4-decimal number 77% of
+  the time** (over its 2,970 figures; D7, for contrast, clears 7%). D2 was never
+  calibrated that way — the perturbation method arrived with D5 and nobody went
+  back. **Do not read "D2 passes" as "the prose traces"**; read it as a weak
+  filter, with D8 as the sharp one over the quantities it watches.
+  **D7 now reads Python docstrings too (2026-08-23), and D2 deliberately does
+  not.** A docstring is prose and was outside every check here: re-quoting
+  `warm_serving_caches`'s figures from a report found the *same* superseded pair
+  still sitting in the docstring one layer down and in the test that pins it.
+  Extending only D7 was measured, not scoped by taste — over these docstrings the
+  ms/q-s rule scores **61% real / 15% at n+1** (a check) while the 4-decimal rule
+  scores **96% / 71%**, i.e. exactly as weak as D2 already is. The sweep took the
+  untraceable docstring figures **24 → 6**, and the 6 that remain are two
+  deliberate classes: the pre-fix `657 ms` engine-probe reading (three copies, its
+  post-fix 197.5 ms quoted beside each) and the discarded 2026-08-07
+  position-effect run plus the 3-token synthetic that produced the withdrawn "26x".
+  **A docstring edit moves the generator's mtime, so D1a and D4 go red on a
+  comment-only change** — the discharge is to `--render` the affected reports and
+  check they come back **byte-identical**, which all three did; that identity is
+  the proof the edit changed nothing, where an allowlist entry would only have been
+  an assertion.
   **Its first run found three real stale tables, and how it found them is the point**:
   all three had drifted in the 2026-08-06 refresh *without a single verdict cell
   changing*, so `diff_significance_reports.py` correctly reported 0 flips and nobody
@@ -1102,7 +1153,7 @@ see `docs/adr/`.
   reproducibility is. Containment is checked, not assumed: `audit_pipeline_invariants.py`
   already classifies `mode_b`/`mode_b_routed` as write-only UI dirs, so nothing an eval
   reads can pick up an F=200 result. Anchors: S2 reproduces `routing_eval.md`'s
-  `routed (shipped)` **0.6831** and S3 the unrouted **0.6281**, both exactly, from an
+  `routed (shipped)` **0.6811** and S3 the unrouted **0.6229**, both exactly, from an
   independent code path; S4 is the live-mechanism check against a real
   `HybridRetriever(fetch_depth=F)` on a *routed* index, since S1-S3 exercise only F=n where
   truncation is inert ([[feedback_anchor_a_check_where_the_mechanism_is_live]]). The fusion

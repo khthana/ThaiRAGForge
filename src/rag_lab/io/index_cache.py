@@ -2,12 +2,12 @@
 
 `ArtifactStore.load` re-reads `chunks.parquet`, the ~234MB `embeddings.npy` and
 rebuilds ~57k `Chunk` objects on every call. Measured on the shipped `person`
-route (`data/results/serving_cost_profile.md`, 2026-08-21) that is **1,149 ms**,
+route (`data/results/serving_cost_profile.md`) that is **1,185 ms**,
 and because `BM25Okapi` is memoised *on the Index object*
 (`Index.lexical_scorer`), throwing the Index away also throws the scorer away and
-the next hybrid retrieve rebuilds it -- a further **921 ms**. Together 2,079 ms
-of a 2,994 ms served query, i.e. everything left after the embedder cache except
-the ~400 ms of real scoring work.
+the next hybrid retrieve rebuilds it -- a further **995 ms**. Together **2,180 ms**
+off the embedder-cached arm's 3,069 ms steady state, i.e. everything left after
+the embedder cache except the real scoring work.
 
 **Sharing an Index is only safe because nothing mutates one, and that was checked
 rather than assumed.** Across `src/`, `tools/` and `app/` there is exactly ONE

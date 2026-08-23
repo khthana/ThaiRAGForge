@@ -32,7 +32,13 @@ Checks (D = docs):
         4-decimal figures
     D7  a unit-suffixed figure ("2,058.9 ms", "9.81 q/s") that no report
         states -- the other class D2 cannot see, and the one that let a whole
-        serving layer's latencies drift
+        serving layer's latencies drift. Covers PYTHON DOCSTRINGS as well as the
+        docs, since a docstring is prose too and was outside every check here
+        until 2026-08-23
+    D8  a NAMED QUANTITY quoted at a value it no longer has -- the quantity->value
+        map D2 is not, with the superseded values derived by diffing each report
+        against its own `_*/` snapshots. The one check here that can see rot D2's
+        own haystack shares
 
 Design rules, each learned by getting one of these checks wrong.
 
@@ -103,6 +109,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import re
 
@@ -436,6 +443,228 @@ EVAL_INPUTS: dict[str, list[str]] = {
 }
 
 findings: list[tuple[str, str, str]] = []
+
+
+# --------------------------------------------------------------------- D8 ---
+# D2 IS A BAG OF NUMBERS. D8 IS THE MAP.
+#
+# D2 asks "does this figure appear in SOME report", which cannot see rot that its
+# own haystack shares: when rebuild #4 moved `routed (shipped)` 0.6831 -> 0.6811,
+# ten other reports still carried 0.6831 and D2 went on passing. Scored against
+# its own perturbations D2 is much weaker than it looks -- over the 2,970 figures
+# it checks, a value moved to n+1 still traces 77% of the time (D7, for contrast,
+# clears 7%). D2 was never calibrated that way; the perturbation method arrived
+# with D5, and nobody went back.
+#
+# D8 asks a different question: is the figure quoted beside this named quantity a
+# value the quantity USED TO have and no longer does? Superseded values are
+# DERIVED, not typed -- the `_*/` snapshot directories hold the previous run of
+# each report, so `superseded = union(snapshots) - current`. A block flags only
+# when it holds a superseded value and NO current one, which is what lets a
+# deliberate supersession trail ("it was 0.6831, now 0.6811") pass.
+#
+# THIS IS NOT ANY OF THE FIVE REFUTED CURRENCY CHECKS (module docstring), and in
+# particular it is not (e): that one EXCLUDED snapshot copies from D2's haystack
+# and cost 103 residue. This one USES them, as a positive signal, in the opposite
+# direction.
+#
+# THE BLOCK IS THE UNIT, NOT A CHARACTER WINDOW. A supersession trail routinely
+# puts the old and new values 300+ chars apart, so a window flags correct writing.
+# And blank lines alone are the wrong split for CLAUDE.md, which writes its
+# bullets with no blank line between them: the whole Conventions list becomes one
+# block, every figure in the file lands in one bag, and the check passes
+# vacuously -- the haystack-too-big shape D2's own design rule warns about, one
+# level down.
+QUANTITY_BLOCK = re.compile(r"^- |^#|^\s*<(?:div|p|h[1-9]|table|tr|li)\b")
+
+# (name, report, section heading or None, row patterns, prose labels)
+# Row patterns match a table line; the quantity's value is the first 4-decimal
+# figure on it. A generic reader rather than an import of each script's own
+# parser, because importing one costs ~6 s and pulls torch -- so
+# `tests/tools/test_audit_doc_claims.py` pins these values against those already
+# tested parsers instead, which is where the 6 s can be afforded. One authority,
+# checked from the side, rather than two copies free to drift.
+WATCHED_QUANTITIES: list[tuple[str, str, str | None, list[str], list[str]]] = [
+    ("routed arms (hybrid)", "routing_eval.md",
+     "## 3. Routed system vs single-combo baselines -- hybrid",
+     [r"\|\s*recall@10\s*\|\s*routed \((?:shipped|loo|oracle)\)\s*\|",
+      r"\|\s*recall@10\s*\|\s*best single combo"],
+     ["routed (shipped)", "routed (loo)", "routed (oracle)"]),
+    ("routed arms (dense)", "routing_eval.md",
+     "## 3. Routed system vs single-combo baselines -- dense",
+     [r"\|\s*recall@10\s*\|\s*routed \((?:shipped|loo|oracle)\)\s*\|",
+      r"\|\s*recall@10\s*\|\s*best single combo"],
+     ["routed (shipped)", "routed (loo)", "routed (oracle)"]),
+    ("soft/hard arms", "soft_vs_hard_routing.md", "## recall@10",
+     [r"^\|\s*[ABCD]['′]?\s"],
+     ["soft_vs_hard", "soft vs hard", "soft-vs-hard", "hard routing", "soft routing"]),
+    ("rrf4 2x2 arms", "reranker_rrf_routed_test.md", None,
+     [r"^\|\s*\**[ABCD]\**['′]?\s*(?:\([^|]*\))?[^|]*\|\s*(?:hard|ไม่มี)"],
+     ["rrf4", "arm C", "arm D", "D vs C", "D vs B"]),
+    ("trained-reranker arms", "reranker_trained_test.md", None,
+     [r"^\|\s*\**(?:C|D|T|L)\**['′]?\s*(?:\([^|]*\))?\s*\|"],
+     ["arm T", "arm L", "T vs C", "T vs D", "T vs L"]),
+]
+
+
+# A DOCSTRING IS PROSE, AND IT WAS OUTSIDE EVERY CHECK HERE UNTIL 2026-08-23.
+# The serving work re-quoted `warm_serving_caches`'s figures from a report and
+# then found the SAME superseded pair still sitting in the docstring one layer
+# down, plus in the test that pins it -- `12,329 ms`, `447 ms`, `2,052 ms`. That
+# is the identical drift D7 was built for, in a file D7 never opened.
+#
+# ONLY D7 IS EXTENDED, AND THAT IS A MEASUREMENT, NOT A SCOPE DECISION. Both
+# rules were scored over these docstrings against their own perturbations, the
+# method that set D5's V1 and D7's unit set:
+#
+#     rule                        n     real   n+1    verdict
+#     docstring ms/q-s (>=3sig)   62     61%    15%   a check
+#     docstring 4-decimal        175     96%    71%   clears a wrong number
+#
+# and the control that settles it -- the same two rules over the PROSE they
+# already run on:
+#
+#     prose ms/q-s (D7)          222     84%     7%
+#     prose 4-decimal (D2)     2,970     96%    77%
+#
+# So the docstring 4-decimal rule is not *worse* than D2, it is exactly as weak,
+# and D2's own weakness is the finding: it was never scored this way, because the
+# perturbation method arrived with D5 and nobody went back. Extending a rule that
+# clears 3 wrong numbers in 4 would add coverage that reads like assurance and is
+# not. That is what D8 exists for instead.
+SOURCE_GLOBS = ["src/rag_lab/**/*.py", "tools/**/*.py", "app/**/*.py", "tests/**/*.py"]
+
+
+def _source_docstrings() -> list[tuple[str, str]]:
+    """(relative path, docstring) for every module/class/function docstring."""
+    out: list[tuple[str, str]] = []
+    for g in SOURCE_GLOBS:
+        for p in sorted(REPO.glob(g)):
+            try:
+                tree = ast.parse(p.read_text(encoding="utf-8"))
+            except (SyntaxError, UnicodeDecodeError):
+                continue
+            rel = str(p.relative_to(REPO)).replace(chr(92), "/")
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                                     ast.AsyncFunctionDef)):
+                    d = ast.get_docstring(node)
+                    if d:
+                        out.append((rel, d))
+    return out
+
+
+def _table_values(text: str, section: str | None, rows: list[str]) -> set[float]:
+    """Every first 4-decimal figure on each matching table row."""
+    if section:
+        i = text.find(section)
+        if i < 0:
+            return set()
+        rest = text[i + len(section):]
+        j = re.search(r"^## ", rest, re.M)
+        text = rest[: j.start()] if j else rest
+    out: set[float] = set()
+    pats = [re.compile(r) for r in rows]
+    for ln in text.splitlines():
+        if not any(p.search(ln) for p in pats):
+            continue
+        m = NUM.search(ln)
+        if m:
+            out.add(float(m.group(0)))
+    return out
+
+
+def _quantity_values(report: str, section: str | None,
+                     rows: list[str]) -> tuple[set[float], set[float]]:
+    """(current, superseded) -- superseded derived from the `_*/` snapshots."""
+    live = RESULTS / report
+    if not live.exists():
+        return set(), set()
+    cur = _table_values(live.read_text(encoding="utf-8", errors="ignore"), section, rows)
+    old: set[float] = set()
+    for snap in RESULTS.glob("_*/" + report):
+        old |= _table_values(snap.read_text(encoding="utf-8", errors="ignore"),
+                             section, rows)
+    return cur, old - cur
+
+
+def _prose_blocks(text: str) -> list[tuple[int, str]]:
+    out: list[tuple[int, str]] = []
+    cur: list[str] = []
+    start = line = 1
+    for ln in text.splitlines():
+        if (not ln.strip() or QUANTITY_BLOCK.match(ln)) and cur:
+            out.append((start, "\n".join(cur)))
+            cur = []
+            start = line
+        if ln.strip():
+            if not cur:
+                start = line
+            cur.append(ln)
+        line += 1
+    if cur:
+        out.append((start, "\n".join(cur)))
+    return out
+
+
+def audit_quantities(show_all: bool) -> None:
+    """D8: a named quantity quoted at a value it no longer has.
+
+    FAILs rather than WARNs, unlike D2/D5/D7. Those ask whether a figure is
+    *traceable*, a question with irreducible false positives; this one asks
+    whether it is *this quantity's current value*, and a superseded value beside
+    a live label is wrong by construction. Its perturbation clearance is 0 for
+    the same reason -- there is one right answer, not a bag to collide with.
+
+    Its first run found 12 stale claims across four documents that D2 passed,
+    including three present-tense "S2 reproduces X" anchor sentences and a whole
+    superseded arm table in `paper-results-summary.md`. The one class it must not
+    flag is a FROZEN PRE-REGISTRATION, where a figure that no longer matches is
+    the point of having written it down; those are allowlisted by (doc, quantity)
+    with the reason stated, and D6 audits them like every other exemption.
+
+    A quantity whose report or table cannot be read is reported UNRESOLVED rather
+    than passing silently -- renaming a row label is exactly how this check would
+    otherwise go quietly vacuous.
+    """
+    allow = {(e["doc"], str(e["quantity"])) for e in _allowlist("quantities")}
+    flagged: list[tuple[str, int, str, list[float], list[float]]] = []
+    watched = 0
+    unresolved: list[str] = []
+
+    for name, report, section, rows, labels in WATCHED_QUANTITIES:
+        cur, old = _quantity_values(report, section, rows)
+        if not cur:
+            unresolved.append(f"{name} ({report})")
+            continue
+        watched += 1
+        if not old:
+            continue
+        for doc in DOCS:
+            p = REPO / doc
+            if not p.exists():
+                continue
+            rel = str(doc).replace(chr(92), "/")
+            if (rel, name) in allow:
+                continue
+            for start, blk in _prose_blocks(_unemph(p.read_text(encoding="utf-8"))):
+                if not any(l in blk for l in labels):
+                    continue
+                figs = {float(x) for x in NUM.findall(blk)}
+                stale = figs & old
+                if stale and not (figs & cur):
+                    flagged.append((rel, start, name, sorted(stale), sorted(cur)))
+
+    detail = (f"{len(flagged)} blocks quote a superseded value of {watched} watched "
+              f"quantities across {len(DOCS)} docs")
+    if unresolved:
+        detail += (f"; UNRESOLVED: {', '.join(unresolved)} -- "
+                   f"the cross-check could not be made")
+    record("D8 a named quantity is quoted at its current value", not flagged, detail)
+    for rel, start, name, stale, cur in (flagged if show_all else flagged[:12]):
+        print(f"        {rel}:{start}  {name}: quotes {stale}, current {cur}")
+    if not show_all and len(flagged) > 12:
+        print(f"        ... {len(flagged) - 12} more (--list)")
 
 
 def record(check: str, ok: bool, detail: str, warn: bool = False) -> None:
@@ -976,12 +1205,49 @@ def audit_allowlist_liveness() -> None:
     # the sense this check means.
     inputs_cleared, dead = _inputs_cleared()
     total = len(_allowlist("inputs"))
+
+    # `quantities` entries are audited by asking D8's own question: would this
+    # (doc, quantity) pair still be flagged without the exemption? A frozen
+    # pre-registration stops needing one the moment its quantity's superseded
+    # set no longer intersects the doc -- and then the entry is pre-arming a
+    # future clearance nobody earned, which is what D6 exists to catch.
+    for e in _allowlist("quantities"):
+        total += 1
+        doc, qname = e["doc"], str(e["quantity"])
+        spec = next((w for w in WATCHED_QUANTITIES if w[0] == qname), None)
+        p = REPO / doc
+        if spec is None:
+            dead.append(f"quantities: {qname!r} is not a watched quantity "
+                        f"(entry for {doc})")
+            continue
+        if not p.exists():
+            dead.append(f"quantities: {doc} does not exist (entry {qname!r})")
+            continue
+        cur, superseded = _quantity_values(spec[1], spec[2], spec[3])
+        hit = False
+        for _, blk in _prose_blocks(_unemph(p.read_text(encoding="utf-8"))):
+            if not any(l in blk for l in spec[4]):
+                continue
+            figs = {float(x) for x in NUM.findall(blk)}
+            if (figs & superseded) and not (figs & cur):
+                hit = True
+                break
+        if not hit:
+            dead.append(f"quantities: {doc} no longer quotes a superseded "
+                        f"{qname!r} (checked {e.get('checked', '?')})")
+
     for section, key, table in (("numbers", "number", nums_of),
                                 ("counts", "figure", counts_of),
                                 ("units", "figure", units_of)):
         for e in _allowlist(section):
             total += 1
             doc, fig = e["doc"], str(e[key])
+            if section == "units" and doc not in table and (REPO / doc).suffix == ".py":
+                table = dict(table)
+                table[doc] = {f"{v} {u}"
+                              for r, d in _source_docstrings() if r == doc
+                              for v, u in UNIT_FIGURE.findall(_unemph(d))
+                              if _significant(v) >= _MIN_SIGNIFICANT}
             if doc not in table:
                 dead.append(f"{section}: {doc} is not one of the {len(DOCS)} audited docs "
                             f"(entry {fig!r})")
@@ -991,8 +1257,8 @@ def audit_allowlist_liveness() -> None:
     record(
         "D6 every allowlist entry still exempts something", not dead,
         f"{len(dead)} of {total} allowlist entries exempt nothing today "
-        f"(numbers/counts: no longer a figure their doc yields; inputs: source "
-        f"moved past its src_sha)",
+        f"(numbers/counts/units: no longer a figure their doc yields; inputs: "
+        f"source moved past its src_sha; quantities: D8 would not flag it now)",
         warn=True,
     )
     for d in dead[:15]:
@@ -1030,30 +1296,44 @@ def audit_unit_figures(show_all: bool) -> None:
     total = untraceable = exempt_allow = 0
     residue: list[tuple[str, int, list[str], str]] = []
 
+    sources: list[tuple[str, int, str]] = []
     for doc in DOCS:
         p = REPO / doc
         if not p.exists():
             continue
         rel = str(doc).replace(chr(92), "/")
         for lineno, ln in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
-            hits = [(v, u) for v, u in UNIT_FIGURE.findall(_unemph(ln))
-                    if _significant(v) >= _MIN_SIGNIFICANT]
-            total += len(hits)
-            miss = [f"{v} {u}" for v, u in hits if v.replace(",", "") not in known]
-            if not miss:
-                continue
-            untraceable += len(miss)
-            keep = [f for f in miss if (rel, f) not in allow]
-            exempt_allow += len(miss) - len(keep)
-            if keep:
-                residue.append((rel, lineno, keep, ln.strip()[:150]))
+            sources.append((rel, lineno, ln))
+    n_prose = len(sources)
+    # A docstring has no file line number of its own here, so it reports 0 and
+    # names the file: the figure string is what the allowlist keys on anyway.
+    for rel, doc_text in _source_docstrings():
+        for ln in doc_text.splitlines():
+            sources.append((rel, 0, ln))
+
+    docstring_total = 0
+    for rel, lineno, ln in sources:
+        hits = [(v, u) for v, u in UNIT_FIGURE.findall(_unemph(ln))
+                if _significant(v) >= _MIN_SIGNIFICANT]
+        total += len(hits)
+        if lineno == 0:
+            docstring_total += len(hits)
+        miss = [f"{v} {u}" for v, u in hits if v.replace(",", "") not in known]
+        if not miss:
+            continue
+        untraceable += len(miss)
+        keep = [f for f in miss if (rel, f) not in allow]
+        exempt_allow += len(miss) - len(keep)
+        if keep:
+            residue.append((rel, lineno, keep, ln.strip()[:150]))
 
     n_res = sum(len(r[2]) for r in residue)
     record(
         "D7 unit-suffixed figures trace to a report", not residue,
         f"{n_res} untraceable of {total} ms/q-s figures across {len(DOCS)} docs "
-        f"({untraceable} not found in {len(artifacts)} reports; "
-        f"{exempt_allow} allowlisted)",
+        f"+ the docstrings of {len(SOURCE_GLOBS)} source trees "
+        f"({docstring_total} of them in docstrings; {untraceable} not found in "
+        f"{len(artifacts)} reports; {exempt_allow} allowlisted)",
         warn=True,
     )
     for doc, lineno, keep, ctx in (residue if show_all else residue[:12]):
@@ -1074,6 +1354,7 @@ def main() -> int:
     audit_numbers(args.list)
     audit_counts(args.list)
     audit_unit_figures(args.list)
+    audit_quantities(args.list)
     audit_significance_wording()
     audit_eval_inputs()
     audit_allowlist_liveness()

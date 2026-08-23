@@ -1,9 +1,9 @@
 """The serving-path embedder cache.
 
 Measured motivation (2026-08-21, shipped `person` route, bge-m3, 57,172 chunks):
-one served query costs 11,433 ms of which 8,929 ms is loading weights the
-previous query already loaded, against 359 ms of irreducible work. The cache is
-worth ~32x on a warm query.
+one served query costs 11,589 ms of which 9,049 ms is loading weights the
+previous query already loaded, against 360 ms of irreducible work
+(`data/results/serving_cost_profile.md`).
 
 Two properties carry the whole design and both are checked here rather than
 argued:

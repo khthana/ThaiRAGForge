@@ -36,7 +36,7 @@ measurement rather than chosen.**
 
 1. **Cells are time-boxed, not request-boxed.** That harness kept ~20 requests
    per worker at every level. Here the arms differ by an order of magnitude in
-   per-query cost (`inproc` is ~450 ms warm, the engine's retrieval half is
+   per-query cost (`inproc` is 626.2 ms at C=1, the engine's retrieval half is
    ~27 ms), so a fixed request count either starves the fast arm's percentiles
    or spends minutes on one cell of the slow one. Each cell runs for
    `--budget` seconds OR `2 x C` requests, whichever is longer, and every table
@@ -188,7 +188,7 @@ def run_level(
     Dispatch is `next(itertools.count())`, atomic under the GIL. A shared
     counter behind a `threading.Lock` is real untimed overhead outside the
     timed region -- a thread blocking on a contended lock can wait a full
-    switch interval, which is nothing against a 450 ms retrieval but is several
+    switch interval, which is nothing against a 626.2 ms retrieval but is several
     times a cheap arm's own work, and it shows up as Little's law failing for
     that arm alone.
 

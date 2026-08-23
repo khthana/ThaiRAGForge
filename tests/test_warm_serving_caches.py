@@ -1,6 +1,6 @@
 """Pre-filling the serving caches, before a user asks.
 
-The caches take a warm routed query from 12,329 ms to 447 ms
+The caches take a warm routed query from 12,465 ms to 463 ms
 (`data/results/serving_cost_profile.md`) -- but only for the SECOND caller on
 each route. A fresh process has four such first callers (four routed index
 directories, two embedders), so a deployment that never warms pays ~12 s four
@@ -175,8 +175,9 @@ def test_the_report_carries_a_cost_per_index(tmp_path):
 
 def test_the_probe_retrieval_is_what_makes_it_actually_warm(tmp_path):
     """Everything resident is still not warm. With all four indices and both
-    embedders loaded, the first real query measured 1,246 ms against ~450 for
-    the ones after it; one throwaway retrieval takes it to 468 (2026-08-21).
+    embedders loaded, the first real query measured 1,131.7 ms against 380.0 ms
+    for the ones after it; one throwaway retrieval takes it to 454.2 ms
+    (`data/results/serving_warmup_profile.md`).
     The residue is process-global CUDA/BLAS init, not per-index -- one probe
     fixed all four routes -- so this does one, and reports its cost."""
     infos = _indices(tmp_path)
@@ -203,8 +204,9 @@ def test_a_probe_that_cannot_run_is_reported_not_raised(tmp_path):
 def test_the_probe_uses_the_params_the_deployment_serves(tmp_path, monkeypatch):
     """A probe left at the class defaults warms a DIFFERENT code path from the
     one the user's query takes: `hybrid` at `fetch_depth=None` fuses over the
-    whole corpus, measured at 2,052 ms against the shipped F=200's 1,093
-    (2026-08-21). It is the startup budget paying for a path nothing serves."""
+    whole corpus, measured fully warm at 856.3 ms against the shipped F=200's
+    342.6 (`data/results/serving_warmup_profile.md`). It is the startup budget
+    paying for a path nothing serves."""
     seen = []
     real = qs.build_retriever_cached
 
@@ -229,7 +231,8 @@ def test_the_engine_shape_gets_a_probe_too(tmp_path):
     initialisation, which has nothing to do with which rows are resident.
     Measured cost of that gating: the engine topology's first real query came
     back at 657 ms against a ~160 ms steady state, while the row-reading arm
-    beside it had been probed (`data/results/serving_concurrency.md`).
+    beside it had been probed; ungated it reads 197.5 ms
+    (`data/results/serving_concurrency.md`).
 
     There is no Qdrant server here, so the probe cannot succeed -- what is
     pinned is that it is ATTEMPTED, i.e. reported as a failure rather than

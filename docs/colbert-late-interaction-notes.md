@@ -116,10 +116,16 @@ the single-vector index we already ship. On a 12 GB card this is workable.
    **RQ4 completed 2026-08-03** (and has been refreshed twice since), so that is
    no longer the reason to defer. What replaces it is a sharper one, measured
    after these notes were written: the routed oracle over a P=50 pool delivers
-   **0.8331** against arm C's 0.6831 (`data/results/reranker_rrf_routed_test.md`),
-   i.e. **+0.1500 of headroom that a better ranker could reach and
-   `bge-reranker-v2-m3` reaches 1% of** — and swapping the model moves recall@10
-   by 20x the anchor's own effect (`reranker_model_comparison.md`). So the axis is
+   **0.8331** against arm C's **0.6811** (`data/results/reranker_rrf_routed_test.md`,
+   re-run 2026-08-20 against rebuild #4), i.e. **+0.1520 of headroom that a better
+   ranker could reach and `bge-reranker-v2-m3` reaches −6% of** — the off-the-shelf
+   arm now sits *below* the router, so the gap it leaves is the whole ceiling. And
+   swapping the model matters more than the anchor's own effect: over four qualified
+   models the **anchor is the worst of the four** and the other three all beat it
+   numerically (`reranker_model_comparison.md`). The earlier phrasing "20x the
+   anchor's own effect" is withdrawn — that ratio was 0.0355 against +0.0017 and now
+   reads ~2.7x, a much weaker sentence for the same conclusion, which is why the
+   ordering is what to cite. So the axis is
    motivated by a *measured* ceiling now, not by a gap in the study.
 
 ## A pre-registered prediction, so this is falsifiable

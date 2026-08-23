@@ -260,8 +260,9 @@ one is a signal you can lean on.
 
 ### 6.3 The control did most of it — read this before citing 6.1
 
-**Arm L, string containment with no GPU and no training, reaches 0.7442 against T's
-0.7485.** §4.1 fixed this control as the thing a positive result must be reported
+**Arm L, string containment with no GPU and no training, reaches 0.7438 against T's
+0.7541** (2026-08-20, against rebuild #4; the 2026-08-12 original read
+0.7442 / 0.7485). §4.1 fixed this control as the thing a positive result must be reported
 beside, and §5 named the reason: training labels and eval qrels come from one
 string-containment generator, so a model that learned the *generator* scores like a
 model that learned relevance. Two point estimates side by side are not a comparison,

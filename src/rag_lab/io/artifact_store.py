@@ -131,13 +131,13 @@ def _read_chunks(path: Path) -> list[Chunk]:
 
     Streaming holds one batch of columns at a time instead of every column of
     every row. Measured on that index, one child process per arm so no arena is
-    inherited (`1c`): **360 MB -> 244 MB held**, at **no cost in time** (550 ms
-    against 532, inside the run-to-run spread -- building 57k pydantic `Chunk`s
+    inherited (`1c`): **379 MB -> 244 MB held**, at **no cost in time** (596 ms
+    against 563, inside the run-to-run spread -- building 57k pydantic `Chunk`s
     dominates either way). End to end the four routed indices resident in one
-    serving process went **3,488 MB -> 3,176 MB**, less than 4x the per-index
-    saving because the parent reuses arenas across loads; quote the 3,176, and
-    treat the 3,488 as a dated pre-change snapshot (2026-08-21) that the report
-    no longer holds.
+    serving process hold **3,135 MB** (`data/results/serving_cache_memory.md`),
+    less than 4x the per-index saving because the parent reuses arenas across
+    loads -- so the per-index figure does not multiply, and the resident total is
+    the one to quote.
 
     Two things to know before touching this. The batch size is on a measured
     knee, not a guess -- see `_BATCH_ROWS`. And the rows are byte-identical in

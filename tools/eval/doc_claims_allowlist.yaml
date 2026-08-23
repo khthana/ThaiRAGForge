@@ -660,3 +660,84 @@ units:
       was wrong is the reusable part -- it timed the probe DURING the warm-up, so
       both arms carried process-global initialisation the depth knob has nothing
       to do with.
+
+  - doc: src/rag_lab/query_service.py
+    figure: "657 ms"
+    checked: 2026-08-23
+    reason: >-
+      a PRE-FIX reading and the defect is the point: warm_serving_caches gated
+      its probe on with_rows, so an engine-only process got no probe at all. The
+      post-fix value (197.5 ms) is in serving_concurrency.md and is quoted
+      beside it; no generator persists the broken state, which is what makes the
+      figure worth keeping
+
+  - doc: tools/eval/serving_concurrency_test.py
+    figure: "657 ms"
+    checked: 2026-08-23
+    reason: >-
+      a PRE-FIX reading and the defect is the point: warm_serving_caches gated
+      its probe on with_rows, so an engine-only process got no probe at all. The
+      post-fix value (197.5 ms) is in serving_concurrency.md and is quoted
+      beside it; no generator persists the broken state, which is what makes the
+      figure worth keeping
+
+  - doc: tests/test_warm_serving_caches.py
+    figure: "657 ms"
+    checked: 2026-08-23
+    reason: >-
+      a PRE-FIX reading and the defect is the point: warm_serving_caches gated
+      its probe on with_rows, so an engine-only process got no probe at all. The
+      post-fix value (197.5 ms) is in serving_concurrency.md and is quoted
+      beside it; no generator persists the broken state, which is what makes the
+      figure worth keeping
+
+  - doc: tools/eval/cost_latency_pareto.py
+    figure: "317 ms"
+    checked: 2026-08-23
+    reason: >-
+      a reading of the DISCARDED 2026-08-07 latency run, kept in the docstring
+      because the position effect it documents (everything timed before the 4B
+      model at 301-317 ms, everything after at 434-525) is why that run was
+      thrown out and why this script now times each embedder in its own
+      subprocess. A discarded run is by definition in no report
+
+  - doc: tools/eval/cost_latency_pareto.py
+    figure: "525 ms"
+    checked: 2026-08-23
+    reason: >-
+      the other end of the same discarded 2026-08-07 position-effect range
+
+  - doc: tools/eval/cost_latency_pareto.py
+    figure: "40.7 ms"
+    checked: 2026-08-23
+    reason: >-
+      the origin of the withdrawn 26x BM25 ratio: an 8-word slice of a chunk
+      tokenizes to 3 terms, which is a query shape this project never issues.
+      Kept as the explanation of a retracted figure; the report states the real
+      20-token numbers
+
+# D8 -- a named quantity quoted at a value it no longer has.
+# The ONE legitimate class: a frozen pre-registration, where a figure that no
+# longer matches the outcome is the point of having written it down. Keyed by
+# (doc, quantity) and audited by D6 like every other exemption.
+quantities:
+  - doc: docs/reranker-trained-on-hybrid-design.md
+    quantity: rrf4 2x2 arms
+    checked: 2026-08-23
+    reason: >-
+      sections 3 and 4 are the FROZEN pre-registration, written before the
+      treatment existed and never edited after: the anchor-reproduction rule
+      names arm C at 0.6831 and arm D at 0.6847 because those were the published
+      values the new code path had to reproduce ON THE DAY. Rebuild #4 later
+      moved both. Editing them would destroy the only thing a pre-registration
+      is for, so section 6 carries the outcome instead.
+
+  - doc: docs/reranker-trained-on-hybrid-design.md
+    quantity: trained-reranker arms
+    checked: 2026-08-23
+    reason: >-
+      same frozen sections 3-4; the pre-registered comparisons are stated against
+      the arm levels published at the time of writing. The section 6 outcome
+      figures are NOT exempt and were re-quoted from
+      reranker_trained_test.md on 2026-08-23.
+
