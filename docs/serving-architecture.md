@@ -298,6 +298,89 @@ Four rules carry the seal.
 
 ---
 
+### 6b. The same race at real size, through the shipped `route_query`
+
+§6 answers the *mechanism* on a 200x8 synthetic whose readers call
+`load_index_cached` directly. §6b answers the *deployment* question: 3 reader
+threads issuing real `person` queries through the shipped `route_query`
+(hybrid, `fetch_depth`=200, all three caches live) against a **scratch copy** of
+the `person` route's own index — 57,172 chunks, dim 1024, 305 MB — while a
+writer alternates two builds through the same four files.
+
+| writer | seal | served | checked | **mixed** | refused | writes |
+|---|---|---:|---:|---:|---:|---:|
+| `real_rebuild` | yes | 150 | 138 | **0** | 1,062 | 5 |
+| `real_rebuild_unsealed` | **no (control)** | 160 | 148 | **42** | 1 | 4 |
+
+**The scratch copy is the safety rule, not a convenience.** A writer runs in this
+loop, so pointing it at `data/index/` would destroy an index costing ~2 h of GPU.
+`route_query` takes its `indices` list as an argument, so the redirect is a
+swapped `IndexInfo.dir` — no monkeypatching, and nothing can leak into the real
+tree.
+
+**The result that matters is not the 0. It is how much work it took to make the
+control fire, because that is what bounds the seal's job.** Three measurements,
+in order:
+
+1. **No gap at all → 0 mixed in *both* arms.** `ArtifactStore.save` goes from
+   `pq.write_table` straight into `np.save`, so at this size the exposure is
+   dominated by a **truncated** file, not by two complete mismatched ones. The
+   formats catch it themselves (`ValueError: Failed to read all data for array`,
+   `JSONDecodeError`) — the failure is **loud**, not silent.
+2. **At §6's 0.15 s → still 0, and that is structural rather than unlucky.** A
+   read of this index takes ~1.5 s, so **a window shorter than a load cannot
+   contain one**: the reader's own before/after stamps straddle the writer's
+   transition, and the 2026-08-21 stamping fix catches it *without* the seal.
+3. **It fires only once the window exceeds a *contended* load** (~13 s with
+   several readers reloading 305 MB against a writer copying the same). At 15 s
+   the control mixes **42 of 148** checked reads and the sealed arm mixes **0 of
+   138**.
+
+**So the seal's unique job is real but NARROW, and §6b is what narrows it.**
+Against a rebuild that *overlaps* a read, the stamp comparison alone is
+sufficient. What only the seal sees is a directory left stably inconsistent for
+**longer than a read** — which `save` does *not* leave at this size, but which an
+**in-place rewrite** does (`relabel_index_resolution_ids.py` rewrites for
+minutes), and which a small index does under §6's conditions, where loads are
+fast enough to fit inside a short window. None of that argues for removing it;
+it says which writer it is protecting against.
+
+**Two vacuity traps, both hit and both fixed at the mechanism.** The control's
+first three configurations produced 0 mixed, which would have made the sealed
+arm's 0 meaningless — hence the three-step calibration above and `S11`. Then
+`S10` itself passed at **"0 mixed of 0 checked"**: with the pause between
+rebuilds shorter than a contended load, every read straddled the next cycle and
+the sealed arm served *nothing*. An arm that served no query cannot evidence
+that serving is safe, so `S10` now requires a non-zero denominator and the pause
+must exceed one contended load.
+
+**The cost side, stated because the 0 is not free:** holding a 15 s inconsistent
+window open cost **1,062 refusals** over 5 rebuilds. The seal converts an
+inconsistency into unavailability, which is the right trade for a wrong answer,
+but it is a trade.
+
+### 6c. The defect §6b found in the cache itself
+
+Running §6b at real size surfaced a bug the synthetic could not: `store.load(...)`
+sat **unwrapped** inside `load_index_cached`'s retry loop. A racing write has two
+outcomes, not one — it can hand back rows from two builds (caught by the stamp
+comparison) **or** truncate a file under the reader, in which case `load` *raises*
+from inside pyarrow/numpy/json. That exception propagated straight past the check
+on the very next line that already knew how to handle it. Two consequences, and
+the second is the dangerous one: the caller saw an exception the cache could have
+retried, and it was **not** the `RuntimeError` a serving layer retries on — so a
+torn read read as a corrupt index.
+
+Fixed 2026-08-23: a load that raises is retried **iff the directory moved under
+it**; a *stable* directory that still fails to load is genuinely corrupt and its
+exception is re-raised **unchanged**. That second half is the guard against
+"retry everything", which would report a genuinely unreadable index as "being
+rebuilt" — a wrong diagnosis rather than a slow one. Both halves are pinned in
+`tests/io/test_index_cache.py`, and the retry test was verified to **fail** on
+the previous implementation before being trusted.
+
+---
+
 ## 7. Under load: which topology
 
 `serving_concurrency.md`, every real arm driven through the shipped `route_query`
@@ -378,9 +461,10 @@ counter is shared, so with `r` requests per worker the ratio is bounded above by
 - **The `encode` curve does not transfer** — an RTX 3060 in-process is not a
   separate faculty GPU server. It is measured alone precisely so another GPU's
   plateau can be substituted without re-running anything.
-- **The staleness race under a *real* rebuild with a query fleet in flight.** The
-  §6 rig drives a synthetic writer deterministically; nothing has rebuilt a real
-  index while a fleet was serving from it.
+- ~~**The staleness race under a *real* rebuild with a query fleet in flight.**~~
+  **CLOSED 2026-08-23 — §6b.** What remains open underneath it is narrower: the
+  *stable* window at real size had to be opened deliberately, so nothing here
+  measures how long a real `build_index` leaves one.
 - **Nothing here says anything about ANN.** The engine recommendation is
   `exact=True`; see `qdrant-serving-pilot.md`.
 - **Exactness between topologies is gated elsewhere.** The §5 ranking comparison

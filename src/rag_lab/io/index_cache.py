@@ -208,9 +208,33 @@ def load_index_cached(
     # Stamping before would merely have caused a redundant reload. Doing both is
     # strictly better than either: an overlapping rebuild is detected rather
     # than reasoned about.
+    last_exc: Exception | None = None
     for _ in range(_MAX_RELOADS):
         mode, before = _settle(d)
-        index = store.load(d, with_embeddings=with_embeddings)
+        try:
+            index = store.load(d, with_embeddings=with_embeddings)
+        except Exception as exc:
+            # THE SAME RACE, THE OTHER OUTCOME. A write landing mid-read can
+            # either hand back rows from two builds -- caught by the stamp
+            # comparison below -- or truncate a file under the reader, in which
+            # case `load` RAISES from inside pyarrow/numpy/json and, until
+            # 2026-08-23, propagated straight past the check that already knew
+            # how to handle it. Measured at real size rather than reasoned
+            # about: a 305MB directory rewritten under a served load produced
+            # ValueError("Failed to read all data for array") and
+            # JSONDecodeError, never a mixed read, because files that large are
+            # caught mid-copy by their own formats. Two consequences, and the
+            # second is the dangerous one: the caller saw an exception the cache
+            # could have retried, and it was NOT the RuntimeError a serving
+            # layer retries on, so a torn read read as a corrupt index.
+            #
+            # A stable directory that still fails to load is genuinely corrupt,
+            # and that exception is re-raised UNCHANGED. Only a directory that
+            # moved under the read is retried.
+            if _stamp(d) == before:
+                raise
+            last_exc = exc
+            continue
         after = _stamp(d)
         if before == after:
             with _lock:
@@ -227,7 +251,7 @@ def load_index_cached(
         f"index directory {d} changed during each of {_MAX_RELOADS} reads -- it is "
         f"being rebuilt. Refusing to serve a read that may pair one build's chunks "
         f"with another's vectors; retry once the build has finished."
-    )
+    ) from last_exc
 
 
 def clear_index_cache() -> None:

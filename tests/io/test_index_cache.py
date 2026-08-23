@@ -449,3 +449,64 @@ class TestARebuildThatLandsBetweenTheWritersOwnFiles:
 
         assert read_seal(d) == recorded, "the stale seal must stay standing"
         assert read_seal(d) != artifact_stamp(d)
+
+
+# --------------------------------------------------------------------------- #
+# A torn read that RAISES is the same race as one that mixes (2026-08-23)
+#
+# Found by running the rebuild race at REAL index size (320MB) through the
+# shipped route_query rather than on the 200x8 synthetic above: at that size a
+# reader almost never sees two complete-but-mismatched files, it catches one
+# mid-copy and `load` raises from inside pyarrow/numpy/json. Both tests below
+# were verified to FAIL before the fix -- the first propagated the raw
+# exception, the second is the guard against "retry everything" as the fix.
+# --------------------------------------------------------------------------- #
+def test_a_load_that_raises_while_the_directory_MOVES_is_retried(tmp_path):
+    """The race's loud outcome must be handled like its silent one."""
+    from rag_lab.io import index_cache as ic
+
+    d = _make_index(tmp_path, "one", tag="old")
+    real_load = ArtifactStore.load
+    calls = {"n": 0}
+
+    def flaky(self, directory, *, with_embeddings=True):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            # Rewrite the directory, THEN fail: exactly what a truncated file
+            # under a concurrent rebuild looks like from inside the loader.
+            _make_index(tmp_path, "one", tag="new")
+            raise ValueError("Failed to read all data for array")
+        return real_load(self, directory, with_embeddings=with_embeddings)
+
+    ArtifactStore.load = flaky
+    try:
+        index = load_index_cached(d)
+    finally:
+        ArtifactStore.load = real_load
+
+    assert calls["n"] == 2, "the racing read must be retried, not propagated"
+    assert all(" new " in c.text for c in index.chunks), (
+        "the retry must return the build that is now on disk"
+    )
+
+
+def test_a_load_that_raises_while_the_directory_is_STABLE_propagates(tmp_path):
+    """A corrupt index must NOT be retried into a misleading RuntimeError.
+
+    This is the half that stops the fix from becoming "swallow everything":
+    without the stamp comparison, a genuinely unreadable index would be retried
+    three times and then reported as "being rebuilt", which is a wrong
+    diagnosis, not a slow one.
+    """
+    d = _make_index(tmp_path, "one")
+    real_load = ArtifactStore.load
+
+    def always_fails(self, directory, *, with_embeddings=True):
+        raise ValueError("genuinely corrupt")
+
+    ArtifactStore.load = always_fails
+    try:
+        with pytest.raises(ValueError, match="genuinely corrupt"):
+            load_index_cached(d)
+    finally:
+        ArtifactStore.load = real_load

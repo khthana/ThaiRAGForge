@@ -100,7 +100,11 @@ from rag_lab.config import StrategySpec  # noqa: E402
 from rag_lab.factory import build_embedder_cached, embedder_cache_info  # noqa: E402
 import rag_lab.io.index_cache as index_cache_mod  # noqa: E402
 from rag_lab.io.artifact_store import ArtifactStore, seal  # noqa: E402
-from rag_lab.io.index_cache import index_cache_info, load_index_cached  # noqa: E402
+from rag_lab.io.index_cache import (  # noqa: E402
+    clear_index_cache,
+    index_cache_info,
+    load_index_cached,
+)
 from rag_lab.query_service import (  # noqa: E402
     _read_manifest,
     discover_indices,
@@ -554,6 +558,11 @@ def _write_build(index: Index, d: Path, mid_gap_s: float) -> None:
     store.save(index, tmp)  # built away from the readers
     d.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(tmp / "chunks.parquet", d / "chunks.parquet")
+    if (tmp / "lexical.json").exists():
+        # With the chunks, not after the gap: it is derived from chunk TEXT, so
+        # it belongs to the same half of the row alignment. Absent for the
+        # synthetic builds, so section 6's behaviour is unchanged.
+        shutil.copyfile(tmp / "lexical.json", d / "lexical.json")
     if mid_gap_s:
         time.sleep(mid_gap_s)
     shutil.copyfile(tmp / "embeddings.npy", d / "embeddings.npy")
@@ -656,6 +665,227 @@ def rebuild_under_load(tmp_root: Path, readers: int, seconds: float) -> dict:
         out["modes"][mode] = stats
         shutil.rmtree(d, ignore_errors=True)
     index_cache_mod.read_seal = real_read_seal
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# section 6b: the same race, at REAL index size, through the shipped route_query
+# --------------------------------------------------------------------------- #
+def _stamp(base: Index, tag: str) -> Index:
+    """A real index, stamped in BOTH halves of the row alignment.
+
+    Section 6 uses a 200x8 synthetic because nothing else reads it. That leaves
+    two things unmeasured, and they are the two that decide whether the seal
+    holds in a deployment: the inter-file window is ARTIFICIAL there (0.15 s,
+    chosen; here it is whatever writing 234 MB actually costs), and the reader
+    calls `load_index_cached` DIRECTLY rather than going through the three
+    caches a served query passes.
+
+    The stamp has to be visible without disturbing what is being served, so it
+    is deliberately minimal: a prefix on `chunk_id`, and column 0 of every
+    vector. Text is untouched, so `lexical.json` stays valid for both builds and
+    BM25 is not rebuilt per read; overwriting 1 of 1024 dimensions moves a
+    cosine by ~0.1%, so the ranking a reader gets is still the real one.
+    """
+    value = 1.0 if tag == "A" else 2.0
+    emb = base.embeddings.copy()
+    emb[:, 0] = value
+    return Index(
+        chunks=[c.model_copy(update={"chunk_id": f"{tag}::{c.chunk_id}"})
+                for c in base.chunks],
+        embeddings=emb,
+        meta={**base.meta, "build": tag},
+        lexical=base.lexical,
+    )
+
+
+def rebuild_under_load_served(tmp_root: Path, indices, spec, texts: list[str],
+                              readers: int, seconds: float,
+                              pause_s: float = 25.0, mid_gap_s: float = 15.0) -> dict:
+    """Section 6's race, but at real size and driven through `route_query`.
+
+    THE SCRATCH COPY IS NOT A CONVENIENCE, IT IS THE SAFETY RULE. A writer runs
+    in this loop, so pointing it at `data/index/` would destroy a real index
+    that costs ~2 h of GPU to rebuild. `route_query` takes its `indices` list as
+    an argument, so the redirect needs no monkeypatching and cannot leak: the
+    IndexInfo handed to it is the real route target with `dir` swapped.
+
+    Detection is honest about one seam. The LOAD under test is the one a served
+    query performs; the CHECK reads the object the cache is holding immediately
+    afterwards, through the same cache, because `RetrievalResult` does not carry
+    the Index. A swap landing between the two shows up as a disagreement rather
+    than as a miss, which is why `checked` is reported separately from `served`.
+    """
+    from rag_lab.query_service import IndexInfo
+
+    target = route_targets(spec.type if spec.type in ("dense", "hybrid") else "hybrid")["person"]
+    real = resolve_index(target, indices)
+    src = Path(real.dir)
+
+    base = load_index_cached(src, with_embeddings=True)
+    builds = {t: _stamp(base, t) for t in ("A", "B")}
+    del base
+    clear_index_cache()
+
+    out: dict = {"readers": readers, "seconds": seconds, "pause_s": pause_s,
+                 "mid_gap_s": mid_gap_s, "modes": {},
+                 "source_dir": str(src), "n_chunks": len(builds["A"].chunks),
+                 "dim": int(builds["A"].embeddings.shape[1])}
+
+    # Stage both builds ONCE. The writer loop then only copies, which is what a
+    # real save's second half costs; re-serialising per cycle would time pyarrow
+    # instead of the race.
+    staging = {}
+    for tag, idx in builds.items():
+        st = tmp_root / f"staged_{tag}"
+        if st.exists():
+            shutil.rmtree(st)
+        ArtifactStore().save(idx, st)
+        # query_indices reads manifest.json, which ArtifactStore.save does not
+        # write (the build pipeline does). It is NOT in ARTIFACT_FILES, so it is
+        # outside both the row alignment and the seal -- copying it once is
+        # faithful, and rewriting it per cycle would add nothing to the race.
+        shutil.copyfile(src / "manifest.json", st / "manifest.json")
+        staging[tag] = st
+    out["staged_bytes"] = sum(
+        f.stat().st_size for f in staging["A"].iterdir() if f.is_file())
+
+    real_read_seal = index_cache_mod.read_seal
+    modes = (("real_rebuild", True), ("real_rebuild_unsealed", False))
+    for mode, use_seal in modes:
+        index_cache_mod.read_seal = (
+            real_read_seal if use_seal else (lambda _directory: None))
+        d = tmp_root / f"served_{mode}"
+        if d.exists():
+            shutil.rmtree(d)
+        d.mkdir(parents=True)
+        for f in staging["A"].iterdir():
+            shutil.copyfile(f, d / f.name)
+        seal(d)
+
+        info = IndexInfo(combo_id=real.combo_id, dir=str(d), loader=real.loader,
+                         chunker=real.chunker, embedder=real.embedder)
+        clear_index_cache()
+        stop = threading.Event()
+        stats = {"served": 0, "checked": 0, "mixed": 0, "refused": 0,
+                 "other_errors": 0, "writes": 0, "gap_s": [], "error_kinds": {}}
+        lock = threading.Lock()
+
+        def read_loop(worker: int) -> None:
+            served = checked = mixed = refused = other = 0
+            kinds: dict[str, int] = {}
+            for n in itertools.count():
+                if stop.is_set():
+                    break
+                text = texts[(worker * 7 + n) % len(texts)]
+                try:
+                    route_query(text, [info], spec, K)
+                    served += 1
+                except RuntimeError:
+                    refused += 1
+                    continue
+                except Exception as exc:
+                    other += 1
+                    kinds[f"{type(exc).__name__}: {str(exc)[:90]}"] = (
+                        kinds.get(f"{type(exc).__name__}: {str(exc)[:90]}", 0) + 1)
+                    continue
+                try:
+                    idx = load_index_cached(Path(info.dir), with_embeddings=True)
+                except Exception as exc:
+                    k = f"check/{type(exc).__name__}: {str(exc)[:80]}"
+                    kinds[k] = kinds.get(k, 0) + 1
+                    continue
+                checked += 1
+                tags = {c.chunk_id.split("::")[0] for c in idx.chunks}
+                vals = set(np.unique(idx.embeddings[:, 0]).tolist())
+                if len(tags) != 1 or vals != ({1.0} if tags == {"A"} else {2.0}):
+                    mixed += 1
+            with lock:
+                stats["served"] += served
+                stats["checked"] += checked
+                stats["mixed"] += mixed
+                stats["refused"] += refused
+                stats["other_errors"] += other
+                for k, v in kinds.items():
+                    stats["error_kinds"][k] = stats["error_kinds"].get(k, 0) + v
+
+        def write_loop() -> None:
+            writes, gaps = 0, []
+            for tag in itertools.cycle(("B", "A")):
+                if stop.is_set():
+                    break
+                st = staging[tag]
+                shutil.copyfile(st / "chunks.parquet", d / "chunks.parquet")
+                shutil.copyfile(st / "lexical.json", d / "lexical.json")
+                # THE STABLE WINDOW IS CHOSEN, AND IT MUST EXCEED A LOAD.
+                # Two measurements put it here, neither of them taste. (1) With
+                # no gap at all BOTH modes returned zero mixed reads: `save`
+                # goes from `pq.write_table` straight into `np.save`, so at
+                # 305MB the exposure is dominated by a TRUNCATED file (loud,
+                # and the format itself catches it) rather than by two complete
+                # mismatched ones (silent). (2) At section 6's 0.15s it was
+                # still zero, and that is structural rather than unlucky: a read
+                # of this index takes ~1.5s, so a window shorter than a load
+                # cannot contain one, the reader's own before/after stamps
+                # straddle the writer's transition, and the 2026-08-21 stamping
+                # fix catches it WITHOUT the seal. So the seal's unique job --
+                # a directory that is stably inconsistent for longer than a read
+                # -- is only reachable above that line, which is precisely the
+                # in-place rewrite it was built for (relabel_index_resolution_ids
+                # rewrites for minutes). The sealed arm faces the identical gap,
+                # which is what keeps the comparison fair.
+                if mid_gap_s:
+                    time.sleep(mid_gap_s)
+                t0 = time.perf_counter()
+                # THE WINDOW IS MEASURED, NOT CHOSEN. Section 6 had to invent
+                # 0.15 s; here it is what writing embeddings.npy really costs,
+                # which is the number a deployment is exposed to.
+                shutil.copyfile(st / "embeddings.npy", d / "embeddings.npy")
+                gaps.append(time.perf_counter() - t0)
+                shutil.copyfile(st / "meta.json", d / "meta.json")
+                seal(d)
+                writes += 1
+                # A DEPLOYMENT REBUILDS OCCASIONALLY, NOT IN A LOOP. Without this
+                # the directory is mid-write most of the time, so the cache
+                # correctly refuses nearly every read and the run measures the
+                # refusal path instead of the race -- the first smoke served 2
+                # queries against 52 refusals, and the negative control could not
+                # fire at all, which would have made S10 vacuous.
+                if stop.wait(pause_s):
+                    break
+            with lock:
+                stats["writes"] += writes
+                stats["gap_s"].extend(gaps)
+
+        threads = [threading.Thread(target=read_loop, args=(i,), daemon=True)
+                   for i in range(readers)]
+        writer = threading.Thread(target=write_loop, daemon=True)
+        writer.start()
+        for t in threads:
+            t.start()
+        time.sleep(seconds)
+        stop.set()
+        writer.join(timeout=120)
+        for t in threads:
+            t.join(timeout=120)
+
+        final = load_index_cached(d, with_embeddings=True)
+        ftags = {c.chunk_id.split("::")[0] for c in final.chunks}
+        stats["final_consistent"] = (
+            len(ftags) == 1
+            and set(np.unique(final.embeddings[:, 0]).tolist())
+            == ({1.0} if ftags == {"A"} else {2.0}))
+        stats["sealed"] = use_seal
+        stats["median_gap_s"] = (
+            sorted(stats["gap_s"])[len(stats["gap_s"]) // 2] if stats["gap_s"] else 0.0)
+        stats.pop("gap_s")
+        out["modes"][mode] = stats
+        clear_index_cache()
+        shutil.rmtree(d, ignore_errors=True)
+
+    index_cache_mod.read_seal = real_read_seal
+    for st in staging.values():
+        shutil.rmtree(st, ignore_errors=True)
     return out
 
 
@@ -956,6 +1186,105 @@ def render(data: dict) -> tuple[str, list[tuple[str, bool, str]]]:
         )
         L.append("")
 
+    served = data.get("race_served")
+    if served:
+        L.append("## 6b. The same race at REAL index size, through `route_query`")
+        L.append("")
+        L.append(
+            f"Section 6 answers the mechanism on a 200x8 synthetic with readers calling "
+            f"`load_index_cached` directly. This one answers the DEPLOYMENT question: "
+            f"{served['readers']} reader threads issuing real `person` queries through the "
+            f"shipped `route_query` (hybrid, `fetch_depth`={FETCH_DEPTH}, all three serving "
+            f"caches live) against a scratch copy of "
+            f"`{Path(served['source_dir']).name}` — **{served['n_chunks']:,} chunks, "
+            f"dim {served['dim']}, {served['staged_bytes'] / 1024 / 1024:.0f} MB on disk** — "
+            f"while a writer alternates two builds through the same four files, "
+            f"{served['seconds']:.0f}s per mode."
+        )
+        L.append("")
+        L.append(
+            "| writer | seal | served | checked | **mixed** | refused | errors | writes "
+            "| write cost | final consistent |"
+        )
+        L.append("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |")
+        for mode, st in served["modes"].items():
+            L.append(
+                f"| `{mode}` | {'yes' if st['sealed'] else '**no (control)**'} | "
+                f"{st['served']:,} | {st['checked']:,} | **{st['mixed']:,}** | "
+                f"{st['refused']:,} | {st['other_errors']:,} | {st['writes']:,} | "
+                f"{st['median_gap_s']:.2f}s | "
+                f"{'yes' if st['final_consistent'] else 'NO'} |"
+            )
+        L.append("")
+        L.append(
+            f"**Two windows, and only one of them is measured.** `write cost` is what "
+            f"copying `embeddings.npy` actually costs at this size — the *truncated* "
+            f"exposure, during which a reader's own before/after stamps already catch "
+            f"the race. `stable window` ({served['mid_gap_s']:.0f}s) is **chosen**, and "
+            f"it is the one the seal alone can see: both files complete, mismatched, "
+            f"nothing moving."
+        )
+        L.append("")
+        L.append(
+            "**Why it had to be chosen, and why it had to be this large — measured in "
+            "three steps rather than picked.** With **no** gap both modes returned "
+            "**0 mixed**: `ArtifactStore.save` goes from `pq.write_table` straight into "
+            "`np.save`, so at this size the exposure is dominated by a *truncated* file, "
+            "which the formats themselves catch (`ValueError: Failed to read all data for "
+            "array`, `JSONDecodeError`) — loud, not silent. At section 6's **0.15s** it "
+            "was still 0, and that is structural: **a window shorter than a load cannot "
+            "contain one**, so the reader's own stamps straddle the transition and the "
+            "2026-08-21 stamping fix catches it *without* the seal. It fires only once "
+            "the window exceeds a **contended** load — ~13s with several readers "
+            "reloading 305MB against a writer copying the same — which is why the "
+            "default is not the 1.5s an uncontended load costs."
+        )
+        L.append("")
+        _sm = served["modes"]
+        _sealed, _ctl = _sm.get("real_rebuild", {}), _sm.get("real_rebuild_unsealed", {})
+        L.append(
+            # Stated as PAIRS in prose, not only as table cells: a count is
+            # invisible to D2 and traceable only to D5, which asks for the pair.
+            f"At that window the control mixes **{_ctl.get('mixed', 0):,} of "
+            f"{_ctl.get('checked', 0):,}** checked reads, while the sealed arm mixes "
+            f"**{_sealed.get('mixed', 0):,} of {_sealed.get('checked', 0):,}**."
+        )
+        L.append("")
+        L.append(
+            "**So the seal's unique job is a real but NARROW one, and this section is "
+            "what narrows it.** Against an overlapping rebuild the stamp comparison is "
+            "sufficient on its own. What only the seal sees is a directory left stably "
+            "inconsistent for **longer than a read** — which is not what `save` leaves "
+            "at this size, but is exactly what an **in-place rewrite** leaves "
+            "(`relabel_index_resolution_ids.py` rewrites for minutes), and what a small "
+            "index leaves under section 6's conditions, where loads are fast enough to "
+            "fit inside a short window."
+        )
+        L.append("")
+        L.append(
+            "**The scratch copy is the safety rule, not a convenience.** A writer runs in "
+            "this loop, so pointing it at `data/index/` would destroy an index costing ~2h "
+            "of GPU. `route_query` takes its `indices` list as an argument, so the redirect "
+            "is a swapped `IndexInfo.dir` — no monkeypatching, and nothing can leak into "
+            "the real tree."
+        )
+        L.append("")
+        L.append(
+            "**One seam, stated rather than hidden.** The *load* under test is the one a "
+            "served query performs; the *check* reads the object the cache holds "
+            "immediately afterwards, because `RetrievalResult` does not carry the Index. A "
+            "write landing between the two shows up as a disagreement, not as a miss — "
+            "which is why `checked` is reported separately from `served`."
+        )
+        L.append("")
+        L.append(
+            "**What the stamp costs the realism.** Both builds share their chunk TEXT, so "
+            "`lexical.json` stays valid and BM25 is not rebuilt per read; the identity "
+            "lives in a `chunk_id` prefix and in column 0 of every vector, i.e. 1 of "
+            f"{served['dim']} dimensions, so the ranking a reader gets is still the real one."
+        )
+        L.append("")
+
     # ---- self-checks ----
     L.append("## 7. Self-checks")
     L.append("")
@@ -1059,6 +1388,40 @@ def render(data: dict) -> tuple[str, list[tuple[str, bool, str]]]:
             f"is descriptive (section 5), the exactness gate is qdrant_routed_check.py",
         )
 
+    served = data.get("race_served")
+    if served:
+        sm = served["modes"]
+        sealed_m = sm.get("real_rebuild", {})
+        ctl = sm.get("real_rebuild_unsealed", {})
+        add(
+            "S10 a real-size rebuild under a served load is never mixed",
+            bool(sealed_m)
+            # checked > 0 IS THE CHECK. Its first run passed at "0 mixed of 0
+            # checked": a contended load outlasted the pause between rebuilds,
+            # so every read straddled the next cycle and the arm served nothing.
+            # An arm that served no query cannot evidence that serving is safe.
+            and sealed_m.get("checked", 0) > 0
+            and sealed_m.get("mixed", 0) == 0
+            and all(m["final_consistent"] for m in sm.values()),
+            f"{sealed_m.get('mixed', 0)} mixed of {sealed_m.get('checked', 0):,} checked "
+            f"reads ({sealed_m.get('served', 0):,} served) at {served['n_chunks']:,} chunks, "
+            f"through the shipped route_query",
+        )
+        add(
+            "S11 the real-size negative control reproduces the defect",
+            ctl.get("mixed", 0) > 0,
+            f"unsealed control served {ctl.get('mixed', 0):,} mixed of "
+            f"{ctl.get('checked', 0):,} checked (0 would make S10 vacuous)",
+        )
+        add(
+            "S12 the seal actually had to fire (the refusals are not incidental)",
+            sealed_m.get("refused", 0) > 0 and sealed_m.get("writes", 0) > 0,
+            f"{sealed_m.get('refused', 0):,} reads refused over "
+            f"{sealed_m.get('writes', 0)} rebuilds, median {sealed_m.get('median_gap_s', 0.0):.2f}s "
+            f"to write embeddings.npy -- a 0-mixed arm that never refused would mean the "
+            f"window was never open, not that the seal held",
+        )
+
     if race:
         modes = race["modes"]
         sealed = {k: m for k, m in modes.items() if m.get("sealed")}
@@ -1109,11 +1472,36 @@ def main() -> None:
     ap.add_argument("--levels", default=",".join(str(c) for c in CONCURRENCY))
     ap.add_argument("--readers", type=int, default=8)
     ap.add_argument("--race-seconds", type=float, default=15.0)
+    ap.add_argument(
+        "--race-pause",
+        type=float,
+        default=25.0,
+        help="seconds between rebuild cycles in section 6b. Must EXCEED one "
+             "contended load or the sealed arm serves nothing between rebuilds and "
+             "its 0-mixed result is vacuous; a deployment rebuilds occasionally, so "
+             "a tight loop measures the refusal path instead",
+    )
+    ap.add_argument(
+        "--race-mid-gap",
+        type=float,
+        default=15.0,
+        help="section 6b's stable inconsistent window, i.e. the time both files "
+             "are complete and mismatched. Must EXCEED one load (~1.5s here) or "
+             "the before/after stamps catch the race without the seal and the "
+             "negative control cannot fire",
+    )
     ap.add_argument("--smoke", action="store_true", help="tiny slice, to check it runs")
     ap.add_argument("--render", action="store_true", help="re-render from the raw cache")
+    ap.add_argument(
+        "--race-served",
+        action="store_true",
+        help="run ONLY section 6b (the real-size race through route_query) and "
+             "re-render from the cached sweep, so the published throughput "
+             "numbers are not re-measured to add a section",
+    )
     args = ap.parse_args()
 
-    if args.render:
+    if args.render or args.race_served:
         data = json.loads(RAW.read_text(encoding="utf-8"))
     else:
         levels = [int(x) for x in args.levels.split(",")]
@@ -1195,6 +1583,35 @@ def main() -> None:
         data["race"] = rebuild_under_load(tmp_root, args.readers, args.race_seconds)
         shutil.rmtree(tmp_root, ignore_errors=True)
 
+        RAW.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    if args.race_served:
+        # Only section 6b. Everything else is re-rendered from the cached sweep:
+        # adding a section must not silently re-measure the published throughput
+        # numbers, which move ~6% run to run on this rig.
+        data = json.loads(RAW.read_text(encoding="utf-8"))
+        entries = load_gold_query_set(GOLD)
+        texts = [e.query for e in entries if classify_query(e.query) == "person"]
+        indices = discover_indices(INDEX_ROOT)
+        spec = StrategySpec(type="hybrid", params={"fetch_depth": FETCH_DEPTH})
+        tmp_root = Path(os.environ.get("TEMP", "/tmp")) / "rag_lab_race_served"
+        if tmp_root.exists():
+            shutil.rmtree(tmp_root, ignore_errors=True)
+        tmp_root.mkdir(parents=True, exist_ok=True)
+        print(f"real-size race under load ({len(texts)} person queries) ...")
+        try:
+            data["race_served"] = rebuild_under_load_served(
+                tmp_root, indices, spec, texts, args.readers, args.race_seconds,
+                args.race_pause, args.race_mid_gap)
+        finally:
+            shutil.rmtree(tmp_root, ignore_errors=True)
+        if args.smoke:
+            # A smoke slice may not publish. Its counts are a code check, not a
+            # small version of the answer -- the same rule hybrid_weighted_
+            # fetch_depth.py learned when its smoke reversed a headline's sign.
+            print(json.dumps(data["race_served"], indent=1))
+            print("smoke run -- nothing written")
+            return
         RAW.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
 
     text, checks = render(data)

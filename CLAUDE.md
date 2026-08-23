@@ -1527,6 +1527,36 @@ see `docs/adr/`.
   fleet, `tools/seal_index_dirs.py --apply` seals). **Never downgrade a mismatch
   to "probably an out-of-band edit, read it anyway"** — during the inter-file
   window the directory is stable too, so stability cannot tell the two apart.
+  **The seal's job is real but NARROW, and running the race at REAL size through
+  the shipped `route_query` is what narrowed it (2026-08-23, `serving_concurrency.md`
+  section 6b — sealed **0 mixed of 138** checked, unsealed control **42 of 148**).**
+  Against a rebuild that *overlaps* a read the before/after stamps are sufficient
+  **on their own**; what only the seal sees is a directory left stably
+  inconsistent for **longer than a read**. That is not what `save` leaves at this
+  size — it goes from `pq.write_table` straight into `np.save`, so the exposure is
+  a **truncated** file and the formats catch it *loudly* — but it is exactly what
+  an **in-place rewrite** leaves, and what a small index leaves. **Getting the
+  control to fire at all took three calibration steps and the failures are the
+  finding**: no gap → 0 mixed in both arms; section 6's 0.15 s → still 0, because
+  **a window shorter than a load cannot contain one**; it fires only above a
+  *contended* load (~13 s here). **Two vacuity traps, both hit**: those three 0s
+  would have made the sealed arm's 0 meaningless (hence `S11`), and `S10` then
+  passed at **"0 mixed of 0 checked"** because a pause shorter than a contended
+  load left the sealed arm serving *nothing* — **an arm that served no query
+  cannot evidence that serving is safe**, so it now gates on a non-zero
+  denominator. **The 0 is not free**: holding that window open cost **1,062
+  refusals** over 5 rebuilds — the seal converts inconsistency into
+  unavailability, which is the right trade and still a trade.
+  **A torn read that RAISES is the same race as one that mixes, and the cache
+  dropped half of it (found by 6b, fixed 2026-08-23).** `store.load` sat
+  **unwrapped** inside `load_index_cached`'s retry loop, so a write that truncated
+  a file under a reader raised out of pyarrow/numpy/json and propagated **past the
+  check on the very next line** that already knew how to handle it — and it was
+  **not** the `RuntimeError` a serving layer retries on, so a torn read read as a
+  corrupt index. A load that raises is now retried **iff the directory moved under
+  it**; a *stable* directory that still fails is genuinely corrupt and its
+  exception is re-raised **unchanged**, which is the guard against "retry
+  everything" turning a real corruption into a wrong diagnosis.
   **Four traps, each of which reversed a conclusion before it was found.**
   `localhost` cost **2,058.9 ms** per request against **15.1 ms** for
   `127.0.0.1` (136.3x) because Docker publishes IPv4-only and `getaddrinfo`
@@ -1543,8 +1573,8 @@ see `docs/adr/`.
   **NOT established** (do not cite past these): no network hop anywhere — app,
   embedder and engine are one process on one box, which makes this box look
   *worse* at the app layer than a real deployment; no bursty arrival process; and
-  **the rebuild-underneath-a-query-fleet race has never been run under real
-  concurrent load** — the tests drive it deterministically.
+  the *stable* inconsistent window at real size had to be **opened deliberately**,
+  so nothing measures how long a real `build_index` leaves one.
 - **Corpus data-quality audit** (`tools/corpus_prep/audit_title_body_agreement.py`,
   2026-07-30): flags manifest titles that disagree with the document's own page-1
   `เรื่อง` subject line. A first version was rejected on measurement (median 0.660,
