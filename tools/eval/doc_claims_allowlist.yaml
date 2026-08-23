@@ -354,6 +354,25 @@ counts:
 # D4: an eval input that changed after a report that reads it, cleared because
 # the change provably cannot move that report's numbers.
 inputs:
+  - src: src/rag_lab/retrievers/qdrant_hybrid.py
+    report: serving_concurrency.md
+    checked: 2026-08-23
+    reason: >-
+      The 2026-08-23 edit added `_verify`, the collection-staleness guard, and a
+      contextual wrapper around engine failures. Neither can move a number in
+      this report, and the cost was MEASURED rather than argued: warm, the guard
+      is one `count(exact=True)` (6.2 ms) plus one `retrieve` of 8 ids (2.6 ms),
+      paid ONCE per collection per retriever instance -- and the serving layer
+      caches instances, so the whole sweep pays it about four times, against
+      arms that run thousands of queries. Re-measuring to clear this would be
+      worse than leaving it: the script re-renders section 6b from cache
+      precisely because this report's throughput figures move ~6% run to run, so
+      a re-run would replace published numbers with noise in order to discharge
+      a ~9 ms one-off. `count(exact=True)` is kept over the 2.3 ms
+      `get_collection().points_count` deliberately -- the cheap counter can lag
+      during indexing, and a guard a lagging counter can fool is worth less than
+      4 ms.
+
   - src: src/rag_lab/retrievers/hybrid.py
     report: hybrid_significance_test_9way.md
     checked: 2026-08-08

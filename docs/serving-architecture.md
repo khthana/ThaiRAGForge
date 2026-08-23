@@ -450,6 +450,74 @@ counter is shared, so with `r` requests per worker the ratio is bounded above by
 
 ---
 
+## 8b. Failure modes: what the served path does when it cannot answer
+
+`tools/eval/serving_failure_modes.py` -> `data/results/serving_failure_modes.md`
+(2026-08-23). Nine modes, every one driven through the **shipped** `route_query`.
+A mode is `ACTIONABLE` only if its message names the artifact that is wrong
+**and** a remedy -- checked against the message text, not judged by eye.
+
+**The finding, and it is the worst class this project has.** A collection is a
+copy of an `Index`'s rows, so **any** index rebuild stales it -- and
+`_to_ranked` builds every result from the engine's stored **payload**, with the
+Index supplying only the collection name. So a collection nobody re-ingested
+does not fail, it *answers*. Measured on a scratch index and a scratch
+collection: after a rebuild without a re-ingest, one `IndexInfo` and one query
+returned
+
+| path | build served |
+|---|---|
+| in-process `hybrid` | **B** (current) |
+| served `qdrant_hybrid` | **A** (previous) |
+
+with **no error on either side**. The file path has had a seal against exactly
+this since 2026-08-21 (`index_cache._settle`); the engine path had nothing.
+
+**The guard, added the same day, is the engine-side counterpart of the seal.**
+`QdrantHybridRetriever._verify` refuses a collection that is a copy of a
+different build, on two signals: the row **count** (one call, does most of the
+work) and a **sample of rows compared by identity** -- point id == row index at
+ingest, so row *i*'s `chunk_id` in the payload must be row *i*'s here. The
+second exists because the first cannot see a rebuild that preserves the count,
+which is exactly what a re-OCR that moves text without moving chunk boundaries
+produces. It runs **once per collection per retriever instance**, and the
+serving layer caches instances, so it is once per process, not per query.
+
+**What it costs, measured rather than argued.** Warm, one `count(exact=True)`
+(**6.2 ms**) plus one `retrieve` of 8 ids (**2.6 ms**), once per collection per
+process; every later call is a set lookup (0.3 us). `count(exact=True)` is kept
+over the 2.3 ms `get_collection().points_count` deliberately -- the cheap
+counter can lag during indexing, and a guard a lagging counter can fool is worth
+less than 4 ms. The warm-up's probe retrieval pays it for the one collection it
+probes; the other three pay it on their first query.
+
+**Two things it is not.** It is not a check that you are serving the index you
+*meant* to -- that is `route_targets` / `resolve_index`, gated in
+`qdrant_routed_check.py`. And it is **not a per-query check**: a collection
+re-ingested, or dropped, *after* a process verified it is not re-checked until
+that process restarts. That is the cost trade, stated rather than hidden.
+
+**Nothing falls back.** It is tempting to drop to the in-process retrievers when
+the engine is unreachable. It must not: the two paths are different retrievers
+over different copies of the rows, so a silent switch is a **different answer,
+not a degraded one** -- the same reason `resolve_index` refuses an ambiguous
+route rather than picking one.
+
+**Three messages were opaque and are not any more**, found by the check rather
+than by reading: `[WinError 10061] No connection could be made ...` named
+neither Qdrant nor the url nor the collection (and took **14.3 s**; it now
+raises in ~2-3 s naming all three), a missing index directory raised a bare
+`FileNotFoundError` on `manifest.json`, and an unbuilt route target named the
+target but no remedy. A 404 is now separated from a refused connection, because
+reporting the first as "the engine is unreachable" sends an operator to restart
+a server that is already running.
+
+**The healthy control is what licenses the guard.** Both controls -- in-process
+and served, against the four collections actually deployed -- still return 10
+results. A guard that refused everything would pass every other check here.
+
+---
+
 ## 9. What is NOT established
 
 - **No network hop.** App, embedder and engine are one process on one box. That
@@ -465,6 +533,9 @@ counter is shared, so with `r` requests per worker the ratio is bounded above by
   **CLOSED 2026-08-23 — §6b.** What remains open underneath it is narrower: the
   *stable* window at real size had to be opened deliberately, so nothing here
   measures how long a real `build_index` leaves one.
+- **No timeout or GPU failure mode.** A refused connection is not a slow one,
+  and an embedder that OOMs mid-serve is not probed -- forcing that safely on
+  the card the eval scripts share is not worth leaving it wedged.
 - **Nothing here says anything about ANN.** The engine recommendation is
   `exact=True`; see `qdrant-serving-pilot.md`.
 - **Exactness between topologies is gated elsewhere.** The §5 ranking comparison

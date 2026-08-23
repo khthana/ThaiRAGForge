@@ -76,7 +76,23 @@ class ComboRetrieval:
 
 
 def _read_manifest(index_dir: str | Path) -> dict:
-    return json.loads((Path(index_dir) / "manifest.json").read_text(encoding="utf-8"))
+    """The manifest, or an error that says what to do about its absence.
+
+    The bare `FileNotFoundError: ... manifest.json` this used to raise names the
+    path and nothing else, which is the difference between an operator who knows
+    they pointed the app at the wrong root and one who thinks the index is
+    corrupt (`serving_failure_modes.md`).
+    """
+    path = Path(index_dir) / "manifest.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            f"{index_dir} is not a built index: it has no manifest.json, which is what "
+            f"identifies a queryable index (discover_indices skips directories without "
+            f"one). Check the index root you passed, or rebuild the combo: python -m "
+            f"rag_lab.cli run --config <experiment>."
+        ) from exc
 
 
 def discover_indices(output_dir: str | Path) -> list[IndexInfo]:
@@ -242,9 +258,19 @@ def resolve_index(target: RouteTarget, indices: list[IndexInfo]) -> IndexInfo:
         )
     ]
     if not matches:
-        raise LookupError(f"no built index matches route target {target!r}")
+        raise LookupError(
+            f"no built index matches route target {target!r}. Build that combo, or "
+            f"pass route_combo= to send this route at one that exists -- nothing here "
+            f"falls back to another index, because answering from the wrong index is a "
+            f"different answer, not a degraded one."
+        )
     if len(matches) > 1:
-        raise LookupError(f"route target {target!r} matches {len(matches)} built indices, expected 1")
+        raise LookupError(
+            f"route target {target!r} matches {len(matches)} built indices, expected 1: "
+            f"{[i.combo_id for i in matches]}. Narrow the target (embedder_model_name), "
+            f"or pass route_combo= -- picking one would silently choose which index "
+            f"answers."
+        )
     return matches[0]
 
 

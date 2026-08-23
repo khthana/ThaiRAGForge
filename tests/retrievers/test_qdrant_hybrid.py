@@ -26,7 +26,7 @@ from rag_lab.config import StrategySpec
 from rag_lab.factory import build_retriever
 from rag_lab.retrievers import QdrantHybridRetriever
 from rag_lab.retrievers.hybrid import fuse_rrf
-from rag_lab.schema import Index, Query
+from rag_lab.schema import Chunk, Index, Query
 
 COLLECTION = "coll"
 
@@ -101,9 +101,22 @@ def _query() -> Query:
     return Query(text="ก", vector=np.array([1.0, 0.0]), tokens=["ก"])
 
 
-def _index(provenance: dict | None = None) -> Index:
-    # Reads no rows by construction -- see BaseRetriever.reads_index_rows.
-    return Index(chunks=[], embeddings=np.zeros((0, 0)), provenance=provenance)
+def _index(provenance: dict | None = None, chunk_ids: list[str] | None = None) -> Index:
+    """The Index the collection is a copy of.
+
+    It carries no EMBEDDINGS -- that is what `reads_index_rows = False` buys, and
+    what query_service skips loading. It does carry the chunk rows, because
+    query_service loads chunks either way (`with_embeddings` is the only thing
+    the flag controls) and the staleness guard compares against them. Passing
+    `chunk_ids` builds an Index that disagrees with the seeded collection, which
+    is what the guard exists to catch.
+    """
+    ids = chunk_ids if chunk_ids is not None else [p["chunk_id"] for p in _POINTS]
+    chunks = [
+        Chunk(chunk_id=cid, resolution_id=f"r{i}", text=cid, chunk_index=i, page=1)
+        for i, cid in enumerate(ids)
+    ]
+    return Index(chunks=chunks, embeddings=np.zeros((0, 0)), provenance=provenance)
 
 
 def test_fuses_both_arms_rather_than_returning_the_dense_ranking(tmp_path):
@@ -218,3 +231,67 @@ def test_the_measured_serving_defaults_are_the_class_defaults():
     assert retriever.hnsw_ef is None
     assert retriever.fetch_depth == 200
     assert (retriever.dense_weight, retriever.bm25_weight, retriever.rrf_k) == (0.5, 0.5, 60)
+
+
+# --------------------------------------------------------------------------- #
+# The staleness guard (2026-08-23) -- the engine-side counterpart of the index
+# seal. A collection is a copy of an Index's rows, so any rebuild stales it, and
+# because results are built from the ENGINE's payload a stale collection does
+# not fail, it ANSWERS. Measured end to end in
+# tools/eval/serving_failure_modes.py; pinned here.
+# --------------------------------------------------------------------------- #
+def test_a_collection_holding_a_different_number_of_rows_is_refused(tmp_path):
+    r = _retriever(tmp_path)
+    with pytest.raises(RuntimeError, match="different build"):
+        r.retrieve(_query(), _index(chunk_ids=["c0", "c1"]), 3)
+
+
+def test_a_SAME_COUNT_collection_whose_rows_differ_is_refused(tmp_path):
+    """The count does most of the work; this is the case it cannot see.
+
+    A re-OCR that moves text without moving chunk boundaries rebuilds every
+    vector and keeps the row count identical, so a count-only guard would pass
+    it. Point id == row index at ingest, so row i's identity is checkable.
+    """
+    r = _retriever(tmp_path)
+    with pytest.raises(RuntimeError, match="disagrees with the index"):
+        r.retrieve(_query(), _index(chunk_ids=["c0", "c1", "OTHER"]), 3)
+
+
+def test_the_refusal_names_the_collection_and_how_to_repair_it(tmp_path):
+    """A message an operator can act on, or the guard just moves the confusion."""
+    r = _retriever(tmp_path)
+    with pytest.raises(RuntimeError) as exc:
+        r.retrieve(_query(), _index(chunk_ids=["c0"]), 3)
+    msg = str(exc.value)
+    assert COLLECTION in msg
+    assert "qdrant_pilot_ingest" in msg
+
+
+def test_verify_collection_False_restores_the_unguarded_behaviour(tmp_path):
+    """The escape hatch, and the proof that the defect it hides is real.
+
+    With the guard off the retriever answers happily from a collection that
+    disagrees with its index -- which is exactly what shipped before this guard
+    and what `serving_failure_modes.md` records as SILENT.
+    """
+    r = _retriever(tmp_path, verify_collection=False)
+    out = r.retrieve(_query(), _index(chunk_ids=["gone"]), 3)
+    assert [c.chunk_id for c in out] == ["c2", "c0", "c1"]
+
+
+def test_the_guard_costs_one_check_per_collection_not_one_per_query(tmp_path):
+    """Once per collection per instance -- the serving layer caches instances."""
+    r = _retriever(tmp_path)
+    calls = {"n": 0}
+    real_count = r._shared_client().count
+
+    def counted(**kwargs):
+        calls["n"] += 1
+        return real_count(**kwargs)
+
+    r._shared_client().count = counted
+    for _ in range(3):
+        r.retrieve(_query(), _index(), 3)
+    assert calls["n"] == 1, "the guard must not re-verify on every query"
+    assert COLLECTION in r._verified

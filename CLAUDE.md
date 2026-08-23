@@ -1547,6 +1547,33 @@ see `docs/adr/`.
   denominator. **The 0 is not free**: holding that window open cost **1,062
   refusals** over 5 rebuilds — the seal converts inconsistency into
   unavailability, which is the right trade and still a trade.
+  **A COLLECTION THAT SURVIVES A REBUILD ANSWERS — it does not fail
+  (2026-08-23, `tools/eval/serving_failure_modes.py` →
+  `data/results/serving_failure_modes.md`).** `_to_ranked` builds every result
+  from the **engine's stored payload**; the Index supplies only the collection
+  name. So the rule already in this file — *any index rebuild stales all four
+  collections* — had **no runtime guard**: measured on a scratch index and a
+  scratch collection, one `IndexInfo` and one query returned build **B**
+  in-process and build **A** served, **no error either side**. The file path had
+  a seal against exactly this; the engine path had nothing.
+  **`QdrantHybridRetriever._verify` is that seal one layer up**: row **count**
+  plus a **sample of rows compared by identity** (point id == row index at
+  ingest), **once per collection per retriever instance** — so once per process,
+  not per query. **It is a FIRST-USE check**: a collection dropped or re-ingested
+  after a process verified it is not re-checked until restart. It does **not**
+  say you are serving the index you *meant* to (that is `resolve_index` /
+  `qdrant_routed_check.py`), and **nothing falls back** — the in-process and
+  served paths are different retrievers over different copies of the rows, so a
+  silent switch is a different answer, not a degraded one.
+  **Nine modes, and the check found three opaque messages nobody had read**:
+  `[WinError 10061]` named neither Qdrant nor the url nor the collection and took
+  **14.3 s** (now ~2-3 s, naming all three); a missing index directory raised a
+  bare `FileNotFoundError` on `manifest.json`; an unbuilt route target named the
+  target but no remedy. A 404 is now separated from a refused connection —
+  reporting the first as "unreachable" sends an operator to restart a server that
+  is already running. **A mode must be constructed at the layer it lives in**:
+  two attempts measured a *different* mode because `_arms_for`'s sidecar check
+  and then `_verify` sit ahead of the layer being probed.
   **A torn read that RAISES is the same race as one that mixes, and the cache
   dropped half of it (found by 6b, fixed 2026-08-23).** `store.load` sat
   **unwrapped** inside `load_index_cached`'s retry loop, so a write that truncated

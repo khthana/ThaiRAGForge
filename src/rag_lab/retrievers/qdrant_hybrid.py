@@ -33,6 +33,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from qdrant_client import QdrantClient
+from qdrant_client.http.exceptions import ApiException, UnexpectedResponse
 
 from rag_lab.registries import retriever_registry
 from rag_lab.retrievers.base import BaseRetriever
@@ -48,13 +49,22 @@ from rag_lab.schema import Index, Query, RankedChunk
 #: <collection>/vocab.json per collection. src/rag_lab/retrievers/ -> repo root.
 _DEFAULT_VOCAB_ROOT = Path(__file__).resolve().parents[3] / "data" / "qdrant"
 
+#: Rows sampled per collection to prove it is a copy of THIS build. Point id ==
+#: row index at ingest, so a row's identity is checkable directly. Eight is not
+#: a confidence level -- the row COUNT does most of the work and this catches the
+#: same-count rewrite; it costs one round trip, once per collection per process.
+_VERIFY_SAMPLE = 8
+
 
 @retriever_registry.register("qdrant_hybrid")
 class QdrantHybridRetriever(BaseRetriever):
     """Dense + sparse from one Qdrant collection, fused with weighted RRF.
 
-    Reads nothing off the Index but its provenance, so `query_service` skips
-    loading `embeddings.npy` -- see `BaseRetriever.reads_index_rows`.
+    Reads no VECTORS off the Index, so `query_service` skips loading
+    `embeddings.npy` -- see `BaseRetriever.reads_index_rows`, which controls
+    exactly that and nothing else. It does read the Index's provenance (for the
+    collection name) and, once per collection, its chunk ids: see `_verify`,
+    which is what stops a collection left behind by a rebuild from answering.
 
     **The default url is `127.0.0.1`, not `localhost`, and the difference is
     2.0 seconds per request on this machine** (`data/results/serving_concurrency.md`
@@ -89,6 +99,7 @@ class QdrantHybridRetriever(BaseRetriever):
         dense_weight: float = 0.5,
         bm25_weight: float = 0.5,
         timeout: int | None = None,
+        verify_collection: bool = True,
     ) -> None:
         # `path` (embedded) and `url` (server) are mutually exclusive downstream;
         # passing path= wins so a test can run without a container.
@@ -107,8 +118,10 @@ class QdrantHybridRetriever(BaseRetriever):
         self.dense_weight = dense_weight
         self.bm25_weight = bm25_weight
         self.timeout = timeout
+        self.verify_collection = verify_collection
         self._arms: dict[str, tuple[QdrantRetriever, QdrantSparseRetriever]] = {}
         self._client: QdrantClient | None = None
+        self._verified: set[str] = set()
 
     @property
     def name(self) -> str:
@@ -124,6 +137,31 @@ class QdrantHybridRetriever(BaseRetriever):
         if self._client is None:
             self._client = _make_client(self.path, self.url, self.api_key, self.timeout)
         return self._client
+
+    def _engine_context(self, collection: str, exc: Exception) -> str:
+        """One message per cause, because they have different remedies.
+
+        A 404 and a refused connection are both `ApiException`, and reporting
+        the first as "the engine is unreachable" sends an operator to restart a
+        server that is already running. The collection being absent is the
+        rebuild-without-re-ingest case one step further along than the staleness
+        guard: nothing to compare, because nothing is there.
+        """
+        where = self.url or self.path or "<default client>"
+        if isinstance(exc, UnexpectedResponse) and getattr(exc, "status_code", None) == 404:
+            return (
+                f"qdrant collection {collection!r} does not exist on the engine at "
+                f"{where}. The index it serves has been built but never ingested (or "
+                f"the collection was dropped). Re-ingest it: python "
+                f"tools/eval/qdrant_pilot_ingest.py --index <index dir>"
+            )
+        return (
+            f"qdrant_hybrid could not reach the engine at {where} for collection "
+            f"{collection!r}: {type(exc).__name__}: {exc}. Check the server is up "
+            f"(docker start rag-qdrant) and that the url is reachable; nothing here "
+            f"falls back to the in-process retrievers, because a silent switch of "
+            f"retriever is a different answer, not a degraded one."
+        )
 
     def _collection_for(self, index: Index) -> str:
         if self.collection_name:
@@ -167,13 +205,88 @@ class QdrantHybridRetriever(BaseRetriever):
             )
         return self._arms[collection]
 
+    def _verify(self, collection: str, index: Index) -> None:
+        """Refuse a collection that is a copy of a DIFFERENT build.
+
+        **This is the engine-side counterpart of the index seal, and it exists
+        because the two paths failed differently.** `index_cache._settle` refuses
+        a directory whose artifacts disagree with the build its writer sealed;
+        nothing made the equivalent claim about a collection. A collection is a
+        copy of an `Index`'s rows (`qdrant_pilot_ingest.py`), so **any** index
+        rebuild stales it -- and because `_to_ranked` builds results from the
+        engine's stored PAYLOAD, a stale collection does not fail, it answers.
+        Measured 2026-08-23 on a scratch index and a scratch collection: after a
+        rebuild without a re-ingest, one `IndexInfo` and one query returned the
+        CURRENT build in-process and the PREVIOUS build through this retriever,
+        no error either side. That is this project's signature shape -- two
+        artifacts produced at different times, no crash, just a wrong answer.
+
+        Two signals, because neither alone is enough. The row COUNT does most of
+        the work and costs one call. It cannot see a rebuild that preserves the
+        count (a re-OCR that moves text without moving chunk boundaries), so a
+        sample of rows is compared by identity: point id == row index at ingest,
+        so row `i`'s `chunk_id` in the payload must be row `i`'s `chunk_id` here.
+
+        Run ONCE per collection per retriever instance, and the serving layer
+        caches retrievers -- so this is once per process, not per query. Failing
+        is deliberately loud and names the remedy: the seal's trade, one layer
+        up, is unavailability over a wrong answer.
+        """
+        if not self.verify_collection or collection in self._verified:
+            return
+        n_rows = len(index.chunks)
+        client = self._shared_client()
+        n_points = client.count(collection_name=collection, exact=True).count
+        if n_points != n_rows:
+            raise RuntimeError(
+                f"qdrant collection {collection!r} holds {n_points:,} points but the "
+                f"index it is serving for holds {n_rows:,} rows -- the collection is a "
+                f"copy of a different build. Re-ingest it: "
+                f"python tools/eval/qdrant_pilot_ingest.py --index "
+                f"{(index.provenance or {}).get('index_dir', '<index dir>')}"
+            )
+        if n_rows:
+            step = max(1, n_rows // _VERIFY_SAMPLE)
+            ids = sorted({*range(0, n_rows, step), n_rows - 1})[:_VERIFY_SAMPLE]
+            found = {
+                r.id: (r.payload or {}).get("chunk_id")
+                for r in client.retrieve(
+                    collection_name=collection, ids=ids, with_payload=True
+                )
+            }
+            for i in ids:
+                if found.get(i) != index.chunks[i].chunk_id:
+                    raise RuntimeError(
+                        f"qdrant collection {collection!r} disagrees with the index it "
+                        f"is serving for at row {i}: the collection has chunk_id "
+                        f"{found.get(i)!r}, the index has "
+                        f"{index.chunks[i].chunk_id!r}. The collection is a copy of a "
+                        f"different build; re-ingest it: python "
+                        f"tools/eval/qdrant_pilot_ingest.py --index "
+                        f"{(index.provenance or {}).get('index_dir', '<index dir>')}"
+                    )
+        self._verified.add(collection)
+
     def retrieve(self, query: Query, index: Index, k: int) -> list[RankedChunk]:
-        dense_arm, sparse_arm = self._arms_for(self._collection_for(index))
+        collection = self._collection_for(index)
+        try:
+            self._verify(collection, index)
+        except ApiException as exc:
+            raise RuntimeError(self._engine_context(collection, exc)) from exc
+        dense_arm, sparse_arm = self._arms_for(collection)
         # A depth below k would under-fetch the answer it is asked for; the
         # measured F=200 is a floor on the fetch, never a cap on the send.
         depth = max(self.fetch_depth, k)
-        dense = dense_arm.retrieve(query, index, depth)
-        sparse = sparse_arm.retrieve(query, index, depth)
+        try:
+            dense = dense_arm.retrieve(query, index, depth)
+            sparse = sparse_arm.retrieve(query, index, depth)
+        except ApiException as exc:
+            # The raw client raises `[WinError 10061] No connection could be
+            # made because the target machine actively refused it` -- measured,
+            # and it names neither Qdrant, nor the url, nor the collection, nor
+            # what to do about it. A served request deserves to know which
+            # component is down.
+            raise RuntimeError(self._engine_context(collection, exc)) from exc
         return fuse_rrf(
             dense,
             sparse,
