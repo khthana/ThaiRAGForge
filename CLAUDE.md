@@ -2292,17 +2292,18 @@ see `docs/adr/`.
   `route_query` calls are N model loads — a **pre-existing** serving gap (the Streamlit UI has
   it too), and per §8b the embedder is the layer that saturates anyway.
 - **Serving cost: an embedder cache on the query path, and the 78% nobody had priced
-  (2026-08-21, `tools/eval/serving_cost_profile.py` → `data/results/serving_cost_profile.md`,
+  (2026-08-21; full narrative `docs/serving-architecture.md`, `tools/eval/serving_cost_profile.py` → `data/results/serving_cost_profile.md`,
   4/4 self-checks).** `qdrant_concurrency.md` established the system is **ENCODE-BOUND**,
   but its harness built the embedder **once outside the loop**, so it measured a *warm*
   model and never priced the per-call **construction** the shipped `query_service`
   actually pays — `build_embedder` had no cache and `query_indices` builds one per index
-  dir per call. Decomposed on the shipped `person` route (bge-m3, 57,172 chunks): one
-  served query is **11,317 ms**, of which **8,835 ms is loading weights the previous query
-  already loaded**, against **416 ms** of irreducible work (encode 13.0 + score/fuse 403).
+  dir per call. Decomposed on the shipped `person` route (bge-m3, 57,172 chunks): one served
+  query with nothing cached is **11,589 ms**, of which **9,049 ms (78%) is loading
+  weights the previous query already loaded**, against **360 ms** of irreducible work
+  (encode 14.3 + score/fuse 346).
   `build_embedder_cached` (bounded LRU, `RAG_LAB_EMBEDDER_CACHE`, default **2**) takes the
-  shipped `route_query` from **11,604 → 3,074 ms p50 (3.8x)**, **2,994 ms steady state
-  (3.9x)**, with **0 of 8** queries returning a different top-10 — ids *and* scores.
+  shipped `route_query` from **12,465 → 3,389 ms p50 (3.7x)**, **3,069 ms steady state**,
+  with **0 of 8** queries returning a different top-10 — ids *and* scores.
   **Five things worth keeping, and the first two are instrument faults that each reversed
   the conclusion on their own.** (1) **`LocalSTEmbedder._load()` is LAZY** — the
   constructor stores a model name and `SentenceTransformer(...)` runs inside the first
@@ -2402,10 +2403,10 @@ see `docs/adr/`.
   larger half (223 MB against 80 MB of chunk objects, ~1,467 bytes/chunk).
   **`ArtifactStore.load` NOW STREAMS (2026-08-21): `pq.ParquetFile.iter_batches` a batch
   at a time instead of `pq.read_table(...).to_pydict()`.** Per index, one child process
-  per arm so no arena is inherited: **379 MB → 244 MB held**, and end to end the four
-  resident indices went **3,488 MB → 3,135 MB** — less than 4x the per-index saving
-  because the parent reuses arenas across loads, so **quote the in-situ figure, never the
-  projection**. **Time is unchanged and that is the honest headline** (596 ms against
+  per arm so no arena is inherited: **379 MB → 244 MB held**, i.e. **135 MB per
+  index**, which at the default cache size 4 is *on the order of* **541 MB** off the
+  resident set — a projection; the parent reuses arenas across loads, so the delta
+  measured end to end is smaller than 4x the per-index saving. **Time is unchanged and that is the honest headline** (596 ms against
   563, and §1's `load` step is 1,185 ms): building 57k pydantic `Chunk`s dominates
   either way, so this is a memory result. An isolated probe building plain tuples *did*
   show 817 → 435 ms, consistent with a fresh process having to grow its heap for the
@@ -2482,7 +2483,8 @@ see `docs/adr/`.
   it holds 3.2 GB RAM + 3.3 GB VRAM on a card the eval scripts share, so an automatic
   grab at UI start is how a GPU run dies; a deployment sets `RAG_LAB_WARM_ON_START=1`.
 - **The shipped serving path under concurrent load, and the two defects it found in
-  that path rather than in the engine (2026-08-21,
+  that path rather than in the engine (2026-08-21; narrative
+  `docs/serving-architecture.md` §7-§8,
   `tools/eval/serving_concurrency_test.py` → `data/results/serving_concurrency.md`,
   9/9 self-checks).** `qdrant_concurrency.md` (08-13) answered "which layer
   saturates" for a **hand-assembled** pipeline whose embedder and Index were built
@@ -2503,7 +2505,9 @@ see `docs/adr/`.
   process on one box, which makes this box look worse at the app layer than the
   target will.**
   **Two defects, both in the shipped path and neither in Qdrant.** (1) **`localhost`
-  cost 2,054 ms per request against 12.3 ms for `127.0.0.1`** — 139x on a name.
+  cost 2,058.9 ms p50 per request against 15.1 / 14.0 ms for `127.0.0.1`** — **136.3x**
+  on a name, arms ordered fast/slow/fast so a one-off stall cannot be read as the
+  effect.
   `docker run -p 6333:6333` publishes on IPv4 only and `getaddrinfo` returns `::1`
   first, so the client spends ~2 s on an address the server is not on, even though
   that address refuses *instantly*. It hid because **every eval script already
@@ -2533,7 +2537,9 @@ see `docs/adr/`.
   **30.2%** on the engine arm because **only the repeat control was warmed at its
   level** — the sweep cells were not, so `engine@C=1` measured 6.30 q/s cold against
   the warmed repeat's 8.20 while `encode`/`inproc` agreed to 6% because earlier
-  phases had incidentally warmed them. *A control warmed differently from the
+  phases had incidentally warmed them. (Those four figures are readings of the
+  *broken* harness and appear in no report by construction; the fixed run's drift
+  is in `serving_concurrency.md`.) *A control warmed differently from the
   treatment is not a control*; every cell is now warmed at its own level and the
   drift reads **0.6%**. `S4` (Little's law) went red on `inproc@C=50` at 0.84, and
   that is **arithmetic, not physics**: the dispatch counter is shared, so with `r`
@@ -2552,7 +2558,7 @@ see `docs/adr/`.
   percentile is visible rather than implied.
 - **A rebuild landing between the writer's own two files — the case stamping the
   read at both ends could not see, and the writer-side seal that closes it
-  (2026-08-21, `ArtifactStore.seal` / `read_seal` / `artifact_stamp`,
+  (2026-08-21; narrative `docs/serving-architecture.md` §6, `ArtifactStore.seal` / `read_seal` / `artifact_stamp`,
   `src/rag_lab/io/index_cache.py`, `tools/seal_index_dirs.py`).** The 08-21 morning
   fix stamped a cached read before *and* after and refused a read that kept racing.
   That detects a write which **overlaps** the read. It cannot detect a directory that

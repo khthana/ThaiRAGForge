@@ -144,6 +144,7 @@ DOCS = [
     Path("docs/rq4-second-generator-check.md"),
     Path("docs/rq4-design.md"),
     Path("docs/reranker-trained-on-hybrid-design.md"),
+    Path("docs/serving-architecture.md"),
     Path("docs/eval-validity-threats.md"),
     Path("docs/research-framework-gap-analysis.md"),
     Path("README.md"),
