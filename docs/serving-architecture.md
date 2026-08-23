@@ -418,6 +418,77 @@ are both right: one is the low-load regime, the other the busy one.
 
 ---
 
+## 7b. Open loop: what a user waits when nobody throttles the arrivals
+
+`tools/eval/serving_open_loop.py` -> `data/results/serving_open_loop.md`
+(2026-08-23). Section 7 measures a **closed** loop: C workers, each issuing its
+next query only after the last returns. That is the right shape for finding a
+plateau and the wrong one for sizing a deployment, for a structural reason --
+**a closed loop throttles itself.** When the system slows, its own clients slow
+with it, so a queue can never build. Here a dispatcher emits at a fixed rate
+lambda **independent of completions**, and each request is timed from when it
+*arrived*, not from when a worker picked it up:
+
+    response = queue wait + service
+
+A closed loop can only ever report the second term.
+
+**Where the knee is.** The engine topology is stable to **8 q/s** and already
+unstable at **10 q/s** -- consistent with section 7's 9.81 q/s plateau, reached
+by a different harness. Above the knee there is no latency to quote: the queue
+grows for as long as the load lasts, and a percentile over whatever finished is
+a property of the run length.
+
+| arrivals | lambda | response p50 | p95 | service p50 | stable |
+|---|---:|---:|---:|---:|:---:|
+| poisson | 1 q/s | 184 ms | n/a | 184 ms | yes |
+| poisson | 4 q/s | 283 ms | 1,337 ms | 275 ms | yes |
+| poisson | 6 q/s | 362 ms | 1,512 ms | 335 ms | yes |
+| poisson | 8 q/s | 1,153 ms | 3,538 ms | 797 ms | yes |
+| poisson | 10 q/s | 3,753 ms | 7,263 ms | 932 ms | **no** |
+
+**The result worth carrying: burstiness costs the tail first, and it costs it
+well inside the plateau.** The deterministic arms offer the *identical* rate
+with even spacing, so any difference is clumping and nothing else. At
+**lambda = 2 q/s** the medians match to a millisecond (181 vs 182 ms) while p95
+differs **1.7x**; by **lambda = 6 q/s** -- comfortably inside the published
+plateau -- even spacing sees **284 ms** at p95 and Poisson at the same rate sees
+**1,512 ms**, a **5.3x** gap with nothing about the system changed. **So a
+capacity figure taken from a closed loop or from even spacing is optimistic
+about what people actually feel**, and the optimism lands on the unlucky user
+before it lands on the typical one.
+
+**Sizing, stated in the form the question arrives in.** 50 users issuing one
+query every 10 s is 5 q/s: inside the stable range, with p95 already over a
+second. The constraint at this scale is still latency rather than capacity --
+the same conclusion section 7 reached, now with a tail attached to it.
+
+**A harness confound worth knowing about, because it is a real deployment
+note.** `with_embeddings` is part of the index-cache key, so warming *both*
+topologies in one process asks for 4 index directories x 2 variants = **8 keys
+against a cache sized 4**, and every query evicts an entry the other topology
+needs. The first run did this and reported an in-process service p50 of
+**4,484 ms** against section 7's published **626.2 ms** at C=1; preparing the
+topologies separately took it to **757 ms**. **A process serving both retriever
+types needs `RAG_LAB_INDEX_CACHE=8`** -- nothing else here says so, because
+nothing else here serves both at once.
+
+**Two method notes.** The stability verdict is **not** a fitted slope: fitting a
+line to a sawtooth backlog produced verdicts that contradicted the latencies
+beside them (lambda=6 "unstable" at a 342 ms response, lambda=8 "stable" at
+1,356 ms), so it compares the **mean depth of the queue early against late**,
+with the threshold set by the worker count rather than a round number. And
+`dropped` is 0 on every row **including the unstable one** -- a 75 s arm just
+past capacity builds a queue the drain window still absorbs, so read the queue
+depth, not the drop count, as the sign of divergence.
+
+**Not established here**: no network hop; one work shape (every request is the
+same routed hybrid query, so nothing says how a mix of cheap and expensive
+requests queues); and the knee is a property of this box, since the GPU is the
+serialising layer.
+
+---
+
 ## 8. Three defects this work found, none of them in Qdrant
 
 1. **`localhost` cost 2,058.9 ms p50 per request against 15.1 / 14.0 ms for
@@ -524,8 +595,10 @@ results. A guard that refused everything would pass every other check here.
   makes this box look *worse* at the app layer than a real deployment will (GIL
   contention bundled with request handling) and hides serialization cost a real
   hop would add.
-- **A closed loop, not a bursty arrival process.** Every latency here is
-  closed-loop queueing at a fixed concurrency.
+- ~~**A closed loop, not a bursty arrival process.**~~ **CLOSED 2026-08-23 —
+  section 7b.** What remains is narrower: Poisson is a memoryless approximation
+  of many independent users, and a real class hitting one deadline is burstier
+  than Poisson, so the arrival model is still a model.
 - **The `encode` curve does not transfer** — an RTX 3060 in-process is not a
   separate faculty GPU server. It is measured alone precisely so another GPU's
   plateau can be substituted without re-running anything.

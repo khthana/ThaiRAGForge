@@ -1547,6 +1547,32 @@ see `docs/adr/`.
   denominator. **The 0 is not free**: holding that window open cost **1,062
   refusals** over 5 rebuilds — the seal converts inconsistency into
   unavailability, which is the right trade and still a trade.
+  **OPEN-LOOP: burstiness costs the TAIL first, and well inside the plateau
+  (2026-08-23, `tools/eval/serving_open_loop.py` →
+  `data/results/serving_open_loop.md`).** Every latency published before this was
+  **closed-loop**, which throttles itself — when the system slows its own clients
+  slow with it, so a queue can never build and only *service* is measurable.
+  Driven at a fixed arrival rate instead, the engine topology is **stable to 8
+  q/s, unstable at 10** (consistent with the 9.81 q/s plateau, different
+  harness), and the deterministic control — identical rate, even spacing —
+  separates **clumping from load**: at **2 q/s** the medians match to a
+  millisecond while p95 differs **1.7x**; at **6 q/s**, inside the published
+  plateau, even spacing sees **284 ms** p95 against Poisson's **1,512 ms**
+  (**5.3x**). **So cite a closed-loop capacity as optimistic about what users
+  feel**, and note the optimism hits the unlucky user before the typical one.
+  50 users at one query per 10 s is 5 q/s — inside the stable range, p95 already
+  over a second: **latency is still the constraint, now with a tail on it.**
+  **A deployment note fell out of the harness**: `with_embeddings` is part of the
+  index-cache key, so a process serving **both** topologies wants 4 dirs × 2
+  variants = **8 keys against a cache sized 4** — set `RAG_LAB_INDEX_CACHE=8`, or
+  every query evicts what the other topology needs (it read as in-process service
+  p50 **4,484 ms** against a published **626.2 ms** until the topologies were
+  prepared separately). **Do not fit a slope to a sawtooth**: the first stability
+  rule fitted a line to the backlog and returned verdicts that contradicted the
+  latencies beside them, so the verdict compares **mean queue depth early vs
+  late** with the threshold set by the worker count. And **`dropped` stays 0 even
+  on the unstable row** — a short arm past capacity builds a queue the drain
+  window absorbs, so read queue depth, not drops.
   **A COLLECTION THAT SURVIVES A REBUILD ANSWERS — it does not fail
   (2026-08-23, `tools/eval/serving_failure_modes.py` →
   `data/results/serving_failure_modes.md`).** `_to_ranked` builds every result
@@ -1601,7 +1627,9 @@ see `docs/adr/`.
   embedder and engine are one process on one box, which makes this box look
   *worse* at the app layer than a real deployment; no bursty arrival process; and
   the *stable* inconsistent window at real size had to be **opened deliberately**,
-  so nothing measures how long a real `build_index` leaves one.
+  so nothing measures how long a real `build_index` leaves one; and the
+  open-loop arrival process is **Poisson**, which a real class hitting one
+  deadline is burstier than.
 - **Corpus data-quality audit** (`tools/corpus_prep/audit_title_body_agreement.py`,
   2026-07-30): flags manifest titles that disagree with the document's own page-1
   `เรื่อง` subject line. A first version was rejected on measurement (median 0.660,

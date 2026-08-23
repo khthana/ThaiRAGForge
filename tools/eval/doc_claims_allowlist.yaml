@@ -463,6 +463,35 @@ units:
       states as a figure of its own
 
   - doc: CLAUDE.md
+    figure: "4,484 ms"
+    checked: 2026-08-23
+    reason: >-
+      a REJECTED first-run reading of serving_open_loop.py, kept because it is
+      the evidence for a real deployment note: warming both topologies in one
+      process asks for 8 index-cache keys against a cache sized 4, so every
+      query evicted what the other topology needed. The corrected value (757 ms)
+      is in serving_open_loop.md beside the published 626.2 ms it is anchored
+      against; the report was regenerated, so no generator persists the broken
+      state -- the same shape as the 657 ms entry below
+
+  - doc: docs/serving-architecture.md
+    figure: "4,484 ms"
+    checked: 2026-08-23
+    reason: >-
+      same rejected first-run reading as the CLAUDE.md entry, quoted in section
+      7b beside its corrected 757 ms
+
+  - doc: docs/serving-architecture.md
+    figure: "1,356 ms"
+    checked: 2026-08-23
+    reason: >-
+      the first stability rule's self-contradiction, and the reason the rule was
+      replaced: a slope fitted to a sawtooth backlog called lambda=8 "stable" at
+      a 1,356 ms response while calling lambda=6 "unstable" at 342 ms. Both
+      figures are from the discarded run; the shipped rule compares mean queue
+      depth early against late, and its numbers are in serving_open_loop.md
+
+  - doc: CLAUDE.md
     figure: "657 ms"
     checked: 2026-08-23
     reason: >-
@@ -704,6 +733,24 @@ units:
       was wrong is the reusable part -- it timed the probe DURING the warm-up, so
       both arms carried process-global initialisation the depth knob has nothing
       to do with.
+
+  - doc: tools/eval/serving_open_loop.py
+    figure: "4,484 ms"
+    checked: 2026-08-23
+    reason: >-
+      the rejected first-run reading, recorded in _prepare's docstring as the
+      reason the topologies are warmed separately. A docstring that says "this
+      is why the code is shaped this way" has to carry the number that shows it;
+      the corrected 757 ms is in serving_open_loop.md
+
+  - doc: tools/eval/serving_open_loop.py
+    figure: "6,484 ms"
+    checked: 2026-08-23
+    reason: >-
+      the first run's lambda=1 p90, i.e. CUDA/BLAS residue landing on the first
+      measured cell -- the reason a discarded ramp runs before each topology
+      group. Same rejected run; no generator persists it, and the shipped run's
+      lambda=1 cell is in serving_open_loop.md
 
   - doc: src/rag_lab/query_service.py
     figure: "657 ms"
