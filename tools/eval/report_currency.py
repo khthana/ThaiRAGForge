@@ -74,6 +74,22 @@ NOT_WORTH_REFRESHING = {
     "hyde_retrieval_thematic.md": "same axis, same direction; P2 refuted, verdict cannot flip",
     "hyde_generation.md": "an input to the two above, not a result of its own",
     "hyde_generation_cost.md": "prices generation, not retrieval; no index is involved",
+    # The 6-embedder originals. Their `_9way` successors cover all nine and are
+    # current; refreshing these would produce a second, narrower answer to a
+    # question already answered, which is what "superseded but kept for
+    # reference" means in CLAUDE.md.
+    "embedder_significance_test.md": "6-embedder original; superseded by "
+                                     "embedder_matrix_9way.py's tables",
+    "embedder_significance_test_by_entity_type.md": "6-embedder original; superseded by "
+                                                   "the _9way version",
+    "bm25_vs_embedder_significance_test.md": "6-embedder original; superseded by the "
+                                             "_9way version",
+    "hybrid_significance_test.md": "6-embedder original; superseded by the _9way version",
+    "gold_embedder_breakdown_73det.md": "6-embedder breakdown; superseded by "
+                                        "embedder_significance_test_by_entity_type_9way.md",
+    "qdrant_concurrency_smoke.md": "a smoke slice, kept to show the harness ran; a smoke "
+                                   "slice is not a small version of the answer, so "
+                                   "refreshing it would establish nothing",
 }
 
 # A rebuild cannot stale these at all.
@@ -87,30 +103,59 @@ CORPUS_INDEPENDENT = {
 }
 
 
-def newest_index_build() -> tuple[dt.datetime, str]:
-    """The newest `timestamp` across every index manifest, and which combo it is.
+def builds_by_root() -> dict[str, tuple[dt.datetime, str]]:
+    """Newest build time per index root, plus which combo carries it.
 
-    Read from the manifest's own recorded field, never from the directory mtime:
-    the RQ3 treatment folders still read 2026-08-08 while their contents are from
-    08-17, and taking the folder at face value nearly bought a 2.5-hour rebuild
-    that was already done.
+    Read from each manifest's own recorded `timestamp`, never from the directory
+    mtime: the RQ3 treatment folders still read 2026-08-08 while their contents
+    are from 08-17, and taking the folder at face value nearly bought a 2.5-hour
+    rebuild that was already done.
     """
-    best, who = None, ""
+    out: dict[str, tuple[dt.datetime, str]] = {}
     for m in INDEX_ROOT.glob("*/*/manifest.json"):
         try:
-            ts = json.loads(m.read_text(encoding="utf-8")).get("timestamp")
-            when = dt.datetime.fromisoformat(ts)
+            when = dt.datetime.fromisoformat(
+                json.loads(m.read_text(encoding="utf-8"))["timestamp"])
         except Exception:
             continue
-        if best is None or when > best:
-            best, who = when, f"{m.parent.parent.name}/{m.parent.name}"
-    if best is None:
+        root = m.parent.parent.name
+        if root not in out or when > out[root][0]:
+            out[root] = (when, f"{root}/{m.parent.name}")
+    if not out:
         raise SystemExit("no index manifest carries a timestamp")
-    return best, who
+    return out
 
 
-def classify(cutoff: dt.datetime) -> dict[str, list[tuple[str, dt.datetime]]]:
-    buckets: dict[str, list[tuple[str, dt.datetime]]] = {
+def cutoff_for(report: Path, builds: dict[str, tuple[dt.datetime, str]]
+               ) -> tuple[dt.datetime, str, bool]:
+    """The build time a report must beat, and whether it was ATTRIBUTED or screened.
+
+    **The global newest build over-flags, and it did so the day this script
+    landed.** `entity_tags_full` was rebuilt 2026-08-12 against a corpus last
+    edited 08-09, so it is current -- but rebuild #4 finished 08-17 on a
+    *different* root, and comparing against that called both
+    `gold_entity_*_73det_report.md` stale when the index they were scored on had
+    not moved. An always-red check is one nobody reads.
+
+    So: if a report names an index root in its own text, it is judged against
+    THAT root's newest build (the strongest evidence available without the report
+    recording its provenance, which is E0's job one layer down). If it names none,
+    the global newest is used as a conservative SCREEN and the row says so --
+    screened is not the same claim as attributed, and collapsing the two is how
+    `undefined` gets reported as `zero`.
+    """
+    text = report.read_text(encoding="utf-8", errors="ignore")
+    named = [r for r in builds if r in text]
+    if named:
+        when, who = max((builds[r] for r in named), key=lambda t: t[0])
+        return when, who, True
+    when, who = max(builds.values(), key=lambda t: t[0])
+    return when, who, False
+
+
+def classify(builds) -> dict[str, list[tuple]]:
+    """Bucket every report. Rows carry (rel, mtime, cutoff, who, attributed)."""
+    buckets: dict[str, list[tuple]] = {
         "current": [], "stale": [], "declined": [], "corpus_independent": [],
         "retired": [],
     }
@@ -118,18 +163,22 @@ def classify(cutoff: dt.datetime) -> dict[str, list[tuple[str, dt.datetime]]]:
         if r.name == OUT.name:
             continue
         when = dt.datetime.fromtimestamp(r.stat().st_mtime, tz=dt.timezone.utc)
-        rel = str(r.relative_to(RESULTS)).replace("\\", "/")
+        rel = r.relative_to(RESULTS).as_posix()
         if any(part.startswith("_") for part in r.relative_to(RESULTS).parts[:-1]) \
                 or r.name in RETIRED_REPORTS:
-            buckets["retired"].append((rel, when))
-        elif r.name in CORPUS_INDEPENDENT:
-            buckets["corpus_independent"].append((rel, when))
-        elif when >= cutoff:
-            buckets["current"].append((rel, when))
+            buckets["retired"].append((rel, when, None, "", False))
+            continue
+        if r.name in CORPUS_INDEPENDENT:
+            buckets["corpus_independent"].append((rel, when, None, "", False))
+            continue
+        cutoff, who, attributed = cutoff_for(r, builds)
+        row = (rel, when, cutoff, who, attributed)
+        if when >= cutoff:
+            buckets["current"].append(row)
         elif r.name in NOT_WORTH_REFRESHING:
-            buckets["declined"].append((rel, when))
+            buckets["declined"].append(row)
         else:
-            buckets["stale"].append((rel, when))
+            buckets["stale"].append(row)
     return buckets
 
 
@@ -138,19 +187,28 @@ def dead_entries() -> list[str]:
     return sorted((set(NOT_WORTH_REFRESHING) | set(CORPUS_INDEPENDENT)) - live)
 
 
-def render(cutoff: dt.datetime, who: str, buckets, dead) -> str:
+def render(builds, buckets, dead) -> str:
     d = lambda w: w.astimezone().strftime("%Y-%m-%d")
     total = sum(len(v) for v in buckets.values())
     L = ["# Report currency against the newest index build", ""]
     L.append("Generated by `tools/eval/report_currency.py`.")
     L.append("")
-    L.append(f"Newest index build: **{d(cutoff)}** (`{who}`), over "
-             f"{len(list(INDEX_ROOT.glob('*/*/manifest.json')))} index manifests.")
+    L.append(f"Newest build per index root, over "
+             f"{len(list(INDEX_ROOT.glob('*/*/manifest.json')))} index manifests:")
     L.append("")
-    L.append("A report older than that build measured indices that no longer exist. "
-             "This says nothing about whether refreshing it is worth doing — that "
-             "judgement lives in `CLAUDE.md`, and the two exemption tables below are "
-             "where a judgement already made is recorded.")
+    L.append("| index root | newest build |")
+    L.append("|---|---|")
+    for root in sorted(builds, key=lambda r: builds[r][0], reverse=True):
+        L.append(f"| `{root}` | {d(builds[root][0])} |")
+    L.append("")
+    L.append("A report older than the build it is judged against measured indices that "
+             "no longer exist. **A report naming an index root in its own text is judged "
+             "against THAT root** (*attributed*); one naming none is screened against the "
+             "newest build anywhere (*screened*), which is conservative and can over-flag "
+             "-- `entity_tags_full` was rebuilt after the corpus last changed, so its "
+             "reports are current even though a different root was rebuilt later. This "
+             "says nothing about whether refreshing is worth doing: that judgement lives "
+             "in `CLAUDE.md` and in the two exemption tables below.")
     L.append("")
     L.append(f"| bucket | count | of |")
     L.append("|---|---:|---:|")
@@ -172,10 +230,11 @@ def render(cutoff: dt.datetime, who: str, buckets, dead) -> str:
     L.append("## Stale, and nothing says otherwise")
     L.append("")
     if buckets["stale"]:
-        L.append("| report | last written |")
-        L.append("|---|---|")
-        for rel, when in sorted(buckets["stale"], key=lambda t: t[1]):
-            L.append(f"| `{rel}` | {d(when)} |")
+        L.append("| report | last written | judged against | how |")
+        L.append("|---|---|---|---|")
+        for rel, when, cut, who, att in sorted(buckets["stale"], key=lambda t: t[1]):
+            L.append(f"| `{rel}` | {d(when)} | `{who}` {d(cut)} | "
+                     f"{'attributed' if att else 'screened'} |")
     else:
         L.append(f"None — all {total} reports are current or exempted.")
     L.append("")
@@ -187,8 +246,8 @@ def render(cutoff: dt.datetime, who: str, buckets, dead) -> str:
         if buckets[key]:
             L.append("| report | last written | why |")
             L.append("|---|---|---|")
-            for rel, when in sorted(buckets[key], key=lambda t: t[1]):
-                L.append(f"| `{rel}` | {d(when)} | {table[Path(rel).name]} |")
+            for row in sorted(buckets[key], key=lambda t: t[1]):
+                L.append(f"| `{row[0]}` | {d(row[1])} | {table[Path(row[0]).name]} |")
         else:
             L.append("None.")
         L.append("")
@@ -199,11 +258,11 @@ def render(cutoff: dt.datetime, who: str, buckets, dead) -> str:
              "`audit_doc_claims.py` rather than re-listed here. Printed rather than "
              "dropped, so this bucket cannot quietly absorb a live report.")
     L.append("")
-    L.append(", ".join(f"`{rel}`" for rel, _ in sorted(buckets["retired"])) or "None.")
+    L.append(", ".join(f"`{r[0]}`" for r in sorted(buckets["retired"])) or "None.")
     L.append("")
     L.append("## Current")
     L.append("")
-    L.append(", ".join(f"`{rel}`" for rel, _ in sorted(buckets["current"])) or "None.")
+    L.append(", ".join(f"`{r[0]}`" for r in sorted(buckets["current"])) or "None.")
     L.append("")
     return "\n".join(L)
 
@@ -214,12 +273,16 @@ def main() -> int:
                     help="exit 1 if an exemption entry names a missing file")
     args = ap.parse_args()
 
-    cutoff, who = newest_index_build()
-    buckets = classify(cutoff)
+    builds = builds_by_root()
+    buckets = classify(builds)
     dead = dead_entries()
-    OUT.write_text(render(cutoff, who, buckets, dead), encoding="utf-8")
+    OUT.write_text(render(builds, buckets, dead), encoding="utf-8")
 
-    print(f"newest index build {cutoff.astimezone():%Y-%m-%d} ({who})")
+    newest = max(builds.values(), key=lambda t: t[0])
+    screened = sum(1 for r in buckets["stale"] if not r[4])
+    print(f"newest index build {newest[0].astimezone():%Y-%m-%d} ({newest[1]}); "
+          f"{len(buckets['stale']) - screened} of {len(buckets['stale'])} stale rows "
+          f"attributed to a named root, {screened} screened against the global newest")
     for k in ("current", "stale", "declined", "corpus_independent", "retired"):
         print(f"  {k:20} {len(buckets[k]):3}")
     print(f"wrote {OUT.relative_to(REPO)}")

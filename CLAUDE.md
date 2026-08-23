@@ -132,6 +132,14 @@ see `docs/adr/`.
   report's mtime → `data/results/report_currency.md`, and excludes what a date test
   would otherwise keep permanently red: `_`-prefixed snapshot directories, and
   `RETIRED_REPORTS` **imported** from `audit_doc_claims.py` rather than re-listed.
+  **The comparison is per index ROOT, not against the newest build anywhere, and
+  the first version got that wrong**: `entity_tags_full` was rebuilt after the
+  corpus last changed, so it is current — but rebuild #4 finished five days later
+  on a *different* root, and the global maximum called both `gold_entity_*` reports
+  stale when the index they were scored on had not moved. A report naming a root in
+  its own text is judged against that root (*attributed*); one naming none is
+  *screened* against the global newest, which is conservative and marked as such,
+  because screened and attributed are different claims.
   **This bullet used to carry the list by hand and it was wrong in both directions
   inside four days**, contradicting itself in two places at once by 2026-08-23
   (it called the reranker family both current and stale, and called the two
