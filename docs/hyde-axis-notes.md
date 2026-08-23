@@ -49,7 +49,8 @@ same way.
 
 3. **This project is 0/1 on the family.** The cross-encoder reranker was also a
    literature-backed query-time model insertion, also plausible, and
-   significantly **hurt** hybrid MRR (0.7814 → 0.6778, Holm-adj p=0.0012) when it
+   significantly **hurt** hybrid MRR (**0.7730 → 0.6940**, Holm-adj **0.0240** — re-run
+   2026-08-18 against rebuild #4; it read 0.7814 → 0.6778 at 0.0012 before) when it
    replaced the ranking. It took a fine-tune on hybrid-fused candidates before
    anything in that family beat the shipped router — and even then a **free**
    lexical control landed 0.0043 behind it

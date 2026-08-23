@@ -550,16 +550,18 @@ class TestD8BlockSplitting:
 
 class TestD8SupersededIsDerivedNotTyped:
     def test_current_and_superseded_are_disjoint(self):
-        for name, report, section, rows, _ in adc.WATCHED_QUANTITIES:
-            cur, old = adc._quantity_values(report, section, rows)
+        for name, report, section, rows, _lbl, *rest in adc.WATCHED_QUANTITIES:
+            cur, old = adc._quantity_values(report, section, rows,
+                                            rest[0] if rest else None)
             assert not (cur & old), f"{name}: a value cannot be both"
 
     def test_every_watched_quantity_actually_resolves(self):
         # A renamed row label would silently empty a quantity, and an empty
         # quantity flags nothing -- the vacuous-PASS shape this whole file
         # exists to prevent. D8 reports it as UNRESOLVED; here it is a failure.
-        for name, report, section, rows, _ in adc.WATCHED_QUANTITIES:
-            cur, _ = adc._quantity_values(report, section, rows)
+        for name, report, section, rows, _lbl, *rest in adc.WATCHED_QUANTITIES:
+            cur, _ = adc._quantity_values(report, section, rows,
+                                          rest[0] if rest else None)
             assert cur, f"{name} resolved to nothing ({report})"
 
     def test_a_missing_section_yields_nothing_rather_than_the_whole_file(self):
@@ -591,7 +593,7 @@ class TestD8AgreesWithTheTestedParsers:
         for retriever in ("hybrid", "dense"):
             spec = next(w for w in adc.WATCHED_QUANTITIES
                         if w[0] == f"routed arms ({retriever})")
-            cur, _ = adc._quantity_values(spec[1], spec[2], spec[3])
+            cur, _ = adc._quantity_values(spec[1], spec[2], spec[3])  # ncols=None
             assert parse_routing_eval_routed(text, retriever) in cur
 
     def test_rrf4_arms_match_parse_routed_arms(self):
@@ -631,3 +633,44 @@ class TestD7ReadsDocstrings:
         (bad / "broken.py").write_text("def (:\n", encoding="utf-8")
         monkeypatch.setattr(adc, "REPO", tmp_path)
         assert adc._source_docstrings() == []
+
+
+class TestD8ReadsTheQuantityAndNotItsNeighbours:
+    """What counts as "the quantity" is where D8's precision comes from.
+
+    Two rules, both adopted after the widened registry printed a false positive
+    that the narrow one had not:
+
+    A CI IS NOT THE QUANTITY. Its endpoints are arbitrary 4-decimals that collide
+    with unrelated effect sizes across a large corpus of prose -- the first
+    widened run flagged CLAUDE.md's `weighted x fetch_depth` -0.0609 against a
+    RETIRED CI bound of the alpha sweep, two experiments with nothing to do with
+    each other.
+
+    A LABEL MUST BE ONE THAT APPEARS WHERE THE NUMBERS ARE. "per-`entity_type`
+    alpha" is how this project REFERS to that axis ("the wrong-pair trap that
+    killed per-`entity_type` alpha"), so it matched blocks whose figures belong
+    to something else entirely.
+    """
+
+    def test_ci_endpoints_are_not_read(self):
+        row = "| recall@10 | routed (shipped) | 0.6811 | +0.0581 | [+0.0205, +0.0978] |"
+        got = adc._table_values(row, None, [r"routed \(shipped\)"])
+        assert 0.0205 not in got and 0.0978 not in got
+        assert {0.6811, 0.0581} <= got
+
+    def test_ncols_stops_before_the_p_value_column(self):
+        row = "| recall@10 | per-type (loo) | 0.6510 | +0.0281 | [+0.0040, +0.0551] | 0.0870 | no |"
+        got = adc._table_values(row, None, [r"per-type \(loo\)"], ncols=2)
+        assert got == {0.6510, 0.0281}
+
+    def test_the_whole_row_is_read_by_default_not_just_the_first_cell(self):
+        row = "| hybrid | mrr | 0.7730 | 0.6940 | -0.0790 |"
+        got = adc._table_values(row, None, [r"^\| hybrid \| mrr"])
+        assert {0.7730, 0.6940, 0.0790} <= got, "a 'X -> Y' pair must be watched at both ends"
+
+    def test_no_watched_quantity_uses_a_reference_only_label(self):
+        # These phrases are how the prose CITES an axis rather than quotes it.
+        banned = {"per-`entity_type` alpha", "wrong-pair trap"}
+        for _, _, _, _, labels, *_ in adc.WATCHED_QUANTITIES:
+            assert not (set(labels) & banned)

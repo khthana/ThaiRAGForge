@@ -102,7 +102,7 @@ see `docs/adr/`.
   structurally blind to, **D6** every allowlist entry still exempts something,
   **D7** the unit-suffixed shape — `2,058.9 ms`, `9.81 q/s` — which is the *other*
   class D2 cannot see, **D8** a *named quantity* quoted at a value it no longer
-  has) over **13 docs**, plus — for D7 only — **every Python docstring** in
+  has, over 13 watched quantities) over **13 docs**, plus — for D7 only — **every Python docstring** in
   `src/`, `tools/`, `app/` and `tests/`.
   **D7 landed 2026-08-23 and its unit set is evidence, not taste.** Every candidate
   was scored against its own perturbations, and per unit at ≥3 significant digits
@@ -150,6 +150,25 @@ see `docs/adr/`.
   pre-registration**, where a figure that no longer matches the outcome is the
   point of having written it down; those are allowlisted by (doc, quantity) and
   D6 audits them like every other exemption.
+  **Widened from 5 watched quantities to 13 the same day, and the widening found
+  13 more stale blocks** — the reranker-vs-hybrid MRR pair `0.7814 → 0.6778,
+  p=0.0012` still sitting in three separate documents (it is **0.7730 → 0.6940 at
+  Holm 0.0240**), the whole soft-vs-hard significance table in
+  `paper-results-summary.md`, the withdrawn alpha-sweep `+0.0350 recall@10` in two
+  places (the `per-type (loo)` arm reads **+0.0281** there now, ns at Holm 0.0870,
+  and survives only on nDCG@10 at **+0.0333**), and the routed-oracle `+0.1500 / +0.0017 / 1%` sentence (now
+  **+0.1520 / −0.0098 / −6%**). **Two rules came out of that widening, both after
+  a false positive rather than from taste.** (1) **A CI is not the quantity**: its
+  endpoints are arbitrary 4-decimals that collide with unrelated effect sizes, and
+  the first widened run flagged `weighted × fetch_depth`'s −0.0609 against a
+  *retired CI bound of the alpha sweep* — two experiments with nothing to do with
+  each other. Brackets are stripped, and an optional column cap keeps the p-value
+  column out of a significance row. (2) **A label must be one that appears where
+  the numbers are**: `per-`entity_type` alpha` is how this file *refers* to that
+  axis ("the wrong-pair trap that killed per-`entity_type` alpha"), so it matched
+  blocks whose figures belong elsewhere. Conversely **broad is safe and
+  English-only is not** — adding the bare word `reranker` is what surfaced the
+  three Thai blocks above.
   **The measurement that motivated D8 is worth more than D8, and it is about D2:
   scored against its own perturbations, D2 clears a wrong 4-decimal number 77% of
   the time** (over its 2,970 figures; D7, for contrast, clears 7%). D2 was never

@@ -741,3 +741,30 @@ quantities:
       figures are NOT exempt and were re-quoted from
       reranker_trained_test.md on 2026-08-23.
 
+  - doc: docs/reranker-trained-on-hybrid-design.md
+    quantity: rrf4 deployable arms
+    checked: 2026-08-23
+    reason: >-
+      section 1 is part of the FROZEN pre-registration (the document says so in
+      its own status line): it motivates the axis against the arm levels
+      published on the day it was written. Rebuild #4 moved them. Section 6
+      carries the outcome and is NOT exempt.
+
+  - doc: docs/reranker-trained-on-hybrid-design.md
+    quantity: reranker model comparison
+    checked: 2026-08-23
+    reason: >-
+      same frozen section 1: the off-the-shelf arm's effect was +0.0017 when
+      this was written and is -0.0098 now. Editing it would destroy the only
+      thing a pre-registration is for.
+
+  - doc: docs/paper-results-summary.md
+    quantity: alpha sweep arms
+    checked: 2026-08-23
+    reason: >-
+      an explicit supersession trail: the paragraph states the WITHDRAWN
+      headline (0.0350 / 0.0360) and hands off to the current figures in the
+      table immediately below it. D8's unit is the block, so a trail that spans
+      a paragraph and the table after it reads as stale; the paragraph names its
+      own date and its own successor, which is what the standing convention asks
+      for.

@@ -484,7 +484,10 @@ QUANTITY_BLOCK = re.compile(r"^- |^#|^\s*<(?:div|p|h[1-9]|table|tr|li)\b")
 # `tests/tools/test_audit_doc_claims.py` pins these values against those already
 # tested parsers instead, which is where the 6 s can be afforded. One authority,
 # checked from the side, rather than two copies free to drift.
-WATCHED_QUANTITIES: list[tuple[str, str, str | None, list[str], list[str]]] = [
+# An optional 6th element caps how many figures are read from each row, counted
+# after the CI is stripped: for a significance table that is the arm mean and
+# its effect size, leaving the p-value column out of the quantity.
+WATCHED_QUANTITIES: list[tuple] = [
     ("routed arms (hybrid)", "routing_eval.md",
      "## 3. Routed system vs single-combo baselines -- hybrid",
      [r"\|\s*recall@10\s*\|\s*routed \((?:shipped|loo|oracle)\)\s*\|",
@@ -495,7 +498,9 @@ WATCHED_QUANTITIES: list[tuple[str, str, str | None, list[str], list[str]]] = [
      [r"\|\s*recall@10\s*\|\s*routed \((?:shipped|loo|oracle)\)\s*\|",
       r"\|\s*recall@10\s*\|\s*best single combo"],
      ["routed (shipped)", "routed (loo)", "routed (oracle)"]),
-    ("soft/hard arms", "soft_vs_hard_routing.md", "## recall@10",
+    # No section: the arms exist on all three metrics and the prose quotes all
+    # three, so restricting to recall@10 made an nDCG figure look superseded.
+    ("soft/hard arms", "soft_vs_hard_routing.md", None,
      [r"^\|\s*[ABCD]['′]?\s"],
      ["soft_vs_hard", "soft vs hard", "soft-vs-hard", "hard routing", "soft routing"]),
     ("rrf4 2x2 arms", "reranker_rrf_routed_test.md", None,
@@ -504,6 +509,44 @@ WATCHED_QUANTITIES: list[tuple[str, str, str | None, list[str], list[str]]] = [
     ("trained-reranker arms", "reranker_trained_test.md", None,
      [r"^\|\s*\**(?:C|D|T|L)\**['′]?\s*(?:\([^|]*\))?\s*\|"],
      ["arm T", "arm L", "T vs C", "T vs D", "T vs L"]),
+    # --- added 2026-08-23, after the first five found 12 stale claims ---
+    ("off-the-shelf reranker vs hybrid", "reranker_significance_test.md", None,
+     [r"^\|\s*(?:hybrid|dense)\s*\|\s*(?:mrr|recall@10|ndcg@10)\s*\|"],
+     # Broad labels are safe here and narrow ones are not: this project writes
+     # about the same arm in English and in Thai, and the English-only list
+     # missed a Thai block still quoting the rebuild-#3 pair.
+     ["CrossEncoderReranker", "bge-reranker-v2-m3", "reranker_significance_test",
+      "hurts hybrid MRR", "cross-encoder", "reranker"], 3),
+    ("reranker pool source x depth", "reranker_pool_source_test.md",
+     "## 1.", [r"^\|\s*(?:10|20|50|100|200)\s*\|"],
+     ["reranker_pool_source", "pool source", "dense pool", "P=50 pool"]),
+    ("rrf4 deployable arms", "reranker_rrf_signal_test.md",
+     "## arm ที่ deploy ได้", [r"^\|\s*\**(?:hybrid \(shipped\)|dense|truncate|rrf4)"],
+     ["rrf4 (loo)", "reranker_rrf_signal", "fourth RRF signal", "4th RRF"]),
+    ("reranker model comparison", "reranker_model_comparison.md", None,
+     [r"^\|\s*\**(?:C —|D\()"],
+     ["bge-v1-large", "bge-reranker-v1", "reranker_model_comparison",
+      "qualified models"]),
+    ("alpha sweep arms", "hybrid_alpha_sweep.md", None,
+     [r"^\|\s*(?:recall@10|mrr|ndcg@10)\s*\|\s*(?:global best|per-type best|"
+      r"per-type \(loo\))\s*\|"],
+     # NOT "per-`entity_type` alpha": that phrase is how this project REFERS to
+     # the axis ("the wrong-pair trap that killed per-`entity_type` alpha"), and
+     # the figures around such a mention belong to a different experiment. A
+     # label has to be one that appears where the numbers are.
+     ["hybrid_alpha_sweep", "alpha sweep", "per-type (loo)", "per-type best"], 2),
+    ("oracle-union ceiling", "oracle_union_ceiling.md", "## 1. ",
+     [r"^\|\s*(?:ระบบเดี่ยว|union|เพดาน)"],
+     ["oracle_union_ceiling", "oracle-union", "union of all 36",
+      "hybrid-union ceiling", "union ของทั้ง 36"]),
+    ("chunker aggregate means", "hybrid_chunker_significance_test.md",
+     "### Per-chunker mean",
+     [r"^\|\s*(?:recursive|sentence|semantic|fixed_size)\s*\|"],
+     ["Per-chunker mean", "hybrid_chunker_significance", "chunker vs chunker",
+      "tied top cluster", "aggregate order"]),
+    ("colbert pilot cells", "colbert_pilot.md", None,
+     [r"^\|\s*`?(?:person|program)`?\s*\|\s*(?:BM25|dense)"],
+     ["ColBERT", "late interaction", "colbert_pilot"]),
 ]
 
 
@@ -554,8 +597,17 @@ def _source_docstrings() -> list[tuple[str, str]]:
     return out
 
 
-def _table_values(text: str, section: str | None, rows: list[str]) -> set[float]:
-    """Every first 4-decimal figure on each matching table row."""
+def _table_values(text: str, section: str | None, rows: list[str],
+                  ncols: int | None = None) -> set[float]:
+    """Every 4-decimal figure on every matching table row.
+
+    The WHOLE row, not just its first cell: a significance row carries a
+    baseline, a treatment, an effect size and a CI, and the prose quotes all of
+    them. Reading only the first would leave `0.7730 -> 0.6940` half-watched, and
+    the half it dropped is the one that moves. Taking everything also widens
+    `current`, which is the conservative direction -- a block quoting ANY live
+    value of the quantity passes.
+    """
     if section:
         i = text.find(section)
         if i < 0:
@@ -566,25 +618,29 @@ def _table_values(text: str, section: str | None, rows: list[str]) -> set[float]
     out: set[float] = set()
     pats = [re.compile(r) for r in rows]
     for ln in text.splitlines():
-        if not any(p.search(ln) for p in pats):
-            continue
-        m = NUM.search(ln)
-        if m:
-            out.add(float(m.group(0)))
+        if any(p.search(ln) for p in pats):
+            # A CI is not the quantity. Its endpoints are arbitrary 4-decimals
+            # that collide with unrelated effect sizes all over the corpus of
+            # prose -- the first widened run flagged CLAUDE.md's `weighted x
+            # fetch_depth` -0.0609 against a RETIRED CI bound of the alpha
+            # sweep, two unrelated experiments. Stripping brackets removed every
+            # such false positive without losing a figure the prose quotes.
+            out.update(float(x) for x in NUM.findall(re.sub(r"\[[^\]]*\]", "", ln))[:ncols])
     return out
 
 
-def _quantity_values(report: str, section: str | None,
-                     rows: list[str]) -> tuple[set[float], set[float]]:
+def _quantity_values(report: str, section: str | None, rows: list[str],
+                     ncols: int | None = None) -> tuple[set[float], set[float]]:
     """(current, superseded) -- superseded derived from the `_*/` snapshots."""
     live = RESULTS / report
     if not live.exists():
         return set(), set()
-    cur = _table_values(live.read_text(encoding="utf-8", errors="ignore"), section, rows)
+    cur = _table_values(live.read_text(encoding="utf-8", errors="ignore"), section,
+                        rows, ncols)
     old: set[float] = set()
     for snap in RESULTS.glob("_*/" + report):
         old |= _table_values(snap.read_text(encoding="utf-8", errors="ignore"),
-                             section, rows)
+                             section, rows, ncols)
     return cur, old - cur
 
 
@@ -632,8 +688,9 @@ def audit_quantities(show_all: bool) -> None:
     watched = 0
     unresolved: list[str] = []
 
-    for name, report, section, rows, labels in WATCHED_QUANTITIES:
-        cur, old = _quantity_values(report, section, rows)
+    for name, report, section, rows, labels, *rest in WATCHED_QUANTITIES:
+        ncols = rest[0] if rest else None
+        cur, old = _quantity_values(report, section, rows, ncols)
         if not cur:
             unresolved.append(f"{name} ({report})")
             continue
@@ -1223,7 +1280,8 @@ def audit_allowlist_liveness() -> None:
         if not p.exists():
             dead.append(f"quantities: {doc} does not exist (entry {qname!r})")
             continue
-        cur, superseded = _quantity_values(spec[1], spec[2], spec[3])
+        cur, superseded = _quantity_values(spec[1], spec[2], spec[3],
+                                           spec[5] if len(spec) > 5 else None)
         hit = False
         for _, blk in _prose_blocks(_unemph(p.read_text(encoding="utf-8"))):
             if not any(l in blk for l in spec[4]):

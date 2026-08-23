@@ -1658,14 +1658,20 @@ Arm C reproduces `routing_eval.md`'s `routed (shipped)` hybrid recall@10 to four
 decimals (0.6811 both, 2026-08-18) from an entirely separate code path — a useful cross-check
 that the two routing scripts agree on what the shipped router does.
 
-**Two significant results, one per mechanism, and they are on different metrics:**
+**ONE significant result, not two — and the one that went is soft's.**
+`B vs A` on nDCG@10 lost significance at rebuild #4 (+0.0333, Holm 0.0528, was
++0.0360 at 0.0216), so **soft routing no longer owns a significant result anywhere
+in this table**, and it is now numerically below doing both. What survives is
+`C vs A` on recall@10:
 
 | comparison | recall@10 | MRR | nDCG@10 |
 |---|---|---|---|
-| B vs A (soft vs none) | +0.0350 [+0.0103, +0.0620] | +0.0275 [−0.0177, +0.0741] | **+0.0360** [+0.0123, +0.0606] |
-| C vs A (hard vs none) | **+0.0549** [+0.0174, +0.0934] | +0.0255 [−0.0241, +0.0756] | +0.0551 [+0.0129, +0.0973] |
-| **B vs C (soft vs hard)** | −0.0199 [−0.0575, +0.0156] | +0.0020 [−0.0553, +0.0576] | −0.0191 [−0.0595, +0.0211] |
-| D vs C (does alpha add to routing) | −0.0202 [−0.0389, −0.0036] | +0.0182 [−0.0258, +0.0638] | +0.0066 [−0.0134, +0.0254] |
+| B vs A (soft vs none) | +0.0281 [+0.0039, +0.0547] | +0.0369 [−0.0094, +0.0848] | +0.0333 [+0.0102, +0.0581] |
+| C vs A (hard vs none) | **+0.0581** [+0.0201, +0.0964] | +0.0140 [−0.0340, +0.0620] | +0.0512 [+0.0089, +0.0927] |
+| **B vs C (soft vs hard)** | −0.0300 [−0.0687, +0.0060] | +0.0229 [−0.0317, +0.0761] | −0.0179 [−0.0582, +0.0220] |
+| D vs C (does alpha add to routing) | −0.0163 [−0.0327, −0.0021] | +0.0253 [−0.0182, +0.0719] | +0.0086 [−0.0118, +0.0281] |
+
+2026-08-18, against rebuild #4.
 
 Paired bootstrap, 10,000 resamples, Holm within m=12. **`C vs A` on recall@10**
 (Holm-adj 0.0242) and **`B vs A` on nDCG@10** (Holm-adj 0.0216) are the only
