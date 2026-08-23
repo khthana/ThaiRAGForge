@@ -2636,26 +2636,32 @@ still carried a **2026-07-22** mtime while `gold_hybrid_73det` had been
 rewritten 2026-07-29, so every number below was one rebuild behind (a third
 instance of the "not in the 5-script refresh chain" staleness pattern, after
 BM25/hybrid and `cost_latency_pareto.py`). Re-ran it (no new retrieval
-needed) — the numbers below are current.
+needed) — and re-ran it again **2026-08-23** against rebuild #4, which is where
+the numbers below come from. **Both orderings survived; the levels moved.** Note
+how the stale copy hid: BM25 `precision@1` had read 0.5849 since 07-29, and
+`audit_doc_claims.py`'s D2 passed it the whole time because 0.5849 is still a
+live figure — it is the `fixed_size` and `semantic` rows of the same report's
+*per-chunker* table. A traceability check that asks only "does this number
+appear somewhere" cannot see a number that has drifted onto a neighbour's cell.
 
 **Dense-alone, top 3 embedders by recall@10 (aggregated across 4 chunkers)**:
 
 | embedder | MAP | recall@1 | recall@3 | recall@5 | recall@10 | precision@1 | precision@5 | ndcg@1 | ndcg@5 |
 |---|---|---|---|---|---|---|---|---|---|
-| qwen3_0.6b | **0.4447** | 0.1225 | 0.2784 | 0.3741 | 0.5263 | **0.7429** | 0.5462 | **0.7429** | 0.6299 |
-| qwen3 | 0.3862 | 0.1085 | 0.2547 | 0.3398 | 0.4777 | 0.6368 | 0.4726 | 0.6368 | 0.5505 |
-| jina_v5 | 0.3149 | 0.0912 | 0.2041 | 0.2788 | 0.4135 | 0.5165 | 0.3939 | 0.5165 | 0.4563 |
+| qwen3_0.6b | **0.4439** | 0.1208 | 0.2777 | 0.3731 | 0.5261 | **0.7453** | 0.5448 | **0.7453** | 0.6294 |
+| qwen3 | 0.3869 | 0.1081 | 0.2547 | 0.3411 | 0.4786 | 0.6321 | 0.4778 | 0.6321 | 0.5537 |
+| jina_v5 | 0.3146 | 0.0902 | 0.2045 | 0.2784 | 0.4145 | 0.5212 | 0.3953 | 0.5212 | 0.4575 |
 
 **Hybrid (RRF), top 3 embedders by recall@10 (aggregated across 4 chunkers)**:
 
 | embedder | MAP | recall@1 | recall@3 | recall@5 | recall@10 | precision@1 | precision@5 | ndcg@1 | ndcg@5 |
 |---|---|---|---|---|---|---|---|---|---|
-| qwen3_0.6b | **0.4922** | 0.1231 | 0.3019 | 0.4224 | 0.6167 | **0.7382** | 0.5868 | **0.7382** | 0.6681 |
-| qwen3 | 0.4757 | 0.1176 | 0.2886 | 0.4128 | 0.5945 | 0.7099 | 0.5684 | 0.7099 | 0.6457 |
-| jina_v5 | 0.4560 | 0.1131 | 0.2838 | 0.3938 | 0.5831 | 0.6745 | 0.5382 | 0.6745 | 0.6163 |
+| qwen3_0.6b | **0.4947** | 0.1238 | 0.3011 | 0.4273 | 0.6162 | **0.7406** | 0.5934 | **0.7406** | 0.6738 |
+| qwen3 | 0.4729 | 0.1136 | 0.2871 | 0.4128 | 0.5942 | 0.6958 | 0.5717 | 0.6958 | 0.6450 |
+| jina_v5 | 0.4541 | 0.1119 | 0.2847 | 0.3919 | 0.5799 | 0.6698 | 0.5401 | 0.6698 | 0.6165 |
 
-**BM25, aggregated across 4 chunkers**: MAP=0.3845, recall@1=0.1016,
-recall@5=0.3392, precision@1=0.5849, ndcg@1=0.5849.
+**BM25, aggregated across 4 chunkers**: MAP=0.3845, recall@1=0.1020,
+recall@5=0.3383, precision@1=0.5967, ndcg@1=0.5967.
 
 **Reading this**: the "mixed story" this section used to report is **gone**
 in the refreshed data. Previously (stale, 2026-07-22 numbers, since
