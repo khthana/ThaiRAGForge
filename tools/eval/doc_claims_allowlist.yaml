@@ -406,16 +406,6 @@ inputs:
 # while building the serving layer that no generator persists.
 units:
   - doc: CLAUDE.md
-    figure: "2,052 ms"
-    checked: 2026-08-23
-    reason: >-
-      the 2026-08-21 in-session probe pair, superseded by
-      serving_warmup_profile.md (856.3 / 342.6 ms) and kept because WHY it was
-      wrong is the reusable part: it timed the probe DURING the warm-up, so both
-      arms carried process-global initialisation the depth knob has nothing to
-      do with
-
-  - doc: CLAUDE.md
     figure: "317 ms"
     checked: 2026-08-23
     reason: >-

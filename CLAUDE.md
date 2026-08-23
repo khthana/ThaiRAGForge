@@ -2020,325 +2020,69 @@ see `docs/adr/`.
   subset**: `build_embedder` has no cache and `query_indices` never releases, so N
   `route_query` calls are N model loads — a **pre-existing** serving gap (the Streamlit UI has
   it too), and per §8b the embedder is the layer that saturates anyway.
-- **Serving cost: an embedder cache on the query path, and the 78% nobody had priced
-  (2026-08-21; full narrative `docs/serving-architecture.md`, `tools/eval/serving_cost_profile.py` → `data/results/serving_cost_profile.md`,
-  4/4 self-checks).** `qdrant_concurrency.md` established the system is **ENCODE-BOUND**,
-  but its harness built the embedder **once outside the loop**, so it measured a *warm*
-  model and never priced the per-call **construction** the shipped `query_service`
-  actually pays — `build_embedder` had no cache and `query_indices` builds one per index
-  dir per call. Decomposed on the shipped `person` route (bge-m3, 57,172 chunks): one served
-  query with nothing cached is **11,589 ms**, of which **9,049 ms (78%) is loading
-  weights the previous query already loaded**, against **360 ms** of irreducible work
-  (encode 14.3 + score/fuse 346).
-  `build_embedder_cached` (bounded LRU, `RAG_LAB_EMBEDDER_CACHE`, default **2**) takes the
-  shipped `route_query` from **12,465 → 3,389 ms p50 (3.7x)**, **3,069 ms steady state**,
-  with **0 of 8** queries returning a different top-10 — ids *and* scores.
-  **Five things worth keeping, and the first two are instrument faults that each reversed
-  the conclusion on their own.** (1) **`LocalSTEmbedder._load()` is LAZY** — the
-  constructor stores a model name and `SentenceTransformer(...)` runs inside the first
-  `embed()` — so the first measurement timed `build_embedder` at **0.0 ms**, charged the
-  8.8 s to *encode*, and concluded a cache could win **10%**. A 9 s encode against the
-  published **13–83 ms** is an instrument fault, not a finding
-  ([[feedback_a_mode_on_a_constant_is_your_instrument]]); `S1` now gates warm encode
-  against that published range. (2) **The A/B measured itself at 1.0x** because the `off`
-  arm called `clear_embedder_cache()` — unnecessary (at size 0 the builder bypasses the
-  cache and never reads it) *and* destructive, since the arms alternate per query so every
-  `on` measurement started cold. The harness was wrong, not the cache. (3) **The cache is
-  on the SERVING path only** — `build_embedder` stays uncached for every eval script,
-  because a global cache would hold Qwen3-Embedding-4B resident beside its neighbours
-  during a 9-embedder sweep, which is the OOM this project already lost five
-  `semantic × 4B` runs to. So **no published number can move**, and
-  `tests/test_embedder_cache.py` pins that exclusion in both directions. (4) **2 is not
-  arbitrary**: the five routes resolve to exactly **two** distinct embedders (bge-m3 for
-  person/faculty/unmatched, qwen3-0.6B for program/course), so the probe **alternates
-  routes** — consecutive same-route queries would be served by one resident model and a
-  size-1 cache would look identical. (5) **The object is now SHARED between concurrent
-  callers** where each used to build its own; that is a real behaviour change, so
-  bit-identical output under 8 concurrent encodes is pinned, as is the double-checked
-  construction race — and **that race test was decoration until it was probed**: the
-  `hashing` fixture constructs in microseconds so the branch was never reached, and
-  deleting the double-check left it green. It now slows the constructor deliberately and
-  asserts the race actually happened.
-  **THE INDEX CACHE IS NOW BUILT TOO (2026-08-21, `src/rag_lab/io/index_cache.py`), and
-  together they take a warm served query to 463 ms.** `ArtifactStore.load` re-read the
-  ~234 MB `embeddings.npy` and rebuilt 57k `Chunk` objects every call (**1,185 ms**), and
-  because `BM25Okapi` is memoised **on the `Index` object**, discarding the Index discarded
-  the scorer too and the next hybrid retrieve rebuilt it (**995 ms**). Three arms on the
-  shipped `route_query`, alternated in one process: **none 12,465 → embedder 3,389 →
-  both 1,462 ms p50 (8.5x)**, and **steady state 463 ms (26.9x)** — the index cache's own
-  contribution is **1,926 ms** off the embedder-only arm. **0 of 8** queries changed their
-  top-10 in either arm, 7/7 self-checks. **Those are the 2026-08-21 19:00 run's figures**;
-  the same unchanged script has now been run three times and read 11,980 → 3,316 → 1,476
-  (steady 422), then 12,329 → 3,168 → 1,548 (447), then this one — i.e. **runs of an
-  unchanged measurement differ by ~6%, more than the streaming loader moved anything** —
-  that is this rig's own resolution, and the reason the loader is defended on memory
-  rather than time. The **steady state is the stable half** (422 / 447 / 446), so quote
-  that in preference to the p50, which carries the cold fill.
-  **Four things worth keeping.** (1) **Sharing an `Index` is safe only because nothing
-  mutates one, and that was grepped rather than assumed**: across `src/`, `tools/` and
-  `app/` there is exactly **one** write to an Index attribute — `bm25.py`'s
-  `index.lexical_scorer = (...)`, the memo the cache exists to preserve — while
-  `MetadataFilter`/`EntityFilter` both go through `Index.select()`, which builds a new
-  Index (fancy-indexing the matrix copies it). `tests/io/test_index_cache.py` pins the
-  no-mutation property directly, because if it ever stops holding this becomes a
-  correctness bug rather than a slow path. (2) **Staleness is the real risk, not memory**:
-  a long-running server holding an Index while its directory is rebuilt would serve the
-  previous build's rows while every artifact on disk said otherwise — the
-  two-artifacts-from-different-days shape, invisible because it lives in RAM. Every cache
-  **hit** re-stats `(mtime_ns, size)` of all four artifacts (~4 stat calls against a
-  1,185 ms reload, so it is not optional), and the invalidation takes the stale BM25 memo
-  with it — **and a rebuild landing *during* a read is a separate case a hit-time check
-  cannot see; see the staleness paragraph below, where it was a real bug.** (3) **The steady-state definition was a fudge that happened to work**: dropping
-  the *N* slowest rows is arm-dependent (the embedder arm fills 2 models, the `both` arm
-  also fills 4 indices), so it is now the **second pass over the query list** — every route
-  appears once in the first pass by construction. (4) **`S7` anchors the result against
-  another report**: a fully warm query is **463 ms** against
-  `routed_fetch_depth_test.md`'s published **475.6 ms** p50, 6% apart, and the figure is
-  **parsed from that report** rather than frozen as a literal
-  ([[feedback_a_frozen_anchor_can_print_a_wrong_number]]).
-  **THE SAME HARNESS BUG BIT BOTH CACHES, and the second time I argued myself into it in a
-  code comment.** The embedder A/B first read **1.0x** and the index arm first read
-  **−2 ms**, both because a disabled arm called `clear_*_cache()` immediately before the
-  enabled arm ran, wiping exactly the state about to be measured. Both clears were also
-  **unnecessary**: `build_embedder_cached` and `load_index_cached` each return the uncached
-  object *before* reading their dict at size 0, so nothing can leak into a disabled arm.
-  The comment justifying the second clear reasoned that a bypassed cache "is not cleared,
-  so an entry could leak" — true of the dict, false of the code path. **A control arm that
-  can touch the treatment's state is not a control**
+- **Serving: the caches, the warm-up, the seal, and what saturates under load.
+  Derivation: `docs/serving-architecture.md`** (§1-§10 — the request path, where
+  the time goes, the three caches, warm-up, footprint, the rebuild-underneath-a-
+  server race, topology under load, the three defects, what is NOT established,
+  and how to operate it). Reports: `data/results/serving_{cost_profile,
+  cache_memory,warmup_profile,concurrency}.md`, `qdrant_{pilot,concurrency,
+  routed_check}.md`. **This is the deployment-facing half of the project
+  ([[project_real_deployment_intent]]), so the rules below are operational, not
+  findings.**
+  **Levels.** A served query goes **12,465 ms cold → 463 ms fully warm (26.9x)**,
+  steady state **446 ms**. Startup warm-up takes the first four routed queries
+  **31,719.7 → 1,613.0 ms**. Under concurrent load the shipped `route_query`
+  plateaus at **9.81 q/s** on the engine topology against **2.53** in-process
+  (3.87x), i.e. 50 users need one query every ~5.1 s.
+  **Three rules that are not negotiable.** (1) **The caches are on the SERVING
+  path only** — `build_embedder_cached` / `load_index_cached` /
+  `build_retriever_cached`; `build_embedder` and `ArtifactStore.load` stay
+  uncached for every eval script, because a global cache holds
+  Qwen3-Embedding-4B resident beside its neighbours during a 9-embedder sweep,
+  which is the OOM this project already lost five runs to. **No published number
+  can move**, and tests pin that exclusion in both directions. (2) **The warm-up
+  is OFF by default** (`RAG_LAB_WARM_ON_START=1`): it holds ~3.2 GB RAM + 3.3 GB
+  VRAM on a card the eval scripts share, so an automatic grab at UI start is how
+  a GPU run dies. (3) **Size for the PEAK, not the steady state** — process peak
+  working set is **4,126 MB** against a 3,135 MB host-RAM + 3,310 MB VRAM
+  resident set. Cache bounds: embedder 2 (`RAG_LAB_EMBEDDER_CACHE`), index 4
+  (`RAG_LAB_INDEX_CACHE`), retriever 4 (`RAG_LAB_RETRIEVER_CACHE`) — each equals
+  the number of *distinct* things the five routes resolve to, not a round number.
+  **The verdict that reversed.** `qdrant_concurrency.md` (08-13) called the system
+  **encode-bound**; that was a hand-assembled pipeline with the embedder and Index
+  built once outside the loop. Measured through the *shipped* path the winning arm
+  reaches only **32.3%** of the `encode` ceiling it contains — **not
+  encode-dominated** — and the engine arm is already 86% of its plateau at C=1, so
+  **size it by making one query cheaper, not by adding users**. Cite the 08-13
+  figures only for the hand-assembled topology.
+  **A writer must seal.** `ArtifactStore.save` writes `_complete.json` **last**
+  and `index_cache._settle` refuses a directory that disagrees with it; without
+  that, a reader landing between the writer's own two files pairs one build's
+  chunks with another's vectors — undetectable downstream, and measured at
+  **36,865 of 43,505** reads before the seal, **0 of 6,326** after. **An in-place
+  writer owes a re-seal** (`relabel_index_resolution_ids.py` is the repo's one
+  such writer); **unsealed is a reported gap, never a pass** (`I7` watches the
+  fleet, `tools/seal_index_dirs.py --apply` seals). **Never downgrade a mismatch
+  to "probably an out-of-band edit, read it anyway"** — during the inter-file
+  window the directory is stable too, so stability cannot tell the two apart.
+  **Four traps, each of which reversed a conclusion before it was found.**
+  `localhost` cost **2,058.9 ms** per request against **15.1 ms** for
+  `127.0.0.1` (136.3x) because Docker publishes IPv4-only and `getaddrinfo`
+  returns `::1` first — **a cost identical across every knob is the transport,
+  not the work** ([[feedback_a_hostname_is_not_free]]); every eval script had
+  passed the fast spelling while the shipped default took the slow one.
+  `LocalSTEmbedder._load()` is **lazy**, so `build_embedder` timed 0.0 ms and the
+  cost landed on *encode* — **separate first use from warm use**
   ([[feedback_a_lazy_constructor_hides_the_cost_you_are_pricing]]).
-  **Bounded at 4** (the five routes resolve to four distinct index dirs — `faculty` and
-  `unmatched` share one), `RAG_LAB_INDEX_CACHE` to change or disable, and it holds host RAM
-  rather than VRAM. `with_embeddings` is part of the key: the engine-served path loads
-  without the matrix, and handing *it* the full variant merely wastes the 234 MB the flag
-  exists to avoid, while the reverse would hand a row-reading retriever an **empty** matrix
-  — a silent wrong answer. **Serving path only**, same rule as the embedder cache:
-  `ArtifactStore.load` stays uncached so a 36-combo sweep keeps its memory profile.
-  **FOOTPRINT IS NOW MEASURED (2026-08-21, `tools/eval/serving_cache_memory.py` →
-  `data/results/serving_cache_memory.md`, 7/7 checks): 3,135 MB host RAM + 3,310 MB
-  VRAM.** The index cache holds **3,135 MB** for its 4 routed indices (9.6% of this
-  32 GB machine; per index 616–869 MB), of which **1,019 MB is the embedding matrices**
-  as an exact `ndarray.nbytes` figure and **331 MB is the BM25 scorers** — which is what
-  the 995 ms rebuild buys back. The embedder cache holds **3,310 MB of VRAM** for its two
-  models (bge-m3 **2,174**, qwen3-0.6B **1,136**) on a 12 GB card, and `C5` confirms
-  `_release` actually returns it (3,302 of 3,310). **Process peak working set is
-  4,126 MB — a deployment sizes for the peak, not the steady state.**
-  **The number worth acting on was not the total but where it goes, and it has now been
-  acted on.** 940 MB held for a 223 MB matrix is not self-explanatory, so §1b walks the
-  read step by step: **307 MB of the 609 MB held was the transient parquet read**
-  (`pq.read_table` 209 + `.to_pydict()` 98), and deleting both returns only **2 MB** — the rest stays in
-  the allocator's arenas. So **roughly half the per-index footprint was not live data at
-  all**, and the lever was `ArtifactStore.load` materialising every column as Python
-  lists before building `Chunk`s, not the cache. Of what *is* live the matrix is the
-  larger half (223 MB against 80 MB of chunk objects, ~1,467 bytes/chunk).
-  **`ArtifactStore.load` NOW STREAMS (2026-08-21): `pq.ParquetFile.iter_batches` a batch
-  at a time instead of `pq.read_table(...).to_pydict()`.** Per index, one child process
-  per arm so no arena is inherited: **379 MB → 244 MB held**, i.e. **135 MB per
-  index**, which at the default cache size 4 is *on the order of* **541 MB** off the
-  resident set — a projection; the parent reuses arenas across loads, so the delta
-  measured end to end is smaller than 4x the per-index saving. **Time is unchanged and that is the honest headline** (596 ms against
-  563, and §1's `load` step is 1,185 ms): building 57k pydantic `Chunk`s dominates
-  either way, so this is a memory result. An isolated probe building plain tuples *did*
-  show 817 → 435 ms, consistent with a fresh process having to grow its heap for the
-  larger read — but **a report quoting that would be describing a loader that builds
-  tuples, and nothing does**. Four things to keep. (1) **The batch size is on a measured
-  knee, not pyarrow's default**: at its default 65,536 rows a 57k-chunk index is *one
-  batch* and gives back barely a tenth of the saving (313–322 MB held); the curve runs
-  1,024 → 195 MB, 256 → 184, 64 → 176, so 1,024 is the knee and the constant carries the
-  whole sweep. (2) **The sweep was run twice in opposite orders**, because the first pass
-  ran the whole-table arm first with a cold page cache and would otherwise have charged
-  its own I/O to the reader under test ([[feedback_check_benchmark_position_drift]]).
-  (3) **"Smaller" is only reported beside "identical"**: `C6` hashes all 57,172 chunks
-  field by field in both arms and requires agreement, since a reader that silently
-  dropped a batch would be the best-looking row in the file. (4) **Reordering, not loss,
-  is the silent failure mode**: `Index.embeddings` is row-aligned to `Index.chunks`
-  (invariant `I1`), so a reordered read mispairs every vector in the index and raises
-  nothing — `tests/io/test_artifact_store_streaming.py` pins file order against the
-  whole-table read on a fixture numbered **backwards**, so a loader that sorted could not
-  pass, and pins the mechanism itself by making `pq.read_table` raise (verified to fail
-  on the old implementation before it was trusted).
-  **Two method points.** (1) **"Is the memory returned?" and "is the object freed?" are
-  different questions**, and only the second has an exact answer: RSS is an allocator
-  question (a large numpy buffer goes straight back, small objects do not), so the leak
-  test is `C3` — a **weakref** to every cached Index, all dead after a clear — while the
-  returned-MB figure is reported as operational, never as evidence of a leak. (2) **The
-  instrument is calibrated in-process before it is trusted** (`C1`: a 200 MB array must
-  register within 10%; it read 200.0 MB), and `GetProcessMemoryInfo` needs explicit
-  ctypes `restype`/`argtypes` or the 64-bit pseudo-handle is truncated and the call fails
-  with ERROR_INVALID_HANDLE — which is how it was written the first time. No new
-  dependency: psapi/kernel32 via ctypes, Windows-only, and it skips rather than pretends
-  elsewhere. **A bullet in §1b was also caught asserting "the chunk objects are the
-  larger half" beside numbers saying 80 MB against 223 MB**; it is now derived from the
-  data ([[feedback_a_hardcoded_verdict_word_rots_unseen]]).
-  **THE STALENESS CASE THE HIT-TIME CHECK COULD NOT SEE WAS A REAL BUG, AND IT WAS
-  GOT BACKWARDS FIRST (2026-08-21, `src/rag_lab/io/index_cache.py`).** The cache
-  stamped `(mtime_ns, size)` *after* the load, on the reasoning that stamping before
-  would pin a torn read no later check could invalidate. That is exactly wrong: a
-  rebuild overlapping the read leaves the post-load stamp equal to what is now on
-  disk, so the stale object is cached **under the current stamp** and every later hit
-  re-stats, agrees, and serves it — **pinned permanently**, which is the one failure
-  the cache exists to prevent. **Measured, not argued**: rewriting the directory
-  mid-load made the next two calls return the previous build's rows indefinitely. It
-  now stamps **before and after** and caches only if the two agree, re-reads up to
-  `_MAX_RELOADS = 3`, and a read that keeps racing **raises rather than returning**.
-  The object is not merely stale in that window — `save` writes four files in
-  sequence and `Index` is row-aligned across two of them (`I1`), so a read can pair
-  one build's chunks with another's vectors, which nothing downstream can detect.
-  Three tests in `tests/io/test_index_cache.py` were each verified to FAIL on the old
-  implementation before being trusted. **Still not measured: the same race under real
-  concurrent load** — the tests drive it deterministically, nothing rebuilds an index
-  while a query fleet is in flight.
-  **A STARTUP WARM-UP IS WIRED (2026-08-21, `query_service.warm_serving_caches`,
-  Streamlit sidebar, OFF by default), and the measurement that matters is that
-  loading everything is still not warm.** The caches above are worth 26.9x — *to the
-  second caller on each route*; a fresh process has **four** first callers (four
-  routed index dirs, two embedders). Front-loading them takes the first four routed
-  queries from **31,719.7 ms cold to 1,613.0 ms**, after a 30,642.0 ms warm-up —
-  **and those figures now live in a report** (`tools/eval/serving_warmup_profile.py`
-  → `data/results/serving_warmup_profile.md`, 2026-08-23, 3 passes per arm in
-  separate processes, 5/5 self-checks). They had been quoted here from an
-  in-session probe since 2026-08-21, which is the gap `D7` was built to see: a
-  latency is neither 4-decimal nor a count, so nothing checked them. **The shape
-  reproduced and one number did not** — `cold` 30,550 → 31,719.7 and warm+probe
-  1,634 → 1,613.0 are inside this rig's own spread, but §2's probe pair did not
-  (see (3) below). **`cold` has no steady state and the report now says so rather
-  than printing one**: its four queries are four *first* callers, one per route,
-  so a deployment does not get one slow query and then fast ones — it gets one
-  slow query per route. **Three
-  things it had to be taught, each a measurement rather than a design choice.**
-  (1) **Building an embedder is not loading one** — `LocalSTEmbedder._load()` runs
-  inside the first `embed()`, so the warm-up embeds one string per route; this is
-  [[feedback_a_lazy_constructor_hides_the_cost_you_are_pricing]] again, in the code
-  written *because* of that lesson. (2) **Everything resident is still not warm**:
-  with all four indices and both embedders loaded, the first real query measured
-  **1,131.7 ms** against **380.0 ms** for the ones after it, and one throwaway
-  retrieval first takes it to **454.2 ms**. The residue is process-global CUDA/BLAS init, **not
-  per-index** — one probe fixed all four routes — so the warm-up does exactly one and
-  reports its cost. (3) **The probe must be given the params the deployment serves**:
-  left at the class defaults a `hybrid` probe fuses at `fetch_depth=None`, i.e. over
-  the whole corpus, **856.3 ms against the shipped F=200's 342.6** — warming a slower
-  code path than the one a user's query takes and charging the difference to startup.
-  **The 2026-08-21 in-session pair was `2,052 ms against 1,093` and is superseded,
-  not merely re-measured**: it timed the probe *during* the warm-up, so both arms
-  carried process-global initialisation the depth knob has nothing to do with. The
-  report times both arms **fully warm**, which isolates the mechanism — the ratio
-  survives (1.9x → 2.5x) and the levels fall by ~2.7x. Read a knob's cost off an
-  arm that is warm in every other respect.
-  Whether to warm the BM25 scorer is **derived from `retriever_type`, never a flag**:
-  a `hybrid` caller who could also say "no scorer" would be asking for a state that
-  cannot serve, and the probe would build it anyway. **Off by default on purpose** —
-  it holds 3.2 GB RAM + 3.3 GB VRAM on a card the eval scripts share, so an automatic
-  grab at UI start is how a GPU run dies; a deployment sets `RAG_LAB_WARM_ON_START=1`.
-- **The shipped serving path under concurrent load, and the two defects it found in
-  that path rather than in the engine (2026-08-21; narrative
-  `docs/serving-architecture.md` §7-§8,
-  `tools/eval/serving_concurrency_test.py` → `data/results/serving_concurrency.md`,
-  9/9 self-checks).** `qdrant_concurrency.md` (08-13) answered "which layer
-  saturates" for a **hand-assembled** pipeline whose embedder and Index were built
-  once *outside* the loop. That was an idealisation then and is the shipped path
-  now, so this re-measures through the real `route_query`, both topologies, caches
-  warm, over the 106 Gold queries at their real route mix. **TOPOLOGY = ENGINE**:
-  `engine` (`qdrant_hybrid`, `exact=True`, F=200) plateaus at **9.81 q/s** against
-  in-process `hybrid`'s **2.53** (3.87x), so 50 users need one query every **5.1 s**
-  against **19.7 s**. Read the scaling labels with the levels, not alone: `inproc`
-  **SCALES** (1.60x from C=1, numpy releases the GIL) but from a base so low that
-  scaling does not rescue it, while `engine` is **SERIAL** in the sense that C=1 is
-  already 86% of its plateau — it must be sized by making one query cheaper, not by
-  adding users. **NOT ENCODE-DOMINATED, which reverses the 08-13 headline for the
-  shipped path**: the winning arm reaches only **32.3%** of the `encode` ceiling it
-  contains (30.40 q/s), where the hand-assembled arms had the GPU as the binding
-  constraint — the remainder is app-layer work that harness hoisted out of its loop.
-  **Nothing here transfers across a network hop; app, embedder and engine are one
-  process on one box, which makes this box look worse at the app layer than the
-  target will.**
-  **Two defects, both in the shipped path and neither in Qdrant.** (1) **`localhost`
-  cost 2,058.9 ms p50 per request against 15.1 / 14.0 ms for `127.0.0.1`** — **136.3x**
-  on a name, arms ordered fast/slow/fast so a one-off stall cannot be read as the
-  effect.
-  `docker run -p 6333:6333` publishes on IPv4 only and `getaddrinfo` returns `::1`
-  first, so the client spends ~2 s on an address the server is not on, even though
-  that address refuses *instantly*. It hid because **every eval script already
-  passed `127.0.0.1` while `QdrantHybridRetriever` and the Streamlit UI defaulted to
-  `localhost`** — i.e. every published Qdrant latency was measured on a path the
-  shipped default did not take. Both defaults changed; the comparison stays in the
-  report, ordered fast/slow/fast. Diagnostic worth reusing: the cost was **identical**
-  for `exact=True` and HNSW, for `limit=10` and `limit=200`, and did not warm — *a
-  constant that survives every knob is the transport, not the work*
-  ([[feedback_a_hostname_is_not_free]]). (2) **The retriever was the third
-  construction nobody had priced**: `query_indices` built a fresh one per query, and
-  a `QdrantHybridRetriever` owns the client plus a per-collection arm cache that
-  parses a 78k-term vocabulary sidecar off disk — **251.8 ms of a 340.5 ms query**.
-  `factory.build_retriever_cached` (bounded 4, `RAG_LAB_RETRIEVER_CACHE`, **serving
-  path only** so no eval number can move) removes it; `route_query` now reads
-  176.4 ms. A retriever is a pure function of its spec and that is the whole licence
-  for sharing one, so what it must not hold is per-query or per-`Index` state —
-  which is why `QdrantHybridRetriever._arms` is keyed by collection rather than being
-  a single slot, pinned by `tests/test_retriever_cache.py`. (3) A third, smaller one:
-  `warm_serving_caches` gated its probe retrieval on `with_rows`, so an **engine-only
-  process got no probe at all** and its first real query cost **657 ms** against a
-  ~160 ms steady state — the probe's job is process-global CUDA/BLAS init, which has
-  nothing to do with which rows are resident. Ungated; that first query now reads
-  **197.5 ms**.
-  **Two harness defects were caught by the self-checks and fixed at the mechanism,
-  and both had reversed a number before they were.** `S5` (drift) went red at
-  **30.2%** on the engine arm because **only the repeat control was warmed at its
-  level** — the sweep cells were not, so `engine@C=1` measured 6.3 q/s cold against
-  the warmed repeat's 8.20 while `encode`/`inproc` agreed to 6% because earlier
-  phases had incidentally warmed them. (Those four figures are readings of the
-  *broken* harness and appear in no report by construction; the fixed run's drift
-  is in `serving_concurrency.md`.) *A control warmed differently from the
-  treatment is not a control*; every cell is now warmed at its own level and the
-  drift reads **0.6%**. `S4` (Little's law) went red on `inproc@C=50` at 0.84, and
-  that is **arithmetic, not physics**: the dispatch counter is shared, so with `r`
-  requests per worker the split is uneven by up to one and the ratio is bounded above
-  by `r/(r+1)` — 0.67 at the `r=2` that cell's budget allows. The domain is now
-  **derived by inverting the tolerance itself** (`r/(r+1) ≥ 0.85` ⟹ `r ≥ 6`), with
-  the excluded cells printed rather than dropped silently.
-  **Section 5 is deliberately descriptive, not a gate**, and the reason generalises:
-  RRF consumes *ranks*, so a tie settled differently inside either arm — which
-  neither engine promises anything about — comes out of the fusion as a genuinely
-  different fused *score*. Exactness is a claim about scores at the layer that
-  computes them, so the correctness gate for "both topologies serve the same data"
-  stays in `qdrant_routed_check.py` (C4/C4b/C5) where the arms are compared directly.
-  Cells are **time-boxed rather than request-boxed** (the arms differ by an order of
-  magnitude per query), and every table prints `n` and requests/worker so a thin
-  percentile is visible rather than implied.
-- **A rebuild landing between the writer's own two files — the case stamping the
-  read at both ends could not see, and the writer-side seal that closes it
-  (2026-08-21; narrative `docs/serving-architecture.md` §6, `ArtifactStore.seal` / `read_seal` / `artifact_stamp`,
-  `src/rag_lab/io/index_cache.py`, `tools/seal_index_dirs.py`).** The 08-21 morning
-  fix stamped a cached read before *and* after and refused a read that kept racing.
-  That detects a write which **overlaps** the read. It cannot detect a directory that
-  is *stably inconsistent*: `save` writes `chunks.parquet` and then
-  `embeddings.npy`, and in between — **seconds**, for a 234 MB matrix — the directory
-  is new chunks beside the previous build's vectors with **nothing moving**. A read
-  falling entirely inside that window stamps the same thing twice, caches the
-  pairing, and serves it to every later hit. **Measured, not reasoned**: 8 reader
-  threads against a writer with a 150 ms inter-file gap served a mixed Index on
-  **36,865 of 43,505** reads. The pairing is undetectable downstream — same row
-  count, same dtype, wrong rows — which is exactly what `Index`'s row alignment
-  (`I1`) cannot check. So the **writer declares**: `save` writes `_complete.json`
-  **last**, recording the four artifacts' stamps, and `index_cache._settle` refuses a
-  directory whose artifacts do not match that declaration. After it: **0 mixed of
-  6,326** sealed reads, with **232** reads refused while the writer was mid-file —
-  refusal being the designed behaviour, not a failure. Four rules carry it. (a) **The
-  stale seal stays standing during a rewrite**; clearing it first would make a
-  half-written directory look merely *unsealed*, which is the one classification that
-  does not refuse. (b) **A mismatch is never downgraded to "probably an out-of-band
-  edit, read it anyway"** — during the inter-file window the directory is stable too,
-  so stability cannot tell the two apart. An in-place writer owes a re-seal instead:
-  `relabel_index_resolution_ids.py` is the repo's one such writer and now calls
-  `seal(d)`. (c) **Unsealed is a reported gap, not a pass** — every index built
-  before this is unsealed and gets the older, narrower guarantee;
-  `index_cache_info()` says so per entry, `tools/seal_index_dirs.py --apply` sealed
-  all **55** (refusing any directory touched in the last `--min-age` seconds, since
-  sealing something still being written would bless the very pairing this catches),
-  and new **`I7`** in `audit_pipeline_invariants.py` watches the fleet. (d) **The
-  load test ships a negative control** — the same rig with the reader made to ignore
-  the seal, which must reproduce the defect; without it "0 mixed" might only mean the
-  rig never exercised the race. Six tests in `tests/io/test_index_cache.py` were
-  verified to FAIL on the pre-seal implementation before being trusted, and one
-  existing test changed contract with them: a vectors-only rewrite is now **refused**
-  rather than merely invalidating the entry, and re-sealing is what brings it back.
+  **A control arm that clears the treatment's cache is not a control** — that bug
+  measured both caches at ~1.0x. And **stamping a cached read before AND after is
+  still not enough** on its own; the seal above is what closes the remaining case
+  ([[feedback_stamp_a_cached_read_before_and_after]]).
+  **NOT established** (do not cite past these): no network hop anywhere — app,
+  embedder and engine are one process on one box, which makes this box look
+  *worse* at the app layer than a real deployment; no bursty arrival process; and
+  **the rebuild-underneath-a-query-fleet race has never been run under real
+  concurrent load** — the tests drive it deterministically.
 - **Corpus data-quality audit** (`tools/corpus_prep/audit_title_body_agreement.py`,
   2026-07-30): flags manifest titles that disagree with the document's own page-1
   `เรื่อง` subject line. A first version was rejected on measurement (median 0.660,
