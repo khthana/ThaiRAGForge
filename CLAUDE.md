@@ -1879,7 +1879,7 @@ see `docs/adr/`.
      can be cited as a *bound* rather than a null. Chunker ties are the tightest in the
      study (`fixed_size` vs `sentence` rules out >0.031 recall@10; family 0.031-0.052),
      which is the right way to state the retired "semantic wins" headline; embedder ties
-     are looser (0.05-0.10); **`e5_small` vs `jina_v5` on MRR (bound 0.1045) is the one
+     are looser (0.05-0.10); **`e5_small` vs `jina_v5` on MRR (bound **0.1029**) is the one
      pair that must be called inconclusive, not tied.** The closed-form MDE is
      simulation-verified against the real bootstrap (achieved power 0.78-0.86 vs nominal
      0.80), so cite it directly. Recomputed from persisted results → **re-run after any
