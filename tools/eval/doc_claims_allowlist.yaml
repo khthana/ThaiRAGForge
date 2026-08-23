@@ -446,17 +446,23 @@ units:
       post-fix value (197.5 ms) is in serving_concurrency.md; no generator
       persists the broken state, which is what makes this figure worth keeping
 
-  - doc: CLAUDE.md
+  - doc: docs/chunker-embedder-notes.md
     figure: "668 ms"
     checked: 2026-08-23
     reason: >-
+      RE-KEYED 2026-08-23 by a CLAUDE.md fold-out: the sentence moved to
+      docs/chunker-embedder-notes.md and allowlist entries are keyed
+      per document, so D6 reported this one as exempting nothing.
       a range endpoint: the min or max of a report's column, which no report
       states as a figure of its own
 
-  - doc: CLAUDE.md
+  - doc: docs/chunker-embedder-notes.md
     figure: "840 ms"
     checked: 2026-08-23
     reason: >-
+      RE-KEYED 2026-08-23 by a CLAUDE.md fold-out: the sentence moved to
+      docs/chunker-embedder-notes.md and allowlist entries are keyed
+      per document, so D6 reported this one as exempting nothing.
       a range endpoint: the min or max of a report's column, which no report
       states as a figure of its own
 

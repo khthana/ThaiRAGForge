@@ -160,6 +160,7 @@ DOCS = [
     # silent loss of coverage, which is the one rule the size-reduction work has.
     Path("docs/reranker-axis-notes.md"),
     Path("docs/entity-matching-and-relation-graph.md"),
+    Path("docs/chunker-embedder-notes.md"),
     Path("docs/serving-architecture.md"),
     Path("docs/eval-validity-threats.md"),
     Path("docs/research-framework-gap-analysis.md"),
