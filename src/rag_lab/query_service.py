@@ -312,7 +312,7 @@ def warm_serving_caches(
 ) -> dict:
     """Load everything the shipped routes will need, before a user asks.
 
-    The two serving caches take a warm routed query from 12,329 ms to 447 ms
+    The two serving caches take a warm routed query from 12,465 ms to 463 ms
     (`data/results/serving_cost_profile.md`) -- but only for the SECOND caller
     on each route. The first still pays ~9.3 s of weight loading plus ~1.1 s of
     index read plus the ~1.0 s BM25 rebuild, and there are four routed indices
@@ -341,22 +341,36 @@ def warm_serving_caches(
        looping over routes. `route_combo` overrides the map, as in `route_query`.
 
     4. **Loading everything is still not warm.** With all four indices and both
-       embedders resident, the first real query measured **1,240.8 ms** against
-       ~430 for the ones after it -- and a single throwaway retrieval before
-       them takes that first one to **488.6 ms** (2026-08-21, one process per
-       arm, four routed queries). The residue is process-global CUDA/BLAS
-       initialisation, not per-index: ONE probe retrieval fixed all four routes,
-       which is why this does one rather than one per index. It is the same
-       lesson as (1) one layer up -- a resource can be present and still not be
-       initialised. End to end over those four queries: cold **30,550 ms**,
-       warmed **1,634 ms** after a 29,642 ms warm-up (of which the probe is
-       1,093).
+       embedders resident, the first real query measured **1,131.7 ms** against
+       **380.0 ms** for the ones after it -- and a single throwaway retrieval
+       before them takes that first one to **454.2 ms**. The residue is
+       process-global CUDA/BLAS initialisation, not per-index: ONE probe
+       retrieval fixes all four routes, which is why this does one rather than
+       one per index. It is the same lesson as (1) one layer up -- a resource
+       can be present and still not be initialised. End to end over four routed
+       queries: cold **31,719.7 ms**, warmed **1,613.0 ms** after a 30,642.0 ms
+       warm-up.
+
+       Those figures come from `data/results/serving_warmup_profile.md`
+       (three passes per arm, each in its own process). They were quoted here
+       from an in-session probe until 2026-08-23, which is the gap `D7` in
+       `audit_doc_claims.py` exists to close -- a latency is neither a
+       4-decimal figure nor a count, so nothing checked them. **A docstring is
+       still outside D7's reach**, so re-quote this block whenever that report
+       is regenerated. Note also that `cold` has NO steady state: its four
+       queries are four first callers, one per route, so a deployment without
+       this function does not get one slow query and then fast ones -- it gets
+       one slow query per route.
 
        **Pass `retriever_params`.** The probe must exercise the path the
        deployment serves: left at the class defaults a `hybrid` probe fuses at
-       `fetch_depth=None`, i.e. the whole corpus, which costs 2,052 ms against
-       the shipped F=200's ~470 -- warming a slower code path than the one the
-       user's query will take, and charging the difference to startup.
+       `fetch_depth=None`, i.e. the whole corpus, which costs 856.3 ms against
+       the shipped F=200's 342.6 -- warming a slower code path than the one the
+       user's query will take, and charging the difference to startup. Both
+       arms of that pair are measured FULLY WARM, so the depth is the only
+       difference between them; the earlier `2,052 / 1,093` reading timed the
+       probe during the warm-up and so charged both arms for process-global
+       initialisation the knob has nothing to do with.
 
     `with_rows=False` is the engine-served shape: `query_indices` loads without
     `embeddings.npy` when the retriever reports `reads_index_rows is False`, and

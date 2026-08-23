@@ -401,44 +401,14 @@ inputs:
 # while building the serving layer that no generator persists.
 units:
   - doc: CLAUDE.md
-    figure: "1,240.8 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: CLAUDE.md
-    figure: "1,634 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: CLAUDE.md
     figure: "2,052 ms"
     checked: 2026-08-23
     reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: CLAUDE.md
-    figure: "29,642 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: CLAUDE.md
-    figure: "30,550 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
+      the 2026-08-21 in-session probe pair, superseded by
+      serving_warmup_profile.md (856.3 / 342.6 ms) and kept because WHY it was
+      wrong is the reusable part: it timed the probe DURING the warm-up, so both
+      arms carried process-global initialisation the depth knob has nothing to
+      do with
 
   - doc: CLAUDE.md
     figure: "317 ms"
@@ -446,14 +416,6 @@ units:
     reason: >-
       a range endpoint: the min or max of a report's column, which no report
       states as a figure of its own
-
-  - doc: CLAUDE.md
-    figure: "488.6 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
 
   - doc: CLAUDE.md
     figure: "525 ms"
@@ -466,9 +428,10 @@ units:
     figure: "657 ms"
     checked: 2026-08-23
     reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
+      a PRE-FIX reading, and the defect is the point: warm_serving_caches gated
+      its probe on with_rows, so an engine-only process got no probe at all. The
+      post-fix value (197.5 ms) is in serving_concurrency.md; no generator
+      persists the broken state, which is what makes this figure worth keeping
 
   - doc: CLAUDE.md
     figure: "668 ms"
@@ -483,30 +446,6 @@ units:
     reason: >-
       a range endpoint: the min or max of a report's column, which no report
       states as a figure of its own
-
-  - doc: docs/code-explained.html
-    figure: "1,093 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: docs/code-explained.html
-    figure: "1,240.8 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: docs/code-explained.html
-    figure: "2,052 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
 
   - doc: docs/paper-results-summary.md
     figure: "1170 ms"
@@ -578,9 +517,10 @@ units:
     figure: "264.7 ms"
     checked: 2026-08-23
     reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
+      from the 2026-07-29 refresh narrative, quoted to record that that run
+      agreed with its predecessor (264.7 vs 264 ms) rather than as a current
+      latency. The current values are cost_latency_pareto.md's 2026-08-09
+      subprocess run
 
   - doc: docs/paper-results-summary.md
     figure: "317 ms"
@@ -634,91 +574,11 @@ units:
       surrounding sentence is about the ratio, not the value
 
   - doc: docs/project-journey.html
-    figure: "1,093 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: docs/project-journey.html
-    figure: "1,144 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: docs/project-journey.html
-    figure: "1,240.8 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: docs/project-journey.html
-    figure: "1,241 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: docs/project-journey.html
-    figure: "1,634 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: docs/project-journey.html
-    figure: "12,295 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: docs/project-journey.html
-    figure: "2,052 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: docs/project-journey.html
-    figure: "2,054 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: docs/project-journey.html
-    figure: "2,532 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: docs/project-journey.html
     figure: "245.7 ms"
     checked: 2026-08-23
     reason: >-
       a range endpoint: the min or max of a report's column, which no report
       states as a figure of its own
-
-  - doc: docs/project-journey.html
-    figure: "30,550 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
 
   - doc: docs/project-journey.html
     figure: "309 ms"
@@ -754,22 +614,6 @@ units:
       same discarded 2026-08-07 latency run
 
   - doc: docs/project-journey.html
-    figure: "488.6 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: docs/project-journey.html
-    figure: "489 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: docs/project-journey.html
     figure: "525 ms"
     checked: 2026-08-23
     reason: >-
@@ -784,20 +628,11 @@ units:
       states as a figure of its own
 
   - doc: docs/project-journey.html
-    figure: "532 ms"
-    checked: 2026-08-23
-    reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
-
-  - doc: docs/project-journey.html
     figure: "657 ms"
     checked: 2026-08-23
     reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
+      same pre-fix engine-only probe reading as the CLAUDE.md entry; post-fix
+      197.5 ms is in serving_concurrency.md
 
   - doc: docs/project-journey.html
     figure: "793 ms"
@@ -809,7 +644,19 @@ units:
     figure: "9,193 ms"
     checked: 2026-08-23
     reason: >-
-      measured in-session while building the serving caches, the warm-up or the
-      seal, and never written to a report -- no generator persists it, which is
-      a real gap and is recorded here rather than hidden
+      a reading of a BROKEN INSTRUMENT, kept deliberately:
+      LocalSTEmbedder._load() is lazy, so the first harness charged the weight
+      load to encode and read ~100x the published warm encode. The corrected
+      decomposition is in serving_cost_profile.md; a report of the fault itself
+      is what no generator can persist
 
+  - doc: docs/serving-architecture.md
+    figure: "1,093 ms"
+    checked: 2026-08-23
+    reason: >-
+      the 2026-08-21 in-session probe pair, quoted deliberately as the head of a
+      supersession trail whose current values (856.3 / 342.6 ms) sit two
+      sentences above it in serving_warmup_profile.md. Kept because the reason it
+      was wrong is the reusable part -- it timed the probe DURING the warm-up, so
+      both arms carried process-global initialisation the depth knob has nothing
+      to do with.

@@ -139,19 +139,43 @@ has four first callers (four index dirs) and two more (two embedders), so
 VRAM on a card the eval scripts share, so an automatic grab at UI start is how a
 GPU run dies.
 
+What it buys, per process state — `serving_warmup_profile.md`, three passes per
+arm, each arm in its own process because a warm-up state is a property of a fresh
+process and cannot be measured in a loop:
+
+| arm | warm-up | 1st query | 4 queries | steady |
+| --- | ---: | ---: | ---: | ---: |
+| `cold` | — | 12,923.1 | 31,719.7 | **none** |
+| `warm_no_probe` | 29,623.6 | 1,131.7 | 2,541.2 | 380.0 |
+| `warm_probe` | 30,642.0 | **454.2** | **1,613.0** | 331.9 |
+
+All in ms. **`cold` has no steady state, and that is the shape of the problem
+rather than a gap in the table**: its four queries are four *first* callers, one
+per route, each loading an index and possibly an embedder of its own. A
+deployment does not get one slow query and then fast ones — it gets one slow
+query per route, which is exactly what a warm-up removes.
+
 Three things it had to be taught, each a measurement rather than a design choice.
 
 1. **Building an embedder is not loading one** (section 2), so the warm-up embeds
    one string per route rather than merely constructing.
 2. **Everything resident is still not warm.** With all four indices and both
-   embedders loaded, the first real query cost far more than the ones after it;
-   one throwaway retrieval removes the difference. The residue is process-global
-   CUDA/BLAS initialisation, **not per-index** — one probe fixes all four routes —
-   so the warm-up does exactly one and reports its cost.
+   embedders loaded, the first real query cost **1,131.7 ms** against **380.0 ms**
+   for the ones after it; one throwaway retrieval takes it to **454.2 ms**. The
+   residue is process-global CUDA/BLAS initialisation, **not per-index** — one
+   probe fixes all four routes — so the warm-up does exactly one and reports its
+   cost.
 3. **The probe must be given the params the deployment serves.** Left at the class
    defaults a `hybrid` probe fuses at `fetch_depth=None`, i.e. over the whole
-   corpus, warming a slower code path than the one a user's query takes and
-   charging the difference to startup.
+   corpus — **856.3 ms against the shipped F=200's 342.6 ms**, both measured fully
+   warm so the depth is the only difference between them — warming a slower code
+   path than the one a user's query takes and charging the difference to startup.
+
+**Read a knob's cost off an arm that is warm in every other respect.** The
+2026-08-21 in-session reading of that pair was `2,052 / 1,093 ms` and is
+superseded: it timed the probe *during* the warm-up, so both arms carried
+process-global initialisation the depth knob has nothing to do with. The ratio
+survives (1.9x → 2.5x); the levels fall by ~2.7x.
 
 Whether to warm the BM25 scorer is **derived from `retriever_type`, never a
 flag**: a `hybrid` caller who could also say "no scorer" would be asking for a

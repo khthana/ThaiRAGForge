@@ -278,8 +278,8 @@ def _warm_once(
     as JSON because `st.cache_resource` keys on the arguments and a dict is not
     hashable -- and they travel at all because the warm-up's probe retrieval has
     to exercise the path this UI will actually serve (at the class defaults a
-    hybrid probe fuses over the whole corpus, 2,052 ms against the shipped
-    F=200's ~470)."""
+    hybrid probe fuses over the whole corpus, 856.3 ms against the shipped
+    F=200's 342.6 -- `data/results/serving_warmup_profile.md`)."""
     return warm_serving_caches(
         discover_indices(index_dir),
         retriever_type,

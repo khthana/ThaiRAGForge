@@ -2479,20 +2479,37 @@ see `docs/adr/`.
   loading everything is still not warm.** The caches above are worth 26.9x — *to the
   second caller on each route*; a fresh process has **four** first callers (four
   routed index dirs, two embedders). Front-loading them takes the first four routed
-  queries from **30,550 ms cold to 1,634 ms**, after a 29,642 ms warm-up. **Three
+  queries from **31,719.7 ms cold to 1,613.0 ms**, after a 30,642.0 ms warm-up —
+  **and those figures now live in a report** (`tools/eval/serving_warmup_profile.py`
+  → `data/results/serving_warmup_profile.md`, 2026-08-23, 3 passes per arm in
+  separate processes, 5/5 self-checks). They had been quoted here from an
+  in-session probe since 2026-08-21, which is the gap `D7` was built to see: a
+  latency is neither 4-decimal nor a count, so nothing checked them. **The shape
+  reproduced and one number did not** — `cold` 30,550 → 31,719.7 and warm+probe
+  1,634 → 1,613.0 are inside this rig's own spread, but §2's probe pair did not
+  (see (3) below). **`cold` has no steady state and the report now says so rather
+  than printing one**: its four queries are four *first* callers, one per route,
+  so a deployment does not get one slow query and then fast ones — it gets one
+  slow query per route. **Three
   things it had to be taught, each a measurement rather than a design choice.**
   (1) **Building an embedder is not loading one** — `LocalSTEmbedder._load()` runs
   inside the first `embed()`, so the warm-up embeds one string per route; this is
   [[feedback_a_lazy_constructor_hides_the_cost_you_are_pricing]] again, in the code
   written *because* of that lesson. (2) **Everything resident is still not warm**:
   with all four indices and both embedders loaded, the first real query measured
-  **1,240.8 ms** against ~430 for the ones after it, and one throwaway retrieval
-  first takes it to **488.6 ms**. The residue is process-global CUDA/BLAS init, **not
+  **1,131.7 ms** against **380.0 ms** for the ones after it, and one throwaway
+  retrieval first takes it to **454.2 ms**. The residue is process-global CUDA/BLAS init, **not
   per-index** — one probe fixed all four routes — so the warm-up does exactly one and
   reports its cost. (3) **The probe must be given the params the deployment serves**:
   left at the class defaults a `hybrid` probe fuses at `fetch_depth=None`, i.e. over
-  the whole corpus, **2,052 ms against the shipped F=200's 1,093** — warming a slower
+  the whole corpus, **856.3 ms against the shipped F=200's 342.6** — warming a slower
   code path than the one a user's query takes and charging the difference to startup.
+  **The 2026-08-21 in-session pair was `2,052 ms against 1,093` and is superseded,
+  not merely re-measured**: it timed the probe *during* the warm-up, so both arms
+  carried process-global initialisation the depth knob has nothing to do with. The
+  report times both arms **fully warm**, which isolates the mechanism — the ratio
+  survives (1.9x → 2.5x) and the levels fall by ~2.7x. Read a knob's cost off an
+  arm that is warm in every other respect.
   Whether to warm the BM25 scorer is **derived from `retriever_type`, never a flag**:
   a `hybrid` caller who could also say "no scorer" would be asking for a state that
   cannot serve, and the probe would build it anyway. **Off by default on purpose** —
