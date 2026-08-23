@@ -708,189 +708,58 @@ see `docs/adr/`.
   **the ~1.0 s absolute saving is what transfers, not the multiplier**
   [[feedback_state_the_input_size_with_any_timing]]), and the k=n over-fetch tax is
   **not** a constant 66% of dense cost — quote it from the current run.
-- **`weighted` × `fetch_depth`: MEASURED 2026-08-12 and the guard is LIFTED
-  (`tools/eval/hybrid_weighted_fetch_depth.py` → `data/results/hybrid_weighted_fetch_depth.md`,
-  36 combos × 106 queries = 3,816 pairs, 16 min).** From 08-11 to 08-12 that pair *raised*
-  in `HybridRetriever.__init__`, and the entry here said so — **containment, not a verdict**,
-  with its own exit condition written into it ("measure it and lift the guard"). The
-  measurement was run and the pre-registered rule (frozen in the script as `DECISION_RULE`,
-  committed before the run) came out **LIFT**: the raise and its `allow_unmeasured_truncation`
-  hatch are gone, and `tests/retrievers/test_hybrid_retriever.py` now pins that permitting the
-  pair did not quietly make it a **no-op** — truncation under `weighted` must still really
-  truncate, since that is the whole cost. **LIFT is not a recommendation and the number is the
-  point**: at F=200 `weighted` loses **−0.0605** macro recall@10 against its own F=n, about
-  **22x** `rrf`'s −0.0027 at the same depth (it read 18x against −0.0033 before the
-  2026-08-23 refresh — **the multiple grew because the DENOMINATOR shrank**, not because
-  `weighted` got worse; state both terms, never the ratio alone), and it does **not** recover
-  with depth the way
-  `rrf` does — at F=10,000 of ~75,000 chunks it is still −0.0112 against `rrf`'s −0.0004, so
-  for `weighted` "deep enough" is essentially n and the knob buys nothing. What licenses
-  permitting it anyway is that this codebase bans an **unmeasured** configuration from passing
-  as measured, not a measured-but-worse one (nothing bans `m2v`); the docstring now carries
-  the cost. Four things worth more than the verdict. (1) **The smoke slice reversed the sign
-  of the headline** — on 2 combos × 8 queries `weighted` *gained* from truncation, peaking
-  0.7708 at F=100 against 0.5938 at F=n, which is the KEEP branch; on the full set every Δ is
-  negative. A smoke run checks that the code runs, it is **not a small version of the answer**
-  ([[feedback_a_smoke_slice_is_not_a_small_answer]]). (2) **P3 refuted, and the plausible
-  reasoning behind it is the trap**: `BM25Okapi` floors negative IDF, so BM25 scores are ≥ 0
-  and the *last-ranked* chunk really does score 0 — but only **0.1%** of the terms a cut
-  zeroes were already 0, because a chunk scores exactly 0 only when it matches **no** query
-  term and a ~20-token Thai query has common tokens reaching nearly every chunk. BM25 carries
-  73% of dense's zeroed mass at F=50 (88,313 vs 121,449). The promotion half is real and
-  negligible (2 of 157,731 dense terms at F=50), so the perturbation is one-sided after all —
-  for the opposite reason to `rrf`'s. (3) **The mechanism, corrected by the same data**: the
-  hypothesis was that truncation *creates* the intersection signal `weighted` structurally
-  lacks (at F=n "also in the other arm's list" is true of every chunk). Truncation does not
-  add that signal mildly — it makes intersection membership **nearly decisive**, because a cut
-  arm's normalized term is worth 0.5 × 0.27–0.95 (max-normalized cosine is *flat*: 0.9491 at
-  rank 10, 0.2699 at rank n) where `rrf` at rank 1,000 forfeits only 0.5/1060 ≈ 0.0005. So
-  `weighted`'s top-10 goes 8.25/10 in-both-arms at F=200 and 9.99/10 at F=1,000 (`rrf` 7.41 /
-  8.30): it becomes an intersection-only ranker and evicts what one arm alone found. That
-  lands exactly where a single arm carries a type — **`person` −0.1957** at F=200 (BM25 carries
-  person at 0.8147) against `program` **+0.0216**. (4) **P4 refuted in the interesting
-  direction and it is a hypothesis, never a result**: at F=n `weighted` scores **above** `rrf`
-  (0.5439 vs 0.5197, **+0.0241** macro recall@10). Descriptive only — no significance test,
-  macro over 36 combos, **unrouted**, and nothing ships `weighted`; the wrong-pair trap that
-  killed per-`entity_type` alpha and rrf4 applies here too, so it would need re-measuring
-  against the hard router before it means anything. **Re-run 2026-08-23 against rebuild #4, as a PAIR with the unrouted sweep (`docs/chunker-embedder-notes.md`) and never alone:
-  the LIFT verdict, every refutation and every mechanism survived, only levels moved.** The
-  pairing is forced by S7 — this run's `rrf` columns must reproduce the *published* sweep, so
-  refreshing either report on its own breaks the anchor rather than merely dating it; the
-  sweep was re-run first and S7 then reproduced it at all 11 depths. The fusion is
-  **imported** from
-  `hybrid_fetch_depth_sweep.py` rather than reimplemented, which makes this run's `rrf` columns
-  a cross-artifact anchor (S7 reproduces that sweep at all 11 depths); S5/S6 check against the
-  real `HybridRetriever` at F=n **and** at F ∈ {5, 50, 200, 1000}, since S5 alone would pass
-  unchanged if the fusion ignored F ([[feedback_anchor_a_check_where_the_mechanism_is_live]]).
-  The F-invariance of the two normalizers (`_normalize` runs over the already-truncated,
-  descending-sorted arm list, so `max(top-F) == max(all n)` for any F ≥ 1) is reported as a
-  lemma and deliberately **not** a self-check — it is true by construction, and a check that
-  cannot fail is a vacuous PASS dressed up as evidence. Raw cache
-  `hybrid_weighted_fetch_depth_raw.json` is written before `render()`, so `--render` is free
-  and a render crash after a GPU run loses nothing.
-- **`fetch_depth` against the shipped router, and the ship decision (2026-08-09,
-  `tools/eval/routed_fetch_depth_test.py` → `data/results/routed_fetch_depth_test.md`,
-  ~2.5 min quality + ~3 min latency).** The unrouted sweep
-  (`docs/chunker-embedder-notes.md`) left one blocker: its
-  −0.0027 is a macro over 36 combos retrieving with **no router**, and hard routing has
-  shipped since 2026-08-08 — the exact wrong-pair trap that killed per-`entity_type` alpha
-  and rrf4. Re-measured on the 106 queries routed by `classify_query` to their 4 shipped
-  indices, **the trade gets better on both sides**: pre-registered F=200 vs k=n (3 metrics,
-  Holm m=3) is recall@10 **+0.0005**, MRR −0.0024, nDCG@10 −0.0022, **all Holm-adj 1.0000**,
-  and latency **1193.9 → 475.6 ms p50 (−0.718 s, 2.51x)**, paired on the index each query is
-  actually routed to. **Note the null points the other way here than in those two cases** —
-  they had to *win* and a null killed them; a depth cut only has to not *lose*, so the null
-  is what licenses shipping — which is exactly why it must be **cited as a bound**: the CI
-  rules out a loss worse than **0.0078** on the worst of the three metrics. **The
-  pre-registered prediction was confirmed and it is the part that carries the mechanism**:
-  unrouted, `person` is the one entity type that *gains* from a shallow cut (+0.0202 at F=50)
-  because BM25 carries it while the cut deletes a weak dense arm's tail; routing already
-  hands `person` its dense specialist, so the gain should shrink — it **reverses** to
-  −0.0207. Also worth knowing: routed damage at *shallow* F is **worse** than unrouted
-  (F=10 −0.0705 vs −0.0480) because routing raised the baseline there is more to lose from,
-  yet routed rankings are *more* stable (84.0% of top-10s identical at F=200 vs 66.0%) —
-  don't assume the unrouted damage curve transfers in either direction.
-  **DECISION: wired at the query-time layer, NOT as the class default.**
-  `app/streamlit_app.py` sets `fetch_depth` per query through `StrategySpec` params
-  (default 200, with 1000 and "whole corpus" selectable); `HybridRetriever.__init__` keeps
-  `fetch_depth=None`, pinned by `tests/retrievers/test_hybrid_retriever.py`. The split is
-  load-bearing, not a hedge: F=200 changes the top-10 on **17 of 106** Gold queries, so as a
-  constructor default it would silently re-rank every future eval run while ~24k persisted
+- **`fetch_depth` — SHIPPED at the query-time layer, never as the class default.
+  Derivation: `docs/fetch-depth-notes.md`** (the unrouted `rrf` sweep, the
+  `weighted` arm and the routed ship decision, folded together 2026-08-23; in
+  `audit_doc_claims.DOCS`). Reports: `data/results/hybrid_fetch_depth_sweep.md`,
+  `hybrid_weighted_fetch_depth.md`, `routed_fetch_depth_test.md`. **Re-run the
+  first two as a PAIR** — the weighted run's `S7` cross-anchors the published
+  sweep, so refreshing either alone breaks the anchor.
+  **THE DECISION, and the split is load-bearing rather than a hedge.**
+  `app/streamlit_app.py` sets `fetch_depth` per query through `StrategySpec`
+  params (default **200**); `HybridRetriever.__init__` keeps **`fetch_depth=None`**
+  (= k=n), pinned by `tests/retrievers/test_hybrid_retriever.py`. As a constructor
+  default F=200 would silently re-rank every future eval run while ~24k persisted
   results and every published table still said k=n — this project's signature
-  silent-corruption shape. The UI is where 0.72 s is felt; the eval harness is where
-  reproducibility is. Containment is checked, not assumed: `audit_pipeline_invariants.py`
-  already classifies `mode_b`/`mode_b_routed` as write-only UI dirs, so nothing an eval
-  reads can pick up an F=200 result. Anchors: S2 reproduces `routing_eval.md`'s
-  `routed (shipped)` **0.6811** and S3 the unrouted **0.6229**, both exactly, from an
-  independent code path; S4 is the live-mechanism check against a real
-  `HybridRetriever(fetch_depth=F)` on a *routed* index, since S1-S3 exercise only F=n where
-  truncation is inert ([[feedback_anchor_a_check_where_the_mechanism_is_live]]). The fusion
-  itself is **imported** from `hybrid_fetch_depth_sweep.py` rather than reimplemented — two
-  copies of that tie-break would eventually disagree.
-  **Refreshed 2026-07-29** against the OCR-remediation-rebuilt indices: latency/cost mechanics
-  came back essentially unchanged (confirms these measure model/index/corpus-size mechanics, not
-  corpus content), but the recall@10 columns in the report dropped substantially like every other
-  quality number in this section (e.g. `qwen3 × semantic` dense 0.6581→0.5382,
-  `qwen3_0.6b × semantic` dense 0.6364→0.5688) — per Open item #13 above, semantic is not a
-  provable "best chunker", so don't cite this report's recall numbers as a chunker-supremacy
-  claim, only as one representative combo's cost/quality profile; report at
-  `data/results/cost_latency_pareto.md`. **Re-run 2026-08-07 against rebuild #3, and
-  the run split in two: quality adopted, latency rejected.** Quality barely moved
-  (max |Δ| recall@10 **0.0034** over 18 cells, ordering identical), so those columns
-  are now current. The latency columns were thrown out on evidence: `search p50` at
-  dim=1024 is the same numpy op on the same-shaped array for 6 of the 9 embedders, and
-  where those 6 agreed to within **1.9%** on 07-29 they spread **74.2%** here — split
-  exactly at run position 6, everything timed before the 4B `qwen3` at 301-317ms and
-  everything after it at 434-525ms (its memory isn't released before the rest of the
-  loop is timed). Underneath that, a uniform ~1.25x floor shift, confirmed by
-  re-running a standalone numpy benchmark on an idle machine afterwards (129ms,
-  matching this run, not 07-29's 97ms). The tell was `m2v` appearing to cost more per
-  hybrid query than `bge_m3` despite a 4ms encode. `docs/paper-results-summary.md`
-  carried **deliberately split provenance** there — 07-29 latency, 08-07 quality —
-  which was sound because latency measures corpus-*size* mechanics a rebuild doesn't
-  change; **that split is now retired by the 08-09 re-run below.** One thing from the
-  rejected run survives, since both terms of the ratio saw the same conditions: the
-  BM25 build-vs-scoring ratio (22x there, 24x on 07-29) — but read it with the token
-  count above, because those were 3-token queries and the honest figure on real
-  queries is 4.1x. **The claim that "the k=n over-fetch tax is 66% of dense k=n cost
-  in both runs" is WITHDRAWN**: on 08-09 it is **54%** (dense k=10 262.46 ms vs k=n
-  575.58 ms, so 313 ms of over-fetch). It is not a constant of the implementation —
-  quote it from the current run.
-  **Re-run 2026-08-09 on an idle machine (task #28), and this run is the citable one.**
-  Every embedder is timed in **its own subprocess** now, which removes the 74.2%
-  position effect at its root (the 4B model's memory can't leak into the next
-  embedder's timings if the process is gone). Three controls ship *in the report*,
-  and the reason there are three is that the first one alone was not enough: (1) a
-  **reference probe** — an identical numpy workload run in every child, which catches
-  the CPU floor moving (median 156.6 ms, spread 13.5%); (2) a **repeat control** —
-  the first embedder re-measured last, which caught what the probe could not, namely
-  `bge_m3`'s own `search p50` rising **245.5 → 257.9 ms (+5.1%)** across a 45-minute
-  run while the probe moved **−0.4 ms (0.3%)**; (3) **same-dim consistency** — the 7
-  dim-1024 embedders do the same numpy op on the same-shaped array, so their spread
-  (**10.3%**) *is* the noise floor, not a difference between models. Treat ~5-10% as
-  this rig's resolution and don't read a smaller gap as real. The intrinsic-cost phase
-  is now **cached** in `cost_latency_raw.json` alongside the per-embedder parts,
-  because it wobbled ~15% between renders and a published figure has to be
-  reproducible from the artifact that published it (`audit_doc_claims.py` D2 checks
-  exactly that); two consecutive renders were verified byte-identical.
-  **When re-running this script: idle machine, and check same-dim embedders at
-  different loop positions before trusting any timing.** **Refreshed 2026-08-06** against rebuild #3
-  (2026-08-05T07:56): `run_gold_bm25_eval.py`/`run_gold_hybrid_eval.py` turned out to
-  have *already* been re-run the day before (2026-08-05, retrieval results in
-  `data/results/gold_bm25_73det/`/`gold_hybrid_73det/` dated 08-05, discovered by
-  mtime — not run by this session, cause unconfirmed but harmless), so this pass
-  regenerated only the seconds-level downstream significance tests
-  (`bm25_vs_embedder_significance_test_9way.md`, `hybrid_significance_test_9way.md`,
-  `hybrid_chunker_significance_test.md`, `hybrid_significance_test_semantic_top5.md`,
-  `bm25_vs_embedder_significance_test_per_chunker.md`,
-  `bm25_hybrid_entity_type_breakdown.md`, `map_precision_significance_test.md`) against
-  already-fresh data and diffed every verdict cell against the pre-refresh (2026-07-29/
-  07-30) baseline rather than eyeballing. **Every aggregate/headline claim in this
-  bullet and the next two survives untouched** — 0 verdict flips across
-  `bm25_vs_embedder_significance_test_9way` (9 pairs), `hybrid_significance_test_9way`
-  (54 pairs), and `bm25_vs_embedder_significance_test_per_chunker` (108 cells,
-  including the `qwen3_0.6b`-beats-BM25-under-`semantic` cell). Four small, non-headline
-  movements, all in the direction of *more* separation, not less: (1)
-  `hybrid_chunker_significance_test`'s one citable pairwise result
-  (`fixed_size` loses to `recursive`, aggregate nDCG@10) holds (Holm-adj p=0.0396, was
-  0.0264); a few individual-embedder cells for that same pair flipped in both
-  directions (`congen`/`m2v` lost significance, `bge_m3` gained a different
-  significant pair) — doesn't change "no chunker beats another except this one cell";
-  (2) the semantic-top-5 tie **sharpens**: `bge_m3` now also loses significantly to
-  `qwen3`/`qwen3_0.6b` on MRR (previously its last tied metric), leaving it clearly
-  outside the 4-way tied cluster on every metric, not just recall@10/nDCG@10; (3)
-  `map_precision_significance_test`'s aggregate-scope precision@1 sharpens from
-  `qwen3_0.6b` beating 4/8 to 5/8 (`e5_small` newly loses); MAP stays 4/8, so "8/8
-  dense → 4/8 hybrid" below is unaffected; (4) `bm25_hybrid_entity_type_breakdown`
-  numbers held within noise (see next bullet). **Thematic-query arm closed
-  2026-08-07** — it was a separate gap because `data/results/thematic_{dense,bm25,hybrid}/`
-  is populated by `run_thematic_eval.py`, not `run_gold_*_eval.py`, so nothing on 08-05
-  touched it. Now re-run in full (all 3 retrieval paths, 5h12m, exit=0) with **0 verdict
-  flips**; see the thematic paragraph in `docs/chunker-embedder-notes.md`. Use
-  `tools/eval/diff_significance_reports.py` for this kind of before/after check — it keys
-  rows on `(section heading, leading label cells)`, because these reports sort rows by
-  effect size and reuse the same label across sections, so a positional diff or a naive
-  label→verdict dict both give wrong answers.
+  silent-corruption shape. **The UI is where 0.72 s is felt; the eval harness is
+  where reproducibility is.**
+  **What licenses shipping it is a NULL, which is the opposite of the other two
+  cases.** Routed, F=200 vs k=n is recall@10 **+0.0005**, MRR −0.0024, nDCG@10
+  −0.0022, **all Holm-adj 1.0000**, for **1193.9 → 475.6 ms p50 (2.51x)**.
+  per-`entity_type` alpha and rrf4 had to *win* and a null killed them; a depth cut
+  only has to not *lose*. **So cite it as a bound: the CI rules out a loss worse
+  than 0.0078 on the worst of the three metrics.**
+  **Two questions with opposite answers, and only one of them matters.** *Is the
+  ranking the same?* — **only at F=n**; even F=10,000 reproduces just 87.84% of
+  top-10s in order, and the pre-registered "F=1000 will be identical" was **wrong**.
+  *Does it cost anything?* — barely, and **non-monotonically**. Mechanism: a chunk
+  inside dense's top-F but past BM25's cut loses its BM25 term **outright**, not by
+  a little, which is why this is not an approximation that merely loses precision.
+  Do **not** assume the unrouted damage curve transfers to the routed setting in
+  either direction — it does not, and the `person` gain **reverses** once routing
+  has already handed that route its dense specialist.
+  **`weighted` × `fetch_depth`: the guard is LIFTED, and LIFT IS NOT A
+  RECOMMENDATION.** The pre-registered rule was frozen in the script before the
+  run and came out LIFT, so the raise is gone — but at F=200 `weighted` loses
+  **−0.0605** macro recall@10 against its own F=n, about **22x** `rrf`'s −0.0027,
+  and it does **not** recover with depth. What licenses permitting it is that this
+  codebase bans an **unmeasured** configuration from passing as measured, not a
+  measured-but-worse one. Mechanism: truncation makes intersection membership
+  **nearly decisive** under `weighted` (max-normalized cosine is flat), so it
+  becomes an intersection-only ranker and evicts what one arm alone found —
+  which lands hardest exactly where a single arm carries a type.
+  **`weighted` scoring above `rrf` at F=n is a HYPOTHESIS, never a result** —
+  descriptive, no significance test, macro over 36 combos, **unrouted**, and
+  nothing ships `weighted`; the wrong-pair trap applies here too.
+  **Three traps.** **A smoke slice is not a small version of the answer** — on
+  2 combos × 8 queries `weighted` *gained* from truncation, i.e. the smoke
+  **reversed the sign of the headline** and would have sent the decision down the
+  KEEP branch ([[feedback_a_smoke_slice_is_not_a_small_answer]]). **Anchor a check
+  where the mechanism is live**: a self-check at F=n only would pass unchanged if
+  the fusion ignored F entirely
+  ([[feedback_anchor_a_check_where_the_mechanism_is_live]]). And **import the
+  fusion, never reimplement it** — two copies of that tie-break would eventually
+  disagree, which is why every script here imports `fuse_at_depth` from the sweep.
 - **Per-entity_type breakdown of BM25/hybrid (2026-07-29, refreshed 2026-08-06 —
   held flat, see caveat above —
   `tools/eval/bm25_hybrid_entity_type_breakdown.py`) gives the mechanism behind the

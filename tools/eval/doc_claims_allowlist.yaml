@@ -423,17 +423,23 @@ inputs:
 # one that is a real gap rather than a false positive -- a measurement taken
 # while building the serving layer that no generator persists.
 units:
-  - doc: CLAUDE.md
+  - doc: docs/chunker-embedder-notes.md
     figure: "317 ms"
     checked: 2026-08-23
     reason: >-
+      RE-KEYED 2026-08-23 by a CLAUDE.md fold-out: the sentence moved to
+      docs/chunker-embedder-notes.md and allowlist entries are keyed
+      per document, so D6 reported this one as exempting nothing.
       a range endpoint: the min or max of a report's column, which no report
       states as a figure of its own
 
-  - doc: CLAUDE.md
+  - doc: docs/chunker-embedder-notes.md
     figure: "525 ms"
     checked: 2026-08-23
     reason: >-
+      RE-KEYED 2026-08-23 by a CLAUDE.md fold-out: the sentence moved to
+      docs/chunker-embedder-notes.md and allowlist entries are keyed
+      per document, so D6 reported this one as exempting nothing.
       a range endpoint: the min or max of a report's column, which no report
       states as a figure of its own
 

@@ -161,6 +161,7 @@ DOCS = [
     Path("docs/reranker-axis-notes.md"),
     Path("docs/entity-matching-and-relation-graph.md"),
     Path("docs/chunker-embedder-notes.md"),
+    Path("docs/fetch-depth-notes.md"),
     Path("docs/serving-architecture.md"),
     Path("docs/eval-validity-threats.md"),
     Path("docs/research-framework-gap-analysis.md"),

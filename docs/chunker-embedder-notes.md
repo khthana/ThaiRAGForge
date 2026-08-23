@@ -192,49 +192,99 @@ script was re-run on an idle machine** and `cost_latency_pareto.md`'s BM25/hybri
 current (dense p50 120-840 ms, hybrid p50 1.21-1.86s). `docs/paper-results-summary.md` was
 updated with it, so its old split provenance (07-29 latency / 08-07 quality) no longer applies
 to the latency half.
-**The over-fetch is now MEASURED, and it is a quality/latency trade rather than an
-optimisation (2026-08-09, `tools/eval/hybrid_fetch_depth_sweep.py` →
-`data/results/hybrid_fetch_depth_sweep.md`).** `HybridRetriever` gained a `fetch_depth`
-knob whose default `None` computes `depth = len(index.chunks)` — literally the old k=n
-expression, so every published hybrid number is reproduced *by construction* and
-`tests/retrievers/test_hybrid_retriever.py` pins it; the sweep runs F ∈ {10 … 10,000, n}
-over 36 combos × 106 queries = 3,816 pairs. **The two questions have opposite answers, and
-that is the finding.** *Is the ranking the same?* — only at F=n: **F=10,000 reproduces just
-87.84%** of top-10s in order (96.59% as a set) and F=1,000 only 70.13%. The pre-registered
-guess "F=1000 will be identical" was **wrong**, recorded as such. *Does it matter?* —
-barely: macro recall@10 across the 36 combos is 0.5197 at k=n, **0.5162 at F=100
-(−0.0035)** and **0.5170 at F=200 (−0.0027)**, and it is **non-monotonic** (F=500's −0.0015
-is better than F=1,000's −0.0025) because truncation lifts different chunks' scores at
-different rates as F grows. Mechanism worth keeping: a chunk inside dense's top-F but past
-BM25's cut loses its BM25 term **outright**, not by a little — that is why this is not an
-approximation that merely loses precision. Damage concentrates exactly where this project's
-RRF rule predicts (worst combo at F=50 `semantic × e5_small` −0.0579, at F=200
-`recursive × bge_m3` −0.0224, at F=1,000 `sentence × sct` −0.0145 — **the last two
-identical to the pre-rebuild run, combo and value both**), and **`person` queries
-*gain* at F=50 (+0.0217)** — the only entity_type that does, consistent with BM25 carrying
-`person` (0.8147) while the cut deletes a weak dense arm's tail. **Timing (paired, one
-process, one loaded index, arms alternated per query, BM25 scorer pre-warmed so its one-off
-build lands in neither arm, `plain__sentence__qwen3__ff8f6c49`): k=n p50 1089.5 ms → F=200
-**417.9 ms** (−0.672 s, 2.6x), F=1,000 421.0 ms.** So the over-fetch is **~62% of hybrid
-query time**, and the ~0.42 s left is real scoring work (dense encode + gemv + `get_scores`)
-that no depth cut can touch — **do not read the earlier "the remaining ~1.36s is the k=n
-over-fetch" as all removable**; that sentence bundled the residual in. **Re-run 2026-08-23 against rebuild #4 (the figures above are that run's): every
-finding survived and only the levels moved** — the two questions still answer
-oppositely, non-monotonicity still holds, `person` is still the only type that
-gains, and the F=200/F=1,000 worst combos are unchanged in both combo and value.
-All 6 self-checks pass at full scale (S2 and S4 both 3,816 reproduce / 0 differ
-against the *current* persisted results, which is what confirms the refresh is
-aligned with the rebuild).
-The trade on the
-table was ~0.67 s/query for −0.0027 macro
-recall@10 at F=200 — a *cost* decision of the same shape as soft-vs-hard routing, and it
-needed re-measuring against the hard router (which now ships) before adoption, since
-that macro figure is an average over a whole combo family, not a system result.
-**That re-measurement is DONE and the decision is made — see the next bullet.** Two method
-notes: the sweep replicates the **truncated** tie-break (the fusion dict is filled
-`dense[:F]` first, then the BM25-only remainder in BM25 rank order, so equal RRF scores stay
-dense-first — the same trap `miss_depth_profile.py` documents at full depth), and **S5
-checks the numpy fusion against a real `HybridRetriever(fetch_depth=F)`**, added because the
-first version anchored only F=n, where the mechanism under test is inert and the check would
-have passed identically had `fuse_at_depth` ignored F. Everything the report renders is
-cached in `hybrid_fetch_depth_raw.json`, so `--render` reproduces it without a GPU.
+**The `fetch_depth` over-fetch sweep that used to sit here moved to
+`docs/fetch-depth-notes.md` on 2026-08-23**, so the whole axis — unrouted
+sweep, `weighted` arm and the routed ship decision — is in one place.
+
+---
+
+## Cost / latency (`cost_latency_pareto.py`) — carried here 2026-08-23
+
+This narrative had been written inside the routed `fetch_depth` bullet, so the
+fold-out carried it into `docs/fetch-depth-notes.md` by whole-bullet extraction.
+It is chunker/embedder cost work, not over-fetch work, so it lives here.
+
+**Refreshed 2026-07-29** against the OCR-remediation-rebuilt indices: latency/cost mechanics
+came back essentially unchanged (confirms these measure model/index/corpus-size mechanics, not
+corpus content), but the recall@10 columns in the report dropped substantially like every other
+quality number in this section (e.g. `qwen3 × semantic` dense 0.6581→0.5382,
+`qwen3_0.6b × semantic` dense 0.6364→0.5688) — per Open item #13 above, semantic is not a
+provable "best chunker", so don't cite this report's recall numbers as a chunker-supremacy
+claim, only as one representative combo's cost/quality profile; report at
+`data/results/cost_latency_pareto.md`. **Re-run 2026-08-07 against rebuild #3, and
+the run split in two: quality adopted, latency rejected.** Quality barely moved
+(max |Δ| recall@10 **0.0034** over 18 cells, ordering identical), so those columns
+are now current. The latency columns were thrown out on evidence: `search p50` at
+dim=1024 is the same numpy op on the same-shaped array for 6 of the 9 embedders, and
+where those 6 agreed to within **1.9%** on 07-29 they spread **74.2%** here — split
+exactly at run position 6, everything timed before the 4B `qwen3` at 301-317ms and
+everything after it at 434-525ms (its memory isn't released before the rest of the
+loop is timed). Underneath that, a uniform ~1.25x floor shift, confirmed by
+re-running a standalone numpy benchmark on an idle machine afterwards (129ms,
+matching this run, not 07-29's 97ms). The tell was `m2v` appearing to cost more per
+hybrid query than `bge_m3` despite a 4ms encode. `docs/paper-results-summary.md`
+carried **deliberately split provenance** there — 07-29 latency, 08-07 quality —
+which was sound because latency measures corpus-*size* mechanics a rebuild doesn't
+change; **that split is now retired by the 08-09 re-run below.** One thing from the
+rejected run survives, since both terms of the ratio saw the same conditions: the
+BM25 build-vs-scoring ratio (22x there, 24x on 07-29) — but read it with the token
+count above, because those were 3-token queries and the honest figure on real
+queries is 4.1x. **The claim that "the k=n over-fetch tax is 66% of dense k=n cost
+in both runs" is WITHDRAWN**: on 08-09 it is **54%** (dense k=10 262.46 ms vs k=n
+575.58 ms, so 313 ms of over-fetch). It is not a constant of the implementation —
+quote it from the current run.
+**Re-run 2026-08-09 on an idle machine (task #28), and this run is the citable one.**
+Every embedder is timed in **its own subprocess** now, which removes the 74.2%
+position effect at its root (the 4B model's memory can't leak into the next
+embedder's timings if the process is gone). Three controls ship *in the report*,
+and the reason there are three is that the first one alone was not enough: (1) a
+**reference probe** — an identical numpy workload run in every child, which catches
+the CPU floor moving (median 156.6 ms, spread 13.5%); (2) a **repeat control** —
+the first embedder re-measured last, which caught what the probe could not, namely
+`bge_m3`'s own `search p50` rising **245.5 → 257.9 ms (+5.1%)** across a 45-minute
+run while the probe moved **−0.4 ms (0.3%)**; (3) **same-dim consistency** — the 7
+dim-1024 embedders do the same numpy op on the same-shaped array, so their spread
+(**10.3%**) *is* the noise floor, not a difference between models. Treat ~5-10% as
+this rig's resolution and don't read a smaller gap as real. The intrinsic-cost phase
+is now **cached** in `cost_latency_raw.json` alongside the per-embedder parts,
+because it wobbled ~15% between renders and a published figure has to be
+reproducible from the artifact that published it (`audit_doc_claims.py` D2 checks
+exactly that); two consecutive renders were verified byte-identical.
+**When re-running this script: idle machine, and check same-dim embedders at
+different loop positions before trusting any timing.** **Refreshed 2026-08-06** against rebuild #3
+(2026-08-05T07:56): `run_gold_bm25_eval.py`/`run_gold_hybrid_eval.py` turned out to
+have *already* been re-run the day before (2026-08-05, retrieval results in
+`data/results/gold_bm25_73det/`/`gold_hybrid_73det/` dated 08-05, discovered by
+mtime — not run by this session, cause unconfirmed but harmless), so this pass
+regenerated only the seconds-level downstream significance tests
+(`bm25_vs_embedder_significance_test_9way.md`, `hybrid_significance_test_9way.md`,
+`hybrid_chunker_significance_test.md`, `hybrid_significance_test_semantic_top5.md`,
+`bm25_vs_embedder_significance_test_per_chunker.md`,
+`bm25_hybrid_entity_type_breakdown.md`, `map_precision_significance_test.md`) against
+already-fresh data and diffed every verdict cell against the pre-refresh (2026-07-29/
+07-30) baseline rather than eyeballing. **Every aggregate/headline claim in this
+bullet and the next two survives untouched** — 0 verdict flips across
+`bm25_vs_embedder_significance_test_9way` (9 pairs), `hybrid_significance_test_9way`
+(54 pairs), and `bm25_vs_embedder_significance_test_per_chunker` (108 cells,
+including the `qwen3_0.6b`-beats-BM25-under-`semantic` cell). Four small, non-headline
+movements, all in the direction of *more* separation, not less: (1)
+`hybrid_chunker_significance_test`'s one citable pairwise result
+(`fixed_size` loses to `recursive`, aggregate nDCG@10) holds (Holm-adj p=0.0396, was
+0.0264); a few individual-embedder cells for that same pair flipped in both
+directions (`congen`/`m2v` lost significance, `bge_m3` gained a different
+significant pair) — doesn't change "no chunker beats another except this one cell";
+(2) the semantic-top-5 tie **sharpens**: `bge_m3` now also loses significantly to
+`qwen3`/`qwen3_0.6b` on MRR (previously its last tied metric), leaving it clearly
+outside the 4-way tied cluster on every metric, not just recall@10/nDCG@10; (3)
+`map_precision_significance_test`'s aggregate-scope precision@1 sharpens from
+`qwen3_0.6b` beating 4/8 to 5/8 (`e5_small` newly loses); MAP stays 4/8, so "8/8
+dense → 4/8 hybrid" below is unaffected; (4) `bm25_hybrid_entity_type_breakdown`
+numbers held within noise (see next bullet). **Thematic-query arm closed
+2026-08-07** — it was a separate gap because `data/results/thematic_{dense,bm25,hybrid}/`
+is populated by `run_thematic_eval.py`, not `run_gold_*_eval.py`, so nothing on 08-05
+touched it. Now re-run in full (all 3 retrieval paths, 5h12m, exit=0) with **0 verdict
+flips**; see the thematic paragraph in `docs/chunker-embedder-notes.md`. Use
+`tools/eval/diff_significance_reports.py` for this kind of before/after check — it keys
+rows on `(section heading, leading label cells)`, because these reports sort rows by
+effect size and reuse the same label across sections, so a positional diff or a naive
+label→verdict dict both give wrong answers.
