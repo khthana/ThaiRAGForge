@@ -29,6 +29,20 @@ see `docs/adr/`.
 
 ## Conventions
 
+- **What belongs in this file, and what does not.** This file is the guard that
+  stops a closed axis being re-proposed and a settled convention being broken, so
+  it keeps **verdicts, bounds, rules and traps**. It is not the research record.
+  Three things belong elsewhere and must not be re-added here: (a) the derivation
+  behind a closed axis → its `docs/*.md` (which must be in
+  `audit_doc_claims.DOCS`, or moving prose there silently drops D2/D5 coverage);
+  (b) why a *check* is written the way it is → the **docstring of the script that
+  runs it**, where the next person to edit that check will read it; (c) **any count
+  a script prints** — a pass/fail tally, a "which reports are stale" list, a
+  combos-rebuilt figure — → run the script. It was measured at ~79k tokens per
+  session on 2026-08-23, of which only 4% was conventions, and (a)-(c) were folded
+  out; the rules are in [[project_claude_md_size_reduction]] and
+  [[feedback_derive_the_enumeration_keep_the_judgement]]. Rewriting a line here as
+  a pointer is right; deleting a *do not* is not.
 - The core package `src/rag_lab/` must not import Streamlit (ADR-0001): keep it
   importable and unit-testable; UI/CLI are thin layers on top.
 - Add a strategy by creating a file + registering it (`src/rag_lab/registry.py`);
@@ -42,493 +56,121 @@ see `docs/adr/`.
   the evidence to tell a data error from a genuine shared title. Run it after any
   corpus/manifest change. An id change makes built indices stale for the affected
   files — they store the ids they were built with.
-- **Run `tools/eval/audit_pipeline_invariants.py` before trusting any eval refresh.**
-  Three silent-corruption bugs have been found by accident rather than by looking
-  (corpus-discovery contamination, stale BM25/hybrid result cache, `resolution_id`
-  collisions); they share a shape — a mismatch between two artifacts produced at
-  different times by different scripts, which never crashes, it just makes a number
-  wrong. This script checks 25 such invariants across corpus/index/eval layers
-  (id uniqueness, row alignment of chunks↔vectors↔lexical, index-vs-corpus
-  membership, embedding sanity, gold-id resolution, results-vs-index freshness)
-  and exits 1 on any FAIL. Latest report: `docs/pipeline-invariant-audit.md`.
-  **The caveat it surfaced is CLOSED (2026-08-09, check `E0`), and the way it was
-  closed is the reusable part.** `BuildCombo.id` hashes loader+chunker+embedder but
-  **not the corpus**, so a smoke-subset combo and a full-corpus combo share an id
-  and a persisted result could not be attributed to one index — this is *why* the
-  stale-cache incident was invisible (12 of 43 combo ids really do exist under >1
-  index root). **Hashing the corpus into the id was the obvious fix and is
-  disqualified**: the id *is* the on-disk directory name and the prefix of every
-  result filename, so it would rename 55 index dirs on every corpus edit, orphan
-  ~24k results, and break the combo names hardcoded in eval scripts
-  (`plain__fixed_size__local__ceea7536`). **Attributability, not renaming**: the
-  disambiguating data already existed but never left the index —
-  `build_manifest` writes `docset_hash`/`n_resolutions`, and `ArtifactStore.load`
-  simply never read it. It now stamps `Index.provenance`, `pipeline.retrieve`
-  copies it onto `RetrievalResult.index_dir`/`docset_hash`, and E0 attributes every
-  result by three rules, strongest first: **recorded** (the result names its index),
-  **unique name** (the combo id exists under one root), **elimination** (exactly one
-  candidate index holds every `resolution_id` the result cites — sound because the
-  result *did* come from one of them). Only >1 survivor at rule 3 is a FAIL; "no
-  built index" (the 8 deleted superseded combos) and "no candidate fits" (drift,
-  which is E3a's finding) are classified, not failed — the
-  [[feedback_cleanup_can_break_an_audit]] lesson. **Elimination alone resolves
-  100% of the live ambiguity**, which is why no backfill was needed: 0 of 23,156
-  unattributable today (15,038 by unique name, 7,268 by elimination, 850 no built
-  index). Two things it *sharpens* rather than merely turning green: E3a now checks
-  ids against the **attributed** index instead of the union over every root sharing
-  the name (a union is a superset, so it would accept an id only the smoke fixture
-  holds), and E4 keys staleness on the attributed dir, so a rebuilt smoke fixture
-  can no longer make full-corpus results look stale. `provenance` is deliberately
-  kept **out of `meta`** (which is what `save` writes back, so a load-time field
-  must not round-trip) and the new result fields are optional (the ~24k legacy
-  results must keep validating); `select()` carries it because a filtered view is
-  still the same build, unlike `lexical_scorer`. Rule 1 fired on **zero** files
-  until 2026-08-12 — nothing had been re-run since the fields landed — and now
-  carries the **212** entity results re-scored that day (14,826 unique name /
-  7,268 elimination / 850 no built index); `tests/tools/test_audit_pipeline_invariants.py`
-  pins all six outcomes anyway, or the other five would be exactly the vacuous
-  PASS the next bullet warns about.
-  Two lessons about the audit itself, both learned by breaking it the same day it was
-  written: (a) **a check whose subject matter moves becomes a vacuous PASS** — C4
-  (orphaned `.md.dup`) went 24→0 the moment those archives were moved off-repo, so it
-  now follows them to `ARCHIVE_ROOT` and says "0 of 239" rather than "0"; (b) **don't
-  let a known-retired artifact keep the gate red** — deleting the 8 superseded combos
-  removed the only indices still holding the pre-contamination-fix ids, which made
-  E3a jump 7→3,106 for result sets nothing reads. Those are now classified separately
-  (E3c contamination ids, E3d pre-repair titles, `RETIRED_RESULT_DIRS`) so a FAIL
-  still means a *live* result set has drifted. Because 0 is ambiguous between
-  "examined and clean" and "nothing left to examine", the E3 checks now print their
-  denominator — `E3a 0 of 23,156 live result files` is a real pass, `E3d 0 of 0` says
-  so out loud. **`I6` was sharpened 2026-08-08 after it was caught unable to see a
-  whole class of corpus change**: it derived "the corpus's last edit" from `*.md`
-  mtimes alone, but a `resolution_id` is built from the manifest title (ADR-0003),
-  so the title repair that day moved 4 ids without touching a single `.md` — I6
-  would have called all 41 affected indices current while they still held
-  pre-repair ids. It now reads `meeting_manifest.json` mtimes too, and counts a
-  recorded relabel (`relabeled_mispairings.at` in an index manifest) as bringing
-  an index current without a rebuild — without that second half it would sit
-  permanently red after any title repair, and an always-red check is one nobody
-  reads. State at the **2026-08-12** run (after the entity arms were re-scored):
-  **27 pass / 1 warn / 0 fail** over 28 checks (unchanged from the 08-11 run that
-  closed `G1c`; was 26/2/0 earlier on 08-11, 25/2/0 over 27 on 08-10; 24/1/0 on
-  08-09, when E0 first made the gate green). **Current is 29/0/0 over 29** — that
-  headline lives with the rebuild-#4 currency paragraph below, not here, because a
-  count written in two places is a count that will disagree with itself.
-  **`G1c` was the second warn, and how the G1 family became three checks — then how
-  the third one was retired — is the reusable part.** The `G1b` that landed
-  08-10 WARNed that **1,509** RQ4 answers predate the `num_ctx` fix and were
-  therefore *unverifiable*, "clearable only by regenerating" — but *no recorded
-  field* is not *no evidence*, and treating them as one bucket **overstated the
-  hole by 2x**. Two provable sources were already on disk and free: the UTF-8-byte
-  upper bound (a prompt under 8,192 **bytes** cannot exceed 8,192 tokens for any
-  byte-level BPE vocabulary) clears **603**, and `rq4_truncated_cells_raw.json`'s
-  cached probes — **228** prompts actually sent at `num_ctx=8192`, i.e. the old run
-  reproduced rather than a proxy — decide **147** more (228 − the 81 regenerated
-  cells, which now carry the field and belong to G1a). Both are evidence about the
-  *prompt*, so they lean on one premise about the answer — that pre-fix answers ran
-  at 8,192 — used in the conservative direction only: 8,192 is the smallest context
-  any published run used, so "fits 8,192" implies "fits whatever it actually ran
-  at". So **`G1a`** is the recorded field (0 truncated of 1,353), **`G1b`**
-  *re-derives* the same claim from provable evidence and can **FAIL**, and
-  **`G1c`** counts what neither reaches — *unmeasured*, never *suspected*
-  ([[feedback_undefined_is_not_zero]]), with its denominator printed.
-  `SCREEN_CHARS_PER_TOKEN = 0.95` would have cleared the whole remainder at a
-  stroke and is deliberately **not** evidence: it is an observed minimum, and this
-  project has already published a wrong blast radius from exactly that
-  ([[feedback_an_observed_extreme_is_not_a_bound]]). **G1c is now CLOSED, and the
-  separation is what made closing it affordable**: it priced the job at one probe
-  per prompt where the old wording had priced all 1,509 at a regeneration.
-  `tools/eval/rq4_probe_prompt_fit.py` sent all **759** remaining prompts to ollama
-  at the old `num_ctx=8192` — **70 min, 0 truncated** — so G1b now re-derives the
-  claim for **all 1,509** pre-fix answers (**603** by the byte bound, **906** by
-  probe) and G1c reads **0 of 2,862** (that denominator grows with every new
-  answer: 1,802 when G1c closed, +1,060 for the `gemma4:e4b` check). Report:
-  `data/results/rq4_prompt_fit_probes.md`. Four things worth keeping from it.
-  (1) **The estimate was checked before the run, not after**: a timed
-  12-cell sample spread across the length distribution (not longest-first —
-  [[feedback_dont_extrapolate_gpu_eta_from_first_batches]]) projected 1.2 GPU-hours
-  against an actual 1.17. (2) **`S0` re-probes two cells
-  `rq4_find_truncated_answers.py` already measured and must reproduce its counts**
-  (8,052 and the truncated 4,098) — every other number here is one nothing else can
-  confirm, so without that anchor a systematically different measurement would
-  produce a clean, plausible, wrong report. (3) **53 of 759 prompts landed within
-  128 tokens of the signature**, where the count alone cannot say whether it was
-  cut, and were re-probed at 16,384 to decide; a run reporting "0 truncated"
-  without those would not have measured its own boundary. (4) The longest of the
-  759 was fed **7,999** tokens — **193 short** of the line, the same margin the
-  `hybrid` arm cleared by, which is a margin nobody chose. The probes live in
-  **their own cache**, `rq4_prompt_fit_probes.json`, and the audit merges the two
-  at read time with the finder's file winning any shared key: that file is subject
-  to its own S1 check that every entry cleared a 0.95 chars/token screen, and this
-  script deliberately admits prompts that screen never has to. Because G1b reports
-  0 on live data its failing branch is unexercised there, so
-  `tests/tools/test_audit_g1_prompt_fit.py` pins all three outcomes plus both
-  cache rules — including a cached probe carrying the `num_ctx//2 + 2` signature
-  ([[feedback_anchor_a_check_where_the_mechanism_is_live]]). **The warn stays
-  wired rather than deleted**: a new pre-fix answer, a rebuilt context or a deleted
-  probe cache must reopen it as *unmeasured*, not pass silently as clean. One
-  measurement worth carrying: realized chars/token over these 759 spans
-  **1.0080–3.4644**, so the observed floor moved **again** (1.046 documented,
-  1.0098 previously seen) the moment more prompts were measured — and the UTF-8
-  byte bound is 2.49x–3.94x loose here, which is why it is sound rather than tight.
-  **The one remaining warn is real and is not E0's
-  doing**: it is that same `I6`, **40** indexes built 2026-08-08 19:33
-  against a corpus last edited 2026-08-09 09:53, i.e. the `2566/ครั้งที่ 3`
-  re-download + re-OCR earlier that day. **Unlike the title repair, that one is a
-  text change, so a relabel cannot discharge it** — those indices genuinely hold
-  the old OCR of that file. It was left standing rather than waived because a
-  16.4h rebuild is not worth it *for correctness*: 0 gold entries in either gold
-  set cite any resolution from that meeting, so no published metric can have
-  moved. **The user elected to clear it anyway on 2026-08-14 (rebuild #4), and it
-  is COMPLETE as of 2026-08-17 20:50 — 40 of 40 combos rebuilt, 0 remaining**
-  (`semantic`/`recursive`/`sentence`/`fixed_size` all 9/9, RQ3 4/4);
-  `make_residual_rebuild_config.py` reports `already current: 40  remaining: 0`,
-  which is I6's own rule over manifest timestamps and therefore the same evidence
-  I6 reports. **Every index now holds the 2026-08-09 re-OCR, and the eval
-  refresh chain is COMPLETE as of 2026-08-20** — every item of the order this
-  paragraph used to list as pending has been run and verified on disk: BM25/hybrid
-  persisted results (08-18), the seconds-level significance tests (08-18), the
-  thematic arm across all three retrieval paths (08-18), RQ4 contexts (08-19/08-20,
-  all five model×variant jobs at 424/424), `cost_latency_pareto.py` /
-  `power_analysis.py` / `reranker_significance_test.py` (08-18), RQ3 (08-20, 0
-  verdict flips), ColBERT (08-20, verdict STOP unchanged), and
-  `audit_pipeline_invariants.py` reads **29 pass / 0 warn / 0 fail** with `I6` 0 and
-  `E4` 0 (28 of 28 until `I7` landed 2026-08-21 — see the serving-concurrency
-  bullet for what it watches and why an unsealed index directory is a reported
-  gap rather than a pass). **This paragraph said "nothing downstream has been re-run yet" until
-  2026-08-20, four days after it stopped being true, while contradicting itself two
-  sentences later** — the same prose rot it goes on to describe, in the file whose
-  job is to prevent it. **A to-do list written into living guidance is a claim that
-  needs re-verifying like any other**: check it against artifact timestamps, not
-  against its own wording. State and protocol live in
-  [[project_index_rebuild_pending]]. **The consequence that is easiest to miss:
-  all 4 ingested Qdrant collections are now stale**, since a collection is a copy
-  of an `Index`'s rows — `person` = `sentence × bge-m3` (combo 17, the exact
-  collection the pilot ingested), `program` = `semantic × qwen3-0.6B` (combo 02),
-  `course` = `recursive × qwen3-0.6B` (combo 11) and `faculty`/`unmatched` =
-  `fixed_size × bge-m3` (combo 26). **This is DONE and was already done on
-  2026-08-18 — the pending item above outlived its own discharge, which is the
-  same prose rot the currency block describes.** A 2026-08-20 re-ingest of all
-  four plus a re-run reproduced 8/8 self-checks, and three independent facts say
-  the collections had *already* been current on 08-18: `points_count` matched the
-  rebuilt indices exactly, `C4`/`C5` agreed with numpy/`BM25Okapi` at **1e-7**
-  (a stale vector set could not), and `sentence` read 57,172 rows against the
-  pilot's 57,174 — i.e. the re-OCR's row-count change was already in the
-  collection. **Re-ingest all four and re-run `qdrant_routed_check.py` once**,
-  not per combo, whenever an index actually is rebuilt. The rebuild also settled what
-  killed the five earlier runs: **all four Qwen3-4B combos passed** (01 `semantic`,
-  10 `recursive` 107 min, 19 `sentence` 126, 28 `fixed_size` 106), so the 5-of-5
-  death pattern belongs to `semantic` × 4B specifically — the sustained
-  per-sentence embed loop — not to running a 4B model on a 12 GB card. It was 41
-  until 2026-08-12, when the `entity_tags_full` rebuild took that index out of the
-  list — a rebuild, not a waiver, which is the check behaving as intended. The
-  previous state was **24 pass / 0 warn / 1 fail** (that lone FAIL being the
-  `BuildCombo.id` caveat, now closed above). That headline was written here before it was true —
-  the report on disk at the time said **21 pass / 3 warn / 1 fail**, the 3 warns
-  being index-staleness ones nobody had chased (`I3b` coverage 2853/2854, `I5` 41
-  manifests drifted, `I6` 41 indexes built before the corpus's last edit). Rebuild
-  #3 cleared all three to 0/0/2854-of-2854, so the claim is now verified rather than
-  asserted. **`E4` (results newer than their index) passing at 0 across 23,156 result
-  files is the mechanical confirmation that the whole 08-06/08-07 refresh chain is
-  complete** — that is the check to look at after a rebuild, not the headline count.
-  Both former warns were chased to root cause rather
-  than waived, and each turned out to be a symptom of something bigger than the
-  warning said (the 5 duplicate thematic queries → the whole 179-entry subset was
-  unanswerable; see above). C4's 24 orphan archives were reviewed one by one and
-  closed (nothing was lost: 21 tail fragments of a wrapped title, 1 rename, 2
-  misfiled-but-live); the verdicts are encoded as rules, and the same-document
-  test compares page-1 `เรื่อง` headings because whole-file similarity decays
-  across the re-OCR boundary. That review surfaced what was then the corpus's one
-  known title↔content defect: `2568/ครั้งที่ 7`'s CHECO-titled file held
-  รับรองรายงานการประชุม instead. Cause was the download stage fetching the wrong
-  Drive id (two byte-identical PDFs, same SHA-256) while the manifest, `_LINK.txt`
-  and `master_list.csv` all already held the correct one
-  (`1d4iz1dpnPweAn7pxBfxlvJf9IJZwIJFJ`) — so the fix was a re-download + re-OCR of
-  that one URL, no metadata change (0 gold queries in the 73det set cite it).
-  **Done (`restore_minutes_2568_7.py`); verified 2026-08-09 by reading both files —
-  the CHECO file holds CHECO text, the minutes file holds the minutes.** Its
-  mechanism recurs: see the orphaned-agenda-items bullet below.
-  A general title-vs-body check was prototyped and **rejected on
-  measurement**: median agreement is 0.660 over 2,820 files with 544 below 0.5,
-  nearly all false alarms from agenda-number prefixes.
-- **Run `tools/eval/audit_doc_claims.py` after editing `CLAUDE.md` or
-  `docs/paper-results-summary.md`, and after any eval refresh.** It is the docs
-  layer the sweep above was missing: `audit_pipeline_invariants.py` gates
-  corpus/index/eval and `diff_significance_reports.py` gates report-vs-report,
-  but **nothing read the prose**, which is where this project's avoidable errors
-  actually live — a number typed by hand, correct that day, that no later
-  refresh touches because a refresh re-runs scripts and diffs reports. Five
-  checks: D1 report older than its generator (+ reports that don't declare one),
-  **D2 every 4-decimal figure in the prose must appear in some report** (the main
-  one), D3 a p-value quoted against a contradicting verdict word, D4 an eval
-  *input* changed after a report that reads it (the "editing `ROUTE_COMBO`
-  silently re-scores `soft_vs_hard_routing.md`" failure), **D5 the count/total
-  shape D2 is structurally blind to** (see the paragraph after next). Report:
-  `docs/doc-claims-audit.md`; triaged exemptions with written reasons in
-  `tools/eval/doc_claims_allowlist.yaml`. **First run found three real stale
-  tables, and the way it found them is the point**: all three had drifted in the
-  2026-08-06 refresh *without a single verdict cell changing*, so
-  `diff_significance_reports.py` correctly reported 0 flips and nobody re-copied
-  the numbers. (1) the per-chunker BM25-vs-embedder table — every one of 36
-  cells off by ~0.001-0.003; (2) the MAP/precision@1 summary — same, plus it
-  still said hybrid/aggregate precision@1 beat **4 of 8** where the report says
-  **5 of 8**, a figure CLAUDE.md had already been updated with, so the two docs
-  openly disagreed; (3) the structural-ceiling table, which was never extended
-  when the 33 `course` queries landed — it was a ceiling for two-thirds of the
-  set (now `all 106` 0.8856, was `all 73` 0.8922; `program` 0.9000 → 0.8979,
-  `course` 0.8729 added). Two design notes worth keeping. **D2's haystack is
-  deliberately `data/results/**/*.md` only** — including the per-query JSON
-  makes it *vacuous rather than thorough*, since 225 MB of scores contains
-  almost any 4-decimal value by coincidence (untraceable count 122 → 27, and not
-  one of those 95 was genuinely sourced). **D2 clears a figure two ways** — cited
-  as superseded, or inside a dated snapshot — because `paper-results-summary.md`
-  keeps its own supersession history on purpose; `tests/tools/test_audit_doc_claims.py`
-  pins those exemptions in both directions so the next one added can't quietly
-  make the check vacuous. D3 is a **WARN by design** (irreducible false
-  positives: a parenthetical can attribute its p to one arm and its verdict word
-  to another), and D1b warns on reports with no identifiable generator so
-  D1a's denominator stays honest. Uses filesystem mtimes, not git dates — reports
-  are gitignored and a script's commit lands *after* the run, which flagged all
-  10 pairs as false positives on the first run.
-  **D5 (2026-08-12) closes the sub-layer D2 cannot see, and the reusable part is
-  the negative control that decided its design.** D2 matches 4-decimal figures
-  only, so *every* count/total figure in these docs — `0 of 23,156`, `70 จาก 84`,
-  `17/106` — was unchecked, and that class had rotted three times in two days
-  (the phantom-citation counts `0/954`→981 and `4/359`→4/391; `0 of 240` where
-  the report says 239). The obvious worry is that integer counts collide by
-  coincidence far more easily than 4-decimal ones, so **each candidate rule was
-  scored against its own perturbations** — every observed pair re-tested at n+1,
-  m+1 and n+7, on the reasoning that a rule which clears a wrong number as
-  readily as a right one is not a check:
-
-  | rule | real | n+1 | m+1 | n+7 |
-  |---|---|---|---|---|
-  | V1 the pair stated in the same shape | 64% | 13% | 4% | 4% |
-  | V2 both integers on one line | 89% | 59% | 39% | 33% |
-  | V3 both integers in one file | 93% | 80% | 68% | 71% |
-  | proximity (≤40 chars apart) | 85% | 47% | 33% | 40% |
-
-  **Only V1 is a check**; V2/V3 look thorough and clear a wrong number a third to
-  three-quarters of the time — the same *vacuous rather than thorough* trap that
-  set D2's haystack. Two consequences. (a) **`DATED` is deliberately NOT
-  inherited**, and that was measured too: it cleared **18 of the 26** V1 flags
-  *including the one true positive*, because CLAUDE.md dates nearly every bullet
-  — an exemption is only ever right for the check it was calibrated on
-  (D2's 1,298 figures, not D5's 72), pinned by
-  `tests/tools/test_audit_doc_claims.py`. (b) **WARN, not FAIL**: V1's 64% means
-  ~36% of *correct* figures are untraceable by construction (the report states
-  the fact as a table row, a percentage, or two figures on one line), so a FAIL
-  would go red on a third of correct writing. Denominator printed, per the E3
-  rule that 0 is ambiguous. The residue was triaged to **0**: one genuine defect
-  (`0 of 240` → **239**), one figure whose denominator reproduces from nothing on
-  disk (`0 of 358` gold ids → restated as `0 of 1,014`, claim re-verified), and
-  20 correct-but-differently-stated figures now in the allowlist's `counts:`
-  section, **each naming the report line that supports it** — keyed on the exact
-  figure string, so changing either half of a cleared figure stops matching its
-  entry and re-flags rather than staying silently cleared. (Write such an example
-  out in full and D5 flags the *example*: it cannot tell an illustration from a
-  claim, which is a live cost of the strict rule, not a bug.) Two lessons from
-  that triage. **Reproduce an artifact's own pipeline
-  before calling it wrong**: `206 of 435` was accused of being a defect on a
-  raw-text recount (443 in 209 files), but `build_relation_graph.collect()`
-  applies `strip_mapping_tables(strip_document_header(...))` first, and over
-  stripped text it reproduces exactly (435 markers in 206 files, 220 pass the
-  faculty prefix, 206 accepted) — accusation withdrawn. **Match the whole
-  composite key, never one component**: verifying "no gold id references a
-  repaired title" by title substring reports a false hit on `2565/10`, a
-  different meeting carrying the same title text as one half of the `2565/8`
-  swap — a `resolution_id` is `<year>/<session>/<title>` and all three must match.
-  **D1b closed 2026-08-09 (18 → 0), and the naive way to close it would have
-  traded one benign WARN for 8 FAILs.** The line belongs in the *generator*, not
-  the report — a hand-added line is erased by the next run — so 9 live reports
-  got it from their emitting script (`embedder_matrix_9way`, `run_gold_bm25_eval`,
-  `run_gold_hybrid_eval`, `run_gold_entity_{boost,lookup}_eval`,
-  `residual_relevance_sample`, `rq4_score`, `hybrid_significance_test_9way`).
-  **That edit moves the script's mtime, which is exactly what D1a watches**, so
-  the 4 seconds-level ones were **re-run** rather than hand-patched (every
-  published figure reproduced identically: rq4 +0.1181/+0.1005/+0.0734 and the
-  guarded +0.0706, residual 0.191/0.224/0.224, thematic −0.0449/−0.0516) and the
-  6 hours-level ones got the byte-identical string the script now emits, so the
-  next real run is a no-op. The other **8 are superseded snapshots** whose
-  generators are live scripts that have moved on (four `run_gold_chunker_eval.py`
-  rollups, the Silver one, the ConGen/SCT truncation fix, the 2026-07-30
-  `pipeline_invariant_audit.md`) — they declare their generator *and* say they are
-  superseded, and `RETIRED_REPORTS` classifies them so D1a is not permanently red,
-  the same rule `RETIRED_RESULT_DIRS`/`RETIRED_RESULTS` already apply one layer
-  down. `person_cross_cell_fix_review.md` is the 9th entry and the only report
-  that can name **no** generator honestly (a one-off diff from `e1523b3`; the
-  throwaway script was not kept). New **D1c** warns if a `RETIRED_REPORTS` entry
-  names a missing file, because an exemption list is the easiest way to make a
-  check vacuous — the [[feedback_cleanup_can_break_an_audit]] shape again — and
-  the tests pin that no current report (`routing_eval`, `rq4_score`,
-  `oracle_union_ceiling`, `power_analysis`, the three 9-way tables) is exempt.
-  Current state: **6 pass / 2 warn / 0 fail** over **8** checks (re-run
-  2026-08-21 after the serving load test; D6 and the `inputs` section landed
-  2026-08-20, which is why the family is 8 rather than 7). The two warns are
-  D3's 4 known false positives and D5's standing residue, about a tenth of its
-  count/total figures across the 12 docs — **D5 is warning by design here, not
-  regressing**: it was green only while it watched 2 docs, and ~36% of correct
-  writing is untraceable to it by construction. **Its two counts are deliberately
-  not written here**, for the reason the widening paragraph below gives: both move
-  whenever this file is edited, so re-derive them by running the script. **D4 fired once during that run
-  and was a true positive**, on a new `artifact_store.py → serving_cache_memory.md`
-  edge: a docstring edit 21 seconds after the render made the report older than
-  its input. Discharged the standing way — re-render, which is free from the raw
-  JSON and came back **byte-identical** — never by an allowlist entry. **D5 caught that
-  edit and the entry it got is worth reading as a pattern**: rebuild #4's
-  combos-rebuilt count (`N of 40`) is the one allowlisted figure whose source is
-  the **index tree** rather than a report —
-  `make_residual_rebuild_config.py` re-derives it from I6's rule over manifest
-  timestamps, and writing it to a snapshot report would manufacture exactly the
-  stale second artifact the D family exists to catch. Keyed on the exact string,
-  so every batch of rebuild #4 re-flags it and the count has to be re-derived
-  rather than inherited. Was
-  **5 pass / 1 warn / 0 fail** over 6 before D5 landed. `EVAL_INPUTS` grew to
-  25 (input, report) pairs on 08-13 with the two ColBERT edges, and the new
-  `scoring.py` edge **fired immediately and correctly** — see the ColBERT
-  bullet for why it was discharged by a re-render rather than by an allowlist
-  entry, which is the general answer whenever D4 flags a proxy: re-run the
-  cheap generator and diff, and only allowlist when the re-run is not cheap.
-  **DOCS WIDENED 2 → 12 (2026-08-20), and the negative results are worth more than
-  the widening.** The docs side had been two files for a long time and the gap was
-  known. What unblocked it was **measuring the cost before paying it**: 8 of the 10
-  candidates add **zero** D2 residue, so the coverage was nearly free. Three files
+- **Run `tools/eval/audit_pipeline_invariants.py` before trusting any eval refresh,
+  and read its module docstring before editing a check.** Three silent-corruption
+  bugs have been found by accident rather than by looking (corpus-discovery
+  contamination, stale BM25/hybrid result cache, `resolution_id` collisions); they
+  share a shape — **a mismatch between two artifacts produced at different times by
+  different scripts, which never crashes, it just makes a number wrong**. The script
+  checks 29 such invariants across corpus/index/eval/answer layers and exits 1 on any
+  FAIL. Report: `docs/pipeline-invariant-audit.md`. **Do not quote a pass/fail count
+  from this file — run it**; the docstring's `Lessons` section carries the reusable
+  half (why `BuildCombo.id` is deliberately not corpus-hashed and `E0` identifies
+  results instead of renaming indices; why `C4` follows its subject matter to
+  `ARCHIVE_ROOT` and the `E3` checks print denominators; why `G1` reads the answers
+  rather than a staleness proxy and `G1c` reports *unmeasured* rather than clean; why
+  `I6` had to learn to read manifest mtimes; why an unsealed index directory is a
+  reported gap). **The two checks to look at after a rebuild** are `I6` (indices
+  older than the corpus) and `E4` (results newer than their index) — `E4` at 0 across
+  every result file is the mechanical confirmation that a whole refresh chain is
+  complete, which the headline count does not tell you.
+  Two standing operational facts, neither derivable by running it. (1) **A rebuild is
+  not always owed**: `I6` sat red on 40 indices holding a pre-re-OCR file for days and
+  that was correct to leave — 0 gold entries in either gold set cite any resolution
+  from that meeting, so no published metric could have moved; the user elected to
+  clear it anyway (rebuild #4, complete 2026-08-17). Distinguish a **text** change
+  (needs a rebuild) from a **title** change (a relabel — `resolution_id` moves,
+  chunk text does not; see [[feedback_a_title_change_is_a_relabel_not_a_rebuild]]).
+  (2) **All four Qdrant collections are copies of an `Index`'s rows, so any rebuild
+  stales them** — re-ingest all four and re-run `qdrant_routed_check.py` **once**, not
+  per combo. State and protocol: [[project_index_rebuild_pending]].
+  A general title-vs-body check was prototyped and **rejected on measurement**
+  (median agreement 0.660 over 2,820 files, 544 below 0.5, nearly all false alarms
+  from agenda-number prefixes) — the audit that did work is the asymmetric
+  token-containment one in the corpus-data-quality bullet below.
+- **Run `tools/eval/audit_doc_claims.py` after editing `CLAUDE.md` or any watched
+  doc, and after any eval refresh; read its module docstring before editing a
+  check.** It is the docs layer the invariant sweep was missing:
+  `audit_pipeline_invariants.py` gates corpus/index/eval and
+  `diff_significance_reports.py` gates report-vs-report, but **nothing read the
+  prose**, which is where this project's avoidable errors actually live — a number
+  typed by hand, correct that day, that no later refresh touches because a refresh
+  re-runs scripts and diffs reports. Six checks (**D1** report older than its
+  generator, **D2** every 4-decimal figure in the prose must appear in some report,
+  **D3** a p-value quoted against a contradicting verdict word, **D4** an eval *input*
+  changed after a report that reads it, **D5** the count/total shape D2 is
+  structurally blind to, **D6** every allowlist entry still exempts something) over
+  **12 docs**. Report: `docs/doc-claims-audit.md`; triaged exemptions with written
+  reasons in `tools/eval/doc_claims_allowlist.yaml`. **Do not quote its counts here —
+  run it**; D3's known false positives and D5's standing residue (about a tenth of
+  its figures, *below* its own documented ~36% base rate) are its designed state, and
+  both move whenever this file is edited.
+  **Its first run found three real stale tables, and how it found them is the point**:
+  all three had drifted in the 2026-08-06 refresh *without a single verdict cell
+  changing*, so `diff_significance_reports.py` correctly reported 0 flips and nobody
+  re-copied the numbers — including a summary that openly disagreed with CLAUDE.md
+  (4 of 8 vs 5 of 8) and a structural-ceiling table never extended when the 33
+  `course` queries landed. **The widening from 2 docs to 12 (2026-08-20) was decided
+  by measuring the cost first**: 8 of 10 candidates added zero D2 residue. Three files
   stay **out**, each because including them makes the check *vacuous rather than
-  thorough* — `chunker-embedder-comparison-log.md` is append-only (49 residue by
-  design: a stale number in a log **is** the record),
-  `reranker-hybrid-interaction-research.md` quotes **211** figures from the
-  *literature* that no report of ours can source, and pre-registration sections state
-  **predictions**, where a figure that no longer matches the outcome is the point of
-  having written it down. Current: **D2 traces every figure across all 12 docs**;
-  D5's residue is about a tenth of its figures, i.e. *below* its own documented
-  ~36% base rate — that is D5's designed state, not a regression from the 0 it read
-  when it watched two files. **Neither count is written here on purpose**: both move
-  whenever this paragraph is edited, and writing them cost two self-inflicted D5
-  flags on the first attempt. Re-derive them by running the script.
-  **What the widening found, and it is the class this file keeps getting hurt by —
-  one layer disagreeing with another.** (1) **The RQ4 entity arms were stale in three
-  layers at once and carried TWO verdict flips nobody had recorded**: CLAUDE.md's own
-  entity bullet still held the 08-12 figures while its RQ4 currency paragraph held the
-  re-scored ones — *this file contradicted itself* — and `docs/rq4-design.md` and
-  `project-journey.html` held the **08-10** originals. The flips: `hybrid vs
-  entity_lookup` **precision** went significant → **ns** (−0.1351, Holm 0.0508) and
-  `hybrid vs entity_boost` **precision** went ns → **significant** (+0.0973, Holm
-  0.0138). The **gating decision is unchanged** — the gating metric is recall, still
-  ns at +0.0505 with the bound now **+0.1114**. (2) the orphaned-archive count written as 240 where the report says
-  **239** — the identical defect D5 caught in CLAUDE.md on 2026-08-12, **never
-  propagated to the journey layer**, which is [[feedback_a_closed_axis_is_recorded_in_fewer_layers]]
-  applied to a correction rather than to a finding. (3) The gemma verdict-agreement
-  table stating 10-of-12 / 7-of-12 while the same file's refresh section says they
-  moved to 7 and 8.
-  **FOUR candidate checks for "the docs disagree" were built and ALL FOUR were
-  refuted — do not re-propose them.** (a) *Filter D2's haystack by report currency*
-  (the fix CLAUDE.md itself floated as option (b)): **cleared both real cases**,
-  because a fresh report legitimately quotes registered, anchored and superseded
-  values — `0.6066` is in a *current* report precisely because the ColBERT baseline
-  fix renders `_REGISTERED`. (b) *Cross-layer near-neighbour* (the same quantity at
-  0.6831 in one layer and 0.6811 in another): **1,740 candidate pairs** at the epsilon
-  the real cases need, with the closest hits pure coincidence (0.0003 vs 0.0004) —
-  D5's V2/V3 trap exactly. (c) *Citation-scoped traceability* (every figure in a block
-  citing one report must be in that report): good precision but under a tenth of
-  blocks covered, and its residue was false positives that its own narrower
-  exemption window created. (d) D2/D5 themselves, already clean. **The root cause is structural: D2 is
-  a bag of numbers, not a quantity→value map**, so *no* filter over that haystack can
-  distinguish "this is the current value of X" from "some table contains this number".
-  The sharpest proof is here: `−0.1557` passed D2 for eight days on an alibi from
-  `map_precision_significance_test.md` and `power_analysis.md`, **two unrelated tables
-  that merely happen to contain the same value**. So the working method stays what
-  actually caught these — **re-run the report, then sweep the prose**, per
-  [[feedback_a_traceability_check_shares_its_haystacks_rot]] — plus convention (c),
-  date the claim.
-  It went **4 pass / 1 warn / 1 fail** on 2026-08-10 with D4 as a **true
-  positive** (`rq4_score.md`/`rq4_score_guarded.md` predating the truncation
-  repair in `tools/eval/rq4_generate.py`, i.e. describing answers from a
-  generator that no longer exists), and is **back to 5/1/0 the same day — but
-  read HOW it cleared, because that is the lesson, not the count.** D4 compares
-  an mtime against its generator's, so **re-running `rq4_score.py` (seconds, no
-  generation) flipped it to PASS while all 80 truncated answers sat untouched on
-  disk.** The re-run was itself legitimate — editing `rq4_score.py` for `--arms`
-  had bumped D1a red, and the fix for that is to re-run the cheap generator
-  ([[feedback_provenance_belongs_in_the_generator]]); both reports reproduced
-  byte-identically. The finding was nonetheless discharged by an unrelated
-  action, which is [[feedback_cleanup_can_break_an_audit]] one layer up.
-  **So the finding was moved somewhere an mtime can't clear it**:
-  `audit_pipeline_invariants.py` gained the **G1** family, which reads the
-  *artifacts* — `rq4_generate.py` now records `num_ctx`/`prompt_eval_count` in
-  every answer and `prompt_eval_count == num_ctx//2 + 2` is an exact truncation
-  signature. **G1a** is the recorded field (0 truncated of 1,353 answers carrying
-  it — 293 after the regeneration, then every answer generated since). See the
-  invariant-audit bullet above for **G1b/G1c**,
-  which split the pre-fix answers by whether provable evidence about their prompt
-  exists — the point being that the first version called all 1,509 of them
-  *unverifiable* and that overstated the hole by 2x, and that the remainder was
-  then **closed by paying the measurement** (2026-08-11, 759 probes, 70 min,
-  0 truncated) rather than by an estimator. General rule: **a staleness
-  check is a proxy; when it is carrying a real finding, add the check that reads
-  the thing itself.**
-- **REBUILD #4 CURRENCY — which published numbers describe the current indices, and
-  which do not (2026-08-20).** Rebuild #4 finished 2026-08-17 (all 40 combos hold the
-  2026-08-09 re-OCR). The downstream refresh chain has been run **in part**, so
-  `data/results/` is a **mixed** directory: **36 of 78 reports are dated 2026-08-18 or
-  later and describe the new indices; 42 are older.** Many of those 51 are legitimately
-  superseded snapshots, but these are **live claims measured against indices that no
-  longer exist** — treat every figure in them as pre-rebuild-#4 and say so when citing:
-  `hybrid_alpha_sweep.md` (the whole per-`entity_type`-alpha result), the two
-  `fetch_depth` sweeps (`hybrid_fetch_depth_sweep.md`, `hybrid_weighted_fetch_depth.md`
-  — note `routed_fetch_depth_test.md`, the one the ship decision rests on, **is**
-  current). **THE WHOLE RERANKER FAMILY IS NOW CURRENT (re-run 2026-08-20) and is off
-  this list** — `_pool_source`, `_rrf_signal`, `_rrf_routed`, `_model_comparison`,
-  `_training_data`, `_training_run` and `_trained_test` were all re-run in that order
-  (each depends on the previous), plus `reranker_significance_test.md` (08-18) and
-  `reranker_model_qualification.md`, which is corpus-independent (it gates models on
-  hand-written examples, so no rebuild can stale it). *This list has now been wrong in
-  both directions inside four days — "the entire reranker family" over-claimed on
-  2026-08-20 morning, and by that evening the family was current; a currency list is
-  itself a claim to re-check against timestamps, never to inherit.* Also stale: the
-  entire **HyDE** family, `qdrant_pilot.md` / `qdrant_concurrency.md`,
-  `gold_anchor_ambiguity.md`, `residual_relevance.md`, and both `gold_entity_*` reports.
-  **The `rq3_*` and ColBERT families are no longer on this list — both were refreshed
-  2026-08-20** (see their own bullets; RQ3 0 verdict flips, ColBERT verdict STOP
-  unchanged).
-  **The HyDE family is on this list DELIBERATELY AND PERMANENTLY — do not re-propose
-  running it, and this is the distinction the list otherwise hides.** "Stale" is a fact
-  about a report's date; "worth refreshing" is a separate judgement, and lumping the two
-  together is how a list nobody can ever clear ends up being a list nobody reads. HyDE's
-  margins are **−0.1898** (Holm 0.0000) and **−0.0736** (0.0008) against the ~0.002-0.010
-  that rebuild #4 actually moved comparable quantities by — 10x to 27x — so no verdict
-  can flip; and because both results are **directional losses**, the bullet states no
-  bound of the form "rules out more than X" that a refresh could sharpen. Its figures are
-  dated 2026-08-13 at the head of their own bullet, which is convention (c) below, and
-  that is the whole remedy owed. **Contrast the reranker family, which is on this list
-  for a reason that does bite**: its `D vs C` (≤ **+0.0212**) and `T vs L` (≤ **0.0229**)
-  are *bounds* the same size as the drift, so refreshing them would genuinely move a
-  published number — that one is a real decision, HyDE is not.
-  **The ColBERT refresh exposed a second, sharper instance of the D2 hole below, and it
-  is the one worth reading.** `qwen3_0.6b` `program` dense recall@10 moved
-  **0.6066 → 0.6034** at rebuild #4, and the current per-`entity_type` report has said
-  0.6034 since 2026-08-18 — yet this file and `paper-results-summary.md` went on saying
-  0.6066 and D2 kept passing, **because the stale ColBERT reports still carried the old
-  value**. So the prose was traceable to precisely the artifacts that were wrong for the
-  same reason. Both were corrected 2026-08-20, along with the ceiling-attainment row it
-  feeds (`program` 0.6165/68.7% → **0.6098/67.9%**). Note the direction this cuts:
-  **refreshing a stale report is what made the stale prose detectable**, so a refresh is
-  not only a currency fix, it is the thing that removes a figure's false alibi. **`rq4_score_gemma4*.md` is
-  stale for a different reason** (its answers were half-regenerated when it was last
-  scored), see the RQ4 bullet.
-  **The reusable part is why no audit caught this, because it is a real hole in the D
-  family.** `audit_doc_claims.py`'s **D2** asks whether a 4-decimal figure in the prose
-  appears in *some* report under `data/results/**/*.md` — a union over every report
-  **regardless of currency**. So when rebuild #4 moved `routed (shipped)` from 0.6831 to
-  0.6811, the prose kept saying 0.6831 and D2 kept passing, because ten *other* reports
-  (`hyde_retrieval_73det.md`, the five reranker ones, `hybrid_alpha_sweep.md`, …) still
-  carried 0.6831 — and they carried it for **exactly the same reason the prose was
-  wrong**. **A traceability check cannot detect rot that its own haystack shares.**
-  D1a (report older than its generator) cannot see it either: no generator changed, the
-  *indices* did. The honest fixes are one of (a) re-run the stale generator, (b) let D2
-  prefer a report newer than the last index build and warn when a figure is traceable
-  only to older ones, or (c) date the claim in the prose. Until (b) exists, **(c) is the
-  standing convention in this file** — every refreshed figure above now carries the date
-  of the run it came from.
+  thorough* — `chunker-embedder-comparison-log.md` is append-only (a stale number in a
+  log **is** the record), `reranker-hybrid-interaction-research.md` quotes 211 figures
+  from the *literature*, and pre-registration sections state **predictions**, where a
+  figure that no longer matches the outcome is the point of having written it down.
+  **What the widening found is the class this file keeps getting hurt by — one layer
+  disagreeing with another**: the RQ4 entity arms were stale in three layers at once
+  and carried two unrecorded verdict flips, while CLAUDE.md contradicted *itself*
+  between two of its own bullets. Two triage rules from that work:
+  **reproduce an artifact's own pipeline before calling it wrong** (a raw-text recount
+  "refuted" a figure that reproduces exactly once the generator's own stripping is
+  applied), and **match the whole composite key, never one component** (a
+  `resolution_id` is `<year>/<session>/<title>` and a title-only match reports a false
+  hit on a different meeting carrying the same title text).
+- **REPORT CURRENCY — which published numbers describe the current indices.
+  RUN `tools/eval/report_currency.py`; do not read a list typed into this file.**
+  It derives the answer from each index manifest's own `timestamp` against each
+  report's mtime → `data/results/report_currency.md`, and excludes what a date test
+  would otherwise keep permanently red: `_`-prefixed snapshot directories, and
+  `RETIRED_REPORTS` **imported** from `audit_doc_claims.py` rather than re-listed.
+  **This bullet used to carry the list by hand and it was wrong in both directions
+  inside four days**, contradicting itself in two places at once by 2026-08-23
+  (it called the reranker family both current and stale, and called the two
+  `rq4_score_gemma4*.md` stale four days after they were re-scored). *A to-do list
+  written into living guidance is a claim that needs re-verifying like any other* —
+  and the derived version immediately found reports the hand list had missed (five
+  pre-9-way tables from 2026-07-21, `multi_k_report.md`) and one it wrongly
+  accused (`gold_anchor_ambiguity.md`, current since the 08-21 re-run).
+  **What the script deliberately does NOT decide: whether a stale report is worth
+  refreshing.** "Stale" is a fact about a timestamp; "worth refreshing" is a
+  judgement about whether a verdict could flip or a published bound could sharpen,
+  and lumping the two together is how a list nobody can ever clear becomes a list
+  nobody reads. Judgements already made live in the script's two exemption tables
+  **with their reasons** — `NOT_WORTH_REFRESHING` (the whole HyDE family:
+  directional losses an order of magnitude larger than anything rebuild #4 moved,
+  so no verdict can flip and there is no bound to sharpen) and `CORPUS_INDEPENDENT`
+  (the two model-qualification reports and the pylate cross-check, which gate on
+  hand-written probes). An entry naming a missing file is reported as **BROKEN**,
+  because an exemption list is the easiest way to make a check vacuous.
+  **The reusable finding, and it is a real hole in the D family.**
+  `audit_doc_claims.py`'s **D2** asks whether a figure in the prose appears in
+  *some* report under `data/results/**/*.md` — a union **regardless of currency**.
+  So when rebuild #4 moved `routed (shipped)` from 0.6831 to 0.6811, the prose kept
+  saying 0.6831 and D2 kept passing, because ten *other* reports still carried
+  0.6831 — **and they carried it for exactly the same reason the prose was wrong**.
+  Sharper instance: `qwen3_0.6b` `program` dense recall@10 moved 0.6066 → **0.6034**
+  and the prose was traceable to precisely the stale ColBERT reports that were wrong
+  the same way. **A traceability check cannot detect rot that its own haystack
+  shares** ([[feedback_a_traceability_check_shares_its_haystacks_rot]]); D1a cannot
+  see it either, because no generator changed — the *indices* did. Note the
+  direction this cuts: **refreshing a stale report is what makes stale prose
+  detectable**, so a refresh is not only a currency fix, it removes a figure's false
+  alibi. Honest fixes are (a) re-run the stale generator, (b) let D2 prefer a report
+  newer than the last index build, or (c) **date the claim in the prose** — and
+  until (b) exists, **(c) is the standing convention in this file**, which is why
+  every refreshed figure above carries the date of the run it came from. Four other
+  candidate currency checks were built and **all four refuted** — see the doc-claims
+  bullet; the root cause is structural, D2 is a bag of numbers, not a
+  quantity→value map.
 - The corpus (`academic_resolutions/`) is gitignored and lives at the repo root;
   corpus-prep tooling in `tools/corpus_prep/` needs Poppler + Ollama.
 - **Superseded backups live off-repo** (2026-07-30): 2,389 `*.dup` / `*.bak` files
@@ -2065,426 +1707,73 @@ see `docs/adr/`.
      cells, not from the tool ([[feedback_verdict_diffing_misses_number_drift]]).
      If `chunker_compare_full` is rebuilt again *without* RQ3 in the batch, treat RQ3
      as stale until re-run.
-- **RQ4 (end-to-end answer quality) is FULLY COMPLETE (2026-08-03)** — generation,
-  the prompt ablation, and the `cite_all` extension all done and committed
-  (`f3c04f1`/`f107469`/`f7add7d`/`44817bf`). 5 arms (hybrid/dense/bm25/m2v/closed-book,
-  all `phi4` local-only, no external API) × 106 queries × **2 prompts** (original
-  `sentence_cap` rule 4 + the ablation's `cite_all`) = the full table, scored by
-  `tools/eval/rq4_score.py` (paired bootstrap + Holm, same machinery as every other
-  significance test here). Report: `data/results/rq4_score.md`; narrative + both
-  build phases: `docs/rq4-design.md`. **Refreshed against `chunker_compare_full`
-  rebuild #3 on 2026-08-07** — see the currency paragraph at the end of this bullet
-  before citing anything here; two findings below are corrected there.
-  **CURRENCY, 2026-08-20: the rebuild-#4 refresh is COMPLETE — all five
-  (model, variant) jobs at 424/424, 0 errors, and all five reports re-scored.**
-  Rebuild #4 changed **233 of 742** contexts (checked
-  byte-for-byte, because `q097`'s old and new contexts share block count *and*
-  character total and are still different files); the 233 were regenerated and the
-  other 509 frozen, per the paired rule. `phi4` finished 2026-08-19 (3 variants,
-  **3 capped**) and `gemma4:e4b` 2026-08-20 (2 variants, 76 min for 466 answers at
-  ~5.5 s each against phi4's ~90 s, **0 capped**). `tools/eval/rq4_supervisor.sh`
-  drives all five and skips finished jobs, so it is the resume path as well as the
-  run path. **`num_predict` is now capped at
-  4,096 and that IS part of the measurement, unlike a timeout** — with it unset
-  (−1) plus ollama context-shifting a request has no end, and one cell really did
-  generate 5,007 tokens of `๒ ๒ ๑ ๒ ๒ ๑ …` past a 3,600 s timeout. The cap is
-  **1.40x the longest answer this project ever published**, and that maximum is
-  *proven* rather than sampled: `tokens ≤ UTF-8 bytes` for any byte-level BPE, so
-  only the 139 of 1,761 answers above 2,935 bytes could beat 2,935 tokens and all
-  139 were measured. **Characters do not stand in for tokens** — realized ratios run
-  1.04–2.68, so the longest answer by characters (5,001) is 1,869 tokens while the
-  longest by tokens (2,935) is 3,189 characters, and both wrong diagnoses that day
-  came from assuming ~1 char/token. `done_reason`/`num_predict` are recorded per
-  answer and `tools/eval/rq4_status.py` counts the capped ones: **3 of 1,272** phi4
-  cells so far, all `รายวิชา` course queries breaking where a Thai meeting number is
-  written, at mid-range prompt sizes (prompt length is not the trigger) — `q083`
-  broke under two variants and two arms, so the trigger is the *query*. **Quote that
-  count with any number from this run**: a capped answer never reaches its
-  `อ้างอิง:` line and scores as *cited nothing*, i.e. a generator failure that reads
-  like a retrieval result. **RE-SCORED 2026-08-19 — 7 verdict flips of 57 in
-  `rq4_score.md`, 5 of 57 guarded, 1 of 14 entity; the two `gemma4:e4b` reports were
-  held back** (their answers were still half-old, so re-running them would have mixed
-  indices inside one table), while `rq4_score_entity.md` WAS re-scored, because its
-  comparison arm `hybrid` moved even though both entity arms' contexts are
-  byte-identical. **The gemma pair was then re-scored 2026-08-20 once its answers
-  were complete — 1 verdict flip of 12 under `cite_all`, none at all under the
-  guard** (see the
-  second-generator paragraph below for what that does to the cross-generator claim). **The headline movement is family 2's dense arm: `sentence_cap vs
-  cite_all` citation recall +0.1095 (Holm 0.0000) → +0.0407 (Holm 0.6610), i.e. the
-  cell is now a bound ruling out a loss beyond 0.0133** — and the mechanism is
-  legible rather than a loss of signal, because the *baseline* rose (0.2261 →
-  0.2738) while the treatment fell (0.3356 → 0.3145): the re-OCR gave the dense arm
-  better contexts, which is exactly what shrinks the marginal value of telling the
-  model to cite everything. **The ablation holds on 2 of 3 answering arms**
-  (`hybrid` +0.0871, `bm25` +0.0789, both Holm 0.0000), so the superseded
-  +0.1181/+0.1005/+0.0734 and +0.1095/+0.0696 figures quoted later in this bullet
-  are pre-rebuild-#4 history. 4 of the 7 flips run `no → yes`, i.e. the refreshed
-  contexts SEPARATE arms that used to tie. **The entity-arm gating decision is
-  unchanged**: `entity_lookup` −0.2384 Holm 0.0000 (was −0.2523), `entity_boost` ns
-  at +0.0505 Holm 0.1040 (was +0.0366), so edges B/C stay unbuilt with the bound now
-  "at most +0.1114" (was +0.0942). Every flip is one cell against a generator whose
-  noise floor is 14/24 identical citation sets at temperature 0 — treat an isolated
-  flip as inconclusive. Adding an "Arabic numerals" prompt rule is deliberately
-  NOT done (a fourth variant, ~12 h of regeneration, and the failing cells already
-  ignored `ไม่เกิน 3 ประโยค` in the same prompt) but is worth testing for the
-  *shipped* prompt. Details: `docs/rq4-design.md` (last section).
-  **READ THIS BEFORE CITING ANY RQ4 NUMBER: every answer on disk was generated at
-  `num_ctx=8192`, and 80 of the 1,590 published (query, arm, variant) cells had
-  their prompt silently TRUNCATED (2026-08-10, `docs/rq4-prompt-truncation.md`).**
-  Found by the mandatory pre-run check before adding the entity arms, not by any
-  symptom — there is no symptom. **The rule was measured, not read from the docs**
-  (ollama 0.32.6 / phi4): a prompt that *fits* `num_ctx` is fed whole; one that
-  *exceeds* it is cut to **`num_ctx // 2 + 2` tokens, keeping the tail**. So the
-  threshold is 8,192 tokens, not 4,098 — the tempting "never more than num_ctx/2"
-  reading is refuted by its own control (5,651 / 6,885 / 7,508-token prompts are
-  fed whole at 8192), and `prompt_eval_count == num_ctx//2 + 2` is an exact
-  truncation signature. **The direction is what makes it bad**: `build_prompt`
-  lays documents out best-first and puts the rules last, so a cut deletes the
-  *highest-ranked evidence* and always spares the instructions — the answer comes
-  back fluent, correctly formatted, correctly citing, and evidence-poor. The
-  2026-08-03 "instructions after context" fix
-  ([[feedback_llm_prompt_truncates_from_front]]) is precisely what made this
-  invisible rather than harmless, which is the reusable lesson
-  ([[feedback_an_asserted_invariant_is_not_a_check]]: the `--num-ctx` help string
-  already asserted "MUST exceed the longest prompt" in capitals, and nothing
-  measured it). **Blast radius, exact token counts:** `hybrid` **0/106** in all
-  three variants (worst 7,999 — 193 tokens short of the line, by luck, and
-  `cite_all_guarded` came within 2.4% of losing it), `closed_book` 0/106 by
-  construction, `dense` **17/106** under `cite_all_guarded` (16 under the other
-  two), `bm25` 5/106, `m2v` 7/106; the entity arms
-  would have been ~45-50%. **So the confound pushes in the same direction as the
-  published `hybrid > {dense, bm25}` ordering — that finding is neither confirmed
-  nor refuted by this, it is measured under a confound that flatters it.** The
-  prompt ablation (the headline) is a within-arm comparison and survives.
-  **Repaired at source**: `rq4_generate.py` gained a `preflight()` that builds
-  every prompt, sends the longest with `num_predict=1` and refuses to start on the
-  signature; a per-answer guard that names each truncated prompt and exits
-  non-zero; `num_ctx`/`prompt_eval_count` recorded in every answer JSON (the
-  8192-era answers carry no such field, which is exactly why the damage had to be
-  reconstructed prompt by prompt); and default `--num-ctx` 8192 → **16384**.
-  Pinned by `tests/tools/test_rq4_prompt_truncation.py`. **The 81 cells were
-  REGENERATED 2026-08-10** (`tools/eval/rq4_regenerate_truncated.py`, 9,501 s,
-  0 errors, post-check: every regenerated answer carries `num_ctx=16384` and no
-  truncation signature); the originals are **moved, not deleted**, to
-  `data/rq4/_truncated_backup_2026_08_10/` with a manifest, since they are the
-  only surviving record of what an evidence-stripped answer looked like. The run
-  is **paired by construction** — `rq4_generate.py` skips existing files, so
-  moving exactly the 81 bad ones regenerates exactly those and freezes the other
-  1,509 byte-for-byte, which matters because the generator's noise floor is 14/24
-  identical citation sets at temperature 0
-  ([[feedback_temperature_zero_is_not_reproducible]]) and an unpaired re-run
-  could not separate repair from drift. **The internal control worked**: `hybrid`
-  (0 truncated) and `closed_book` (0 by construction) come back with every figure
-  unchanged, while all three truncated arms improved. Verdicts were **diffed, not
-  eyeballed** — `rq4_score.md` **1 flip of 57** and `rq4_score_guarded.md`
-  **3 of 57**; §4b of `docs/rq4-prompt-truncation.md` lists every moved figure.
-  **The single lost verdict is the one the confound was predicted to flatter**:
-  `hybrid > dense` citation recall under `cite_all` goes −0.0756 (Holm 0.0132,
-  significant) → **−0.0606, CI [−0.1115, −0.0098], Holm 0.0760 — now a bound, not
-  a result**. The three gains are all guarded m2v pairs. The prompt ablation
-  (family 2, the headline) is **entirely intact**; its point estimates moved only
-  (dense +0.1005 → +0.1095, bm25 +0.0734 → +0.0696, hybrid +0.1181 unchanged).
-  Method note
-  for any future prompt-size work here: **chars/token is unusable as an
-  estimator** on this corpus — realized spread **1.0098 – 4.0175** within the
-  same prompt family — and **an observed minimum is not a bound either.** The
-  screen shipped with the repair divided characters by `MIN_CHARS_PER_TOKEN =
-  1.046`, documented as this corpus's floor from the two entity arms; **15 of
-  228 measured prompts fall below it** (min 1.0098, `bm25_semantic/q001`,
-  11,208 chars / 11,099 tokens). An unsound "upper bound" does not merely
-  mis-sort the probe queue, it **excludes prompts from being measured at all** —
-  which is how two reconstruction runs of the 80 cells came back with 78,
-  missing `sentence_cap/dense…/q009` (8,212 tokens) and one more. Both
-  `rq4_generate.token_upper_bound` and the reconstruction script now use the
-  only bound that is provable rather than sampled — **one token per UTF-8 byte**
-  (~3x loose on Thai, and loose is the one safe direction) — and the
-  reconstruction carries **S1**, which re-derives every probed prompt's realized
-  ratio and fails if any lands under the screen. Findings, in
-  the order they were established:
-  (a) **retrieval quality survives the generation stage — but after the
-  2026-08-10 truncation repair the only citable ordering is
-  `{hybrid, dense} > m2v`, with `hybrid > dense` a bound.** Post-repair: under
-  `cite_all` hybrid 0.7268 > dense 0.6798 > bm25 0.6104 > m2v 0.5278, but
-  **dense vs bm25 is not significant in either prompt variant** (Holm-adj 1.0000
-  under `sentence_cap`, 0.1798 under `cite_all`) and **`hybrid > dense` citation
-  recall lost significance with the repair** (−0.0606, CI [−0.1115, −0.0098],
-  Holm 0.0760 — cite it as ruling out dense beating hybrid, not as hybrid
-  winning); under `sentence_cap` bm25 (0.6607) numerically *edges* dense
-  (0.6549). The old wording "citation precision orders exactly as recall@10 did
-  (hybrid 0.742 > dense 0.670 > bm25 0.625 > m2v 0.562)" over-read a tie and is
-  **corrected 2026-08-07**;
-  (b) **the original run's flat ~0.41 citation recall across every arm was a PROMPT
-  artifact, not a generator ceiling — confirmed, not just suspected.** Prompt rule 4
-  said `ตอบสั้น ๆ ไม่เกิน 3 ประโยค` against a gold set dominated by aggregation queries
-  (mean 9.87 relevant docs); re-running hybrid+bm25 under `cite_all`
-  ("cite every relevant document") raised recall significantly for both (hybrid
-  0.2862→0.3865, bm25 0.2127→0.3034, Holm-adj p<0.0001) with **no significant
-  precision cost** — the model cites more correctly, not more sloppily. **Do not cite
-  "the generator is the bottleneck"; the recommendation is "fix the instruction."**
-  (Note: `rq4_score.py`'s recall denominator is the full qrels, stricter than the
-  original inline script's "present-in-context" denominator — the ~0.41 figure and
-  the 0.21-0.29 figures are not the same metric, don't cross-cite them.) The extension
-  then covered the remaining 3 arms under `cite_all` too and found **the gain isn't
-  universal — m2v doesn't improve (+0.026, Holm p=0.657)**, consistent with retrieval
-  quality (the RRF-failure arm likely lacks enough correct evidence in context to cite
-  regardless of instruction), and **arm ordering (4c) sharpens under `cite_all`**
-  (post-repair **8/12** pairwise tests significant vs **2/12** under the original
-  prompt — direction unchanged; m2v significantly worst on both precision and
-  recall). One real cost surfaced:
-  **closed-book abstention dropped 106/106 → 104/106 under `cite_all`** (2
-  hallucinations, 5 phantom citations) — `cite_all` has no zero-document guard, worth
-  a tightened wording before adopting it as the paper's final prompt; (c) **0
-  fabricated citations across all 981 citations under the original prompt** — RAG's
-  most-feared failure mode is absent here, the payoff for exactly-checkable numeric
-  labels — but **this is prompt-specific, corrected 2026-08-07**: under `cite_all`
-  the dense arm now shows **4/391 phantoms** (previously 0/370), all from one query
-  citing labels `[6]`–`[9]` when only 5 documents were supplied. (Both denominators
-  grew with the 2026-08-10 regeneration — 954 and 359 before it — while no phantom
-  *count* moved in any cell, so restoring the evidence created no new fabrication.)
-  So `cite_all` shows
-  fabrication in two arms, not closed-book alone. Caveat: citation precision is judged against the
-  same qrels, so it inherits the pooling-bias threat — direction is conservative (see
-  validity bullet below). **The `gemma4:e4b` robustness check is DONE (2026-08-12,
-  `docs/rq4-second-generator-check.md`; 1,060 answers under both live prompts,
-  76 min, 0 errors, 0 truncated, `think` disabled, scored to
-  `data/results/rq4_score_gemma4{,_guarded}.md`) — and the headline is that the arm
-  ordering survives a generator swap while the one bound this bullet tells you to
-  cite does not.** It was queued on family 2's pre-registered rule ("a second
-  generator is worth running only if recall stays flat"), which *recall rising*
-  already closed, so it answers a different question instead: **is the ordering a
-  property of retrieval or of one model?** `sentence_cap` is unavailable by guard,
-  so **family 1b is the whole deliverable** and 1a/2/3 skip by design. Result:
-  citation **precision** orders identically in all four positions under both
-  prompts (gemma `cite_all` hybrid 0.7417 > dense 0.7375 > bm25 0.6850 > m2v
-  0.6279), verdicts agree **10 of 12** under `cite_all` and **7 of 12** under the
-  guard — **but no flip is a reversal**: every disagreement is one model resolving
-  what the other leaves inconclusive, in the same direction (the guarded 5 are
-  mostly gemma separating bm25 from both strong arms, which phi4 cannot). **The
-  sign was checked mechanically over all 24 cells and disagrees for exactly one
-  pair — `hybrid` vs `dense`, in all four of its cells.** Three are near-zero and
-  ns under both, but the fourth is the published bound: phi4/`cite_all` −0.0606 CI
-  [−0.1115, −0.0098] (excludes zero) against gemma **+0.0228** CI [−0.0258,
-  +0.0711]. **So cite `{hybrid, dense} > bm25 > m2v` as generator-independent and
-  restate `hybrid > dense` as a phi4 result, not a system result.** Levels do not
-  transfer at all — gemma's recall is higher on every arm (dense 0.5074 vs 0.3356)
-  — and neither does prompt fit: identical contexts tokenize to **6,714** tokens
-  here against phi4's 7,999, so [[project_rq4_prompt_truncation]]'s clearance is
-  per-model.
-  **REFRESHED AGAINST REBUILD #4 (2026-08-20): the conclusion is unchanged and
-  better supported, but two of its supporting figures are not.** All 466 changed
-  gemma cells were regenerated and re-scored — **1 verdict flip of 12 under
-  `cite_all`, and none at all under the guard.** Post-rebuild, the four-position
-  precision
-  ordering claim above **no longer holds for gemma**: `cite_all` reads dense
-  **0.7314** > hybrid **0.7277** > bm25 0.6879 > m2v 0.6270, i.e. the top two
-  swapped, and phi4 still puts hybrid first (0.7185 > 0.6381). **Verdict agreement
-  moved in both directions — 10 of 12 → 7 of 12 under `cite_all`, 7 of 12 → 8 of 12
-  under the guard** — and the mechanical sign check is now the sharper statement:
-  **2 sign disagreements over 24 cells, both of them `hybrid` vs `dense` under
-  `cite_all` (precision and recall); under the guard all 12 signs agree.** The
-  phi4 side of that pair is **significant again** after the rebuild (recall −0.0678
-  Holm **0.0410**, precision −0.0798 Holm 0.0410, both hybrid-favouring), reversing
-  the 2026-08-10 "now a bound, not a result" wording, while gemma stays ns and
-  points the other way (+0.0093 / +0.0026). **So the published guidance survives a
-  second index generation and is now the whole finding: cite
-  `{hybrid, dense} > bm25 > m2v` as generator-independent, and `hybrid > dense`
-  as a phi4 result.** Two internal controls held: **`closed_book` is byte-identical
-  across the refresh** (24 hallucinations under `cite_all`, 1 under the guard;
-  phantom 37/37 → 1/1), which is expected because its context is empty and cannot
-  change, and it is what separates repair from generator drift here; and every one
-  of the 5 verdict disagreements outside the `hybrid`/`dense` pair is still one
-  model resolving what the other leaves inconclusive, never a reversal. One level
-  worth noting: gemma's `bm25` recall fell 0.3991 → **0.3784** under `cite_all`,
-  which is what strengthened both strong arms' margins over it (`hybrid vs bm25`
-  Holm 0.0320 → 0.0000, `dense vs bm25` 0.0320 → 0.0016) — the opposite direction
-  to phi4's dense arm gaining from the same re-OCR, so **do not read the rebuild as
-  uniformly helpful per arm.**
-  **The larger finding is Result B, on the guard.** `cite_all`'s missing
-  zero-document rule cost phi4 2 hallucinations; it costs `gemma4:e4b` **24**, with
-  **37/37** of its closed-book citations phantom. Rule 5 generalises — **24 → 1**,
-  phantom 37/37 → **1/1** — so `cite_all_guarded`'s case is much stronger than the
-  model it was tuned on could show. **100% of closed-book hallucination in both
-  models is `course` queries** (gemma 24 of 33, phi4 2 of 33; zero across all 73
-  person/program/faculty queries), which is a target, not a diffuse risk. And **the
-  guard's published cost is phi4-specific**: where phi4 pushed m2v toward
-  abstention (missed 10 → 18), gemma's `missed` **fell** on every arm and recall
-  rose on every arm (hybrid 0.4846 → 0.5155), the cost landing on weak-arm
-  precision instead (bm25 0.6850 → 0.6028). Two operational notes: the abstention
-  detector is a substring test for `ไม่พบข้อมูล`, so all 24 raw answers were read
-  before the count was believed (they invent meeting numbers *and* labels); and
-  **`--out` is mandatory when scoring another model**, because the guard protecting
-  `rq4_score.md` keys on `--arms`, not on `--model`. **Those preconditions are now GUARDS in `rq4_generate.py`, not prose
-  (2026-08-12, `9962a96`, pinned both ways by
-  `tests/tools/test_rq4_generate_guards.py`)** — every published answer came from one
-  model under one set of defaults, and each default is wrong for a *second* model in
-  the way this project keeps getting hurt by: it returns plausible output rather than
-  an error. (1) `--variant sentence_cap` now **refuses** for any model but `phi4`
-  (whose 530 answers are keyed to that pair), because the pre-registered rule in
-  `rq4_score.py` made a second generator interesting only if recall stayed flat and it
-  rose. (2) **`think` was never passed** — a no-op for `phi4` (capabilities
-  `['completion']`) and expensive for a thinking model, so it is now *read* from
-  `ollama.show(model).capabilities` rather than assumed, disabled when present, and
-  recorded per answer (`thinking_supported`/`thinking_disabled`) exactly as `num_ctx`
-  is, since the answer **text itself changes** with it. **Measured, not estimated**: on
-  one real RQ4 prompt `gemma4:e4b` spends **1058 eval tokens / 27.2 s** unset against
-  **243 / 4.9 s** at `think=False` — **77%** of generated tokens discarded, 5.6x
-  slower; end-to-end the guarded path measured **8.1 s/answer**, so 530 answers is
-  ~1.2 h, not the ~5 h this file used to imply. (3) `--num-ctx` below **16,384** is
-  refused outright: `preflight()` probes for the truncation signature but probes at
-  most 5 prompts and is skippable, and *a bound that holds for every prompt beats a
-  probe of five*. All three are **containment with a named escape hatch**
-  (`--allow-retired-variant`, `--allow-small-ctx`) — `rq4_probe_prompt_fit.py`
-  legitimately probes at the old 8,192 — the same shape as the
-  `weighted`×`fetch_depth` raise. Two build-phase gotchas worth keeping in mind for any future generation
-  work: (a) **Ollama truncates an over-long prompt from the front**, so a default
-  `num_ctx=4096` silently deleted the instructions on long prompts and produced
-  fluent, plausible, citation-free answers — always set `num_ctx` and put instructions
-  *after* the context; (b) the design doc's original "recall@10 ~0.6 so the context
-  often lacks the answer" was wrong (recall ≠ presence: 96% of contexts hold ≥1 gold
-  doc), so 4b's power lives in the weak arms and closed-book, not the strong ones.
-  **Currency: refreshed 2026-08-07 against `chunker_compare_full` rebuild #3, and
-  this is the one refresh in the project that must NOT be read as "0 flips".**
-  Contexts rebuilt for all 4 retrieval arms, then only the **362 of 530**
-  (query, arm) cells whose context actually changed were regenerated — the other
-  168 frozen, so the comparison stays paired (4h05m, exit 0, 0 errors;
-  `data/logs/rq4_regen_2026_08_07.log`). Result: **5 verdict flips of 33**, and
-  they are weak evidence, because `rq4_generate.py`'s "temperature 0 ⇒ no
-  sampling variance" docstring **was false** — re-running byte-identical prompts
-  reproduces the citation set only 21/24 (`sentence_cap`) / **14/24** (`cite_all`),
-  measured by `tools/eval/rq4_determinism_check.py`; see
-  [[feedback_temperature_zero_is_not_reproducible]]. All four *lost* verdicts are
-  in family 1a and were already borderline (Holm-adj 0.014-0.081), nothing at
-  p<0.001 moved, and the largest single driver is one arm's mean precision
-  (`phi4 / hybrid_m2v` 0.4945→0.5575) narrowing three m2v comparisons at once —
-  **report those four as inconclusive, not reversed.** Everything cited above
-  survived: the whole prompt ablation (hybrid +0.1181 / dense +0.1005 / bm25
-  +0.0734 all Holm 0.0000, m2v +0.0217 ns — the dense/bm25 estimates are
-  +0.1095/+0.0696 after the 2026-08-10 truncation repair, same verdicts),
-  m2v-worst, and 106→104 abstention.
-  One further lesson: the phantom-citation regression in (c) was **silently
-  skipped by `diff_significance_reports.py`**, because that column is formatted
-  `count/total` and matched neither its numeric nor its verdict branch — the differ
-  now reports and gates on every non-numeric cell change (CIs excluded).
-  **`cite_all`'s two measured costs are now REPAIRED — use `cite_all_guarded`
-  (2026-08-07).** `cite_all` is left untouched (the 530 answers on disk are keyed to
-  that variant name; editing its wording in place would silently decouple them from
-  the prompt that produced them), so the fix is a third `_RULE4` entry in
-  `rq4_generate.py` writing to its own `answers/phi4_cite_all_guarded/`. The
-  diagnosis is the point: rule 3 already forbade the failure and is *identical*
-  between variants, so it was never a missing rule — it was **position**. Rule 4 is
-  the last line before the question, and "cite every relevant document" outranked
-  rule 3 by recency, the same mechanism `build_prompt` exploits deliberately
-  (context first, instructions last), here working against us. So the guard is
-  placed *after* rule 4 and says outright that it outranks it: **rule 5** (no
-  documents supplied at all ⇒ abstain, cite `-`, cite no number, and this beats
-  rule 4) and **rule 6** (cite only labels that literally appear above). Results,
-  each confirmed on the failure it was written for: rule 5 → closed-book abstention
-  **104/106 → 106/106**, phantom **5/5 → 0/0**; rule 6 → dense phantom
-  **4/391 → 0/375** (no other arm produced a phantom under any variant, so dense
-  was the only arm that could test it). **All 4 retrieval arms regenerated under
-  the guard 2026-08-08** (bm25+m2v, 212 answers, 4678s, exit 0), so the variant
-  now carries the full 530 answers and every family is rerunnable under it.
-  **The benefit survives**: guarded beats the `sentence_cap` baseline by
-  **+0.1198 on dense** (Holm 0.0000 in every family) and **+0.0706 on hybrid**
-  (Holm 0.0192 in family 2), so the ablation's headline doesn't depend on the
-  unguarded wording; bm25's guarded gain (+0.0533) misses significance where the
-  unguarded +0.0696 made it, and m2v moves under neither. **The apparent cost vs
-  unguarded `cite_all` is not a finding** — no arm significant and the point
-  estimates **don't agree on a direction** (dense +0.0104 vs hybrid −0.0475,
-  bm25 −0.0163, m2v −0.0095), which is what the measured noise floor predicts
-  (14/24 identical citation sets at temperature 0,
-  [[feedback_temperature_zero_is_not_reproducible]]); as bounds, hybrid rules out
-  the guard being *better* than `cite_all`, dense rules out a loss > ~0.02.
-  **Two things the 4-arm run added that the 2-arm run could not show.** (1) The
-  guard is **not free**: rule 5 applies to every arm, not just closed-book, and
-  it pushes the weak arms toward abstention — m2v correct-abstain 13→16 and
-  hallucination 16→13 but *missed* (gold present, abstained) 10→18; bm25
-  hallucination 11→10. Report the trade. (2) **The 4c "sharpening" claim belongs
-  to `cite_all`, not to the guard — but the *reason* recorded here until
-  2026-08-10 was wrong and is WITHDRAWN.** Family 1's 12 pairwise tests separate
-  **2/12** under `sentence_cap`, **8/12** under `cite_all`, **6/12** under
-  `cite_all_guarded`. The old text said the guard "compresses the spread"; that
-  rested on a 3/12 measured *before* the truncation repair, and restoring the
-  evidence took the guarded count to 6/12. What actually differs is **which**
-  pairs each prompt resolves: under the guard all 6 significant cells are m2v
-  pairs (it separates the weak arm from everything) while `hybrid vs bm25`
-  narrowly misses on both metrics (recall Holm 0.1056, precision 0.2430) and
-  `hybrid vs dense` is a flat tie (−0.0028, Holm 0.9164) — **`cite_all` is the
-  only variant that separates the two strong arms from each other.**
-  **Recommendation: report `cite_all_guarded` as the paper's prompt but cite the
-  ordering result from `cite_all`, with the guarded 6/12 and its differing
-  composition stated alongside.**
-  `rq4_score.py` gained `--treatment-variant` and `--out` so a variant is scored
-  against the same baseline without clobbering the published `rq4_score.md`
-  (guarded report: `data/results/rq4_score_guarded.md`). **Always quote the Holm
-  family size** — with 4 arms family 3 holds **24** tests and family 2 holds **9**,
-  and on 2026-08-08 they stopped agreeing: `hybrid: guarded vs baseline`, identical
-  data, +0.0706 either way, reads **0.0192 (significant) in family 2** and **0.0720
-  (not significant) in family 3**. Neither is wrong; family 2 is the one built to
-  answer "does this prompt beat the baseline", so cite that one, *as family 2*.
-  Family 3 was added 2026-08-08 because the variant-vs-variant pairs
-  (`guarded` vs `cite_all`) exist in no other family, so they had been computed ad
-  hoc and the doc quoted numbers no script could reproduce — the
-  [[feedback_recompute_derived_stats_from_the_table]] failure mode, caught by
-  re-reading the report against the prose.
-  **The two entity arms ran 2026-08-10 as a pre-registered decisive upper bound, and
-  the answer is: do not build relation-graph edges B/C** (`rq4_score.py --arms ...`
-  → `data/results/rq4_score_entity.md`, family 1b **m=6**; 212 answers, 14,434 s,
-  0 errors, **0 truncated** — necessary, since `prompt_eval_count` peaks at 13,636 /
-  14,515, so at the old 8192 default about half would have been evidence-stripped).
-  The rule was fixed in `docs/rq4-design.md` before the number existed. **All figures
-  below are the 2026-08-12 re-measurement** after the `match_programs` repair reached
-  these arms (see the paragraph at the end of this bullet for what moved; the
-  superseded 08-10 originals are in `docs/rq4-design.md`). **The primary
-  comparison failed in the *opposite* direction**: `entity_lookup` vs hybrid citation
-  recall **−0.2384**, CI [−0.3083, −0.1680], Holm **0.0000** — decisively worse,
-  not merely no better. **Its precision cell flipped at the rebuild-#4 re-score and
-  nothing had recorded it until 2026-08-20**: −0.1557 at Holm 0.0156 (significant)
-  → **−0.1351, CI [−0.2535, −0.0182], Holm 0.0508 — no longer significant**, so
-  `entity_lookup` is now decisively worse on *recall alone* and precision is a bound
-  ruling out a loss beyond 0.2535. Sign unchanged; read the flip as power, not
-  reversal ([[feedback_a_replication_disagrees_by_sign_not_verdict]]). **But the stated reason for
-  the inference does not survive, which matters more than the verdict**
-  (`tools/eval/rq4_entity_arm_diagnosis.py` → `data/results/rq4_entity_arm_diagnosis.md`,
-  descriptive, no GPU): `entity_lookup`'s contexts hold a **higher** gold density than
-  hybrid's (**0.6501 vs 0.5352**) and it still abstained on **40** gold-bearing queries
-  (hybrid 8, `entity_boost` 5) — a ranking failure, not an evidence failure.
-  **Two things fall out that are worth more than the gating decision.** (1) That
-  density is the **circularity made visible**: the qrels call a document relevant when
-  it *contains the entity* and this arm retrieves exactly those, so a near-pure-gold
-  context is true by construction — and the generator, handed ~8 documents all naming
-  the entity, judged on 40 queries that none answered the question. **An independent
-  judge saying string containment over-counts relevance for this query shape**, which
-  is the `docs/eval-validity-threats.md` §3 threat measured rather than argued. (2)
-  Same dictionaries, ranked vs unranked, is worth **0.4328 vs 0.1439** recall — far
-  more than the dictionaries' own margin. **So cite `entity_boost` as the arm that
-  answers the gating question**: it is the numerically best arm in the whole RQ4 table
-  (**precision 0.8248**, the highest ever measured here, recall **0.4328**, only 5
-  missed). **The gating metric is recall and it is still ns** (+0.0505, Holm 0.1040),
-  so **state it as a bound** — ranked dictionary use buys at most **+0.1114** citation
-  recall over shipped hybrid, the point estimate sits inside the measured generator
-  noise floor ([[feedback_temperature_zero_is_not_reproducible]]), and the bound is
-  **optimistic** because of the circularity. Edges B/C are therefore not
-  built. **Precision is the one cell the 08-12 re-measurement moved, and it does not
-  reopen the gate**: +0.0847, CI [+0.0215, +0.1510], Holm 0.1192 → **0.0164, now
-  significant** — and it held through the rebuild-#4 re-score at **+0.0973, CI
-  [+0.0305, +0.1643], Holm 0.0138**. Read it as power, not reversal
-  ([[feedback_a_replication_disagrees_by_sign_not_verdict]]) — the sign never changed
-  (+0.0635 → +0.0847) and the movement is **located** rather than assumed: the 56
-  frozen `entity_boost` cells score 0.8778 before and after by construction, the 50
-  regenerated ones went 0.7195 → 0.7630, and that dilutes to +0.0200 overall. Inside
-  those 50, **repair and generator noise are not separable** — 48 had a genuinely
-  different context but 38 changed their citation set, against a floor of 14/24
-  identical sets at temperature 0. It is also the metric the circularity flatters most
-  directly (the candidate pool comes from the same dictionaries the qrels are derived
-  from), so a newly-significant *precision* margin is not evidence for building more
-  dictionary-derived structure. Operational note: `ARM_ORDER` was hardcoded to the published five, so the
-  entity arms would have been **silently dropped** from the report; they are now in
-  `EXTRA_ARMS` behind `--arms`, and passing a non-default arm set **refuses to write
-  `rq4_score.md`** because family 1's Holm size *is* the number of arm pairs — a
-  different arm set re-adjusts every published p without touching an answer file
-  (`tests/tools/test_rq4_score_arms.py` pins both guards; the default path still
-  reproduces `rq4_score.md` byte-identically).
+- **RQ4 (end-to-end answer quality) — COMPLETE, and refreshed against rebuild #4
+  on 2026-08-20 (all five model×variant jobs 424/424, every report re-scored).**
+  5 arms × 106 queries × 3 prompt variants, `phi4` local-only, plus a `gemma4:e4b`
+  second-generator check and two entity arms. Design, pre-registrations, build
+  phases and every superseded figure: `docs/rq4-design.md`,
+  `docs/rq4-second-generator-check.md`, `docs/rq4-prompt-truncation.md`; scripts
+  `tools/eval/rq4_{generate,score,supervisor.sh,status}`; reports
+  `data/results/rq4_score{,_guarded,_entity,_gemma4,_gemma4_guarded}.md`.
+  **What to cite.** (a) Retrieval quality survives the generation stage:
+  **`{hybrid, dense} > bm25 > m2v` is generator-independent** (precision ordering
+  holds across both models), while **`hybrid > dense` is a phi4 result, not a
+  system result** — it is significant for phi4 (recall −0.0678, Holm 0.0410) and ns
+  pointing the other way for gemma. Levels do not transfer between generators at
+  all. (b) **The prompt ablation is the headline and it is an instruction problem,
+  not a generator ceiling**: the original `ตอบสั้น ๆ ไม่เกิน 3 ประโยค` rule
+  suppressed citation recall against a gold set averaging 9.87 relevant documents;
+  `cite_all` raises it significantly on **2 of 3** answering arms (`hybrid`
+  **+0.0871**, `bm25` +0.0789, both Holm 0.0000) — the dense arm went to a **bound**
+  at rebuild #4 (+0.0407, Holm 0.6610) because better contexts shrink the marginal
+  value of the instruction. (c) **Report `cite_all_guarded` as the paper's prompt
+  but cite the arm ordering from `cite_all`** — only the unguarded variant
+  separates the two strong arms from each other; the guard's own 6-of-12 separations
+  are all m2v pairs. **Always quote the Holm family size**: identical data reads
+  significant in family 2 (m=9, "does this prompt beat the baseline" — cite this
+  one) and ns in family 3 (m=24).
+  **Two guards that generalise past RQ4.** `cite_all`'s missing zero-document rule
+  cost phi4 2 hallucinations and `gemma4:e4b` **24**, with 37/37 of its closed-book
+  citations phantom; rule 5 (abstain when no documents are supplied, and it
+  outranks rule 4) takes that to **24 → 1**. The fix was **position, not a missing
+  rule** — rule 3 already forbade it and is identical between variants, but rule 4
+  is the last line before the question and won by recency
+  ([[feedback_prompt_rule_recency_beats_earlier_rules]]). 100% of closed-book
+  hallucination in both models is `course` queries.
+  **Operational rules, all now enforced in `rq4_generate.py` rather than written
+  down.** `--num-ctx` below **16,384** is refused (ollama truncates an over-long
+  prompt to `num_ctx//2 + 2` keeping the **tail**, so the evidence dies and the
+  instructions survive — see [[project_rq4_prompt_truncation]];
+  `prompt_eval_count == num_ctx//2 + 2` is an exact signature and `G1a`/`G1b` in
+  the invariant audit read it off the artifacts). `--variant sentence_cap` is
+  refused for any model but `phi4`. `think` is **read** from the model's
+  capabilities and disabled, never assumed — it changes the answer text, not just
+  the cost ([[feedback_a_generation_default_is_part_of_the_measurement]]).
+  `num_predict` is capped at **4,096**, which is part of the measurement rather
+  than a timeout: **3 of 1,272** phi4 cells hit it, all `รายวิชา` course queries,
+  and a capped answer never reaches its `อ้างอิง:` line, so it scores as *cited
+  nothing* — a generator failure that reads like a retrieval result. **Quote that
+  count with any number from this run.** `--out` is mandatory when scoring another
+  model, and passing a non-default `--arms` refuses to write `rq4_score.md`
+  (family 1's Holm size *is* the number of arm pairs).
+  **Two things that make an isolated RQ4 verdict flip uninformative.**
+  Temperature 0 is **not** reproducible here — byte-identical prompts reproduce the
+  citation set only **14 of 24** times under `cite_all`
+  ([[feedback_temperature_zero_is_not_reproducible]]) — so every refresh
+  regenerates **only** the cells whose context actually changed and freezes the
+  rest byte-for-byte, which is what separates repair from drift
+  ([[feedback_repair_a_subset_paired_with_a_control]]). And `closed_book` is the
+  built-in control: its context is empty, so it must come back byte-identical.
+  **The entity arms answered a gating question and the answer is: do NOT build
+  relation-graph edges B/C.** `entity_lookup` is decisively worse than hybrid on
+  recall (**−0.2384**, Holm 0.0000) — and the *stated reason* did not survive:
+  its contexts hold a **higher** gold density than hybrid's (0.6501 vs 0.5352) and
+  it still abstained on 40 gold-bearing queries, so it is a **ranking** failure, not
+  an evidence failure ([[feedback_exhaustive_retrieval_dies_at_the_context_budget]]).
+  `entity_boost` is the arm that answers the gate and its recall margin is **ns**:
+  ranked dictionary use buys at most **+0.1114** citation recall, a bound that is
+  **optimistic** because the qrels and the retriever read the same dictionaries.
+  Details and the precision cell that moved: [[project_rq4_entity_arms_gating]].
 - **Evaluation validity — read `docs/eval-validity-threats.md` before defending any
   number in this project.** Written 2026-07-30 against the question "is 106 queries too
   few for a reviewer". It is not (BEIR peers run 50-300 topics, and this set is unusually
@@ -2718,267 +2007,82 @@ see `docs/adr/`.
   a perfect rerank over P=50 is 0.6229 → **0.8268**, and P=1000 buys only 0.8738,
   so the 10-document budget binds, not the pool. Same family as
   [[feedback_state_the_retrieval_budget_in_every_comparison]].
-- **ColBERT / late interaction: BUILT, PILOTED AND CLOSED 2026-08-13 at the user's
-  request — the pre-registered prediction FAILED and the frozen rule returned STOP
-  (`docs/colbert-late-interaction-notes.md`, `src/rag_lab/colbert/`,
-  `tools/eval/colbert_length_profile.py` + `qualify_colbert_model.py` +
-  `colbert_pylate_crosscheck.py` + `colbert_pilot_baselines.py` + `colbert_pilot.py`
-  → `data/results/colbert_pilot.md`).** The prediction, registered before anything
-  was built: *ColBERT-alone ties or beats **BM25** on `person` (0.8147) **and** ties
-  or beats the best dense embedder on `program` (`qwen3_0.6b` 0.6066), in the same
-  run* — motivated by *our own* results (the cross-encoder hurt hybrid MRR;
-  BM25/dense split person vs program), so an aggregate win cannot be mistaken for
-  resolving that split. **`person` cleared as a TIE (+0.0308, CI [−0.0429,
-  +0.1030], Holm 0.3974) and `program` failed by −0.3337 (Holm 0.0000), 6.7x the
-  STOP margin** — the pilot is `recursive` only, doc300/q32, 106 Gold queries,
-  unrouted, k=10, 7/7 self-checks PASS, build 11.8 min (70,250 chunks →
-  7,364,358 token vectors, `docset_hash 091b7a0ad8a5cfbe`), query p50 1578.9 ms.
-  **The bars are recomputed AT `recursive`, never the published cross-chunker
-  aggregates** — a one-chunker treatment against a nine-chunker bar is the
-  wrong-pair trap that killed per-`entity_type` alpha and rrf4 — and S1/S2
-  reproduce 0.8147 / 0.6034 exactly from the same code path.
-  **The mechanism is worth more than the verdict, and it is the axis's own
-  motivation answered in the negative**: ColBERT is strong exactly where the
-  lexical arm is strong (`person` 0.8360 ≈ BM25 0.8053 vs dense 0.4281) and weak
-  exactly where the lexical arm is weak (`program` 0.2749 ≈ BM25 0.3278 vs dense
-  0.6086) — it **inherits** one side of the person/program split instead of
-  covering it. Not purely lexical either: on `course` it beats both arms (0.6176
-  vs 0.5759 / 0.4280). **And ColBERT carries the highest overall figure in the
-  table (0.5555 vs BM25 0.5088 / dense 0.5264), which is exactly the aggregate
-  reading the conjunctive pre-registration exists to refuse** — written as an
-  aggregate, this run would have been published as a success.
-  **The 512/48 length rider was executed and does not fire.** It is conditioned on
-  the losing cell's truncation being "materially above" the corpus rate, and
-  choosing what counts as material *after* seeing −0.3337 is the favourable
-  re-reading a frozen rule exists to prevent — so it is answered as an **arithmetic
-  bound** (`truncation_rider`, §3b): grant truncation the most damage possible,
-  i.e. assume a gold resolution with **any** truncated chunk is destroyed outright.
-  Over `program`'s 221 gold resolutions / 7,659 chunks, **32 are truncated (0.42%,
-  below the corpus 1.11%)** touching 14 resolutions (6.3%), and total loss of all
-  14 explains at most **0.0837** against a **0.3337** gap. Both readings agree, 4x
-  short, no threshold needed; 300/32 stands and truncation stays a confound
-  pointing *against* the treatment. `--render` back-fills and persists the rider so
-  the figure is sourced from an artifact, not typed. **What is NOT closed**: this
-  says nothing about ColBERT against the shipped hard router, fused with BM25, or
-  on a second checkpoint — those are new predictions, not a continuation of the
-  failed one, and the axis must not be reopened as one.
-  **SHIP DECISION: do not adopt** (2026-08-13, notes §"Should it ship?") — a
-  separate decision from the axis verdict, since `DECISION_RULE` only stops us
-  spending more GPU on the *question*. Four grounds, heaviest first. (1) The
-  failed cell is the one the shipped system depends on: `program` is where the
-  router hands off to a dense specialist *because* BM25 collapses there (0.3278),
-  so adopting ColBERT trades away a capability we have to buy one BM25 already
-  gives free — `person` only **ties**. (2) **It was never shown to beat what
-  ships, and was never *measured* against it either** — the bars were BM25 and
-  best-dense at `recursive` by pre-registration; hybrid at the same chunker was
-  never a bar and neither was the router. State that precisely rather than as "it
-  loses"; indicatively (**not** like-for-like, different chunker/embedder systems)
-  unrouted hybrid publishes 0.6229 and routed 0.6811 against 0.5555, and for a
-  ship decision the burden is on the candidate anyway. (3) Cost: **1,578.9 ms p50
-  vs 475.6 ms** (~3.3x), 1.89 GB fp16 per chunker (7.3 GB for four, which will not
-  co-reside on a 12 GB card), plus `_repair_rotary` as a permanent maintenance
-  liability keyed to a `transformers` version. (4) The `course` win (0.6176 vs
-  0.5759 / 0.4280, all three unmoved by rebuild #4) is a **per-`entity_type` repair**, and that shape has died
-  against the hard router twice here (per-type alpha, rrf4) by the same mechanism —
-  it is a hypothesis needing its own pre-registration, never a result to read off
-  this table.
-  Everything in the notes before the build log is the untouched
-  2026-07-30 write-up, kept because it is what the prediction was registered
-  against. **The package is deliberately outside `embedders/`**: `BaseEmbedder` is
-  one row per text and `Index` is row-aligned on it (invariant `I1`), while
-  ColBERT is many vectors per chunk and needs its own artifact shape (packed
-  `vecs` + `lengths`).
-  **The checkpoint arrives broken, and the buffer audit could not see it.**
-  `jinaai/jina-colbert-v2` loads `jinaai/xlm-roberta-flash-implementation`, remote
-  code written for transformers 4.43 run here under 5.12 — the same path that made
-  `gte-multilingual-reranker-base` position-blind on 2026-08-09 — and **all 24
-  layers' `RotaryEmbedding.inv_freq` come up as uninitialised memory**, so the
-  rotation is the identity. `ColbertEncoder._repair_rotary` rebuilds it from the
-  model's own `_compute_inv_freq` **and invalidates the cos/sin cache** (that cache
-  refreshes only when the sequence length grows, so a corrected `inv_freq` alone
-  is ignored for every length already seen); it is restoration, not modification,
-  and self-retires to 0 the day transformers loads the buffer correctly. Four
-  things worth keeping. (1) **It was found by a gate failing, not by reasoning** —
-  G2 rejected the encoder at |Δ| = 2.8e-04 between a document and its
-  token-reversal. (2) **G1 passed on the broken model**: its rule was "finite and
-  not identically zero" and the garbage was 30 zeros plus 2.6e-29 and 1.0e-42, so
-  a smell test cannot decide this — `inv_freq` is a deterministic function of
-  `(dim, base)` written in the checkpoint's own code, and the check that decides
-  (**C7**) recomputes it per layer. (3) **The corruption is nondeterministic across
-  loads** (zeros, then 2.6e-29, then 1.6e-30 in one session), so a one-off probe of
-  a buffer says nothing about the next load — the check runs at load time and
-  reports how many layers it rebuilt. **That nondeterminism decides *which weak
-  check fires*, which is why the report's `unrepaired` row must be read as one
-  sample and not as a property of the bug**: over four loads on 2026-08-13, layer 0
-  came up `2.6e-29` (G1 passed, G2 caught it), `-5.2e+02` (**the mirror image** —
-  G2 passed at |Δ| = 4.09e-01, looking position-sensitive while being just as
-  wrong, and G1 caught it), `1.3e-01` (both caught it, G2 by 4.79e-02 against its
-  5e-02 threshold — within 5% of passing) and `-2.7e-23` (both). **C7 fired all
-  four times**, because it is the only one of the three whose rule does not depend
-  on what happened to be in memory. A re-run reproduces `real`'s row exactly (the
-  repair is deterministic) and will *not* reproduce `unrepaired`'s G1/G2 cells. (4) **The broken model looked *better***:
-  position-blind it scored the hand-written relevance example **24.4580 vs
-  12.7192** against the repaired encoder's 20.7382 vs 17.1936, which is
-  [[feedback_qualify_a_model_before_measuring_with_it]] in its purest form.
-  Gate: 11 checks × 4 variants, `real` **QUALIFIED**, and three controls built from
-  the same weights each fail the check written for them — `bag_of_words` on G2 at
-  **exactly 0.00e+00**, `unnormalised` on C3, `unrepaired` (the live bug, not a
-  synthetic sabotage) on C7. **G2's exactness is the mechanism, not luck**: MaxSim
-  is permutation-invariant over document tokens, so a position-blind model must
-  score a token-reversal *identically* — and the reversal is done on **ids**, since
-  a word-level reversal retokenizes to a different multiset and the gate would then
-  rest on a threshold.
-  **Lengths are conventions, not limits** (rotary, 8192-token card), so truncation
-  is a choice applied to the treatment alone. Measured with the model's own
-  tokenizer (2.96–2.98 chars/token — a hand-written Thai probe gives 4.79, so
-  sizing from a probe would have under-counted tokens by ~60%): at the checkpoint's
-  own `doc_maxlen=300` truncation is **1.1% (recursive) to 7.4% (semantic)** of
-  chunks and at `query_maxlen=32` it is **8%** of Gold queries by at most 5 tokens;
-  512/48 would cost 0.0–3.3% / 0% for +3.7% storage. **Run at 300/32 and report
-  both rates as confounds** — they point *against* the treatment, so a win is not
-  bought by the setting, and 512/48 is pre-registered as a fallback to execute
-  **only if** ColBERT loses and truncation is a plausible cause. Storage across all
-  four chunkers is 30.7M tokens / **7.3 GB** at 128-dim fp16: one chunker at a time
-  fits the 12 GB card, four at once does not.
-  **The encoder is now cross-checked against pylate, and the check earned its cost
-  by finding a defect none of the 11 gates could** (`tools/eval/colbert_pylate_crosscheck.py`
-  → `data/results/colbert_pylate_crosscheck.md`, 7 self-checks PASS) — pylate cannot
-  go into `.venv` (it pins `transformers<=5.3.0` against 5.12.1), so it ran in a
-  throwaway CPU venv encoding one fixed Thai query + two documents to `.npz`.
-  **That venv is deleted and the check still re-runs**, because the only thing it
-  produced is `data/results/colbert_pylate_ref_t{453,530}.npz` (`--reference` mode
-  writes them, the default mode reads them); `--render` re-derives the report with
-  no model load at all. Persisting it was not tidiness: every figure below was
-  cited in prose while **nothing on disk supported it**, which is exactly the
-  hand-typed-number shape the D-family exists to catch, and D5 duly flagged
-  `0 of 24` as untraceable. Three findings.
-  (A) **The rotary bug reaches the reference library**: pylate reports `24 of 24
-  layers wrong` under transformers **5.3.0** and `0 of 24` under **4.53.2**, so
-  anyone running pylate + `jina-colbert-v2` on 5.x is silently serving a
-  position-blind model — and pinning 4.53.2 is what makes the reference *correct by
-  construction* rather than merely independent. Corollary: **a comparison against a
-  second broken model is not a control**, since the uninitialised buffer differs
-  per load (that cell disagrees at 2.7e-01), so two independently-broken models are
-  not the same model. (B) **The query side matched bitwise** — `max|Δ| = 0.000e+00`,
-  min per-token cosine `1.000000` over (32,128) — which externally validates the
-  marker insertion, augmentation to 32, `attend_to_mask_tokens`, the hand-loaded
-  projection head, L2 **and** `_repair_rotary` at once: the repaired buffer
-  reproduces a correctly-loaded one exactly, so it is restoration, not a
-  self-consistent substitute. (C) **The documents did not match and the cause was
-  ours**: 19/21 vectors against pylate's 21/22, because the two skiplists are
-  **disjoint** — ours used `encode(sym)[0]`, which on SentencePiece is the `▁`
-  boundary marker, so `mask_punctuation=True` masked **whitespace and no
-  punctuation at all**, the inverse of its name (original ColBERT uses both forms
-  and they coincide only on WordPiece). Fixed to `convert_tokens_to_ids(sym)`;
-  all three tensors then agree (`max|Δ|` 1.2e-04, min cosine 0.999936, MaxSim
-  20.8212/17.5484 vs 20.8213/17.5487). **The lesson generalises past ColBERT: an
-  N-check gate is a battery of *self*-consistency tests, and a convention that is
-  uniformly wrong on both sides of every internal comparison is invisible to all of
-  them** — note also that the surprise ran backwards, the *query* path (markers,
-  augmentation, mask attention) matched exactly while the simpler document path
-  held the defect. `tests/colbert/test_colbert_skiplist.py` pins the rule in both
-  directions against a stub tokenizer carrying the property that makes the two
-  disagree, so it states the rule rather than recording today's vocabulary.
-  The three items this bullet listed as open are all **done**: the I1-variant
-  alignment check (`store.verify_alignment`, L1a-L6, run as the pilot's S4), a
-  `ColbertRetriever` registered per ADR-0001, and the pilot itself.
-  **The artifact lives at `data/index/colbert/<chunker>__doc300_q32` and is
-  deliberately NOT an `Index`, so `audit_pipeline_invariants.py` does not see
-  it** — `I1` still reads `0 misaligned of 55` and that 55 excludes ColBERT.
-  Read that as scope, not as coverage: the packed `vecs`+`lengths` shape has no
-  row-per-chunk to align, which is why it carries its own L1a-L6 check instead.
-  The two `EVAL_INPUTS` edges in `audit_doc_claims.py`
-  (`src/rag_lab/colbert/{encoder,scoring}.py` → the three ColBERT reports) are
-  the other half of that: the encoder is the *generator* of none of them and the
-  substance of all of them — the skiplist fix moved the document vectors while
-  `colbert_pilot.py` was untouched — so repairing the encoder must turn the STOP
-  into a visibly stale record of a model that no longer exists rather than a
-  silently inherited verdict. Doc-claims after this bullet was written:
-  **6 pass / 1 warn / 0 fail** (2026-08-13; the D4 edge fired once on
-  `colbert_pylate_crosscheck.md` and was discharged by re-rendering it, which
-  reproduced **byte-identically** — the `astype`→`asarray` change it flagged is
-  a copy-avoidance edit with no numeric effect, which is what a staleness proxy
-  cannot know and a re-render can).
-  **HyDE was the other candidate axis and is DONE and CLOSED — see the next
-  bullet.**
-- **HyDE: BUILT, RUN AND CLOSED on both query sets (2026-08-13,
-  `tools/eval/hyde_generate.py` → `data/results/hyde_documents.json` +
-  `hyde_generation.md`, then `tools/eval/hyde_retrieval_test.py` →
-  `hyde_retrieval_73det.md` / `hyde_retrieval_thematic.md`; 40.6 min generation +
-  20.4 / 32.1 min retrieval, 36 combos × 106 and × 179 queries, 8 and 9
-  self-checks PASS).** Verdict and narrative: `docs/hyde-axis-notes.md`
-  §"What actually happened". **P1 held in the harder half of its own wording** —
-  the pre-registration allowed "ties or degrades" and the result is a
-  significant loss: dense recall@10 **0.5034 → 0.3135, −0.1898**, Holm-adj
-  **0.0000**, all six family-1 cells worse; nothing to state as a bound, it is
-  directional. **P2 was REFUTED**: thematic, the set these notes said was HyDE's
-  only real chance, loses too (**0.4469 → 0.3733, −0.0736**, Holm **0.0008**, all
-  9 embedders down). **But P2's reasoning survives its own prediction, and that
-  is the transferable part** — the argument was that damage comes from diluting
-  an exact-token signal, so it should be smaller where BM25 is weak, and it is:
-  −0.0736 against −0.1898 (2.6x), P3 −0.0462 against −0.2735 (~6x), correlation
-  r = −0.282 against −0.887. **Cite it as "HyDE is less harmful where the lexical
-  signal is weak", never as "HyDE helps thematic"; less to lose is not something
-  to gain.** Four things worth keeping beyond the verdict. (1) **The `person`
-  mechanism is now evidence, not reasoning**: `person` is the worst type
-  (**−0.2798**, 0.3604 → **0.0807**) yet 29 of 30 generated documents *still
-  literally contain the queried name* — it is **dilution, not deletion**, the
-  token averaged into ~250 tokens of invented context. (2) **P3 was this
-  design's one untested premise and is now the largest single effect in the
-  table**: "feed the dense arm only, give BM25 the raw query" was an assertion;
-  poisoning BM25 with the same document costs a further **−0.2735** on top of
-  HyDE's own loss, i.e. more than the entire dense-arm effect. Anyone
-  re-proposing HyDE must keep the split. (3) **The four formulations order by how
-  much of the raw query survives** (`concat` −0.0817, `hyde_q` −0.1405,
-  `hyde_half` −0.1769, `hyde` −0.1898), which is the shape of a real effect
-  rather than a bug; `concat` is the only arm reaching ns anywhere (73det hybrid
-  −0.0209; thematic dense **−0.0250**, Holm 0.2316) and it is exploratory by the
-  frozen rule, so read it as a bound — best case, dense recall@10 loses no more
-  than 0.0576 and gains no more than 0.0061, for 7.85 s/query against a 475.6 ms
-  routed hybrid query. (4) **The 100%-cap-hit objection is bounded, for free**:
-  greedy decoding is a prefix process, so a prefix *is* what a smaller cap would
-  have produced — `hyde_half` costs no extra generation and does not unpair the
-  comparison. Over four cells (2 sets × 2 retrievers) `hyde_half` lands at
-  **0.3265 / 0.5582** (73det dense/hybrid) against `hyde`'s **0.3135 / 0.5864**,
-  and **0.3653 / 0.3937** (thematic) against **0.3733 / 0.3937** — **no
-  consistent sign**, every gap under 0.03 against a treatment effect of −0.1898.
-  Length is not the constraint. **No re-measurement
-  against the shipped hard router is owed**: the known-limitation clause made
-  that follow-up conditional on a *positive* unrouted result, precisely so a
-  negative one could not be kept alive by an untested "but maybe with routing" —
-  the asymmetry that lets a null close an axis. Anchors, from an independent code
-  path: `hybrid_raw` reproduces the published unrouted **0.6281** and `dense_raw`
-  the published **0.5034**, both exactly. **§7 of each report is written by hand
-  and lives in a `VERDICT` dict in the generator, not in the `.md`** — `--render`
-  rewrites the whole file, so a hand-added paragraph would be erased by the next
-  run ([[feedback_provenance_belongs_in_the_generator]]); a set with no entry
-  renders a placeholder saying so.
-  **HyDE's price was measured first, and the correction is the reusable part
-  (2026-08-12, `tools/eval/probe_hyde_generation_cost.py` →
-  `data/results/hyde_generation_cost.md`).** The notes had inherited **15.6
-  s/query** from the RQ4 generation log; an RQ4 prompt carries ~8k tokens of
-  retrieved context and a HyDE prompt carries only the question (~300), so that
-  figure never transferred ([[feedback_state_the_input_size_with_any_timing]]).
-  Measured warm: **17.57 s** uncapped, **7.85 s** at `num_predict=256`, ≈33 tok/s
-  flat — so 73det is 31 min uncapped / **14 min capped**, thematic 52 / 23, one
-  generation serves every embedder (pure query transform, cacheable to JSON) and
-  **no index rebuild at all**. **The cost is output-bound, not prompt-bound**:
-  the model writes 564–843 tokens for a prompt that says "ไม่เกิน 5 ประโยค", i.e.
-  **a length instruction written in natural language enforces nothing** — capping
-  halves the price and is *closer* to HyDE's intent, not a compromise of it. Two
-  further things worth keeping. (1) **The serving objection grew while the system
-  got faster**: at the time of writing, hybrid cost ~2.1–2.7 s of which ~1.9–2.0 s
-  was the `BM25Okapi` rebuild, so +15.6 s read as ~7x; with the scorer memoised
-  and `fetch_depth=200` shipped, a routed query is **475.6 ms** p50 and the honest
-  addition is 7.85 s — **~17x**. Cheap as an offline eval axis, not as a shipped
-  feature; argue the two separately. (2) **`temperature=0` is not reproducible
-  here either, and it took four runs to see**: the first three reproduced
-  output-token counts exactly on every query, the fourth disagreed on every
-  query. The report's reproducibility sentence is **derived** from
-  `hyde_generation_cost_runs.json` (run history, distinct signatures, leading
-  identical streak) rather than typed, which is the only reason it did not end up
-  asserting determinism on the strength of those three
-  ([[feedback_temperature_zero_is_not_reproducible]]).
+- **ColBERT / late interaction: CLOSED 2026-08-13, verdict STOP; re-run against
+  rebuild #4 on 2026-08-20 with the verdict unchanged. Do not adopt, and do not
+  reopen the failed prediction as a continuation.** Full narrative, build log and
+  the ship-decision reasoning: `docs/colbert-late-interaction-notes.md`; code
+  `src/rag_lab/colbert/`; reports `data/results/colbert_pilot.md`,
+  `colbert_model_qualification.md`, `colbert_pylate_crosscheck.md`.
+  The pre-registered prediction was **conjunctive** — tie-or-beat BM25 on `person`
+  **and** the best dense embedder on `program`, in the same run — and it FAILED:
+  `person` tied (**+0.0308**, Holm 0.3974), `program` lost by **−0.3337** (Holm
+  0.0000), 6.7x the STOP margin. **The conjunction is the reusable part**: ColBERT
+  carries the highest overall figure in the table (**0.5555** vs BM25 0.5088 /
+  dense 0.5264), so written as an aggregate this run would have been published as
+  a success ([[feedback_a_conjunction_refuses_an_aggregate_win]]). Mechanism: it
+  **inherits** one side of the person/program split rather than covering it
+  (`person` 0.8360 ≈ BM25 0.8053; `program` 0.2749 ≈ BM25 0.3278 vs dense 0.6086),
+  though not purely lexical — it beats both arms on `course` (0.6176). The
+  512/48 length rider was **executed and does not fire**: granting truncation the
+  most damage arithmetically possible explains at most **0.0837** of a 0.3337 gap.
+  **Ship decision (separate from the axis verdict,
+  [[feedback_an_axis_verdict_is_not_a_ship_decision]]): no** — the failed cell is
+  the route the shipped router depends on; it was never measured against hybrid or
+  the router at all; it costs 1,578.9 ms p50 against 475.6 and 1.89 GB fp16 per
+  chunker; and the `course` win is a per-`entity_type` repair, a shape that has
+  died against the hard router twice.
+  **Two things to carry off this axis even if ColBERT never returns.** (1) The
+  checkpoint arrives **broken** under transformers 5.x — all 24 layers'
+  `RotaryEmbedding.inv_freq` are uninitialised memory, so the model is
+  position-blind, and **it scored the relevance example BETTER that way**
+  ([[feedback_qualify_a_model_before_measuring_with_it]]); `_repair_rotary`
+  restores it and self-retires. The corruption differs per load, so a one-off
+  probe of a buffer proves nothing — only the check that recomputes `inv_freq`
+  from the checkpoint's own code fires every time. (2) An N-check gate is a
+  battery of **self**-consistency tests, and a convention uniformly wrong on both
+  sides of every internal comparison is invisible to all of them — the pylate
+  cross-check found `mask_punctuation` masking whitespace and no punctuation
+  ([[feedback_a_self_consistency_gate_cannot_see_a_shared_convention]]).
+  **Not established** (new predictions, not a continuation): ColBERT against the
+  shipped hard router, fused with BM25, or on a second checkpoint.
+  The artifact at `data/index/colbert/<chunker>__doc300_q32` is deliberately not
+  an `Index` (packed `vecs`+`lengths`, no row-per-chunk), so
+  `audit_pipeline_invariants.py`'s `I1` does not see it — that is scope, not a
+  coverage gap; it carries its own L1a-L6 alignment check instead.
+- **HyDE: CLOSED 2026-08-13 on both query sets — a significant LOSS, not a null.
+  Do NOT re-run it after an index rebuild** (no verdict can flip at these margins
+  and the bullet states no bound a refresh could sharpen — the distinction between
+  *stale* and *worth refreshing*). Narrative and the frozen predictions:
+  `docs/hyde-axis-notes.md`; scripts `tools/eval/hyde_{generate,retrieval_test}.py`;
+  reports `data/results/hyde_retrieval_{73det,thematic}.md`, `hyde_generation.md`,
+  `hyde_generation_cost.md`.
+  **P1** held in the harder half of its own wording: dense recall@10
+  **0.5034 → 0.3135, −0.1898**, Holm **0.0000**, all six family-1 cells worse.
+  **P2 was REFUTED** — thematic, the set these notes called HyDE's only real
+  chance, loses too (**−0.0736**, Holm 0.0008, all 9 embedders down). **But P2's
+  reasoning survives its own prediction and that is the transferable part**:
+  damage comes from diluting an exact-token signal, so it is smaller where BM25 is
+  weak (2.6x smaller) — cite that as *less harmful where the lexical signal is
+  weak*, **never** as *HyDE helps thematic*
+  ([[feedback_less_to_lose_is_not_something_to_gain]]).
+  Three rules for anyone re-proposing it. (1) The `person` mechanism is **dilution,
+  not deletion** — 29 of 30 generated documents still literally contain the queried
+  name, and `person` is still the worst type (**−0.2798**). (2) **Keep the split**:
+  feeding the same document to BM25 as well costs a further **−0.2735**, more than
+  the entire dense-arm effect (P3, this design's one untested premise). (3) The
+  four formulations order by how much of the raw query survives, and only `concat`
+  reaches ns anywhere — as a bound, dense recall@10 loses no more than **0.0576**
+  and gains no more than **0.0061**, for **7.85 s/query** against a 475.6 ms routed
+  hybrid query. The 100%-cap-hit objection is bounded for free (greedy decoding is
+  a prefix process, so `hyde_half` costs no extra generation): no consistent sign,
+  every gap under 0.03. **No re-measurement against the hard router is owed** —
+  that follow-up was made conditional on a *positive* unrouted result precisely so
+  a negative one could not be kept alive by an untested "but maybe with routing".
+  Two method notes worth keeping: the inherited 15.6 s/query cost figure never
+  transferred (an RQ4 prompt carries ~8k tokens of context, a HyDE prompt ~300 —
+  [[feedback_state_the_input_size_with_any_timing]]), and a length instruction
+  written in natural language enforces **nothing** (the model wrote 564-843 tokens
+  for a prompt saying "ไม่เกิน 5 ประโยค").
 - **Qdrant serving pilot (2026-08-13, `tools/eval/qdrant_pilot_{ingest,test}.py` →
   `data/results/qdrant_pilot.md`; narrative `docs/qdrant-serving-pilot.md`)** — the first
   work here aimed at **deployment rather than the paper**
@@ -3135,8 +2239,12 @@ see `docs/adr/`.
   `exact=True`). **A collection is a copy of an `Index`'s rows, so any index rebuild stales
   it**: re-ingest and re-run this. **Rebuild #4 staled 3 of the 4
   (`person`, `program`, `course`) on 2026-08-16 and all four were re-ingested on
-  2026-08-18**; the `I6` paragraph in the invariant-audit bullet names which combo each
-  one is and why the re-ingest waited for all 40 rather than chasing each rebuilt combo.
+  2026-08-18** — **once, after all 40 combos were done, never per rebuilt combo**, which
+  is the protocol: re-ingest is cheap, `qdrant_routed_check.py` is not free, and a
+  collection rebuilt against a half-rebuilt index family would have to be redone anyway.
+  Never write the route→combo mapping down: resolve it the way the check does, through
+  `route_targets("hybrid")` + `resolve_index`, so a `ROUTE_COMBO_BY_RETRIEVER` change
+  moves it with them.
   **Re-verified 2026-08-20 by re-ingesting all four again and re-running: 8/8 pass,
   reference 0.6815 reproducing the published per-query F=200 figures on 106/106, served
   0.6829 (+0.0014), worst relative score error dense 3.24e-07 / sparse 2.15e-07.** Two

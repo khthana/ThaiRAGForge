@@ -43,6 +43,68 @@ Checks, grouped by layer (C = corpus, I = index, E = eval):
         same claim for pre-fix answers from provable evidence about their prompt,
         and G1c reports how many answers neither can reach
 
+Lessons this file's own checks were built from. Read these before editing a
+check, because each one is a way a check went quietly wrong here at least once.
+
+  * A CHECK WHOSE SUBJECT MATTER MOVES BECOMES A VACUOUS PASS. C4 went 24 -> 0
+    the moment the `.md.dup` archives were moved off-repo, so it now follows them
+    to ARCHIVE_ROOT and prints "0 of 239" rather than "0". Because 0 is ambiguous
+    between "examined and clean" and "nothing left to examine", the E3 checks
+    print their denominator too.
+  * DON'T LET A KNOWN-RETIRED ARTIFACT KEEP THE GATE RED. Deleting the 8
+    superseded combos removed the only indices still holding pre-contamination-fix
+    ids, which made E3a jump 7 -> 3,106 for result sets nothing reads. Those are
+    classified separately (E3c, E3d, RETIRED_RESULT_DIRS) so a FAIL still means a
+    *live* result set has drifted.
+  * ATTRIBUTABILITY, NOT RENAMING. `BuildCombo.id` hashes loader+chunker+embedder
+    but NOT the corpus, so a smoke-subset combo and a full-corpus combo share an
+    id -- which is why the 2026-07-29 stale-cache incident was invisible (12 of 43
+    combo ids exist under more than one index root). Hashing the corpus into the
+    id is the obvious fix and is DISQUALIFIED: the id *is* the on-disk directory
+    name and the prefix of every result filename, so it would rename 55 index
+    dirs on every corpus edit, orphan ~24k results, and break combo names
+    hardcoded in eval scripts. E0 instead makes each result NAME its source. Its
+    third rule, elimination, is sound because the result *did* come from one of
+    the candidate indices, so exactly one candidate holding every resolution_id
+    it cites identifies it; only >1 survivor is a FAIL, while "no built index"
+    and "no candidate fits" are classified, not failed. Elimination alone
+    resolves 100% of the live ambiguity, which is why no backfill was needed.
+    `provenance` is deliberately kept OUT of `meta` (which is what `save` writes
+    back, so a load-time field must not round-trip) and the new result fields are
+    optional, because ~24k legacy results must keep validating.
+  * A STALENESS CHECK IS ONLY A PROXY; WHEN IT CARRIES A REAL FINDING, ADD THE
+    CHECK THAT READS THE THING ITSELF. The G1 family exists because a D4 finding
+    about truncated RQ4 answers was discharged by an unrelated re-run of a cheap
+    generator while all 80 truncated answers sat untouched on disk. G1 reads the
+    artifacts instead: `prompt_eval_count == num_ctx // 2 + 2` is an exact
+    truncation signature.
+  * "UNVERIFIABLE" IS A BUCKET TO SHRINK, NOT A VERDICT. G1b's predecessor called
+    all 1,509 pre-fix answers unverifiable and overstated the hole by 2x; two
+    provable sources already on disk (the UTF-8-byte upper bound, and cached
+    probes actually sent at the old num_ctx) decided most of them, which priced
+    the remainder at one probe per prompt instead of a full regeneration.
+    SCREEN_CHARS_PER_TOKEN = 0.95 would have cleared the whole remainder at a
+    stroke and is deliberately NOT evidence: it is an observed minimum, and an
+    observed extreme is not a bound. G1c counts what neither reaches --
+    *unmeasured*, never *suspected* -- with its denominator printed, and the warn
+    stays wired rather than deleted so a new pre-fix answer or a deleted probe
+    cache reopens it.
+  * A CHECK CAN BE BLIND TO A WHOLE CLASS OF INPUT. I6 derived "the corpus's last
+    edit" from `*.md` mtimes alone, but a resolution_id is built from the manifest
+    title (ADR-0003), so the 2026-08-08 title repair moved 4 ids without touching
+    a single `.md` and I6 would have called all 41 affected indices current. It
+    now reads `meeting_manifest.json` mtimes too, and counts a recorded relabel
+    (`relabeled_mispairings.at`) as bringing an index current without a rebuild --
+    without that second half it would sit permanently red after any title repair,
+    and an always-red check is one nobody reads.
+  * AN UNSEALED INDEX IS A REPORTED GAP, NOT A PASS. I7 watches the writer-side
+    seal `_complete.json`; an index built before that convention gets the older,
+    narrower staleness guarantee and must say so rather than passing silently.
+  * A CHECK THAT CANNOT FAIL ON LIVE DATA IS UNEXERCISED. G1b reports 0 here, so
+    its failing branch never runs against the corpus; `tests/tools/` pins all
+    three G1 outcomes plus both cache rules, and pins all six E0 outcomes, or
+    five of them would be exactly the vacuous PASS the first lesson warns about.
+
 Read-only. Exits 1 if any check FAILs.
 
 Run:
