@@ -1,0 +1,541 @@
+%% iSAI-NLP 2026 submission -- DRAFT 2026-08-24
+%% Compiles with pdflatex. Thai text is given in English gloss in the body;
+%% the verbatim Thai originals are in prompts_thai.tex and need XeLaTeX +
+%% a Thai font (see README.md).
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+
+\begin{document}
+
+\title{Prompt Position, Not Prompt Content:\\
+Three Ordering Failures in a Thai\\
+Retrieval-Augmented Question Answering System}
+
+\author{\IEEEauthorblockN{ANONYMOUS FOR REVIEW}
+\IEEEauthorblockA{\textit{Affiliation} \\
+City, Country \\
+email}}
+
+\maketitle
+
+\begin{abstract}
+Evaluations of retrieval-augmented generation (RAG) routinely attribute answer
+quality to the retriever. We report three cases from a production-intent Thai
+RAG system in which the number being measured was set by where an instruction
+sat in the prompt rather than by retrieval, and in which the prompt's content
+was held fixed while only its ordering changed. On a corpus of 2{,}853 Thai
+academic-council resolutions with 106 entity-anchored queries and 1{,}046
+relevance judgments (9.87 relevant documents per query), we find: (i) the
+conventional fix of placing instructions \emph{after} the retrieved context
+interacts with the serving runtime's front-truncation policy to convert a loud
+failure into a silent one, damaging 81 of 1{,}590 generated answers with no
+observable symptom; (ii) a brevity instruction (``answer in at most three
+sentences'') acts as a citation-recall cap, and replacing it raises citation
+recall significantly on two of four answering arms (up to $+0.0871$,
+Holm-adjusted $p=0.0000$, family size $m=9$) with no change to retrieval; and
+(iii) a prohibition already present in the prompt is defeated by a later,
+more recent rule --- moving it after the offending rule and declaring its
+precedence takes closed-book hallucinations from 24 of 106 to 1 of 106 on
+\texttt{gemma4:e4b}, and phantom citations from 37/37 to 1/1, while leaving the
+four answering arms essentially unchanged. All three effects are invisible to
+retrieval metrics. We give the detection signature for (i), report every
+comparison with its Holm family size, and state the generator noise floor that
+bounds what a single-cell difference can mean.
+\end{abstract}
+
+\begin{IEEEkeywords}
+retrieval-augmented generation, prompt engineering, Thai NLP, information
+retrieval evaluation, citation grounding, hallucination
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+A retrieval-augmented question answering system has two halves that are usually
+evaluated separately: a retriever, scored with ranking metrics against
+relevance judgments, and a generator, scored on the answer it produces from the
+retrieved context~\cite{lewis2020rag}. When end-to-end answer quality is
+reported, the discussion almost always concerns the retriever --- which
+embedder, which fusion, which reranker.
+
+This paper reports three findings from building a Thai RAG system over
+institutional meeting minutes, in each of which the \emph{prompt's layout}, not
+its content and not the retriever, determined the measured outcome. The three
+are not variations of one effect; they act at different layers, and each would
+have been reported as a different kind of result had it not been isolated:
+
+\begin{enumerate}
+\item \textbf{Layout versus runtime truncation.} Placing instructions after the
+retrieved documents is the standard defence against an over-long prompt losing
+its rules. On our serving runtime it makes truncation \emph{invisible instead of
+harmless}: the rules always survive, the best-ranked evidence is deleted, and
+the answer is well-formed, correctly shaped in its citations, and evidence-poor
+for reasons nothing in the output reveals.
+\item \textbf{A brevity instruction is a recall cap.} Against a judgment set
+averaging 9.87 relevant documents per query, an instruction to answer in at most
+three sentences cannot cite them. The resulting flat citation recall reads as a
+generator ceiling and is a prompt budget.
+\item \textbf{A rule's position beats its presence.} A rule forbidding answers
+that the supplied documents do not support was identical, word for word, in both
+prompt variants we compare. Under one variant a second model fabricated answers
+on 24 of 106 zero-document queries. The repair was not a new prohibition but the
+same prohibition moved after the rule that was defeating it, with an explicit
+precedence declaration.
+\end{enumerate}
+
+Effect (1) is a systems interaction; effect (2) is a measurement artifact that
+would silently understate any RAG system evaluated this way; effect (3) is a
+safety failure with a one-line fix. What unites them is that in all three the
+prompt's \emph{content} was adequate and its \emph{order} was not.
+
+\textbf{Contributions.} (i) Three measured prompt-ordering effects in a
+non-English, entity-anchored RAG setting, each isolated with the rest of the
+system held fixed; (ii) an exact, cheap detection signature for silent prompt
+truncation under a widely used local-inference runtime; (iii) a prompt-repair
+rule --- \emph{declare precedence and move the rule after its competitor, rather
+than adding a stronger prohibition} --- validated on two generators with a
+built-in control; and (iv) an explicit account of the generator noise floor and
+of multiple-comparison family sizes, so that the null cells reported here can be
+read as bounds rather than as absence of effect.
+
+\section{Related Work}
+
+\textbf{Thai retrieval resources.} Thai is covered as a \emph{language} by
+several multilingual retrieval benchmarks. MIRACL~\cite{zhang2023miracl}
+includes Thai Wikipedia ad-hoc retrieval with natural queries written by native
+speakers, at roughly 9--10 labels per query; Mr.~TyDi~\cite{zhang2021mrtydi}
+includes Thai but is shallow, at about one positive passage per query.
+BEIR~\cite{thakur2021beir} is English-only. Domain-specific Thai RAG evaluation
+exists: NitiBench~\cite{nitibench2025} benchmarks LLM frameworks on Thai legal
+question answering. What is not covered is the \emph{domain} we work in ---
+administrative and academic-governance minutes --- and, more importantly for this
+paper, none of these resources is designed to separate prompt effects from
+retrieval effects, because none of them evaluates a generator at all.
+
+\textbf{Position effects in language models.} That transformer language models
+use long contexts unevenly is established: Liu et al.~\cite{liu2024lost} show a
+U-shaped curve in which information at the beginning and end of a context is used
+far more effectively than information in the middle. Our findings are adjacent
+but distinct in two ways. First, the object whose position matters here is an
+\emph{instruction}, not evidence: in finding (3) two rules compete and the later
+one wins even though the earlier one is more specific and strictly prohibitive.
+Second, finding (1) is not a model property at all --- it is an interaction
+between prompt layout and a serving runtime's truncation policy, and it therefore
+survives any improvement in the model's use of long context.
+
+\textbf{Retrieval components.} Our arms use BM25~\cite{robertson2009bm25}, dense
+retrieval with multilingual embedders including BGE-M3~\cite{chen2024bgem3}, and
+reciprocal rank fusion~\cite{cormack2009rrf} for the hybrid arms. These are
+background: no claim in this paper is about which of them is better.
+
+\section{Experimental Setup}
+
+\subsection{Corpus and query set}
+
+The corpus is 2{,}853 Thai academic-council resolutions, obtained as scanned PDFs
+and converted by OCR. Relevance is judged at the level of a \emph{resolution} ---
+the unit a reader of these minutes actually wants --- rather than at the level of
+a retrieval chunk.
+
+The evaluation set contains 106 entity-anchored queries with 1{,}046 relevance
+judgments, i.e. a mean of \textbf{9.87 relevant documents per query}. This depth
+is the reason effect (2) is visible at all: against a shallow judgment set of
+about one relevant document per query, an instruction capping the answer at three
+sentences costs nothing measurable. Composition is given in
+Table~\ref{tab:queries}.
+
+\begin{table}[t]
+\caption{Evaluation query set}
+\label{tab:queries}
+\centering
+\begin{tabular}{lr}
+\toprule
+Query type & Queries \\
+\midrule
+\texttt{course} & 33 \\
+\texttt{person} & 30 \\
+\texttt{program} & 30 \\
+\texttt{faculty} (aggregate) & 13 \\
+\midrule
+Total & 106 \\
+Relevance judgments & 1{,}046 \\
+Mean relevant per query & 9.87 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Arms}
+
+Five arms supply the context. Four retrieve ten documents each: \texttt{hybrid}
+(RRF over BM25 and a dense arm), \texttt{dense}, \texttt{bm25}, and a
+deliberately weak \texttt{m2v} arm using a low-capacity static embedder. The
+fifth, \texttt{closed\_book}, supplies \emph{no documents at all} and is the
+control that carries finding (3): with an empty context, the only correct
+behaviour is to abstain, and any answer produced is by construction ungrounded.
+
+\subsection{Generators}
+
+Both generators run locally through the same serving runtime (ollama) on a single
+consumer GPU. \texttt{phi4} is the primary generator; \texttt{gemma4:e4b} is a
+second-generator check, run precisely so that a prompt effect can be told apart
+from a model idiosyncrasy. Sampling temperature is 0. Following a measurement
+reported in Section~\ref{sec:limits}, temperature 0 is \emph{not} treated here as
+reproducible.
+
+\subsection{Metrics and statistics}
+
+\emph{Citation recall} is the fraction of a query's gold resolutions that the
+answer's citation line names, macro-averaged over all 106 queries.
+\emph{Citation precision} is the fraction of cited documents that are gold,
+macro-averaged over queries that cited at least one document. A \emph{phantom}
+citation is a label that does not appear in the supplied context at all, reported
+as a micro count over all citations. For finding (3) we also report the
+abstention $2\times2$: whether the context contained gold, against whether the
+model abstained; the cell with no gold and no abstention is a hallucination.
+
+Significance is paired bootstrap over queries ($10{,}000$ resamples, fixed seed)
+with Holm correction~\cite{holm1979}. \textbf{We report the Holm family size $m$
+with every adjusted $p$-value}, because in this study the identical test on
+identical data reads significant in one family and not in another purely through
+$m$; a bare adjusted $p$ is ambiguous.
+
+\section{Finding 1: Layout Interacts With Runtime Truncation}
+
+\subsection{The loud failure, and the standard fix}
+
+An initial pilot placed the instructions \emph{before} the retrieved documents.
+On prompts that carried context it produced \textbf{0 of 4} correctly formatted
+citations, while producing \textbf{4 of 4} on the short zero-document prompts ---
+same model, same instructions, so not a capability limit. The cause is that the
+runtime truncates an over-long prompt from the \emph{front}: with instructions
+first, the rules were cut away before the model ever saw them. The standard fix
+applies --- put the documents first and the rules last, so a truncation cannot
+delete the rules.
+
+\subsection{What the fix actually did}
+
+The fix worked, and it converted a loud failure into a silent one. Because the
+prompt lays the retrieved documents out best-ranked first and the rules last, an
+over-long prompt now loses \emph{the highest-ranked evidence} and keeps every
+rule. The result is an answer that is well-formed, cites in the correct format,
+and abstains when told to --- and that is evidence-poor for reasons nothing in the
+output reveals. Nothing warned; the runtime reports no error.
+
+\subsection{The truncation rule, measured}
+
+We measured the runtime's behaviour rather than reading it from documentation.
+One 14{,}721-token prompt at three context sizes gives Table~\ref{tab:trunc}.
+
+\begin{table}[t]
+\caption{Prompt truncation, one 14{,}721-token prompt}
+\label{tab:trunc}
+\centering
+\begin{tabular}{rrl}
+\toprule
+\texttt{num\_ctx} & \texttt{prompt\_eval\_count} & interpretation \\
+\midrule
+4{,}096  & 2{,}050  & cut to $\texttt{num\_ctx}/2 + 2$ \\
+8{,}192  & 4{,}098  & cut to $\texttt{num\_ctx}/2 + 2$ \\
+16{,}384 & 14{,}721 & fed whole \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+An intuitive hypothesis --- \emph{the runtime never feeds more than half the
+context window} --- is refuted by its own control: prompts of 5{,}651, 6{,}885 and
+7{,}508 tokens are fed \emph{whole} at $\texttt{num\_ctx}=8{,}192$. The rule that
+reproduces all six observations is:
+
+\begin{quote}
+A prompt that fits \texttt{num\_ctx} is fed whole; a prompt that exceeds it is
+cut to $\texttt{num\_ctx}/2 + 2$ tokens, keeping the \emph{tail}.
+\end{quote}
+
+The practical value of the second clause is that
+$\texttt{prompt\_eval\_count} = \texttt{num\_ctx}/2 + 2$ is an \textbf{exact
+detection signature}. It costs nothing: the runtime already returns
+\texttt{prompt\_eval\_count} with every response. We therefore recommend
+recording it per generated answer and asserting the signature, in preference to
+any layout convention --- a layout rule chooses \emph{which half} of the prompt
+dies, and cannot tell you \emph{that} something died.
+
+\subsection{Blast radius}
+
+Applying the signature retrospectively identified \textbf{81 of 1{,}590}
+generated answers as produced from a truncated prompt, with as little as 31\% of
+the intended prompt actually fed. Regenerating all 81 at
+$\texttt{num\_ctx}=16{,}384$ flipped \textbf{1 of 57} verdicts in the primary
+report and \textbf{3 of 57} in a secondary one; the prompt-ablation headline of
+Section~\ref{sec:ablation} did not move. We stress the direction of that result:
+the damage was real and the published conclusions largely survived it, which is
+exactly the case in which a silent fault is never found by inspecting outcomes.
+
+\section{Finding 2: A Brevity Instruction Caps Citation Recall}
+\label{sec:ablation}
+
+\subsection{Design}
+
+The prompt is a numbered rule list. We hold rules 1--3 and the answer format
+fixed and change only rule 4, giving the variants in Table~\ref{tab:variants}.
+Rules 1--3 state, in Thai: (1) answer only from the supplied documents, never
+from other knowledge; (2) cite the documents used by bracketed number; (3) if the
+supplied documents do not contain the answer, reply \textsc{not-found} only, and
+do not guess.
+
+\begin{table}[t]
+\caption{The three prompt variants (English gloss; originals are Thai)}
+\label{tab:variants}
+\centering
+\begin{tabular}{p{0.15\columnwidth}p{0.73\columnwidth}}
+\toprule
+Variant & Rule 4 onwards \\
+\midrule
+\texttt{sentence\_cap} (baseline) &
+4. Answer briefly, in no more than 3 sentences. \\[3pt]
+\texttt{cite\_all} &
+4. Cite every relevant document found in the supplied documents, not just one;
+the answer length is unlimited so long as it covers every relevant one. \\[3pt]
+\texttt{cite\_all\_guarded} &
+4. \emph{(identical to} \texttt{cite\_all}\emph{)} \newline
+5. If no supporting documents were supplied at all, reply \textsc{not-found} and
+give the citation as ``--'' only; cite no number whatsoever.
+\textbf{This rule outranks rule 4.} \newline
+6. Cite only numbers that actually appear in the documents above; never invent a
+number. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Result}
+
+Table~\ref{tab:phi4} gives citation precision and recall for \texttt{phi4} across
+all four answering arms and all three variants, and Table~\ref{tab:family2} the
+significance of the baseline-to-\texttt{cite\_all} contrast.
+
+\begin{table}[t]
+\caption{Citation precision / recall, \texttt{phi4}, 106 queries}
+\label{tab:phi4}
+\centering
+\small
+\begin{tabular}{llrr}
+\toprule
+Arm & Variant & Precision & Recall \\
+\midrule
+hybrid & \texttt{sentence\_cap}      & 0.7013 & 0.2952 \\
+hybrid & \texttt{cite\_all}          & 0.7185 & \textbf{0.3823} \\
+hybrid & \texttt{cite\_all\_guarded} & 0.6945 & 0.3794 \\
+\midrule
+dense  & \texttt{sentence\_cap}      & 0.6867 & 0.2738 \\
+dense  & \texttt{cite\_all}          & 0.6381 & 0.3145 \\
+dense  & \texttt{cite\_all\_guarded} & 0.6650 & \textbf{0.3481} \\
+\midrule
+bm25   & \texttt{sentence\_cap}      & 0.6591 & 0.2329 \\
+bm25   & \texttt{cite\_all}          & 0.5801 & \textbf{0.3118} \\
+bm25   & \texttt{cite\_all\_guarded} & 0.5968 & 0.2733 \\
+\midrule
+m2v    & \texttt{sentence\_cap}      & 0.5417 & 0.1807 \\
+m2v    & \texttt{cite\_all}          & 0.5057 & \textbf{0.1989} \\
+m2v    & \texttt{cite\_all\_guarded} & 0.4539 & 0.1761 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\caption{\texttt{sentence\_cap} $\rightarrow$ \texttt{cite\_all}, \texttt{phi4}.
+Paired bootstrap, Holm-corrected, family size $m=9$}
+\label{tab:family2}
+\centering
+\small
+\begin{tabular}{llrlr}
+\toprule
+Arm & Metric & Diff & 95\% CI & Holm $p$ \\
+\midrule
+hybrid & recall    & $+0.0871$ & $[+0.0438,+0.1307]$ & \textbf{0.0000} \\
+bm25   & recall    & $+0.0789$ & $[+0.0440,+0.1174]$ & \textbf{0.0000} \\
+dense  & recall    & $+0.0407$ & $[-0.0133,+0.0932]$ & 0.6610 \\
+m2v    & recall    & $+0.0182$ & $[-0.0136,+0.0489]$ & 0.7398 \\
+bm25   & precision & $-0.0644$ & $[-0.1155,-0.0134]$ & 0.0798 \\
+hybrid & precision & $+0.0043$ & $[-0.0559,+0.0636]$ & 1.0000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Citation recall rises significantly on \texttt{hybrid} ($+0.0871$) and
+\texttt{bm25} ($+0.0789$), both at Holm-adjusted $p=0.0000$ with $m=9$.
+\textbf{No retrieval changed}: the contexts are byte-identical between variants
+and only rule 4 differs. The pre-existing reading of the flat baseline recall ---
+that the generator could not do better --- is therefore wrong. It was a budget
+imposed by the prompt.
+
+\subsection{Two qualifications we do not want cited away}
+
+First, the \texttt{dense} arm's gain is \textbf{not significant} ($+0.0407$, Holm
+$p=0.6610$). We report it as a bound, not as an effect: the data rule out a loss
+and do not establish a gain. The mechanism we suspect --- that a stronger context
+reduces the marginal value of the instruction --- is consistent with
+\texttt{dense} and \texttt{hybrid} being the two strongest arms, but we did not
+test it and do not claim it.
+
+Second, the gain is a \emph{trade}. Citation precision falls on three of four
+arms, most on \texttt{bm25} ($-0.0644$), and while no precision cell is
+significant at $m=9$, the direction is consistent. Instructing a model to cite
+everything relevant produces more citations, and some of the extra ones are
+wrong.
+
+\subsection{The effect is not model-specific, but the levels are}
+
+Under \texttt{cite\_all}, \texttt{gemma4:e4b} reaches citation recall 0.4956
+(hybrid) and 0.5049 (dense), against \texttt{phi4}'s 0.3823 and 0.3145. The
+direction of the prompt effect transfers between generators; \textbf{the levels
+do not transfer at all}. Any absolute citation-recall figure reported for a RAG
+system is a joint property of the retriever, the prompt and the generator, and is
+not portable across a change in any of the three.
+
+\section{Finding 3: A Rule Already Present, Defeated by Position}
+
+\subsection{The failure}
+
+Rule 3 --- \emph{if the supplied documents do not contain the answer, reply
+\textsc{not-found} only, and do not guess} --- is present, identical and word for
+word, in all three variants. It is a strict prohibition and it is stated before
+any competing instruction.
+
+It does not hold. Table~\ref{tab:closed} gives the \texttt{closed\_book} arm,
+where the context is empty and abstention is the only correct output. Under
+\texttt{cite\_all}, \texttt{gemma4:e4b} answers anyway on \textbf{24 of 106}
+queries, and \emph{every one} of the 37 citations it produces is a phantom --- a
+bracketed document number when no document was supplied at all. \texttt{phi4}
+shows the same failure at much lower magnitude: 2 of 106, 5/5 phantom.
+
+\begin{table}[t]
+\caption{\texttt{closed\_book} arm: empty context, so abstention is the only
+correct answer}
+\label{tab:closed}
+\centering
+\small
+\begin{tabular}{llrrl}
+\toprule
+Model & Variant & Halluc. & Abstained & Phantom \\
+\midrule
+\texttt{phi4} & \texttt{sentence\_cap}      & 0  & 106 & 0/0 \\
+\texttt{phi4} & \texttt{cite\_all}          & 2  & 104 & 5/5 \\
+\texttt{phi4} & \texttt{cite\_all\_guarded} & \textbf{0} & 106 & 0/0 \\
+\midrule
+\texttt{gemma4:e4b} & \texttt{cite\_all}          & 24 & 82  & 37/37 \\
+\texttt{gemma4:e4b} & \texttt{cite\_all\_guarded} & \textbf{1} & 105 & 1/1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{The diagnosis: recency, not absence}
+
+The natural reading is that the model ignores instructions. The comparison
+refutes it. Rule 3 is \emph{identical} between \texttt{sentence\_cap} and
+\texttt{cite\_all}, and under \texttt{sentence\_cap} \texttt{phi4} hallucinates
+0 times. What changed is the rule that follows it: \texttt{cite\_all}'s rule 4
+instructs the model to cite every relevant document, it is the last line before
+the question, and \emph{with nothing to cite it reads as an instruction to
+produce citations}. The specific, prohibitive, earlier rule loses to the general,
+permissive, later one.
+
+\subsection{The repair, and why its shape matters}
+
+The repair is not a stronger prohibition. It is the same prohibition, moved:
+rule 5 restates the zero-document case \emph{after} rule 4 and declares
+precedence in as many words --- \emph{this rule outranks rule 4}. Rule 6 adds a
+ceiling on which labels are citable, aimed at the bounded-context version of the
+same over-production (the \texttt{dense} arm produced 4 phantom labels against 5
+supplied documents).
+
+The effect is in Table~\ref{tab:closed}: \textbf{24 hallucinations become 1}, and
+37/37 phantom citations become 1/1. \texttt{phi4} goes from 2 to 0.
+
+\subsection{The control that makes this readable}
+
+A guard that suppressed hallucination by making the model reticent everywhere
+would be worthless. The four answering arms are the built-in control, and they
+barely move: for \texttt{gemma4:e4b} the abstention $2\times2$ is \emph{identical}
+between \texttt{cite\_all} and \texttt{cite\_all\_guarded} on \texttt{hybrid}
+(93/9/2/2) and on \texttt{dense} (92/8/4/2), and moves by at most three cells on
+\texttt{bm25} and \texttt{m2v}. Citation recall on the strong arms is unchanged or
+slightly higher under the guard (hybrid $0.4956 \rightarrow 0.5260$). The guard
+reached the case it was aimed at and left the rest alone.
+
+\subsection{Where the failure concentrates}
+
+In \emph{both} models, 100\% of closed-book hallucination occurs on
+\texttt{course} queries. We report this as an observation, not a mechanism: a
+course code is a short, highly patterned string about which a language model has
+strong priors, and the plausible explanation --- that a well-formed guess is
+easier to produce for this query shape --- was not tested here.
+
+\section{Limitations and Threats to Validity}
+\label{sec:limits}
+
+\textbf{Temperature 0 is not reproducible, and we measured how badly.} Feeding
+byte-identical prompts to \texttt{phi4} at temperature 0 reproduces the identical
+citation set only \textbf{14 of 24} times under \texttt{cite\_all}. Every claim in
+this paper is therefore made over families of 106 queries with Holm-corrected
+paired bootstrap, and no single-cell difference is interpreted. A reader
+reproducing this work should expect cell-level disagreement, and should
+re-measure this noise floor rather than infer determinism from the temperature
+setting.
+
+\textbf{Holm family size is load-bearing.} In our data the identical test on
+identical data reads significant in a family of 9 and not significant in a family
+of 24. We quote $m$ everywhere; a comparison from Table~\ref{tab:family2} should
+not be quoted against a $p$-value computed in a different family.
+
+\textbf{A generation cap can masquerade as a retrieval result.} The maximum
+generated length is capped at 4{,}096 tokens. \textbf{3 of 1{,}272} \texttt{phi4}
+cells reach that cap, all of them \texttt{course} queries. A capped answer never
+reaches its citation line and is therefore scored as having cited nothing --- a
+generator failure that reads as a retrieval failure. The count is small enough not
+to move any conclusion here, and is stated because the failure mode is invisible
+in the metric.
+
+\textbf{The judgments are rule-derived.} Relevance judgments were derived by
+string containment of each query's anchor entity, which under-counts documents
+phrasing that entity differently. Citation recall inherits the undercount. It is a
+level effect shared by every arm and variant, and the comparisons here are paired,
+so it does not threaten the contrasts --- but absolute values should be read as a
+lower bound.
+
+\textbf{Scope.} One corpus, one language, one serving runtime, two generators.
+Finding (1) is specific to a runtime that truncates from the front and should be
+re-measured, not assumed, elsewhere; the \emph{method} --- assert a signature on
+the runtime's own reported token count --- transfers. Findings (2) and (3) were
+each observed on two generators, with the direction preserved and the levels not.
+
+\section{Conclusion}
+
+Three times in one system, the quantity we were measuring was set by where an
+instruction sat rather than by what it said. Placing rules after the context is
+the correct fix for one failure and silently creates another, and the durable
+defence is a truncation signature rather than a layout convention. A brevity
+instruction, harmless against a shallow judgment set, acts as a citation-recall
+cap against a deep one --- and the ceiling it produces is easily mistaken for a
+generator limit. And a prohibition already written into the prompt is defeated by
+a later rule, with a repair that consists of moving it and declaring precedence
+rather than strengthening it.
+
+For practitioners the operational form is short: record the runtime's reported
+prompt token count and assert it; check whether an instruction constrains the
+quantity you are about to report; and when a rule is disobeyed, look at what
+follows it before rewriting it. For evaluation the point is sharper --- a RAG
+result that does not hold the prompt fixed, and say so, may be reporting a
+property of its instructions.
+
+\section*{Acknowledgments}
+
+TO BE ADDED AFTER REVIEW.
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\end{document}
