@@ -494,6 +494,16 @@ units:
       same rejected first-run reading as the CLAUDE.md entry, quoted in section
       7b beside its corrected 757 ms
 
+  - doc: docs/project-journey.html
+    figure: "4,484 ms"
+    checked: 2026-08-24
+    reason: >-
+      the third and last copy of the same rejected first-run reading, quoted in
+      the narrative section 9.47 for the deployment note it is the evidence for.
+      Allowlisted rather than deleted for the reason the other two are: the
+      corrected value is in serving_open_loop.md and no generator persists the
+      broken state, so there is nothing for D7 to trace it to
+
   - doc: docs/serving-architecture.md
     figure: "1,356 ms"
     checked: 2026-08-23
