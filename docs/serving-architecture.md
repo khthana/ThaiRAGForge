@@ -643,3 +643,34 @@ collection is a copy of an `Index`'s rows, so any rebuild stales it.
 
 Nothing defaults to the engine: `dense` and `hybrid` still ship in-process and
 `qdrant_hybrid` is opt-in by name, the same rule `lexical_containment` follows.
+
+### What the UI opens on, and when to change it
+
+**Default since 2026-08-24: `routed hybrid`** — `retriever=hybrid`, Smart routing
+on, `fetch_depth=200`. Before that the page opened on `dense` with routing off,
+which is the weakest configuration in every table this project publishes, and it
+was that only because both widgets took their first option. Pinned by
+`tests/app/test_streamlit_query_compare.py::test_the_shipped_defaults_are_routed_hybrid`
+and by `test_the_default_retriever_is_a_choice_not_a_position`, which asserts the
+named `_DEFAULT_RETRIEVER` rather than element 0 of the option list.
+
+Why this one and not the two arms that score higher:
+
+| | score | why it is not the default |
+|---|---|---|
+| `routed hybrid` | recall@10 **0.6811**, LOO **0.6794** | the choice. The leave-one-out estimate is the *stronger* of the two (+0.0825 over the best single combo, Holm-adj 0.0000), so it is not a fitted number being discounted — and it carries no caveat about what its own score measures |
+| `lexical_containment` | **+0.0489** on top | its score partly measures its own rule: the person/program/faculty qrels were themselves derived by string containment. The metric is therefore blind to this arm's own failure mode — a relevant document that spells the entity differently is demoted *and* unjudged at once, which is the pooling-bias case in `eval-validity-threats.md` §2 |
+| `qdrant_hybrid` | same accuracy (**0.6827** vs **0.6835**) | it buys throughput (**9.81** vs **2.53** q/s), not accuracy, and adds a container, a re-ingest obligation after every rebuild, and a stale collection that **answers** rather than fails (`_verify` guards it, but on first use only) |
+
+**Switch to `lexical_containment`** when you accept that caveat — it is free of GPU
+and costs ~+20% latency. **Switch to `qdrant_hybrid`** when concurrency is the
+actual problem: in-process plateaus at **2.53 q/s**, so a load of 50 users each
+querying every ~10 s (5 q/s) does not fit in-process and does fit on the engine.
+Below that, §7b says the constraint is latency, not capacity — and the engine
+does not fix latency.
+
+**Turning routing on changes what the page is.** Mode B is named *Query &
+Compare*, and routing replaces the side-by-side comparison with one routed
+answer; the "Combinations to compare" multiselect only appears with routing off.
+That trade is stated in the checkbox's own help text rather than left to be
+discovered.

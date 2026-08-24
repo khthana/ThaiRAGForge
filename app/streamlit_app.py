@@ -107,7 +107,12 @@ def _combo_label(combo_id: str) -> str:
 
 
 smart_routing = st.sidebar.checkbox(
-    "Smart routing (route by query shape)", value=False, key="smart_routing",
+    # ON by default since 2026-08-24, together with retriever=hybrid below: the
+    # two of them are `routed hybrid`, the configuration this project measured
+    # as the best DEPLOYABLE one. Off, this page compares combos side by side --
+    # which is what it is named for, so the trade is stated in the help text
+    # rather than hidden. See docs/serving-architecture.md section 10.
+    "Smart routing (route by query shape)", value=True, key="smart_routing",
     help=(
         "Classify the query as person-/program-/course-/faculty-/unmatched-shaped "
         "(src/rag_lab/router.py) and query only that route's best-performing "
@@ -115,6 +120,13 @@ smart_routing = st.sidebar.checkbox(
         "combo each route reaches depends on the Retriever setting below "
         "(router.route_targets), so the required combos differ between dense and "
         "hybrid -- the caption under the result names the one actually used. "
+        "ON by default: with the Retriever left at 'hybrid' this is `routed "
+        "hybrid`, recall@10 0.6811 against 0.6229 for the best single combo, and "
+        "the leave-one-out estimate (0.6794, +0.0825 Holm-adj 0.0000) is the "
+        "stronger of the two rather than a discount on a fitted one. It also "
+        "closes a coverage hole that left 43% of the Gold set unrouted. "
+        "TURN IT OFF to compare combinations side by side -- that is what this "
+        "page is named for, and routing replaces the comparison with one answer. "
         "Evidence for the targets: tools/eval/routing_eval.py -> "
         "data/results/routing_eval.md."
     ),
@@ -136,10 +148,22 @@ else:
             "retired 252-query/3-route eval and are withdrawn."
         ),
     )
+# The default is named, not positional. It used to be `index=0` over a list
+# whose first element happened to be `dense`, so "what ships" was a property of
+# list order -- and `dense` unrouted is the weakest arm in every table this
+# project publishes. `hybrid` is the choice, and the two arms that beat it are
+# deliberately NOT the default: `lexical_containment` scores higher but the
+# person/program/faculty qrels were themselves derived by string containment,
+# so the metric is blind to its own failure mode; `qdrant_hybrid` is the same
+# accuracy plus a container, a re-ingest obligation, and a stale collection that
+# ANSWERS rather than fails. Both are one click away. See
+# docs/serving-architecture.md section 10 for when to switch.
+_RETRIEVER_OPTIONS = ["dense", "bm25", "hybrid", "lexical_containment", "qdrant_hybrid"]
+_DEFAULT_RETRIEVER = "hybrid"
 retriever = st.sidebar.selectbox(
     "Retriever",
-    ["dense", "bm25", "hybrid", "lexical_containment", "qdrant_hybrid"],
-    index=0, key="retriever",
+    _RETRIEVER_OPTIONS,
+    index=_RETRIEVER_OPTIONS.index(_DEFAULT_RETRIEVER), key="retriever",
     help=(
         "'lexical_containment' is arm L\u2032: run 'hybrid', then stably "
         "partition its top-50 by whether the entity detect_entities() finds in "
@@ -151,7 +175,10 @@ retriever = st.sidebar.selectbox(
         "A query naming no entity the dictionaries know falls through to plain "
         "hybrid order, unchanged. Adds ~100ms/query for detection. See "
         "data/results/reranker_trained_test.md, family 3. "
-        "'hybrid' fuses in-process numpy + rank_bm25. 'qdrant_hybrid' fuses the "
+        "'hybrid' fuses in-process numpy + rank_bm25, and is the DEFAULT here: "
+        "with Smart routing on it is the best deployable configuration measured, "
+        "and it is the only one of the three that carries no caveat about what "
+        "its own score is measuring. 'qdrant_hybrid' fuses the "
         "SAME two arms served by a Qdrant server (dense exact=True + precomputed "
         "BM25 sparse vectors), with the identical RRF -- data/results/"
         "qdrant_routed_check.md measured the served routed stack at 0.6827 "

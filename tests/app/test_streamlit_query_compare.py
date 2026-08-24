@@ -48,6 +48,15 @@ def _point_at_custom_index_dir(at: AppTest, out) -> None:
     at.run(timeout=30)
 
 
+def _turn_off_routing(at: AppTest) -> None:
+    """Smart routing ships ON, and it replaces the side-by-side comparison with
+    a single routed answer -- so every test that reaches for the
+    "Combinations to compare" multiselect has to opt out of it first."""
+    if at.sidebar.checkbox(key="smart_routing").value:
+        at.sidebar.checkbox(key="smart_routing").set_value(False)
+        at.run(timeout=30)
+
+
 def test_compare_mode_still_works_unchanged(tmp_path):
     out = _build_index(tmp_path)
 
@@ -57,7 +66,12 @@ def test_compare_mode_still_works_unchanged(tmp_path):
 
     _point_at_custom_index_dir(at, out)
     assert not at.exception
-    assert at.sidebar.checkbox(key="smart_routing").value is False
+
+    # Routing ships ON (2026-08-24), so compare mode is now the opt-out and the
+    # "Combinations to compare" multiselect does not exist until it is off.
+    assert at.sidebar.checkbox(key="smart_routing").value is True
+    at.sidebar.checkbox(key="smart_routing").set_value(False)
+    at.run(timeout=30)
 
     # multiselect's `default=` isn't reflected in AppTest's `.value` until an
     # explicit selection is made, even though the live app would use it --
@@ -135,6 +149,7 @@ def test_entity_boost_checkbox_narrows_and_labels_the_result(tmp_path):
     _point_at_custom_index_dir(at, out)
 
     combo_ids = [info.combo_id for info in discover_indices(out)]
+    _turn_off_routing(at)
     at.sidebar.multiselect(key="selected_combos").set_value(combo_ids)
     at.sidebar.checkbox(key="entity_boost").set_value(True)
     at.run(timeout=30)
@@ -172,6 +187,7 @@ def test_combo_label_disambiguates_same_chunker_type_by_chunk_size(tmp_path):
     at.run(timeout=30)
     _point_at_custom_index_dir(at, out)
 
+    _turn_off_routing(at)
     labels = at.sidebar.multiselect(key="selected_combos").options
     assert len(set(labels)) == 2
     assert any("100" in label for label in labels)
@@ -213,3 +229,20 @@ def test_pressing_the_button_warms_the_routed_indices(tmp_path, monkeypatch):
     # Every shipped target is missing from this toy dir, so the report is all
     # failures -- rendered as warnings, with the app still usable.
     assert at.sidebar.warning, "an unreachable target was not reported"
+
+
+def test_the_shipped_defaults_are_routed_hybrid(tmp_path):
+    """The decision of 2026-08-24, pinned where a user would meet it.
+
+    Before it, the page opened on `dense` with routing off -- the weakest
+    configuration in every table this project publishes, and it was that only
+    because both widgets took their first option. A revert would not fail
+    anything else here: compare mode works either way.
+    """
+    at = AppTest.from_file(_APP)
+    at.run(timeout=30)
+    assert not at.exception
+    assert at.sidebar.selectbox(key="retriever").value == "hybrid"
+    assert at.sidebar.checkbox(key="smart_routing").value is True
+    # the depth the routed measurement was taken at
+    assert at.sidebar.selectbox(key="fetch_depth").value == 200

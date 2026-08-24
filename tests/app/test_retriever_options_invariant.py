@@ -32,8 +32,14 @@ def _app_ast() -> ast.Module:
 
 
 def _offered_retrievers() -> list[str]:
-    """The `Retriever` selectbox's option list."""
-    for node in ast.walk(_app_ast()):
+    """The `Retriever` selectbox's option list.
+
+    Accepts either an inline list or the name of one, because the app now
+    passes `_RETRIEVER_OPTIONS`: the default is chosen BY NAME rather than by
+    being element 0, so the option list had to become a name too.
+    """
+    tree = _app_ast()
+    for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         func = node.func
@@ -43,9 +49,32 @@ def _offered_retrievers() -> list[str]:
             continue
         if node.args[0].value != "Retriever":
             continue
-        assert len(node.args) >= 2 and isinstance(node.args[1], ast.List)
-        return [e.value for e in node.args[1].elts]
+        assert len(node.args) >= 2
+        arg = node.args[1]
+        if isinstance(arg, ast.List):
+            return [e.value for e in arg.elts]
+        assert isinstance(arg, ast.Name), f"unexpected options node {type(arg).__name__}"
+        return list(_named_list(arg.id))
     raise AssertionError("could not find the Retriever selectbox in the app source")
+
+
+def _named_list(name: str) -> list[str]:
+    for node in ast.walk(_app_ast()):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == name for t in node.targets
+        ):
+            return [e.value for e in node.value.elts]
+    raise AssertionError(f"could not find {name} in the app source")
+
+
+def _named_str(name: str) -> str:
+    for node in ast.walk(_app_ast()):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == name for t in node.targets
+        ):
+            assert isinstance(node.value, ast.Constant), f"{name} is not a literal"
+            return node.value.value
+    raise AssertionError(f"could not find {name} in the app source")
 
 
 def _named_set(name: str) -> set[str]:
@@ -95,7 +124,38 @@ def test_the_fused_set_holds_nothing_that_would_reject_the_depth():
 
 
 def test_lexical_containment_is_offered():
-    """It is opt-in, so it must actually appear — and must not be the default."""
+    """It is opt-in, so it must actually appear -- and must not be the default."""
+    assert "lexical_containment" in _offered_retrievers()
+
+
+def test_the_default_retriever_is_a_choice_not_a_position():
+    """This assertion used to read `offered[0] == "dense"`, which conflated two
+    different things: the first element of a list, and what a user gets. They
+    were the same only because the widget passed `index=0`, so reordering the
+    list for readability would have silently changed the shipped default and
+    this test would have caught nothing.
+
+    What is pinned now is the decision (2026-08-24, docs/serving-architecture.md
+    section 10): the default is `hybrid`, which with Smart routing on is
+    `routed hybrid` -- and the two arms that score higher stay opt-in, each for
+    a stated reason rather than for lack of a number.
+    """
+    default = _named_str("_DEFAULT_RETRIEVER")
     offered = _offered_retrievers()
-    assert "lexical_containment" in offered
-    assert offered[0] == "dense", "nothing new may become the UI default"
+    assert default in offered, "the default is not one of the offered options"
+    assert default == "hybrid"
+    assert default not in {"lexical_containment", "qdrant_hybrid"}, (
+        "lexical_containment's score partly measures its own rule (the "
+        "person/program/faculty qrels were derived by string containment too) "
+        "and qdrant_hybrid adds a container plus a stale collection that "
+        "ANSWERS rather than fails -- neither may become the default silently"
+    )
+
+
+def test_the_selectbox_actually_uses_the_named_default():
+    """A named constant nothing reads is worse than a magic number: it looks
+    like a decision while the widget still opens on element 0."""
+    src = _APP.read_text(encoding="utf-8")
+    assert "_RETRIEVER_OPTIONS.index(_DEFAULT_RETRIEVER)" in src, (
+        "the Retriever selectbox must resolve its index from _DEFAULT_RETRIEVER"
+    )

@@ -1697,6 +1697,23 @@ see `docs/adr/`.
   measured both caches at ~1.0x. And **stamping a cached read before AND after is
   still not enough** on its own; the seal above is what closes the remaining case
   ([[feedback_stamp_a_cached_read_before_and_after]]).
+  **THE SHIPPED DEFAULT IS `routed hybrid` (2026-08-24), and it is a DECISION
+  rather than a list position.** `app/streamlit_app.py` opens on
+  `retriever=hybrid` + Smart routing **on** + `fetch_depth=200`; it used to open
+  on `dense` with routing off, which is the weakest configuration in every table
+  here and was that only because both widgets took their first option. **The two
+  arms that score higher stay opt-in for stated reasons, not for lack of a
+  number**: `lexical_containment`'s metric is blind to its own failure mode (the
+  person/program/faculty qrels were derived by the same string containment it
+  ranks by, so a document spelling the entity differently is demoted *and*
+  unjudged at once), and `qdrant_hybrid` buys throughput rather than accuracy at
+  the price of a container, a re-ingest obligation and a stale collection that
+  **answers**. **A default should be the arm whose MEASUREMENT you trust most,
+  not the arm with the biggest number.** Switch rules, and what turning routing
+  on costs the compare page, are in `docs/serving-architecture.md` §10; the
+  default is pinned by two tests that assert the *named* `_DEFAULT_RETRIEVER`,
+  because the old assertion (`offered[0] == "dense"`) conflated list order with
+  what ships and would have caught nothing.
   **NOT established** (do not cite past these): no network hop anywhere — app,
   embedder and engine are one process on one box, which makes this box look
   *worse* at the app layer than a real deployment; no bursty arrival process; and
