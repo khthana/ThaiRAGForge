@@ -1,6 +1,6 @@
 # Pipeline invariant audit
 
-Run 2026-08-23 14:29 UTC. 31 pass / 0 warn / 1 fail.
+Run 2026-08-24 07:35 UTC. 33 pass / 0 warn / 0 fail.
 
 | check | status | detail |
 |---|---|---|
@@ -12,8 +12,9 @@ Run 2026-08-23 14:29 UTC. 31 pass / 0 warn / 1 fail.
 | C3d one source URL, one base title | PASS | 0 URLs claimed by differently-titled documents |
 | C4 no orphaned .md.dup archive | PASS | 0 of 239 archives are unaccounted for (21 are tail fragments of a live file's title, 1 are live under a repaired name, 1 under a truncated title, 0 under a title naming a different agenda item) |
 | C5 master_list.csv row count | PASS | 2854 rows vs 2854 corpus files (rows are meeting-level, not file-level -- informational) |
-| T1 cached entity tags reproduce from the current matchers | FAIL | files differing of files compared, over a 60-file sample: people 17/60, programs 0/60, courses 2/60, faculties 0/60; build_gold_candidates.py (the qrels generator) reads people/courses/faculties VALUES and now refuses on this, so nothing can silently derive qrels from them. RE-RUNNING tag_*.py IS NOT AN OBVIOUS FIX and is a decision, not a chore: it would make these copies current with today's corpus while data/index/entity_tags_full still holds tags from its own build date, i.e. it moves the mismatch rather than removing it, and CLAUDE.md coupled that index to a tag regeneration for exactly this reason. Decide the pair together |
+| T1 cached entity tags reproduce from the current matchers | PASS | files differing of files compared, over a 60-file sample: people 0/60, programs 0/60, courses 0/60, faculties 0/60 |
 | T1b a programs drift cannot move the qrels | PASS | program_candidates() iterates the tag mapping's KEYS and never reads a value -- audit_program_tag_regeneration.py S2 blanks every value and requires identical output -- so a programs difference is a reporting concern, not a qrels one |
+| T2 the entity-tagged index reproduces from the current matchers | PASS | files differing of files compared, over a 60-file sample against 2854 indexed resolutions: people 0/60, programs 0/60, courses 0/60, faculties 0/60 |
 | I1 row alignment (chunks/vectors/lexical) | PASS | 0 misaligned of 55 |
 | I2 chunk_id unique within index | PASS | 0 indexes with duplicates |
 | I3a no chunks from outside the corpus | PASS | 0 indexes contaminated |

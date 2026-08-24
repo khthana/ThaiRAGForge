@@ -97,8 +97,8 @@ see `docs/adr/`.
   deliberately not) lives in the script's docstring. **T1 reads the artifact, not
   its date**: it replicates each tagger's own text pipeline and compares tag for
   tag, because every cached tag file IS older than its matcher and that says
-  nothing about whether the matcher would now differ. It does — over a 60-file
-  sample, **people 17/60, courses 2/60**, programs and faculties 0. The consumer
+  nothing about whether the matcher would now differ. It did, on two of the four
+  taggers, which is what the regeneration below cleared. The consumer
   that matters is `build_gold_candidates.py`, the **qrels generator**, which
   reads people/courses/faculties **by value**; it now **refuses** on drift
   (`--allow-stale-tags` to override) rather than mixing tags from one date with
@@ -106,12 +106,27 @@ see `docs/adr/`.
   and `entity_loader` calls the matchers directly, so neither is exposed —
   **T1b** records that a `programs` drift cannot move the qrels at all, since
   `program_candidates()` reads only the mapping's keys.
-  **T1 is red, and clearing it is a DECISION rather than a chore**: re-running
-  `tag_*.py` would make the cached copies current with today's corpus while
-  `data/index/entity_tags_full` still holds tags from its own build date, i.e.
-  it moves the mismatch rather than removing it — which is exactly why this file
-  already couples that index to a tag regeneration. Decide the pair together, and
-  re-run the RQ4 entity arms if you do.
+  **T1 was red, it is now clear, and what made it cheap is a MEASUREMENT that
+  contradicts what this file used to say here (2026-08-24).** The old text ran:
+  re-running `tag_*.py` "moves the mismatch rather than removing it", because
+  `data/index/entity_tags_full` still holds tags from its own build date — and
+  that is reasoned from a **date**, the exact proxy T1's own docstring refuses
+  to use one line above. Read the artifact instead and that index reproduces
+  from today's matchers **tag for tag on every one of the 2,854 resolutions**,
+  because nothing that moves its output has changed since it was built. So the
+  regeneration removed the mismatch rather than relocating it, and **no rebuild
+  and no RQ4 entity re-run was owed** — a coupling this file had asserted for
+  days, whose price is a GPU rebuild plus a generation run. Previous copies are
+  under
+  `academic_resolutions/entity_tags/_snapshots/`, dated and named for what came
+  after them, because the published gold set's provenance is the tag files as
+  they stood on 2026-07-25.
+  **`T2` now watches that half instead of asserting it**, and prints the
+  rebuild-owed remedy when it goes red — the next matcher repair makes the
+  measurement above false again. What is deliberately **not** re-derived is
+  `data/entity_dictionaries/people.json`: it is an *input* to `match_people`,
+  frozen at the state the published gold set was curated against, so moving it
+  is a shipped-dictionary decision and not a cache refresh.
   **The vocabulary sidecar is guarded by ORDERING, not by a check**:
   `qdrant_pilot_ingest.py` writes `vocab.json` **before** the upsert as of the
   same day, so a run that dies in between leaves a *current vocabulary beside a
@@ -465,7 +480,11 @@ see `docs/adr/`.
   **The one operational rule here.** `entity_tags_full` is a third call site, so
   **rebuild it ONLY together with regenerating `academic_resolutions/entity_tags/
   programs_by_file.json`, never alone** — rebuilding it alone decouples its tags
-  from the qrels' cached tags in an unmeasured way — **and re-run the RQ4 entity arms
+  from the qrels' cached tags in an unmeasured way (the converse is NOT symmetric
+  and was measured on 2026-08-24: regenerating the cached copies alone is safe
+  exactly when `T2` is green, i.e. when the index already reproduces from the
+  same matchers, which is what makes it a convergence rather than a second
+  mismatch) — **and re-run the RQ4 entity arms
   if you do.** Both moved together on 2026-08-12; only the program-bearing rows
   changed, which is the built-in control. Likewise **recompute tags from the tested
   matchers**, never read `entity_tags/*_by_file.json` as ground truth: those files

@@ -547,6 +547,110 @@ def audit_derived_copies(quick: bool) -> None:
     )
 
 
+def audit_entity_index_tags(quick: bool) -> None:
+    """Does `entity_tags_full` still reproduce from the current matchers?
+
+    T1 asks that of the cached JSON copies; this asks it of the **index**, the
+    other half of the pair. They are asked separately because they rot
+    separately and their consumers differ: the JSON files are read by value by
+    the qrels generator, while the index is what `entity_lookup` and
+    `entity_boost` actually retrieve from. Nothing re-derives either.
+
+    **This check exists because the guidance was wrong about it.** CLAUDE.md
+    said clearing T1 would only *move* the mismatch, since the index "still
+    holds tags from its own build date" -- reasoned from a date, which is the
+    proxy T1's own docstring refuses to use. Read the artifact instead and the
+    index reproduces tag for tag over the whole corpus, so regenerating the JSON
+    copies removes the mismatch rather than relocating it and no rebuild is
+    owed. Same lesson one layer along, and the reason it is now a check rather
+    than a sentence: the next matcher repair makes it false again.
+
+    Reproduce with `EntityTagLoader`, never by replicating it: the index was
+    written by that loader, so one `load()` per file yields both the
+    `resolution_id` its rows are keyed on and the four tag lists, from the same
+    code path the build used. A difference is then the matcher or the corpus.
+
+    What it does NOT watch: `data/entity_dictionaries/people.json`. That
+    dictionary is an *input* to `match_people`, deliberately frozen at the state
+    the published gold set was curated against; re-deriving it is a separate
+    decision, and one that moves a shipped dictionary rather than a cached copy.
+
+    Driven over a synthetic index before being trusted, because live it only
+    ever passes and a check that only passes is indistinguishable from one that
+    cannot fail: rows agreeing -> PASS; one indexed row's `people` list replaced
+    -> FAIL; a sampled file with no row -> FAIL naming the corpus-state gap; an
+    index sharing no file with the sample -> FAIL, not a vacuous pass; and no
+    built index at all -> FAIL. The last two are the shape this file has already
+    been bitten by once, a check reporting "0 mixed of 0 checked".
+    """
+    from rag_lab.loaders.entity_loader import EntityTagLoader
+
+    name = "T2 the entity-tagged index reproduces from the current matchers"
+    parquets = sorted((INDEX_ROOT / "entity_tags_full").glob("*/chunks.parquet"))
+    if not parquets:
+        record(name, False,
+               "no built index under data/index/entity_tags_full -- nothing was "
+               "compared, which is a gap in the check's input, not a clean index")
+        return
+
+    import pyarrow.parquet as pq
+
+    stored: dict[str, dict] = {}
+    for parquet in parquets:
+        pf = pq.ParquetFile(parquet)
+        for batch in pf.iter_batches(batch_size=8192,
+                                     columns=["resolution_id", "metadata"]):
+            for rid, meta in zip(batch.column(0).to_pylist(),
+                                 batch.column(1).to_pylist()):
+                if rid not in stored:
+                    stored[rid] = json.loads(meta)
+
+    files = sorted(iter_corpus_files(CORPUS), key=str)
+    n = _TAG_SAMPLE_QUICK if quick else _TAG_SAMPLE
+    step = max(1, len(files) // n)
+    sample = files[::step][:n]
+
+    loader = EntityTagLoader()
+    differ = {k: 0 for k in _TAG_FILES}
+    compared = {k: 0 for k in _TAG_FILES}
+    absent = 0
+    for p in sample:
+        res = loader.load(str(p))
+        was = stored.get(res.resolution_id)
+        if was is None:
+            absent += 1
+            continue
+        for k in _TAG_FILES:
+            if k not in was:
+                continue
+            compared[k] += 1
+            if (json.dumps(was[k], ensure_ascii=False, sort_keys=True)
+                    != json.dumps(res.metadata[k], ensure_ascii=False,
+                                  sort_keys=True)):
+                differ[k] += 1
+
+    if not any(compared.values()):
+        # A comparison over nothing agrees with itself.
+        record(name, False,
+               f"none of the {len(sample)} sampled files has a row in the index "
+               f"({len(stored)} resolutions indexed) -- nothing was compared")
+        return
+
+    ok = not any(differ.values()) and absent == 0
+    detail = (
+        f"files differing of files compared, over a {len(sample)}-file sample "
+        f"against {len(stored)} indexed resolutions: "
+        + ", ".join(f"{k} {differ[k]}/{compared[k]}" for k in _TAG_FILES)
+    )
+    if absent:
+        detail += (f"; {absent} sampled file(s) have NO row in the index -- it "
+                   f"was built over a different corpus state than the one on disk")
+    if any(differ.values()):
+        detail += ("; a rebuild of data/index/entity_tags_full IS owed here, and "
+                   "per CLAUDE.md the RQ4 entity arms must be re-run with it")
+    record(name, ok, detail)
+
+
 # ---------------------------------------------------------------- index layer
 def combos() -> list[Path]:
     return [
@@ -1221,6 +1325,7 @@ def main() -> int:
     corpus_ids, _ = audit_corpus()
     print("\n=== derived copies ===")
     audit_derived_copies(args.quick)
+    audit_entity_index_tags(args.quick)
     print("\n=== indexes ===")
     ids_by_combo = audit_indexes(corpus_ids, args.quick)
     audit_docset_hashes()
