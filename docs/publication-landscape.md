@@ -1058,6 +1058,10 @@ lowest-friction path in the entire landscape.
 
 ### 5.3 The non-releasable-corpus verdict, across every venue
 
+> **SUPERSEDED 2026-08-24 by §6.** The author confirmed the corpus *can*
+> be released, so this whole subsection answers a question that no longer
+> applies. Kept because the per-venue policy findings in it are still correct.
+
 **No venue researched disqualifies a non-releasable corpus for a regular
 research-paper track.** The friction is concentrated in exactly three places:
 
@@ -1080,6 +1084,10 @@ the 106-query set, and either hashed/redacted chunks or a synthetic surrogate
 corpus would turn the weakest part of the submission into an asset.
 
 ### 5.4 Recommended sequence
+
+> **SUPERSEDED 2026-08-24 by §6.2.** Written before three author
+> constraints were known (releasable corpus, Scopus-indexed international venue
+> required, small travel budget). The third one alone removes ECIR 2027 (UK).
 
 1. **iSAI-NLP 2026 (1 Sep 2026)** — a 6-page regional slice (e.g. the Thai
    normalization/segmentation null plus the chunker/embedder comparison) to get
@@ -1137,7 +1145,13 @@ Every risk found, stated at full strength.
    ~10× theirs, but *"first Thai domain RAG benchmark"* is gone, and a reviewer
    familiar with Thai NLP will know this paper.
 
-2. **The corpus cannot be released, and that is worse than it looks for a
+2. ~~**The corpus cannot be released, and that is worse than it looks for a
+   resource claim.**~~ **WITHDRAWN 2026-08-24 — the premise is false; the author
+   confirmed the corpus can be released. A different risk replaces it: see
+   §6.4.** The original text follows, because the per-venue policy evidence in
+   it stands.
+
+   **The corpus cannot be released, and that is worse than it looks for a
    resource claim.** Our strongest structural precedent, the Amharic passage
    retrieval paper ([Findings of ACL
    2025](https://aclanthology.org/2025.findings-acl.543.pdf)), releases
@@ -1245,3 +1259,123 @@ Every risk found, stated at full strength.
     There may be a Thai-language paper on Thai administrative-document retrieval
     that no search in this session would surface. **A manual IEEE Xplore +
     TCI-ThaiJo sweep is owed before any "first" claim is committed to print.**
+
+
+---
+
+## 6. Author constraints, and the venue plan they force (2026-08-24)
+
+The venue map in §5 was built before any constraint from the author was known.
+Three arrived afterwards, and together they overturn §5.4. Recorded here rather
+than edited into §5, so what was believed on what evidence stays legible.
+
+### 6.1 The three constraints, as stated
+
+1. **The corpus CAN be released.** This reverses §5.3 and withdraws risk #2.
+2. **The venue must be international, and Scopus indexing matters** — the
+   university counts only international publications, Scopus especially.
+3. **The travel budget is small.** The conference must be near Thailand;
+   domestic is better still.
+
+Constraint 3 is the one that does the damage, and it was the one nobody asked
+about. It is also the only one that cannot be satisfied by writing differently.
+
+### 6.2 What the constraints do to the §5 shortlist
+
+**ECIR 2027 is out.** It is held in the **UK**
+([ecir2027.co.uk](https://www.ecir2027.co.uk/)). §5.4 made it the primary
+target purely on deadline availability; under constraint 3 the travel cost
+disqualifies it regardless of fit.
+
+**SIGIR-AP 2026 was the best possible fit and its deadline had already
+passed.** Singapore, **13–15 December 2026**, **hybrid — "authors of accepted
+papers are expected to present their work either in person at the conference or
+remotely"**, 2–9 pages, ACM. Its *Regular Submissions* type explicitly names
+**resource papers (test collections, software tools, services)** and
+**reproducibility papers** alongside original research. Artifact sharing is
+"encouraged", not mandated. Deadlines: abstract **22 July 2026**, paper
+**29 July 2026**, notification 23 September, camera-ready 14 October
+([SIGIR-AP 2026 CFP](https://www.sigir-ap.org/sigir-ap-2026/call-for-papers/index.html)).
+**The paper deadline elapsed 26 days before this section was written.** This is
+the single most costly miss in the landscape: an Asia-Pacific venue with the
+scope of SIGIR, remote presentation permitted, and two submission types written
+for exactly this work.
+
+**Under a travel-budget constraint, journals dominate.** A journal costs nothing
+to attend, has no 6- or 9-page squeeze, and this project has substantially more
+content than a regional conference paper can hold. The catch is the APC, which
+splits the field cleanly:
+
+- **Gold open access is now the expensive route in IR.** The *Information
+  Retrieval Journal* — the field's own journal, and the obvious first thought —
+  **became fully open access on 1 January 2024 and was renamed
+  *Discover Computing***. APC is **€1140 / $1520 / £1040** discounted through
+  31 December 2026, **€1890 / $2190 / £1590** standard
+  ([Springer announcement](https://link.springer.com/journal/10791/updates/26580658)).
+  Out, on constraint 3.
+- **Hybrid/subscription journals remain free to publish in** via the
+  subscription route (IP&M, ACM TOIS). Hard, but zero cost and zero travel.
+- **ECTI-CIT charges nothing at all**: "**$0 Article Page Charges** — there are
+  no submission or article processing fees", 8–12 pages two-column, ~6.5 weeks
+  review and ~2.5 weeks to publication, indexed in DOAJ, Google Scholar and
+  **Scopus**
+  ([submission page](https://ph01.tci-thaijo.org/index.php/ecticit/about/submissions)).
+  Zero cost, zero travel, Scopus — it satisfies all three constraints outright.
+
+### 6.3 The revised sequence
+
+1. **Primary: SIGIR-AP 2027.** Same series as the venue just missed — Asia,
+   hybrid, ACM/Scopus, 9 pages, resource and reproducibility both first-class.
+   Carries the full study plus the released collection. **Cost: ~11 months of
+   waiting, and the 2027 dates and location are not published yet** (§6.5).
+2. **Floor: ECTI-CIT.** Not a parallel submission — the extended version, sent
+   only if SIGIR-AP rejects. At $0 and no travel it is a fallback with no
+   downside other than a lower-profile venue (2024 CiteScore 1.6).
+3. **Optional, immediate: iSAI-NLP 2026, deadline 1 September 2026.** Bangkok,
+   19–21 November 2026, ten tracks including Natural Language Processing
+   ([isai-nlp2026.aiat.or.th](https://isai-nlp2026.aiat.or.th/)). Domestic, so
+   constraint 3 is satisfied by construction. **It must carry a slice the
+   primary paper does not need** — the RQ4 prompt-rule-ordering result
+   (hallucinations 24 → 1, with the recency mechanism) or the RQ3
+   Thai-normalization/word-segmentation null, which is on-topic for a Thai NLP
+   venue in a way it would not be anywhere else. **Routing and the test
+   collection must not go here**; they are the primary paper's spine.
+
+**The §5.4 rule survives unchanged and now binds harder**: if the work is split,
+the regional paper must not consume the headline the major paper needs, and the
+overlap must be declared to both.
+
+### 6.4 The risk that replaces withdrawn risk #2
+
+**A releasable corpus is not the same as a publishable one, because the
+documents name real people.** Academic-council minutes identify individuals by
+name and academic rank, and this project's gold set is *built on* that: 30 of
+the 106 queries are person queries, and `people.json` holds 2,158 entities.
+Publishing individual minutes on an institutional website and publishing a
+searchable dataset with a 2,158-name entity dictionary are different acts, and
+the second is the one a reviewer's ethics check — and Thailand's PDPA — will
+look at. **This is a decision to be taken deliberately, not a licence to be
+chosen.** Options, none yet evaluated: release qrels + queries + derived tags
+without raw text; pseudonymise person names consistently across corpus, gold set
+and dictionaries; or seek institutional sign-off for release as a public record.
+Every venue in §6.2 states that sharing is encouraged rather than required, so
+**no deadline forces this decision** — but the resource claim depends on it.
+
+### UNCERTAIN / COULD NOT VERIFY (§6)
+
+- **iSAI-NLP 2026 publishes neither a registration fee, a page limit, nor an
+  indexing statement** on its site as fetched on 2026-08-24. §5.2's "~6 pages"
+  and "IEEE Xplore" come from prior editions, not from the 2026 call.
+- **"IEEE Xplore therefore Scopus" is a general practice, not a per-series
+  guarantee.** Before counting an iSAI-NLP paper toward a Scopus requirement,
+  check the Scopus source list for the series directly. This is the one
+  unverified fact that a career decision would rest on.
+- **SIGIR-AP 2027 dates and location are not published.** The ~July 2027
+  deadline in §6.3 is extrapolated from the 2026 cycle (abstract 22 Jul, paper
+  29 Jul) and the location is unknown; "Asia-Pacific, therefore cheap from
+  Bangkok" holds for the series, not for a specific unannounced city.
+- **IP&M and ACM TOIS were not fetched.** Their "free via the subscription
+  route" status is asserted from the hybrid model in general, not from either
+  journal's 2026 author guide.
+- **Whether Thailand qualifies for any Springer/Elsevier APC waiver was not
+  checked.** If it does, Discover Computing returns to the shortlist.
