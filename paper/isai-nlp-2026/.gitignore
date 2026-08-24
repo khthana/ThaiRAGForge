@@ -1,0 +1,12 @@
+# LaTeX intermediates. main.pdf is deliberately NOT ignored: it is the
+# submission artifact, it is small, and a reviewer-facing deliverable that only
+# exists on one machine is the thing this repo keeps getting bitten by.
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+bibtex.out

@@ -291,22 +291,26 @@ do not guess.
 \caption{The three prompt variants (English gloss; originals are Thai)}
 \label{tab:variants}
 \centering
-\begin{tabular}{p{0.15\columnwidth}p{0.73\columnwidth}}
+\small
+\begin{tabular}{@{}r@{~~}p{0.84\columnwidth}@{}}
 \toprule
-Variant & Rule 4 onwards \\
+\multicolumn{2}{@{}p{0.92\columnwidth}@{}}{\texttt{sentence\_cap} --- the baseline (shown as \texttt{cap} in later tables)} \\
 \midrule
-\texttt{sentence\_cap} (baseline) &
-4. Answer briefly, in no more than 3 sentences. \\[3pt]
-\texttt{cite\_all} &
-4. Cite every relevant document found in the supplied documents, not just one;
-the answer length is unlimited so long as it covers every relevant one. \\[3pt]
-\texttt{cite\_all\_guarded} &
-4. \emph{(identical to} \texttt{cite\_all}\emph{)} \newline
-5. If no supporting documents were supplied at all, reply \textsc{not-found} and
-give the citation as ``--'' only; cite no number whatsoever.
-\textbf{This rule outranks rule 4.} \newline
-6. Cite only numbers that actually appear in the documents above; never invent a
-number. \\
+4. & Answer briefly, in no more than 3 sentences. \\
+\midrule
+\multicolumn{2}{@{}p{0.92\columnwidth}@{}}{\texttt{cite\_all}} \\
+\midrule
+4. & Cite every relevant document found in the supplied documents, not just
+one; the answer length is unlimited so long as it covers every relevant one. \\
+\midrule
+\multicolumn{2}{@{}p{0.92\columnwidth}@{}}{\texttt{cite\_all\_guarded} --- adds rules 5 and 6 (shown as \texttt{guarded} in later tables)} \\
+\midrule
+4. & \emph{Identical to} \texttt{cite\_all}. \\
+5. & If no supporting documents were supplied at all, reply \textsc{not-found}
+and give the citation as ``--'' only; cite no number whatsoever.
+\textbf{This rule outranks rule 4.} \\
+6. & Cite only numbers that actually appear in the documents above; never
+invent a number. \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -318,29 +322,31 @@ all four answering arms and all three variants, and Table~\ref{tab:family2} the
 significance of the baseline-to-\texttt{cite\_all} contrast.
 
 \begin{table}[t]
-\caption{Citation precision / recall, \texttt{phi4}, 106 queries}
+\caption{Citation precision / recall, \texttt{phi4}, 106 queries.
+Variant names abbreviated as in Table~\ref{tab:variants}}
 \label{tab:phi4}
+\setlength{\tabcolsep}{4pt}
 \centering
 \small
 \begin{tabular}{llrr}
 \toprule
 Arm & Variant & Precision & Recall \\
 \midrule
-hybrid & \texttt{sentence\_cap}      & 0.7013 & 0.2952 \\
-hybrid & \texttt{cite\_all}          & 0.7185 & \textbf{0.3823} \\
-hybrid & \texttt{cite\_all\_guarded} & 0.6945 & 0.3794 \\
+hybrid & \texttt{cap}     & 0.7013 & 0.2952 \\
+hybrid & \texttt{cite\_all} & 0.7185 & \textbf{0.3823} \\
+hybrid & \texttt{guarded} & 0.6945 & 0.3794 \\
 \midrule
-dense  & \texttt{sentence\_cap}      & 0.6867 & 0.2738 \\
-dense  & \texttt{cite\_all}          & 0.6381 & 0.3145 \\
-dense  & \texttt{cite\_all\_guarded} & 0.6650 & \textbf{0.3481} \\
+dense  & \texttt{cap}     & 0.6867 & 0.2738 \\
+dense  & \texttt{cite\_all} & 0.6381 & 0.3145 \\
+dense  & \texttt{guarded} & 0.6650 & \textbf{0.3481} \\
 \midrule
-bm25   & \texttt{sentence\_cap}      & 0.6591 & 0.2329 \\
-bm25   & \texttt{cite\_all}          & 0.5801 & \textbf{0.3118} \\
-bm25   & \texttt{cite\_all\_guarded} & 0.5968 & 0.2733 \\
+bm25   & \texttt{cap}     & 0.6591 & 0.2329 \\
+bm25   & \texttt{cite\_all} & 0.5801 & \textbf{0.3118} \\
+bm25   & \texttt{guarded} & 0.5968 & 0.2733 \\
 \midrule
-m2v    & \texttt{sentence\_cap}      & 0.5417 & 0.1807 \\
-m2v    & \texttt{cite\_all}          & 0.5057 & \textbf{0.1989} \\
-m2v    & \texttt{cite\_all\_guarded} & 0.4539 & 0.1761 \\
+m2v    & \texttt{cap}     & 0.5417 & 0.1807 \\
+m2v    & \texttt{cite\_all} & 0.5057 & \textbf{0.1989} \\
+m2v    & \texttt{guarded} & 0.4539 & 0.1761 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -349,6 +355,7 @@ m2v    & \texttt{cite\_all\_guarded} & 0.4539 & 0.1761 \\
 \caption{\texttt{sentence\_cap} $\rightarrow$ \texttt{cite\_all}, \texttt{phi4}.
 Paired bootstrap, Holm-corrected, family size $m=9$}
 \label{tab:family2}
+\setlength{\tabcolsep}{4pt}
 \centering
 \small
 \begin{tabular}{llrlr}
@@ -414,7 +421,7 @@ shows the same failure at much lower magnitude: 2 of 106, 5/5 phantom.
 
 \begin{table}[t]
 \caption{\texttt{closed\_book} arm: empty context, so abstention is the only
-correct answer}
+correct answer. Variants abbreviated as in Table~\ref{tab:variants}}
 \label{tab:closed}
 \centering
 \small
@@ -422,12 +429,12 @@ correct answer}
 \toprule
 Model & Variant & Halluc. & Abstained & Phantom \\
 \midrule
-\texttt{phi4} & \texttt{sentence\_cap}      & 0  & 106 & 0/0 \\
-\texttt{phi4} & \texttt{cite\_all}          & 2  & 104 & 5/5 \\
-\texttt{phi4} & \texttt{cite\_all\_guarded} & \textbf{0} & 106 & 0/0 \\
+\texttt{phi4} & \texttt{cap}     & 0  & 106 & 0/0 \\
+\texttt{phi4} & \texttt{cite\_all} & 2  & 104 & 5/5 \\
+\texttt{phi4} & \texttt{guarded} & \textbf{0} & 106 & 0/0 \\
 \midrule
-\texttt{gemma4:e4b} & \texttt{cite\_all}          & 24 & 82  & 37/37 \\
-\texttt{gemma4:e4b} & \texttt{cite\_all\_guarded} & \textbf{1} & 105 & 1/1 \\
+\texttt{gemma4:e4b} & \texttt{cite\_all} & 24 & 82  & 37/37 \\
+\texttt{gemma4:e4b} & \texttt{guarded} & \textbf{1} & 105 & 1/1 \\
 \bottomrule
 \end{tabular}
 \end{table}

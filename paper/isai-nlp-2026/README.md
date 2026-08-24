@@ -2,8 +2,11 @@
 
 **Target:** iSAI-NLP 2026, Bangkok, 19–21 Nov 2026.
 **Paper deadline: 1 September 2026** (extended from 15 Aug).
-**Status: DRAFT, 2026-08-24.** Complete argument, all figures verified against
-their reports. Not compiled — see *Blockers* below.
+**Status: DRAFT, 2026-08-24. Compiles clean at 5 pages.** 0 overfull boxes,
+0 undefined references, 10 references typeset, and all 79 figures verified
+against their reports. Under the ~6-page target with room to spare — the Thai
+prompt figure fits if wanted. Remaining blockers are below and none are about
+the text.
 
 Venue reasoning, and why this slice rather than another, is in
 `docs/publication-landscape.md` §6.
@@ -41,24 +44,34 @@ is 106 queries / 1,046 judgments / 9.87 relevant per query.
 | `refs.bib` | 10 references, **every one verified against a primary source** during drafting. |
 | `prompts_thai.tex` | The prompt rules verbatim in Thai. **Not included by `main.tex`** — pdflatex cannot typeset Thai. See below. |
 | `check_paper_figures.py` | Asserts all 79 figures in `main.tex` against the reports that generate them. |
+| `build.ps1` | One-command build: the full pdflatex/bibtex cycle, then reports overfull boxes, undefined references and the figure check. |
+| `main.pdf` | The built paper. **Tracked on purpose** — a reviewer-facing artifact that exists on one machine only is a failure mode this repo knows well. |
 
-## Compiling
+## Building
 
-**There is no LaTeX toolchain on this machine** (`pdflatex`, `xelatex` and
-`latexmk` are all absent), so this draft has **never been compiled**. Two
-consequences you must not assume away:
+MiKTeX 25.12 is installed **per-user** (`winget install --id MiKTeX.MiKTeX -e
+--scope user`), so its `bin` is not on the PATH of any shell that started
+before the install. `build.ps1` calls the binaries by full path and does not
+care:
 
-- **The page count is unverified.** The target is ~6 pages. This draft has 7
-  sections, **6 tables and 3,687 words of body text** (counted, not estimated),
-  which lands at roughly 5.5-7 pages in IEEE two-column depending on how the
-  tables set. Budget for cutting. The cheapest cuts, in order:
-  Section II's third paragraph (retrieval components), Finding 1's
-  "Blast radius" subsection, and Table~III collapsed to the two `cite_all` rows
-  per arm.
-- **Nothing has been checked for LaTeX errors.** `\newline` inside a `p{}`
-  column and the `\textsc` in a table cell are the two most likely to complain.
+```
+powershell -File paper\isai-nlp-2026\build.ps1
+```
 
-Upload the directory to Overleaf and compile there, or install MiKTeX/TeX Live.
+It runs `pdflatex` → `bibtex` → `pdflatex` ×2, then **reports the failures that
+do not stop a compile**: overfull hboxes (text in the margin) and undefined
+citations (which print as `[?]`). pdflatex exits 0 on both, so they must be
+checked rather than inferred from the exit code. It finishes by running
+`check_paper_figures.py`.
+
+**A silent-failure lesson from building this, worth keeping.** An earlier edit
+turned every row terminator in the variants table from `\\` into `\`, which
+LaTeX reads as a control space: all rows merged into one paragraph, rules 4–6
+ran together, and `pdflatex` reported **0 errors, 0 overfull boxes and the same
+5 pages**. It was found by *looking at the rendered page*, not by any log. The
+cause was the Bash tool's heredoc collapsing `\\` to `\` in this environment —
+so **write LaTeX through a file, never through a heredoc**, and read the PDF
+after any table edit.
 
 ### The Thai prompts
 
@@ -99,11 +112,11 @@ moving under the paper.
 
 | Claim in the paper | Source |
 |---|---|
-| All `phi4` citation precision/recall/phantom (Table III) | `data/results/rq4_score.md`, descriptive table |
-| `closed_book` abstention, `phi4` (Table V) | `rq4_score.md`, abstention 2×2 |
-| `gemma4:e4b` 24 → 1, phantom 37/37 → 1/1 (Table V) | `data/results/rq4_score_gemma4.md` |
+| All `phi4` citation precision/recall/phantom (Table IV) | `data/results/rq4_score.md`, descriptive table |
+| `closed_book` abstention, `phi4` (Table VI) | `rq4_score.md`, abstention 2×2 |
+| `gemma4:e4b` 24 → 1, phantom 37/37 → 1/1 (Table VI) | `data/results/rq4_score_gemma4.md` |
 | The control: answering arms unmoved by the guard | `rq4_score_gemma4.md`, abstention 2×2 |
-| Significance family 2, m=9 (Table IV) | `rq4_score.md`, "Significance family 2" section only |
+| Significance family 2, m=9 (Table V) | `rq4_score.md`, "Significance family 2" section only |
 | 106 queries / 1,046 judgments / 9.87 mean | recomputed from `config/eval/gold_query_set_73det.yaml` |
 | Truncation table, 14,721-token prompt, 81 of 1,590 cells | `docs/rq4-prompt-truncation.md` §2, §4 |
 | Pilot 0/4 vs 4/4 citations, instructions-first | `tools/eval/rq4_generate.py` `build_prompt` docstring |
@@ -121,20 +134,24 @@ doc.** This is the same failure the repo's D8 check exists to catch.
 
 ## Blockers before submission
 
-1. **Compile it.** Page count and LaTeX validity are both unverified.
-2. **Confirm iSAI-NLP is Scopus-indexed.** The 2026 site states **no** page
-   limit, **no** registration fee and **no** indexing statement. "IEEE Xplore
-   therefore Scopus" is a general practice, not a per-series guarantee, and the
-   whole reason for choosing this venue is the Scopus requirement. Check the
-   Scopus source list for the series directly. **If it is not indexed, do not
-   submit** — the constraint is not satisfied and the effort is better spent on
-   the primary paper.
-3. **Get the page limit and template** from the organisers; `IEEEtran` is an
-   assumption from prior editions.
-4. **Author block, affiliation, acknowledgments** are placeholders.
-5. **Decide on the Thai figure** (see above).
-6. **Anonymity:** the title block says ANONYMOUS FOR REVIEW. Confirm whether
+1. **Confirm iSAI-NLP is Scopus-indexed. This one gates everything else.** The
+   2026 site states **no** page limit, **no** registration fee and **no**
+   indexing statement. "IEEE Xplore therefore Scopus" is a general practice,
+   not a per-series guarantee, and Scopus indexing is the entire reason for
+   choosing this venue. Check the Scopus source list for the series directly.
+   **If it is not indexed, do not submit** — the constraint is not satisfied
+   and the effort belongs on the primary paper instead.
+2. **Get the page limit and template** from the organisers. `IEEEtran` and
+   "~6 pages" are both inferred from prior editions; the paper is at 5, so a
+   6-page limit is comfortable and a 4-page limit would mean real cuts.
+3. **Author block, affiliation, acknowledgments** are placeholders.
+4. **Decide on the Thai figure** (see above). There is room for it at 5 pages.
+5. **Anonymity:** the title block says ANONYMOUS FOR REVIEW. Confirm whether
    iSAI-NLP reviews double-blind; if it does not, fill the names in.
+
+Done: the paper compiles clean (0 overfull, 0 undefined, 5 pages), the
+NitiBench reference has its full 7-author list and page range, and the figure
+check is green.
 
 ## Deliberately absent
 
